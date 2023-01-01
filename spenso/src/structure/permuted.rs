@@ -49,8 +49,8 @@ impl<S> PermutedStructure<S> {
 
         self.rep_permutation.apply_slice_in_place_inv(&mut indices);
         let mut structure = self.structure.reindex(&indices)?;
-        println!("Rep:{}", self.rep_permutation);
-        println!("Ind:{}", structure.index_permutation);
+        // println!("Rep:{}", self.rep_permutation);
+        // println!("Ind:{}", structure.index_permutation);
         structure.rep_permutation = self.rep_permutation;
         Ok(structure)
     }

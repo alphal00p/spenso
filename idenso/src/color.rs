@@ -408,7 +408,7 @@ static CF: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> = La
         [
             ColorAdjoint {}.new_rep(8),
             ColorAdjoint {}.new_rep(3),
-            ColorAdjoint {}.new_rep(8),
+            ColorAdjoint {}.new_rep(2),
         ],
         CS.f,
         None,

@@ -359,17 +359,21 @@ pub fn hep_lib<T: TensorLibraryData + Clone + Default>(
     initialize();
     weyl.update_ids();
 
-    let gamma_key = gamma4D_strct(AGS.gamma).structure;
-    weyl.insert_explicit(gamma_data_weyl(gamma_key, one.clone(), zero.clone()).into());
+    let gamma_key = gamma4D_strct(AGS.gamma)
+        .map_structure(|a| gamma_data_weyl(a, one.clone(), zero.clone()).into());
+    weyl.insert_explicit(gamma_key);
 
-    let gamma5_key = gamma5_strct(AGS.gamma5).structure;
-    weyl.insert_explicit(gamma5_weyl_data(gamma5_key, one.clone(), zero.clone()).into());
+    let gamma5_key = gamma5_strct(AGS.gamma5)
+        .map_structure(|a| gamma5_weyl_data(a, one.clone(), zero.clone()).into());
+    weyl.insert_explicit(gamma5_key);
 
-    let projm_key = projm_strct(AGS.projm).structure;
-    weyl.insert_explicit(proj_m_data_weyl(projm_key, one.clone(), zero.clone()).into());
+    let projm_key = projm_strct(AGS.projm)
+        .map_structure(|a| proj_m_data_weyl(a, one.clone(), zero.clone()).into());
+    weyl.insert_explicit(projm_key);
 
-    let projp_key = projp_strct(AGS.projp).structure;
-    weyl.insert_explicit(proj_p_data_weyl(projp_key, one.clone(), zero.clone()).into());
+    let projp_key = projp_strct(AGS.projp)
+        .map_structure(|a| proj_p_data_weyl(a, one.clone(), zero.clone()).into());
+    weyl.insert_explicit(projp_key);
 
     weyl
 }
@@ -396,7 +400,7 @@ mod tests {
     #[test]
     fn simple_scalar() {
         let _ = ETS.id;
-        let a = WEYLIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
+        let a = HEP_LIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
 
         let expr = parse!("gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_4))*gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
             ","spenso");
@@ -410,7 +414,7 @@ mod tests {
         let mut net =
             Network::<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, _>::try_from_view(
                 expr.as_view(),
-                &*WEYLIB,
+                &*HEP_LIB,
             )
             .unwrap();
 
@@ -423,7 +427,7 @@ mod tests {
             )
         );
 
-        net.execute::<Steps<1>, SmallestDegreeIter<1>, _>(&*WEYLIB)
+        net.execute::<Steps<1>, SmallestDegreeIter<1>, _, _>(&*HEP_LIB)
             .unwrap();
         println!(
             "{}",
@@ -437,7 +441,7 @@ mod tests {
                     .unwrap_or("".to_string())
             )
         );
-        net.execute::<Steps<1>, SmallestDegreeIter<2>, _>(&*WEYLIB)
+        net.execute::<Steps<1>, SmallestDegreeIter<2>, _, _>(&*HEP_LIB)
             .unwrap();
         println!(
             "{}",
@@ -469,7 +473,7 @@ mod tests {
     #[test]
     fn parse_problem() {
         let _ = ETS.id;
-        let a = WEYLIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
+        let a = HEP_LIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
 
         let expr = parse!("((N(4,mink(4,l_2))*P(4,mink(4,r_2))+N(4,mink(4,r_2))*P(4,mink(4,l_2)))*N(4,mink(4,dummy_ss_4_1))*P(4,mink(4,dummy_ss_4_1))+-1*N(4,mink(4,dummy_ss_4_2))^2*P(4,mink(4,l_2))*P(4,mink(4,r_2))+-1*N(4,mink(4,dummy_ss_4_3))*N(4,mink(4,dummy_ss_4_4))*P(4,mink(4,dummy_ss_4_3))*P(4,mink(4,dummy_ss_4_4))*g(mink(4,l_2),mink(4,r_2)))*((N(5,mink(4,l_3))*P(5,mink(4,r_3))+N(5,mink(4,r_3))*P(5,mink(4,l_3)))*N(5,mink(4,dummy_ss_5_1))*P(5,mink(4,dummy_ss_5_1))+-1*N(5,mink(4,dummy_ss_5_2))^2*P(5,mink(4,l_3))*P(5,mink(4,r_3))+-1*N(5,mink(4,dummy_ss_5_3))*N(5,mink(4,dummy_ss_5_4))*P(5,mink(4,dummy_ss_5_3))*P(5,mink(4,dummy_ss_5_4))*g(mink(4,l_3),mink(4,r_3)))*(-1*G^2*P(0,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5))+G^2*P(2,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5)))*(-1*P(2,mink(4,l_20))+P(0,mink(4,l_20)))*-1*G^2*P(2,mink(4,dummy_2_0))*P(3,mink(4,dummy_3_1))*𝑖*𝟙(bis(4,l_0),bis(4,l_7))*𝟙(bis(4,l_1),bis(4,l_4))*𝟙(mink(4,l_2),mink(4,l_5))*𝟙(mink(4,l_3),mink(4,l_4))*gamma(bis(4,l_1),bis(4,r_1),mink(4,dummy_3_1))*gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_20))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))*gamma(bis(4,r_0),bis(4,l_0),mink(4,dummy_2_0))
             ","spenso");
@@ -478,7 +482,7 @@ mod tests {
         let mut net =
             Network::<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, _>::try_from_view(
                 expr.as_view(),
-                &*WEYLIB,
+                &*HEP_LIB,
             )
             .unwrap();
 
@@ -491,7 +495,7 @@ mod tests {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _>(&*WEYLIB)
+        net.execute::<Sequential, SmallestDegree, _, _>(&*HEP_LIB)
             .unwrap();
 
         println!(

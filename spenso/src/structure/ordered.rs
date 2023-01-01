@@ -488,3 +488,22 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
     //     slots_a
     // }
 }
+#[cfg(test)]
+pub mod test {
+    use crate::structure::{
+        representation::{Euclidean, LibraryRep, Lorentz, Minkowski, RepName},
+        slot::IsAbstractSlot,
+        StructureContract, TensorStructure,
+    };
+
+    use super::OrderedStructure;
+
+    #[test]
+    fn orderedmerge() {
+        let a: OrderedStructure<LibraryRep> =
+            OrderedStructure::from_iter([Lorentz {}.new_slot(3, 3).to_lib()]).structure;
+        let b = a.clone().dual();
+
+        println!("{}", a.merge(&b).unwrap().0);
+    }
+}

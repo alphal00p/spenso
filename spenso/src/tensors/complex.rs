@@ -383,6 +383,21 @@ where
             RealOrComplexTensor::Complex(s) => RealOrComplexTensor::Complex(s.permute(permutation)),
         }
     }
+
+    fn permute_reps(
+        self,
+        ind_perm: &linnet::permutation::Permutation,
+        rep_perm: &linnet::permutation::Permutation,
+    ) -> Self::Permuted {
+        match self {
+            RealOrComplexTensor::Real(d) => {
+                RealOrComplexTensor::Real(d.permute_reps(ind_perm, rep_perm))
+            }
+            RealOrComplexTensor::Complex(s) => {
+                RealOrComplexTensor::Complex(s.permute_reps(ind_perm, rep_perm))
+            }
+        }
+    }
 }
 
 impl<T: Clone, S> TensorStructure for RealOrComplexTensor<T, S>

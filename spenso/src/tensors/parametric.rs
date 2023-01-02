@@ -322,6 +322,17 @@ where
             param_type: self.param_type,
         }
     }
+
+    fn permute_reps(
+        self,
+        ind_perm: &linnet::permutation::Permutation,
+        rep_perm: &linnet::permutation::Permutation,
+    ) -> Self::Permuted {
+        ParamTensor {
+            tensor: self.tensor.permute_reps(ind_perm, rep_perm),
+            param_type: self.param_type,
+        }
+    }
 }
 
 impl<S> TensorStructure for ParamTensor<S>
@@ -1182,6 +1193,19 @@ where
         match self {
             ParamOrConcrete::Param(d) => ParamOrConcrete::Param(d.permute(permutation)),
             ParamOrConcrete::Concrete(s) => ParamOrConcrete::Concrete(s.permute(permutation)),
+        }
+    }
+
+    fn permute_reps(
+        self,
+        ind_perm: &linnet::permutation::Permutation,
+        rep_perm: &linnet::permutation::Permutation,
+    ) -> Self::Permuted {
+        match self {
+            ParamOrConcrete::Param(d) => ParamOrConcrete::Param(d.permute_reps(ind_perm, rep_perm)),
+            ParamOrConcrete::Concrete(s) => {
+                ParamOrConcrete::Concrete(s.permute_reps(ind_perm, rep_perm))
+            }
         }
     }
 }

@@ -98,7 +98,7 @@ fn test_fiber_iterators() {
     let rep = Euclidean {};
     let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
 
-    let mut tensor = DenseTensor::<i32, _>::zero(structure.clone());
+    let mut tensor = DenseTensor::<i32, _>::zero((*structure).clone());
     for i in 0..6 {
         tensor.data[i] = i as i32;
     }
@@ -120,7 +120,7 @@ fn test_fiber_class_iterators() {
     let rep = Euclidean {};
     let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
 
-    let mut tensor = DenseTensor::<i32, _>::zero(structure.clone());
+    let mut tensor = DenseTensor::<i32, _>::zero((*structure).clone());
     for i in 0..6 {
         tensor.data[i] = i as i32;
     }

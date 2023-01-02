@@ -106,6 +106,14 @@ where
         }
         permuted
     }
+
+    fn permute_reps(
+        self,
+        ind_perm: &linnet::permutation::Permutation,
+        rep_perm: &linnet::permutation::Permutation,
+    ) -> Self::Permuted {
+        todo!()
+    }
 }
 
 impl<T, S> TensorStructure for DenseTensor<T, S>

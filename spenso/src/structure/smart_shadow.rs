@@ -176,6 +176,41 @@ impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for SmartShadowStru
             ids,
         )
     }
+
+    fn permute_reps(self, ind_perm: &Permutation, rep_perm: &Permutation) -> Self::Permuted {
+        let mut dummy_structure = Vec::new();
+        let mut og_reps = Vec::new();
+        let mut ids = Vec::new();
+
+        if rep_perm.is_identity() {
+            return self.permute(ind_perm);
+        }
+        for s in rep_perm.iter_slice(&self.structure.structure) {
+            og_reps.push(s.rep.to_lib());
+            let d = s.to_dummy();
+            dummy_structure.push(d);
+        }
+
+        for (i, s) in ind_perm.iter_slice(&self.structure.structure).enumerate() {
+            let d = dummy_structure[i];
+            let new_slot = og_reps[i].slot(s.aind);
+
+            ids.push(SmartShadowStructure::id(d, new_slot));
+        }
+        let strct = OrderedStructure::new(dummy_structure);
+        if !strct.permutation.is_identity() {
+            panic!("should be identity")
+        }
+        (
+            SmartShadowStructure {
+                contractions: self.contractions,
+                global_name: self.global_name,
+                additional_args: self.additional_args,
+                structure: strct.structure,
+            },
+            ids,
+        )
+    }
 }
 
 impl<N, A, R: RepName<Dual = R>> TensorStructure for SmartShadowStructure<N, A, R> {

@@ -409,15 +409,12 @@ mod test {
         println!("{}", key.permutation);
 
         let one = ConcreteOrParam::Concrete(RealOrComplex::Real(1.));
-        lib.insert_explicit_sparse(key.clone(), [(vec![0, 0, 1], one)])
+        lib.insert_explicit_sparse((*key).clone(), [(vec![0, 0, 1], one)])
             .unwrap();
 
         lib.get(&key).unwrap();
-        let indexed = key
-            .clone()
-            .reindex(&[0.into(), 1.into(), 2.into()])
-            .unwrap();
-        let expr = indexed.structure.to_symbolic(None).unwrap();
+        let indexed = key.clone().reindex([0, 1, 2]).unwrap().structure.structure;
+        let expr = indexed.to_symbolic(None).unwrap();
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -449,10 +446,7 @@ mod test {
         }) = net.result().unwrap()
         {
             // println!("YaY:{a}");
-            assert_eq!(
-                graph_slots,
-                indexed.structure.structure.external_structure()
-            );
+            assert_eq!(graph_slots, indexed.structure.external_structure());
             assert_eq!(&key.structure, res_key);
         } else {
             panic!("Not Key")
@@ -472,11 +466,7 @@ mod test {
             None,
         );
 
-        let indexed = key
-            .clone()
-            .reindex(&[0.into(), 1.into(), 2.into()])
-            .unwrap()
-            .structure;
+        let indexed = key.reindex([0, 1, 2]).unwrap().structure.structure;
         let expr = indexed.to_symbolic(None).unwrap();
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,

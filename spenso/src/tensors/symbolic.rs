@@ -69,11 +69,52 @@ impl PermuteTensor for SymbolicTensor {
         let (n, idstructures) = self.structure.clone().permute(permutation);
 
         let mut ids = Atom::one();
+        if permutation.is_identity() {
+            return self;
+        }
+
+        for (i, idstructure) in permutation.iter_slice_inv(&idstructures).enumerate() {
+            let ogo = idstructure.external_structure();
+            let o = idstructures[i].external_structure();
+
+            ids *= Self::id(o[0], o[1]).expression;
+            self.expression = self
+                .expression
+                .replace(ogo[1].to_atom())
+                .with(o[0].to_atom())
+        }
+
+        self.expression *= ids;
+
+        self
+    }
+
+    fn permute_reps(
+        self,
+        ind_perm: &linnet::permutation::Permutation,
+        rep_perm: &linnet::permutation::Permutation,
+    ) -> Self::Permuted {
+        let (n, idstructures) = self.structure.clone().permute_reps(ind_perm, rep_perm);
+
+        if rep_perm.is_identity() {
+            return self.permute(ind_perm);
+        }
+        let mut dummy_structure = Vec::new();
+        let mut og_reps = Vec::new();
+        let mut ids = Vec::new();
+
+        for s in rep_perm.iter_slice(&self.structure) {
+            self.expression = self
+                .expression
+                .replace(s.to_atom())
+                .with(s.to_dummy().to_atom());
+        }
+
+        let mut ids = Atom::one();
         for i in idstructures {
             let o = i.external_structure();
 
             ids *= Self::id(o[0], o[1]).expression;
-            self.expression = self.expression.replace(o[0].to_atom()).with(o[1].to_atom())
         }
 
         self.expression *= ids;

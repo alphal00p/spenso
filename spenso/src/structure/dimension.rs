@@ -16,8 +16,6 @@ use crate::shadowing::symbolica_utils::SerializableSymbol;
     Debug,
     Copy,
     Clone,
-    Ord,
-    PartialOrd,
     Eq,
     PartialEq,
     Hash,
@@ -49,6 +47,22 @@ impl Dimension {
             Self::Concrete(c) => Atom::num(*c as i64),
             Self::Symbolic(s) => Atom::var((*s).into()),
         }
+    }
+}
+
+impl Ord for Dimension {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (Dimension::Concrete(s), Dimension::Concrete(o)) => s.cmp(o),
+            #[cfg(feature = "shadowing")]
+            _ => std::cmp::Ordering::Equal,
+        }
+    }
+}
+
+impl PartialOrd for Dimension {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 

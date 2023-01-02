@@ -344,9 +344,23 @@ pub fn wrap_dummies_impl(view: AtomView, header: Symbol) -> Atom {
 
 pub fn simplify_metrics_impl(view: AtomView) -> Atom {
     let mut reps = vec![];
+
     for i in LibraryRep::all_self_duals().chain(LibraryRep::all_inline_metrics()) {
         reps.extend(
             [
+                (
+                    function!(
+                        ETS.id,
+                        i.to_symbolic([RS.a__]),
+                        LibraryRep::Dummy.to_symbolic([RS.i__])
+                    ) * function!(
+                        RS.f_,
+                        RS.a___,
+                        LibraryRep::Dummy.to_symbolic([RS.i__]),
+                        RS.b___
+                    ),
+                    function!(RS.f_, RS.a___, i.to_symbolic([RS.a__]), RS.b___),
+                ),
                 (
                     function!(ETS.id, i.to_symbolic([RS.a__]), i.to_symbolic([RS.i__]))
                         * function!(RS.f_, RS.a___, i.to_symbolic([RS.i__]), RS.b___),
@@ -402,6 +416,32 @@ pub fn simplify_metrics_impl(view: AtomView) -> Atom {
 
         reps.extend(
             [
+                (
+                    function!(
+                        ETS.id,
+                        i.to_symbolic([RS.a__]),
+                        LibraryRep::Dummy.to_symbolic([RS.i__])
+                    ) * function!(
+                        RS.f_,
+                        RS.a___,
+                        LibraryRep::Dummy.to_symbolic([RS.i__]),
+                        RS.b___
+                    ),
+                    function!(RS.f_, RS.a___, i.to_symbolic([RS.a__]), RS.b___),
+                ),
+                (
+                    function!(
+                        ETS.id,
+                        di.to_symbolic([RS.a__]),
+                        LibraryRep::Dummy.to_symbolic([RS.i__])
+                    ) * function!(
+                        RS.f_,
+                        RS.a___,
+                        LibraryRep::Dummy.to_symbolic([RS.i__]),
+                        RS.b___
+                    ),
+                    function!(RS.f_, RS.a___, di.to_symbolic([RS.a__]), RS.b___),
+                ),
                 (
                     function!(ETS.id, i.to_symbolic([RS.a__]), di.to_symbolic([RS.i__]))
                         * function!(RS.f_, RS.a___, i.to_symbolic([RS.i__]), RS.b___),

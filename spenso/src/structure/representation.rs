@@ -328,7 +328,7 @@ pub struct Dummy {}
 
 impl From<Dummy> for LibraryRep {
     fn from(_value: Dummy) -> Self {
-        ExtendibleReps::MINKOWSKI
+        LibraryRep::Dummy
     }
 }
 
@@ -363,15 +363,11 @@ impl RepName for Dummy {
     fn matches(&self, _: &Self::Dual) -> bool {
         true
     }
-
-    fn is_neg(self, i: usize) -> bool {
-        i > 0
-    }
 }
 
 impl Display for Dummy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "mink")
+        write!(f, "dummy")
     }
 }
 
@@ -379,11 +375,11 @@ impl TryFrom<LibraryRep> for Dummy {
     type Error = RepresentationError;
 
     fn try_from(value: LibraryRep) -> std::result::Result<Self, Self::Error> {
-        if value == ExtendibleReps::MINKOWSKI {
+        if value == LibraryRep::Dummy {
             std::result::Result::Ok(Dummy {})
         } else {
             Err(RepresentationError::WrongRepresentationError(
-                "mink".to_string(),
+                "dummy".to_string(),
                 value.to_string(),
             ))
         }
@@ -391,7 +387,7 @@ impl TryFrom<LibraryRep> for Dummy {
 }
 
 impl BaseRepName for Dummy {
-    const NAME: &'static str = "mink";
+    const NAME: &'static str = "dummy";
 
     fn selfless_base() -> Self::Base {
         Self::default()
@@ -428,7 +424,7 @@ impl<T: RepName> Ord for Representation<T> {
             // self.dim.cmp(&other.dim)
             Ordering::Equal
         } else {
-            self.rep.cmp(&other.rep)
+            self.dim.cmp(&other.dim).then(self.rep.cmp(&other.rep))
         }
     }
 }
@@ -499,7 +495,7 @@ impl Ord for LibraryRep {
             (LibraryRep::Dualizable(a), LibraryRep::Dualizable(b)) => {
                 // println!("a{a}b{b}");
                 // match
-                a.abs().cmp(&b.abs())
+                a.cmp(&b)
             }
             (LibraryRep::SelfDual(_), LibraryRep::Dualizable(_))
             | (LibraryRep::SelfDual(_), LibraryRep::InlineMetric(_))

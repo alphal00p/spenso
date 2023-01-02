@@ -61,11 +61,50 @@ impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
         let mut dummy_structure = Vec::new();
         let mut ids = Vec::new();
 
-        for s in permutation.iter_slice_inv(&self.structure) {
+        if permutation.is_identity() {
+            return (
+                OrderedStructure {
+                    structure: self.structure.into_iter().map(|s| s.to_lib()).collect(),
+                },
+                ids,
+            );
+        }
+        println!("{}", permutation);
+        for s in permutation.iter_slice(&self.structure) {
             let d = s.to_dummy();
             let ogs = s.to_lib();
+            println!("{ogs}");
+            println!("{d}");
             dummy_structure.push(d);
             ids.push(OrderedStructure::id(d, ogs));
+        }
+        let strct = OrderedStructure::new(dummy_structure);
+        if !strct.permutation.is_identity() {
+            panic!("should be identity")
+        }
+        (strct.structure, ids)
+    }
+
+    fn permute_reps(self, ind_perm: &Permutation, rep_perm: &Permutation) -> Self::Permuted {
+        let mut dummy_structure = Vec::new();
+        let mut og_reps = Vec::new();
+        let mut ids = Vec::new();
+
+        if rep_perm.is_identity() {
+            return self.permute(ind_perm);
+        }
+        for s in rep_perm.iter_slice(&self.structure) {
+            og_reps.push(s.rep.to_lib());
+            let d = s.to_dummy();
+            dummy_structure.push(d);
+        }
+
+        for (i, s) in ind_perm.iter_slice(&self.structure).enumerate() {
+            let d = dummy_structure[i];
+            let new_slot = og_reps[i].slot(s.aind);
+            println!("{new_slot}");
+            println!("{d}");
+            ids.push(OrderedStructure::id(d, new_slot));
         }
         let strct = OrderedStructure::new(dummy_structure);
         if !strct.permutation.is_identity() {

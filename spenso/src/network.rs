@@ -12,7 +12,7 @@ use crate::algebra::algebraic_traits::{One, Zero};
 use crate::algebra::ScalarMul;
 use crate::contraction::Contract;
 use crate::network::library::LibraryTensor;
-use crate::structure::permuted::PermuteTensor;
+use crate::structure::permuted::{Perm, PermuteTensor};
 // use crate::shadowing::Concretize;
 use crate::structure::representation::LibrarySlot;
 use crate::structure::StructureError;

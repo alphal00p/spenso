@@ -3,7 +3,10 @@ use std::{collections::HashSet, sync::LazyLock};
 use itertools::Itertools;
 use spenso::{
     network::library::symbolic::ETS,
-    structure::representation::{LibraryRep, Minkowski, RepName},
+    structure::{
+        IndexlessNamedStructure, PermutedStructure,
+        representation::{LibraryRep, Minkowski, RepName},
+    },
 };
 use symbolica::{
     atom::{Atom, AtomCore, AtomView, Symbol},
@@ -11,6 +14,8 @@ use symbolica::{
     id::{MatchSettings, Pattern, Replacement},
     symbol,
 };
+
+use crate::representations::ColorAntiFundamental;
 
 use super::{
     metric::MetricSimplifier,
@@ -398,8 +403,39 @@ impl<'a> ColorSimplifier for AtomView<'a> {
     }
 }
 
+static CF: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> = LazyLock::new(|| {
+    IndexlessNamedStructure::from_iter(
+        [
+            ColorAdjoint {}.new_rep(8),
+            ColorAdjoint {}.new_rep(3),
+            ColorAdjoint {}.new_rep(8),
+        ],
+        CS.f,
+        None,
+    )
+});
+
+static CT: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> = LazyLock::new(|| {
+    IndexlessNamedStructure::from_iter(
+        [
+            ColorAntiFundamental {}.new_rep(3).to_lib(),
+            ColorFundamental {}.new_rep(3).to_lib(),
+            ColorAdjoint {}.new_rep(8).to_lib(),
+        ],
+        CS.t,
+        None,
+    )
+});
+
 #[cfg(test)]
 mod test {
+    use spenso::{
+        structure::{
+            TensorStructure,
+            permuted::{Perm, PermuteTensor},
+        },
+        tensors::symbolic::SymbolicTensor,
+    };
     use symbolica::{parse, parse_lit};
 
     use crate::{
@@ -409,8 +445,37 @@ mod test {
     use super::*;
 
     #[test]
+    fn test_color_structures() {
+        let f = CF
+            .clone()
+            .reindex([4, 3, 2])
+            .unwrap()
+            .map_structure(|a| a.map_structure(|a| SymbolicTensor::from_named(&a).unwrap()));
+
+        let f_s = f.structure.structure.clone();
+        let f_p = f.permute();
+
+        println!(
+            "{}\n{}\n{}\n{}",
+            f_s,
+            f_p,
+            f_p.structure,
+            f_p.expression.simplify_metrics()
+        );
+
+        let t = CT
+            .clone()
+            .reindex([4, 2, 3])
+            .unwrap()
+            .map_structure(|a| a.map_structure(|a| SymbolicTensor::from_named(&a).unwrap()))
+            .permute();
+
+        println!("{t}")
+    }
+
+    #[test]
     fn test_color_simplification() {
-        let atom = parse_lit!(spenso::f(coad(8, 2), coad(8, 2), coad(8, 1)), "spenso");
+        let atom = parse_lit!(f(coad(8, 2), coad(8, 2), coad(8, 1)), "spenso");
         println!("{atom}");
         let simplified = atom.simplify_color().unwrap();
         println!("{simplified}");
@@ -430,22 +495,22 @@ mod test {
                 -g(mink(D,6),mink(D,7))*Q(4,mink(D,5))
             )
             *g(mink(D,4),mink(D,7))
-            *spenso::t(coad(spenso::Nc^2-1,6),cof(spenso::Nc,5),dind(cof(spenso::Nc,4)))
-            *spenso::f(coad(spenso::Nc^2-1,7),coad(spenso::Nc^2-1,8),coad(spenso::Nc^2-1,9))
+            *t(coad(Nc^2-1,6),cof(Nc,5),dind(cof(Nc,4)))
+            *f(coad(Nc^2-1,7),coad(Nc^2-1,8),coad(Nc^2-1,9))
             *𝟙(bis(D,0),bis(D,5))
             *𝟙(bis(D,1),bis(D,4))
             *𝟙(mink(D,2),mink(D,5))
             *𝟙(mink(D,3),mink(D,6))
-            *𝟙(coad(spenso::Nc^2-1,2),coad(spenso::Nc^2-1,7))
-            *𝟙(coad(spenso::Nc^2-1,3),coad(spenso::Nc^2-1,8))
-            *𝟙(coad(spenso::Nc^2-1,6),coad(spenso::Nc^2-1,9))
-            *𝟙(cof(spenso::Nc,0),dind(cof(spenso::Nc,5)))
-            *𝟙(cof(spenso::Nc,4),dind(cof(spenso::Nc,1)))
-            *spenso::gamma(mink(D,4),bis(D,5),bis(D,4))
-            *spenso::vbar(1,bis(D,1))
-            *spenso::u(0,bis(D,0))
-            *spenso::ϵbar(2,mink(D,2))
-            *spenso::ϵbar(3,mink(D,3))",
+            *𝟙(coad(Nc^2-1,2),coad(Nc^2-1,7))
+            *𝟙(coad(Nc^2-1,3),coad(Nc^2-1,8))
+            *𝟙(coad(Nc^2-1,6),coad(Nc^2-1,9))
+            *𝟙(cof(Nc,0),dind(cof(Nc,5)))
+            *𝟙(cof(Nc,4),dind(cof(Nc,1)))
+            *gamma(mink(D,4),bis(D,5),bis(D,4))
+            *vbar(1,bis(D,1))
+            *u(0,bis(D,0))
+            *ϵbar(2,mink(D,2))
+            *ϵbar(3,mink(D,3))",
                 "spenso"
             ),
             parse_lit!(

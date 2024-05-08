@@ -1,0 +1,35 @@
+[package]
+name = "spensor"
+version = "0.1.0"
+edition = "2021"
+
+
+[profile.bench]
+lto = "fat"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+insta = { version = "1.38.0", features = ["yaml", "json", "ron", "toml"] }
+
+[[bench]]
+name = "gamma_net"
+harness = false
+
+[[bench]]
+name = "evaluate_net"
+harness = false
+
+[dependencies]
+ahash = { version = "0.8.11", features = ["serde"] }
+derive_more = "0.99.17"
+duplicate = "1.0.0"
+enum-try-as-inner = "0.1.1"
+indexmap = { version = "2.2.6", features = ["serde"] }
+num = { version = "0.4.2", features = ["serde"] }
+permutation = "0.4.1"
+rand = "0.8.5"
+rand_xoshiro = "0.6.0"
+serde = "1.0.201"
+slotmap = { version = "1.0.7", features = ["serde"] }
+smartstring = { version = "1.0.1", features = ["serde"] }
+symbolica = { git = "https://github.com/alphal00p/symbolica" }

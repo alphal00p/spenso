@@ -133,6 +133,7 @@ duplicate! {
     [f64] [Atom];
     [Atom] [Atom];
     [Complex<f64>] [Atom];
+    [i32] [Atom];
     [f32] [f64];
     [i32] [f64];]
 
@@ -213,6 +214,15 @@ impl TrySmallestUpgrade<Atom> for f64 {
     }
 }
 
+impl TrySmallestUpgrade<Atom> for i32 {
+    type LCM = Atom;
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
+        let symnum = Atom::new_num(*self as i32);
+
+        Some(Cow::Owned(symnum))
+    }
+}
+
 impl TrySmallestUpgrade<Atom> for Complex<f64> {
     type LCM = Atom;
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
@@ -228,6 +238,7 @@ impl TrySmallestUpgrade<Atom> for Complex<f64> {
 duplicate! {
     [smaller larger;
     [f64] [Atom];
+    [i32] [Atom];
     [Complex<f64>] [Atom];
     [f64][Complex<f64>];
     [f32] [f64];

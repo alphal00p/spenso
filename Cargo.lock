@@ -857,7 +857,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "spensor"
+name = "spencer"
 version = "0.1.0"
 dependencies = [
  "ahash",

@@ -1,13 +1,12 @@
-use std::{fmt::Debug, ops::Neg};
+use std::fmt::Debug;
+use std::ops::Neg;
 
 use spencer::{
     ufo::{euclidean_four_vector, gamma},
-    AbstractIndex, ContractionCountStructure, FallibleMul, MixedTensor, Representation,
-    SetTensorData, Slot, SparseTensor, TensorNetwork, TensorStructure,
+    AbstractIndex, ContractionCountStructure, FallibleMul, HasTensorData, MixedTensor,
+    Representation, SetTensorData, Slot, SparseTensor, TensorNetwork, TensorStructure,
 };
-
 use ahash::{AHashMap, HashMap};
-use criterion::{criterion_group, criterion_main, Criterion};
 
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
@@ -16,19 +15,6 @@ use symbolica::{
     representations::{Atom, AtomView},
     state::State,
 };
-
-fn indices(n: i32, m: i32) -> Vec<i32> {
-    let spacings: [i32; 2] = [n, m];
-    let mut start = 1;
-    let mut ranges = Vec::new();
-
-    for &spacing in spacings.iter() {
-        ranges.push((start..start + spacing).chain(std::iter::once(-1)));
-        start += spacing;
-    }
-
-    ranges.into_iter().flatten().collect()
-}
 
 fn gamma_net_param(
     minkindices: &[i32],
@@ -93,7 +79,6 @@ where
 
     tensor
 }
-
 fn const_map_gen<'a, 'b, I>(
     params: &'a [MixedTensor<I>],
     const_map: &mut HashMap<AtomView<'b>, symbolica::domains::float::Complex<f64>>,
@@ -111,8 +96,16 @@ fn const_map_gen<'a, 'b, I>(
             .append_const_map(&pdata, const_map);
     }
 }
-fn criterion_benchmark(c: &mut Criterion) {
+
+fn main() {
     let one = Complex::<f64>::new(1.0, 0.0);
+
+    let notnorm: u8 = 0b10000000;
+    let mut f: u8 = 3;
+    f |= notnorm;
+    println!("{:?}", f);
+    f |= notnorm;
+    println!("{:?}", f);
 
     let vbar = [
         one.mul_fallible(3.0).unwrap(),
@@ -126,34 +119,50 @@ fn criterion_benchmark(c: &mut Criterion) {
         one.mul_fallible(4.2).unwrap(),
         one.mul_fallible(4.3).unwrap(),
     ];
-    let minkindices = indices(20, 24);
+    let spacings: [i32; 2] = [2, 4];
+    let mut start = 1;
+    let mut ranges = Vec::new();
 
-    let mut net = gamma_net_param(&minkindices, vbar, u);
+    for &spacing in spacings.iter() {
+        ranges.push((start..start + spacing).chain(std::iter::once(-1)));
+        start += spacing;
+    }
+
+    let vec: Vec<i32> = ranges.into_iter().flatten().collect();
+
+    let mut net = gamma_net_param(&vec, vbar, u);
     net.generate_params();
-    let params = net.params.clone();
-    println!("{:?}", params.len());
-    net.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(2));
     let mut const_map = AHashMap::new();
+    let params = net.params.clone();
+    const_map_gen(&params, &mut const_map);
 
     let i = Atom::new_var(State::I);
     const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.));
 
-    let mut group = c.benchmark_group("evaluate_net");
+    // net.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(2));
 
-    group.bench_function("Evaluate_net", |b| {
-        b.iter_batched(
-            || net.clone(),
-            |mut net| {
-                const_map_gen(&params, &mut const_map);
+    // for (i, n) in &net.graph.nodes {
+    //     match n {
+    //         MixedTensor::Symbolic(s) => {
+    //             for (_, a) in s.try_as_dense().unwrap().iter_flat() {
+    //                 println!("{}", a);
+    //             }
+    //         }
+    //         _ => {}
+    //     }
+    // }
 
-                net.evaluate_complex(&const_map);
-
-                net.contract();
-            },
-            criterion::BatchSize::SmallInput,
-        )
-    });
+    // for p in const_map.keys() {
+    //     if let AtomView::Fun(f) = p {
+    //         println!(
+    //             "Map {}, with id {:?},{:?}",
+    //             State::get_name(f.get_symbol()),
+    //             f.get_symbol(),
+    //             f
+    //         );
+    //     }
+    // }
+    net.evaluate_complex(&const_map);
+    net.contract();
+    println!("{:?}", net.result().try_as_complex().unwrap().data()[0]);
 }
-
-criterion_group!(benches, criterion_benchmark);
-criterion_main!(benches);

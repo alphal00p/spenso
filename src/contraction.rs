@@ -12,7 +12,7 @@ use std::{
     ops::Neg,
 };
 
-trait LeastCommonStorage<Other: HasTensorData + SetTensorData>: HasTensorData + SetTensorData {
+pub trait LeastCommonStorage<Other: HasTensorData + SetTensorData>: HasTensorData + SetTensorData {
     type OutStorage<LCMData>: SetTensorData<SetData = LCMData>;
     fn least_common_storage<LCMData>(&self, other: &Other) -> Self::OutStorage<LCMData>
     where
@@ -129,7 +129,7 @@ where
     }
 }
 
-trait ExteriorProduct<T> {
+pub trait ExteriorProduct<T> {
     type Out;
     fn exterior_product(&self, other: &T) -> Self::Out;
 }
@@ -229,7 +229,7 @@ pub trait SingleContract<T> {
     fn single_contract(&self, other: &T, i: usize, j: usize) -> Option<Self::LCM>;
 }
 
-trait MultiContract<T> {
+pub trait MultiContract<T> {
     type LCM;
     fn multi_contract(&self, other: &T) -> Option<Self::LCM>;
 }

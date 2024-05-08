@@ -1,6 +1,6 @@
 use std::ops::Neg;
 
-use _spencer::tensor::{
+use spencer::{
     ufo::{
         euclidean_four_vector, euclidean_four_vector_sym, gamma, gammasym, mink_four_vector,
         mink_four_vector_sym,

@@ -1,0 +1,36 @@
+---
+source: src/tests.rs
+expression: dense_dense
+---
+DenseTensor(
+  data: [
+    -2085011,
+    -594613,
+    -1160080,
+    -1053333,
+    3906441,
+    -1336135,
+    -1890749,
+    -2767740,
+    -1313075,
+    3028951,
+    1409117,
+    4247860,
+    -2430513,
+    6765175,
+    -922195,
+    3866621,
+  ],
+  structure: VecStructure(
+    structure: [
+      Slot(
+        index: AbstractIndex(5),
+        representation: Lorentz(Dimension(4)),
+      ),
+      Slot(
+        index: AbstractIndex(4),
+        representation: Lorentz(Dimension(4)),
+      ),
+    ],
+  ),
+)

@@ -31,6 +31,10 @@ use symbolica::state::{State, Workspace};
 use std::collections::HashSet;
 use std::{cmp::Ordering, collections::HashMap};
 
+use crate::Fiber;
+use crate::TensorStructureFiberIterator;
+use crate::TensorStructureMultiFiberIterator;
+
 use super::ufo;
 use super::DenseTensor;
 use super::MixedTensor;
@@ -135,6 +139,14 @@ impl PartialOrd<Dimension> for usize {
 /// A  concrete index, i.e. the concrete usize/index of the corresponding abstract index
 
 pub type ConcreteIndex = usize;
+
+pub struct ExpandedConcreteIndex{
+    indices: Vec<ConcreteIndex>
+}
+
+pub struct FlatIndex{
+    index: usize
+}
 
 pub const EUCLIDEAN: &str = "euc";
 pub const LORENTZ: &str = "lor";
@@ -547,6 +559,17 @@ pub trait TensorStructure {
     fn structure(&self) -> &Self::Structure;
 
     fn mut_structure(&mut self) -> &mut Self::Structure;
+
+    // fn iter_index_along_fiber(&self,fiber_position: &[bool]  )-> TensorStructureMultiFiberIterator where Self: Sized{
+    //     TensorStructureMultiFiberIterator::new(self, fiber_position)
+    // }
+
+    // fn single_fiber_at(&self,fiber_pos:usize)->Fiber{
+    //     let mut  f =Fiber::zeros(self.external_structure().len());
+    //     f.free(fiber_pos);
+    //     f.is_single();
+    //     f
+    // }
 
     /// checks if the tensor has the same exact structure as another tensor
     fn same_content(&self, other: &Self) -> bool {

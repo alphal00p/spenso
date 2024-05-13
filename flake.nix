@@ -25,8 +25,13 @@
         # you can access crate outputs under `config.nci.outputs.<crate name>` (see documentation)
         crateOutputs = config.nci.outputs."spencer";
       in {
-        # export the crate devshell as the default devshell
-        devShells.default = crateOutputs.devShell;
+        devShells.default = config.nci.outputs."spencer".devShell.overrideAttrs (old: {
+          packages = (old.packages or []) ++ [pkgs.cargo-insta];
+          shellHook = ''
+            ${old.shellHook or ""}
+            echo "Helloo"
+          '';
+        });
         # export the release package of the crate as default package
         packages.default = crateOutputs.packages.release;
       };

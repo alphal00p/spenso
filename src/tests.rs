@@ -1,3 +1,4 @@
+use crate::{Fiber, FiberClass};
 use crate::{
     ufo::mink_four_vector, Contract, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSub,
     GetTensorData, HasTensorData, MixedTensor, Representation, SparseTensor, StructureContract,
@@ -7,6 +8,7 @@ use ahash::{HashMap, HashMapExt};
 
 use indexmap::{IndexMap, IndexSet};
 
+use insta::assert_ron_snapshot;
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 
@@ -53,6 +55,9 @@ where
 
     tensor
 }
+
+
+
 
 fn test_structure(length: usize, seed: u64) -> VecStructure {
     let mut rng = Xoroshiro64Star::seed_from_u64(seed);
@@ -137,6 +142,21 @@ fn indexflatten() {
     let idx = vec![1, 2, 3, 1];
     let flatidx = a.flat_index(&idx).unwrap();
     assert_eq!(idx, a.expanded_index(flatidx).unwrap());
+}
+
+
+#[test]
+fn fibers(){
+
+    let a = test_structure(5, 5);
+    let fiber = Fiber::from_filter(&[true,true,false,false,true], &a);
+    let fiberclass: FiberClass<'_,VecStructure>= fiber.into();
+    let iter = fiberclass.clone().iter();
+    let fciter:Vec<usize>= iter.map(|fc|fc.zero_index).collect();
+
+    let fiter:Vec<usize>= fiberclass.iter().flat_map(|fc|fc.collect::<Vec<usize>>()).collect();
+    assert_ron_snapshot!((a,fiter,fciter));
+    
 }
 
 #[test]
@@ -370,6 +390,8 @@ fn all_single_contractions() {
         let dense_sparse = densor_b.contract(&spensor_a).unwrap();
         let sparse_dense = spensor_b.contract(&densor_a).unwrap();
 
+       
+
         if dense_dense.data() != sparse_sparse.data() {
             sseq.push(s);
         }
@@ -442,6 +464,8 @@ fn multi_contract() {
         sparse_dense.data(),
         "S-D not match at seed: {s}"
     );
+
+    insta::assert_ron_snapshot!(dense_dense);
 }
 
 #[test]

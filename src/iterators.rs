@@ -7,15 +7,26 @@
 //! The iterators are built using the basic index iterators provided by the `TensorStructureIterator`s.
 //!
 
-use std::ops::{AddAssign, Neg, SubAssign};
+use std::{fmt::{write, Debug, Display}, ops::{AddAssign, Index, Neg, SubAssign}};
+
+use crate::VecStructure;
 
 use super::{
     ConcreteIndex, DenseTensor, Dimension, GetTensorData, Representation, Slot, SparseTensor,
     TensorStructure,
 };
-use ahash::AHashMap;
+use ahash::{AHashMap, AHashSet};
 
+use bitvec::vec::{self, BitVec};
 use permutation::Permutation;
+use serde::{Deserialize, Serialize};
+
+
+use bitvec::prelude::*;
+
+
+
+
 
 /// An iterator over all indices of a tensor structure
 ///
@@ -48,6 +59,464 @@ impl<'a> TensorStructureIndexIterator<'a> {
         }
     }
 }
+
+
+
+
+#[derive(Debug,Clone,Copy,Serialize,Deserialize)]
+pub enum FiberClassIndex{
+    Free,
+    Fixed,
+}
+
+impl FiberClassIndex{
+    pub fn is_free(&self)->bool{
+        if let FiberClassIndex::Free = self{
+            return true
+        }else{
+            return false
+        }
+    }
+
+    pub fn is_fixed(&self)->bool{
+        !self.is_free()
+    }
+
+
+}
+
+
+
+#[derive(Debug,Clone,Copy,Serialize,Deserialize)]
+pub enum FiberIndex{
+    Free,
+    Fixed(usize)
+}
+
+impl FiberIndex{
+    pub fn is_free(&self)->bool{
+        if let FiberIndex::Free = self{
+            return true
+        }else{
+            return false
+        }
+    }
+
+    pub fn is_fixed(&self)->bool{
+        !self.is_free()
+    }
+
+
+}
+
+impl From<usize> for FiberIndex{
+    fn from(value: usize) -> Self {
+        FiberIndex::Fixed(value)
+    }
+}
+
+
+impl Display for FiberIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self{
+            FiberIndex::Fixed(val)=> {write!(f,"{val}")},
+            FiberIndex::Free=>{write!(f,":")}
+        }
+    }
+}
+
+
+pub struct FiberClass<'a,I:TensorStructure>{
+    fiber: Fiber<'a,I>,
+    /// true is fixed (but varying when iterating) and false is free (but fixed to 0 when iterating)
+    free: BitVec, //check performance when it is AHashSet<usize>
+}
+
+ 
+impl<'a,I:TensorStructure> Clone for FiberClass<'a,I>{
+    fn clone(&self) -> Self {
+        FiberClass { fiber: self.fiber.clone(), free: self.free.clone() }
+    }
+}
+
+impl<'a,I> Index<usize> for FiberClass<'a,I> where I:TensorStructure{
+    type Output = FiberClassIndex;
+
+    fn index(&self, index: usize) -> &Self::Output {
+    if self.free[index]{
+        return &FiberClassIndex::Free
+    }else {
+        return &FiberClassIndex::Fixed
+    }
+    }
+}
+
+impl<'a,I:TensorStructure> From<Fiber<'a,I>> for FiberClass<'a,I> {
+    fn from(fiber: Fiber<'a,I>) -> Self {
+
+        let free = fiber.bitvecinv();
+        FiberClass { fiber , free  }
+    }
+    
+}
+
+impl<'a,I:TensorStructure> FiberClass<'a,I>{
+    pub fn strides(&self)->Vec<usize>{
+        self.fiber.strides()
+    }
+
+    pub fn iter(self)-> FiberClassIterator<'a,I>{
+        FiberClassIterator::new(self)
+    }
+
+    pub fn fiber(self)->Fiber<'a,I>{
+        self.fiber
+    }
+
+    pub fn shape(&self)-> Vec<Dimension>{
+        self.fiber.shape()
+    }
+
+    pub fn order(&self)->usize{
+        self.fiber.order()
+    }
+
+    
+    
+}
+
+
+pub struct FiberClassIterator<'b,N:TensorStructure>{
+    pub fiber: FiberIterator<'b,N>,
+    pub varying_fiber_index: usize,
+    pub increment: usize,
+    pub fixed_strides: Vec<usize>,
+    pub shifts: Vec<usize>,
+    pub max: usize,
+}
+
+
+impl<'b,N:TensorStructure> FiberClassIterator<'b,N>{
+    pub fn new(class: FiberClass<'b,N>) -> Self
+    {
+
+
+        let strides = class.strides();
+        let dims = class.shape();
+        let order = class.order();
+        let mut max = 0;
+
+        // max -= 1;
+
+        let mut increment = 1;
+
+        // println!("{:?}{}", fiber_positions, increment);
+        let mut fixed_strides = vec![];
+        let mut fixed_strides_conj = vec![];
+        let mut shifts = vec![];
+        let mut shifts_conj = vec![];
+
+        let mut before = true;
+        let mut has_seen_stride = false;
+        let mut has_seen_stride_conj = false;
+        let mut first = true;
+        let mut first_conj = true;
+        let mut increment_conj = 1;
+
+        let mut max_conj = 0;
+
+        for pos in (0..order).rev() {
+            let fi = class[pos];
+
+            if fi.is_fixed() && !before {
+                if !first {
+                    has_seen_stride = true;
+                    fixed_strides.push(strides[pos]);
+                }
+
+                if has_seen_stride_conj {
+                    shifts_conj.push(strides[pos]);
+                }
+            }
+            if fi.is_free() && before {
+                if has_seen_stride {
+                    shifts.push(strides[pos]);
+                }
+
+                if !first_conj {
+                    fixed_strides_conj.push(strides[pos]);
+                    has_seen_stride_conj = true;
+                }
+            }
+
+            if fi.is_fixed() {
+                max_conj += (usize::from(dims[pos]) - 1) * strides[pos];
+                if first_conj {
+                    increment_conj = strides[pos];
+                    first_conj = false;
+                }
+            } else {
+                max += (usize::from(dims[pos]) - 1) * strides[pos];
+                if first {
+                    increment = strides[pos];
+                    first = false;
+                }
+            }
+
+            before = fi.is_fixed();
+        }
+
+        if fixed_strides.len() > shifts.len() {
+            fixed_strides.pop();
+        }
+
+        if fixed_strides_conj.len() > shifts_conj.len() {
+            fixed_strides_conj.pop();
+        }
+
+        let fiber = FiberIterator{
+            fiber:class.fiber(),
+            varying_fiber_index: 0,
+            fixed_strides: fixed_strides_conj,
+            increment:increment_conj,
+            max: max_conj,
+            shifts:shifts_conj,
+            zero_index:0,
+        };
+
+        FiberClassIterator { 
+            fiber,
+            varying_fiber_index: 0,
+            increment,
+            fixed_strides,
+            shifts,
+            max,
+        }
+    }
+}
+
+
+impl<'a,I:TensorStructure> FiberClassIterator<'a,I>{
+    pub fn increment(&mut self) -> Option<usize>{
+        if self.varying_fiber_index > self.max {
+            return None;
+        }
+        let index = self.varying_fiber_index;
+
+        self.varying_fiber_index += self.increment;
+
+        for (i, s) in self.fixed_strides.iter().enumerate() {
+            if self.varying_fiber_index % s == 0 {
+                self.varying_fiber_index += self.shifts[i] - s;
+            } else {
+                break;
+            }
+        }
+        Some(index)
+    }
+}
+
+
+
+
+impl<'a,I:TensorStructure> Iterator for FiberClassIterator<'a,I>{
+    type Item = FiberIterator<'a,I>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let shift = self.increment()?;
+        self.fiber.shift(shift);
+        Some(self.fiber.clone())
+    }
+}
+#[derive(Debug)]
+pub struct Fiber<'a,I:TensorStructure>{
+    structure: &'a I,
+    indices: Vec<FiberIndex>,
+    is_single: FiberIndex
+}
+
+
+impl<'a,I:TensorStructure> Clone for Fiber<'a,I>{
+    fn clone(&self) -> Self {
+        Fiber { structure: self.structure.clone(), indices: self.indices.clone(), is_single: self.is_single.clone() }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct FiberIterator<'a,I:TensorStructure>{
+    pub fiber: Fiber<'a,I>,
+    pub varying_fiber_index: usize,
+    pub increment: usize,
+    pub fixed_strides: Vec<usize>,
+    pub shifts: Vec<usize>,
+    pub max: usize,
+    pub zero_index: usize,
+}
+
+
+impl<'a,I:TensorStructure> Clone for FiberIterator<'a,I>{
+    fn clone(&self) -> Self {
+        FiberIterator{
+            fiber: self.fiber.clone(),
+            varying_fiber_index: self.varying_fiber_index,
+            increment: self.increment,
+            max: self.max,
+            zero_index: self.zero_index,
+            fixed_strides: self.fixed_strides.clone(),
+            shifts: self.shifts.clone(),
+        }
+    }
+}
+
+
+impl<'a,I:TensorStructure> FiberIterator<'a,I>{
+
+
+   
+    pub fn increment(&mut self) -> Option<usize>{
+        if self.varying_fiber_index > self.max {
+            return None;
+        }
+        let index = self.varying_fiber_index+self.zero_index;
+
+        self.varying_fiber_index += self.increment;
+
+        for (i, s) in self.fixed_strides.iter().enumerate() {
+            if self.varying_fiber_index % s == 0 {
+                self.varying_fiber_index += self.shifts[i] - s;
+            } else {
+                break;
+            }
+        }
+        Some(index)
+    }
+
+    pub fn reset(&mut self) {
+        self.varying_fiber_index = 0;
+    }
+
+    pub fn shift(&mut self, shift: usize){
+        self.zero_index =shift; 
+    }
+}
+
+
+impl<'a> Iterator for FiberIterator<'a,VecStructure>{
+    type Item = usize;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.increment()
+    }
+}
+
+
+impl<'a,I> Index<usize> for Fiber<'a,I> where I:TensorStructure{
+    type Output = FiberIndex;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &(self.indices[index])
+    }
+}
+
+    
+
+
+impl<'a,I> Fiber<'a,I> where I:TensorStructure{
+
+    pub fn strides(&self)-> Vec<usize>{
+        self.structure.strides()
+    }
+
+    pub fn shape(&self) -> Vec<Dimension>{
+        self.structure.shape()
+    }
+
+    pub fn order(&self)->usize{
+        self.structure.order()
+    }
+
+    pub fn conj(self)->Self{
+        self
+    }
+
+    pub fn bitvec(&self)-> BitVec{
+        self.indices.iter().map(|x| x.is_free()).collect()
+    }
+
+    pub fn bitvecinv(&self)-> BitVec{
+
+        self.indices.iter().map(|x| x.is_fixed()).collect()
+    }
+    pub fn from_flat(flat:usize,structure:&'a I)->Fiber<'a,I>{
+        let expanded = structure.expanded_index(flat).unwrap();
+        
+        
+        Fiber { structure, indices: expanded.into_iter().map(|i|FiberIndex::from(i)).collect(), is_single: FiberIndex::Free }
+
+    }
+    /// true is free, false is fixed
+    pub fn from_filter(filter: &[bool],structure:&'a I)-> Fiber<'a,I>{
+        let mut f =Fiber { structure, indices: filter.into_iter().map(|i|if *i { FiberIndex::Free} else {FiberIndex::Fixed(0)}).collect(), is_single: FiberIndex::Free };
+        f.is_single();
+        f
+    }
+    pub fn zeros(structure:&'a I)->Fiber<'a,I>{
+        Fiber{
+            indices: vec![FiberIndex::Fixed(0);structure.order()],
+            is_single: FiberIndex::Free,
+            structure
+        }
+    }
+
+    pub fn fix(&mut self,pos: usize,val: usize){
+        if let   FiberIndex::Fixed(single_pos) = self.is_single {
+            if single_pos==pos{
+                self.is_single=FiberIndex::Free;
+            }
+        }
+
+        self.indices[pos]=val.into();
+    }
+
+    pub fn is_single(&mut self)-> FiberIndex{
+        if let FiberIndex::Fixed(pos)=self.is_single{
+            FiberIndex::Fixed(pos)
+        } else {
+            let mut has_one = false;
+            let mut pos = 0;
+
+            for (posi,index) in self.indices.iter().enumerate(){
+                if let FiberIndex::Free = index{
+                    if !has_one{
+                        has_one= true;
+                        pos = posi;
+                    } else {
+                        has_one = false;
+
+                    }
+                }
+            }
+            if has_one{
+                return FiberIndex::Fixed(pos)
+            }
+            FiberIndex::Free
+        }
+    }
+
+    pub fn free(&mut self,pos: usize){
+        self.indices[pos]=FiberIndex::Free;
+    }   
+}
+
+impl<'a,I:TensorStructure> Display for Fiber<'a,I>{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for index in self.indices.iter(){
+            write!(f,"{} ",index)?
+        }
+        Ok(())
+    }
+}
+
 
 /// An iterator over all indices of a tensor structure, keeping an index fixed
 
@@ -133,6 +602,18 @@ impl Iterator for TensorStructureFiberIterator {
     }
 }
 
+
+
+pub struct TensorStructureFiberClassIterator<'a,S:TensorStructure> {
+    pub fiber: Fiber<'a,S>,
+    pub increment: usize,
+    pub fixed_strides: Vec<usize>,
+    pub shifts: Vec<usize>,
+    pub max: usize,
+}
+
+
+
 /// Iterator over all indices of a tensor structure, fixing a subset of indices
 ///
 /// This version directly iterates over the expanded indices.
@@ -208,6 +689,14 @@ pub struct TensorStructureMultiFiberIterator {
     pub max: usize,
 }
 
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+
+enum FiberError {
+    #[error("Fiber is not the right size")]
+    IncompatibleSize,
+}
 impl TensorStructureMultiFiberIterator {
     /// Create a new multi fiber iterator
     ///
@@ -221,13 +710,13 @@ impl TensorStructureMultiFiberIterator {
     /// Smartly constructs the shifts and strides for each fixed index.
     /// It skippes over adjacent fixed indices for the strides.
     ///
-    pub fn new<N>(structure: &N, fiber_positions: &[bool]) -> TensorStructureMultiFiberIterator
+    pub fn new<N>(fiber: &Fiber<N>) -> TensorStructureMultiFiberIterator
     where
         N: TensorStructure,
     {
-        let strides = structure.strides();
-        let dims = structure.shape();
-        let order = structure.order();
+        let strides = fiber.structure.strides();
+        let dims = fiber.structure.shape();
+        let order = fiber.structure.order();
         let mut max = 0;
 
         // max -= 1;
@@ -242,17 +731,17 @@ impl TensorStructureMultiFiberIterator {
         let mut first = true;
 
         for pos in (0..order).rev() {
-            let is_fixed = fiber_positions[pos];
+            let fi = fiber[pos];
 
-            if is_fixed && !before && !first {
+            if fi.is_fixed() && !before && !first {
                 has_seen_stride = true;
                 fixed_strides.push(strides[pos]);
             }
-            if !is_fixed && before && has_seen_stride {
+            if fi.is_free() && before && has_seen_stride {
                 shifts.push(strides[pos]);
             }
 
-            if !is_fixed {
+            if fi.is_free() {
                 max += (usize::from(dims[pos]) - 1) * strides[pos];
                 if first {
                     increment = strides[pos];
@@ -260,7 +749,7 @@ impl TensorStructureMultiFiberIterator {
                 }
             }
 
-            before = is_fixed;
+            before = fi.is_fixed();
         }
 
         if fixed_strides.len() > shifts.len() {
@@ -442,8 +931,7 @@ impl TensorStructureMultiFiberMetricIterator {
     /// # Arguments
     ///
     pub fn new<N>(
-        structure: &N,
-        fiber_positions: &[bool],
+        fiber:&Fiber<N>,
         permutation: Permutation,
     ) -> TensorStructureMultiFiberMetricIterator
     where
@@ -452,11 +940,11 @@ impl TensorStructureMultiFiberMetricIterator {
         // for f in fiber_positions {
         //     filter[*f] = true;
         // }
-        let iterator = TensorStructureMultiFiberIterator::new(structure, fiber_positions);
+        let iterator = TensorStructureMultiFiberIterator::new(fiber);
 
-        let mut f = fiber_positions.iter();
-        let mut reps = structure.reps();
-        reps.retain(|_| !*f.next().unwrap_or_else(|| unreachable!()));
+        let mut f = fiber.indices.iter();
+        let mut reps = fiber.structure.reps();
+        reps.retain(|_| f.next().unwrap_or_else(|| unreachable!()).is_free());
         let capacity = reps.iter().map(usize::from).product();
         let indices = vec![0; reps.len()];
         // println!("Reps : {:?}", reps);

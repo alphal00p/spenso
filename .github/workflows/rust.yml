@@ -13,6 +13,8 @@ jobs:
   build:
     environment: symbolica_keys
     runs-on: ubuntu-latest
+    env:
+          SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
 
     steps:
     - uses: actions/checkout@v4

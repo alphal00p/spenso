@@ -190,8 +190,8 @@ impl Representation {
     ///
     /// # Example
     /// ```
-    /// # use _gammaloop::tensor::Representation;
-    /// # use _gammaloop::tensor::Dimension;
+    /// # use spencer::Representation;
+    /// # use spencer::Dimension;
     /// let spin = Representation::Bispinor(Dimension(5));
     ///
     /// let metric_diag = spin.negative();
@@ -270,8 +270,8 @@ impl Representation {
     ///
     /// ```
     /// # use symbolica::state::{State, Workspace};
-    /// # use _gammaloop::tensor::Representation;
-    /// # use _gammaloop::tensor::Dimension;
+    /// # use spencer::Representation;
+    /// # use spencer::Dimension;
     ///
     /// let mink = Representation::Lorentz(Dimension(4));
     ///
@@ -377,7 +377,7 @@ impl std::fmt::Display for Representation {
 ///
 /// It can be built from a tuple of `usize` and `Representation`
 /// ```
-/// # use _gammaloop::tensor::{Representation,Slot,Dimension,AbstractIndex};
+/// # use spencer::{Representation,Slot,Dimension,AbstractIndex};
 /// let mink = Representation::Lorentz(Dimension(4));
 /// let mu = Slot::from((AbstractIndex(0),mink));
 ///
@@ -386,7 +386,7 @@ impl std::fmt::Display for Representation {
 ///
 /// It can also be built from a tuple of `usize` and `usize`, where we default to `Representation::Euclidean`
 /// ```
-/// # use _gammaloop::tensor::{Representation,Slot};
+/// # use spencer::{Representation,Slot};
 /// let mu = Slot::from((0,4));
 /// assert_eq!("id0euc4",format!("{}",mu));
 /// ```
@@ -402,7 +402,7 @@ pub struct Slot {
 ///
 /// ```
 ///
-/// # use _gammaloop::tensor::{Representation,Slot,Dimension,AbstractIndex};
+/// # use spencer::{Representation,Slot,Dimension,AbstractIndex};
 /// # use symbolica::representations::AtomView;
 
 ///    let mink = Representation::Lorentz(Dimension(4));
@@ -524,7 +524,7 @@ impl Slot {
     ///
     /// ```
     /// # use symbolica::state::{State, Workspace};
-    /// # use _gammaloop::tensor::{Representation,Slot,Dimension,AbstractIndex};
+    /// # use spencer::{Representation,Slot,Dimension,AbstractIndex};
     /// let mink = Representation::Lorentz(Dimension(4));
     /// let mu = Slot::from((AbstractIndex(0),mink));
     ///

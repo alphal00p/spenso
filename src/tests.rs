@@ -1,9 +1,9 @@
-use crate::{Fiber, FiberClass};
 use crate::{
     ufo::mink_four_vector, Contract, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSub,
     GetTensorData, HasTensorData, MixedTensor, Representation, SparseTensor, StructureContract,
     TensorStructure,
 };
+use crate::{AbstractFiber, Fiber, FiberClass};
 use ahash::{HashMap, HashMapExt};
 
 use indexmap::{IndexMap, IndexSet};
@@ -22,7 +22,6 @@ use super::{
     NamedStructure, NumTensor, SetTensorData, Shadowable, Slot, TensorNetwork, TryIntoUpgrade,
     VecStructure,
 };
-
 
 fn test_tensor<D, S>(structure: S, seed: u64, range: Option<(D, D)>) -> SparseTensor<D, S>
 where
@@ -55,9 +54,6 @@ where
 
     tensor
 }
-
-
-
 
 fn test_structure(length: usize, seed: u64) -> VecStructure {
     let mut rng = Xoroshiro64Star::seed_from_u64(seed);
@@ -144,19 +140,34 @@ fn indexflatten() {
     assert_eq!(idx, a.expanded_index(flatidx).unwrap());
 }
 
+#[test]
+fn single_fiber() {
+    let a = test_structure(5, 5);
+    let fiber = Fiber::from_filter(&[true, false, false, false, false], &a);
+    assert!(fiber.single().is_some());
+
+    let iter = fiber.iter();
+
+    let fciter: Vec<usize> = iter.collect();
+
+    for i in fciter.iter() {
+        println!("{:?}", a.expanded_index(*i).unwrap());
+    }
+}
 
 #[test]
-fn fibers(){
-
+fn fibers() {
     let a = test_structure(5, 5);
-    let fiber = Fiber::from_filter(&[true,true,false,false,true], &a);
-    let fiberclass: FiberClass<'_,VecStructure>= fiber.into();
+    let fiber = Fiber::from_filter(&[true, true, false, false, true], &a);
+    let fiberclass: FiberClass<'_, VecStructure> = fiber.into();
     let iter = fiberclass.clone().iter();
-    let fciter:Vec<usize>= iter.map(|fc|fc.zero_index).collect();
+    let fciter: Vec<usize> = iter.map(|fc| fc.iter.zero_index).collect();
 
-    let fiter:Vec<usize>= fiberclass.iter().flat_map(|fc|fc.collect::<Vec<usize>>()).collect();
-    assert_ron_snapshot!((a,fiter,fciter));
-    
+    let fiter: Vec<usize> = fiberclass
+        .iter()
+        .flat_map(|fc| fc.collect::<Vec<usize>>())
+        .collect();
+    assert_ron_snapshot!((a, fiter, fciter));
 }
 
 #[test]
@@ -390,8 +401,6 @@ fn all_single_contractions() {
         let dense_sparse = densor_b.contract(&spensor_a).unwrap();
         let sparse_dense = spensor_b.contract(&densor_a).unwrap();
 
-       
-
         if dense_dense.data() != sparse_sparse.data() {
             sseq.push(s);
         }
@@ -432,14 +441,13 @@ fn multi_contract() {
     let spensor_b: SparseTensor<i32, VecStructure> = test_tensor(structb.clone(), s + 4, range);
     let densor_b: DenseTensor<i32, VecStructure> = spensor_b.to_dense();
 
-
     let data_a = DataTensor::from(spensor_a.clone());
     let sym_a: DataTensor<Atom> = data_a.try_into_upgrade().unwrap();
 
     let data_b = DataTensor::from(spensor_b.clone());
     let sym_b: DataTensor<Atom> = data_b.try_into_upgrade().unwrap();
 
-    let b  = sym_b.contract(&sym_a);
+    let b = sym_b.contract(&sym_a);
 
     <DataTensor<Atom, _> as Contract<DataTensor<Atom, _>>>::contract(&sym_a, &sym_b);
 

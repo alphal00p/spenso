@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::Neg};
 
-use spencer::{
+use spenso::{
     ufo::{euclidean_four_vector, gamma},
     AbstractIndex, ContractionCountStructure, FallibleMul, MixedTensor, Representation,
     SetTensorData, Slot, SparseTensor, TensorNetwork, TensorStructure,

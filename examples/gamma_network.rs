@@ -1,10 +1,10 @@
 use std::ops::Neg;
 
-use spencer::{
+use num::ToPrimitive;
+use spenso::{
     ufo::{euclidean_four_vector, gamma, mink_four_vector},
     AbstractIndex, ContractionCountStructure, FallibleMul, NumTensor, TensorNetwork,
 };
-use num::ToPrimitive;
 
 use symbolica::domains::float::Complex;
 

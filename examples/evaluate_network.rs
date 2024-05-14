@@ -1,12 +1,12 @@
 use std::fmt::Debug;
 use std::ops::Neg;
 
-use spencer::{
+use ahash::{AHashMap, HashMap};
+use spenso::{
     ufo::{euclidean_four_vector, gamma},
     AbstractIndex, ContractionCountStructure, FallibleMul, HasTensorData, MixedTensor,
     Representation, SetTensorData, Slot, SparseTensor, TensorNetwork, TensorStructure,
 };
-use ahash::{AHashMap, HashMap};
 
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;

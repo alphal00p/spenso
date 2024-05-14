@@ -2,7 +2,7 @@
 
 use std::{ops::Neg, time::Instant};
 
-use spencer::{
+use spenso::{
     parametric::MixedTensor,
     ufo::{
         euclidean_four_vector, euclidean_four_vector_sym, gammasym, mink_four_vector,

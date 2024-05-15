@@ -7,8 +7,8 @@ use super::{
     TensorStructure, TryFromUpgrade, TryIntoUpgrade,
 };
 
-use symbolica::domains::float::Complex;
-use symbolica::representations::Atom;
+use num::Complex;
+use symbolica::atom::Atom;
 
 impl<'a, T, U, I, Out> FallibleAdd<&DenseTensor<T, I>> for &'a DenseTensor<U, I>
 where

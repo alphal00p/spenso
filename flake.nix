@@ -1,39 +1,37 @@
 {
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-  inputs.nci.url = "github:yusdacra/nix-cargo-integration";
-  inputs.nci.inputs.nixpkgs.follows = "nixpkgs";
-  inputs.parts.url = "github:hercules-ci/flake-parts";
-  inputs.parts.inputs.nixpkgs-lib.follows = "nixpkgs";
+  description = "A devShell example";
 
-  outputs = inputs @ {
-    parts,
-    nci,
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
+
+  outputs = {
+    self,
+    nixpkgs,
+    rust-overlay,
+    flake-utils,
     ...
   }:
-    parts.lib.mkFlake {inherit inputs;} {
-      systems = ["x86_64-linux"];
-      imports = [
-        nci.flakeModule
-        ./crates.nix
-      ];
-      perSystem = {
-        pkgs,
-        config,
-        ...
-      }: let
-        # shorthand for accessing this crate's outputs
-        # you can access crate outputs under `config.nci.outputs.<crate name>` (see documentation)
-        crateOutputs = config.nci.outputs."spencer";
-      in {
-        devShells.default = config.nci.outputs."spencer".devShell.overrideAttrs (old: {
-          packages = (old.packages or []) ++ [pkgs.cargo-insta];
-          shellHook = ''
-            ${old.shellHook or ""}
-            echo "Helloo"
-          '';
-        });
-        # export the release package of the crate as default package
-        packages.default = crateOutputs.packages.release;
-      };
-    };
+    flake-utils.lib.eachDefaultSystem (
+      system: let
+        overlays = [(import rust-overlay)];
+        pkgs = import nixpkgs {
+          inherit system overlays;
+        };
+      in
+        with pkgs; {
+          devShells.default = mkShell {
+            buildInputs = [
+              (rust-bin.stable.latest.default.override
+                {
+                  extensions = ["llvm-tools-preview"];
+                })
+              cargo-insta
+              cargo-llvm-cov
+            ];
+          };
+        }
+    );
 }

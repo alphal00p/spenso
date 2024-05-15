@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::ops::Neg;
 
 use ahash::{AHashMap, HashMap};
+use num::Complex;
 use spenso::{
     ufo::{euclidean_four_vector, gamma},
     AbstractIndex, ContractionCountStructure, FallibleMul, HasTensorData, MixedTensor,
@@ -11,8 +12,7 @@ use spenso::{
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 use symbolica::{
-    domains::float::Complex,
-    representations::{Atom, AtomView},
+    atom::{Atom, AtomView},
     state::State,
 };
 
@@ -56,7 +56,7 @@ fn gamma_net_param(
     TensorNetwork::from(result)
 }
 
-fn test_tensor<S>(structure: S) -> SparseTensor<symbolica::domains::float::Complex<f64>, S>
+fn test_tensor<S>(structure: S) -> SparseTensor<Complex<f64>, S>
 where
     S: TensorStructure,
 {
@@ -137,7 +137,7 @@ fn main() {
     const_map_gen(&params, &mut const_map);
 
     let i = Atom::new_var(State::I);
-    const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.));
+    const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.).into());
 
     // net.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(2));
 

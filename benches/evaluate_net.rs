@@ -1,5 +1,6 @@
 use std::{fmt::Debug, ops::Neg};
 
+use num::Complex;
 use spenso::{
     ufo::{euclidean_four_vector, gamma},
     AbstractIndex, ContractionCountStructure, FallibleMul, MixedTensor, Representation,
@@ -12,8 +13,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 use symbolica::{
-    domains::float::Complex,
-    representations::{Atom, AtomView},
+    atom::{Atom, AtomView},
     state::State,
 };
 
@@ -70,7 +70,7 @@ fn gamma_net_param(
     TensorNetwork::from(result)
 }
 
-fn test_tensor<S>(structure: S) -> SparseTensor<symbolica::domains::float::Complex<f64>, S>
+fn test_tensor<S>(structure: S) -> SparseTensor<Complex<f64>, S>
 where
     S: TensorStructure,
 {
@@ -136,7 +136,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut const_map = AHashMap::new();
 
     let i = Atom::new_var(State::I);
-    const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.));
+    const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.).into());
 
     let mut group = c.benchmark_group("evaluate_net");
 

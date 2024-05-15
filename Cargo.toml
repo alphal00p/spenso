@@ -29,17 +29,17 @@ derive_more = "0.99.17"
 duplicate = "1.0.0"
 enum-try-as-inner = "0.1.1"
 indexmap = { version = "2.2.6", features = ["serde"] }
-num = { version = "0.4.2", features = ["serde"] }
+num = { version = "0.4.3", features = ["serde"] }
 permutation = "0.4.1"
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
 serde = "1.0.201"
 slotmap = { version = "1.0.7", features = ["serde"] }
 smartstring = { version = "1.0.1", features = ["serde"] }
-symbolica = { version = "0.3" }
+symbolica = { git = "https://github.com/lcnbr/symbolica" }
 # symbolica = { path = "../gammaloop/python/gammaloop/dependencies/symbolica" }
 thiserror = "1.0.60"
 
 
-[patch.crates-io]
-symbolica = { git = "https://github.com/alphal00p/symbolica" }
+# [patch.crates-io]
+# symbolica = { git = "https://github.com/lcnbr/symbolica" }

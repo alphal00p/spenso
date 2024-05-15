@@ -6,13 +6,13 @@ use ahash::AHashMap;
 use derive_more::From;
 use enum_try_as_inner::EnumTryAsInner;
 use indexmap::IndexMap;
-use num::Zero;
+use num::{Complex, Zero};
 
 use serde::{Deserialize, Serialize};
 use smartstring::alias::String;
 use std::{borrow::Cow, collections::HashMap};
-use symbolica::domains::float::Complex;
-use symbolica::{representations::Atom, representations::Symbol};
+
+use symbolica::{atom::Atom, atom::Symbol};
 
 pub trait DataIterator<T> {
     type FlatIter<'a>: Iterator<Item = (usize, &'a T)>

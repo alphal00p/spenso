@@ -13,7 +13,7 @@ use smartstring::LazyCompact;
 use smartstring::SmartString;
 use std::borrow::Cow;
 use std::fmt::Debug;
-use symbolica::representations::ListIterator;
+use symbolica::atom::ListIterator;
 
 use std::i64;
 
@@ -21,11 +21,11 @@ use std::ops::Range;
 
 use symbolica::coefficient::CoefficientView;
 
-use symbolica::representations::AtomView;
+use symbolica::atom::AtomView;
 
 use permutation::Permutation;
 
-use symbolica::representations::{AsAtomView, Atom, FunctionBuilder, Symbol};
+use symbolica::atom::{AsAtomView, Atom, FunctionBuilder, Symbol};
 use symbolica::state::{State, Workspace};
 
 use std::collections::HashSet;
@@ -140,12 +140,12 @@ impl PartialOrd<Dimension> for usize {
 
 pub type ConcreteIndex = usize;
 
-pub struct ExpandedConcreteIndex{
-    indices: Vec<ConcreteIndex>
+pub struct ExpandedConcreteIndex {
+    indices: Vec<ConcreteIndex>,
 }
 
-pub struct FlatIndex{
-    index: usize
+pub struct FlatIndex {
+    index: usize,
 }
 
 pub const EUCLIDEAN: &str = "euc";

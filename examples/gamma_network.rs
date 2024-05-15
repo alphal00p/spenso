@@ -1,12 +1,10 @@
 use std::ops::Neg;
 
-use num::ToPrimitive;
+use num::{Complex, ToPrimitive};
 use spenso::{
     ufo::{euclidean_four_vector, gamma, mink_four_vector},
     AbstractIndex, ContractionCountStructure, FallibleMul, NumTensor, TensorNetwork,
 };
-
-use symbolica::domains::float::Complex;
 
 fn gamma_net_num(
     minkindices: &[i32],

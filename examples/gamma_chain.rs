@@ -12,9 +12,8 @@ use spenso::{
     NumTensor, SparseTensor, TensorNetwork,
 };
 
-use num::traits::ToPrimitive;
-use symbolica::domains::float::Complex;
-use symbolica::representations::{Atom, Symbol};
+use num::{traits::ToPrimitive, Complex};
+use symbolica::atom::{Atom, Symbol};
 
 // #[allow(dead_code)]
 // fn gamma_trace<T>(minkindices: &[i32]) -> SparseTensor<Complex<T>>

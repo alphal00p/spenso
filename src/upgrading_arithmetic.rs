@@ -3,10 +3,9 @@ use std::ops::Mul;
 
 use duplicate::duplicate;
 
-use symbolica::domains::float::Complex;
-
+use num::Complex;
+use symbolica::atom::Atom;
 use symbolica::domains::float::Real;
-use symbolica::representations::Atom;
 
 use symbolica::state::State;
 

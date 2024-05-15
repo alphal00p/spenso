@@ -3,8 +3,8 @@ use ahash::AHashMap;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
 use symbolica::{
+    atom::{Atom, AtomView, Symbol},
     domains::float::Complex,
-    representations::{Atom, AtomView, Symbol},
     state::State,
 };
 

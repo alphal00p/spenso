@@ -9,12 +9,13 @@ use ahash::{HashMap, HashMapExt};
 use indexmap::{IndexMap, IndexSet};
 
 use insta::assert_ron_snapshot;
+use num::Complex;
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 
 use smartstring::alias::String;
-use symbolica::domains::float::Complex;
-use symbolica::{representations::Atom, state::State};
+use symbolica::atom::AtomView;
+use symbolica::{atom::Atom, state::State};
 
 use super::FallibleAdd;
 use super::{
@@ -793,7 +794,7 @@ fn evaluate() {
 
     let adata = test_tensor(structure, 1, Some((-100., 100.))).to_dense();
 
-    let mut const_map = HashMap::new();
+    let mut const_map: HashMap<AtomView<'_>, f64> = HashMap::new();
 
     a.append_const_map(&adata, &mut const_map);
 
@@ -946,13 +947,14 @@ fn test_fallible_mul() {
     let mut cache = HashMap::new();
 
     let mut const_map = HashMap::new();
-    const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.));
+    const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.).into());
 
-    const_map.insert(a.as_view(), Complex::<f64>::new(3., 1.));
+    const_map.insert(a.as_view(), Complex::<f64>::new(3., 1.).into());
 
-    const_map.insert(b.as_view(), Complex::<f64>::new(3., 1.));
+    const_map.insert(b.as_view(), Complex::<f64>::new(3., 1.).into());
 
-    let ev = f.as_view().evaluate(&const_map, &function_map, &mut cache);
+    let ev: symbolica::domains::float::Complex<f64> =
+        f.as_view().evaluate(&const_map, &function_map, &mut cache);
 
     println!("{}", ev);
     // print!("{}", f.unwrap());

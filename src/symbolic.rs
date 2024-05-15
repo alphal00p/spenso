@@ -3,7 +3,7 @@ use super::{
     TensorNetwork, TensorStructure, VecStructure,
 };
 
-use symbolica::representations::{AddView, Atom, AtomView, MulView, Symbol};
+use symbolica::atom::{AddView, Atom, AtomView, MulView, Symbol};
 
 /// A fully symbolic tensor, with no concrete values.
 ///
@@ -14,7 +14,7 @@ use symbolica::representations::{AddView, Atom, AtomView, MulView, Symbol};
 #[derive(Debug, Clone)]
 pub struct SymbolicTensor {
     structure: VecStructure,
-    expression: symbolica::representations::Atom,
+    expression: symbolica::atom::Atom,
 }
 
 impl TensorStructure for SymbolicTensor {

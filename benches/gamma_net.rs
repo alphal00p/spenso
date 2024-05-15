@@ -9,10 +9,9 @@ use spenso::{
 };
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use num::ToPrimitive;
-use symbolica::domains::float::Complex;
+use num::{Complex, ToPrimitive};
 
-use symbolica::representations::Symbol;
+use symbolica::atom::Symbol;
 fn gamma_net_sym(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],

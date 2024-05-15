@@ -1,16 +1,17 @@
 use ahash::{AHashMap, HashMap};
 use enum_try_as_inner::EnumTryAsInner;
 
+use num::Complex;
 use symbolica::{
-    domains::float::Complex,
+    atom::{Atom, AtomView, Symbol},
     evaluate::EvaluationFn,
-    representations::{Atom, AtomView, Symbol},
 };
 
 use super::{
     Contract, DataIterator, DataTensor, DenseTensor, HasName, HistoryStructure, Slot, SparseTensor,
     StructureContract, TensorStructure, TracksCount, VecStructure,
 };
+use symbolica::domains::float::Complex as SymComplex;
 
 #[derive(Clone, Debug, EnumTryAsInner)]
 #[derive_err(Debug)]
@@ -35,7 +36,7 @@ impl<'a, I: TensorStructure + Clone + 'a> MixedTensor<I> {
         }
     }
 
-    pub fn evaluate_complex<'b>(&mut self, const_map: &'b HashMap<AtomView<'a>, Complex<f64>>)
+    pub fn evaluate_complex<'b>(&mut self, const_map: &'b HashMap<AtomView<'a>, SymComplex<f64>>)
     where
         'b: 'a,
     {
@@ -54,10 +55,15 @@ impl<I> DataTensor<Atom, I>
 where
     I: Clone + TensorStructure,
 {
-    pub fn evaluate<'a, 'b, T>(&self, const_map: &'b HashMap<AtomView<'a>, T>) -> DataTensor<T, I>
+    pub fn evaluate<'a, 'b, T, U>(
+        &self,
+        const_map: &'b HashMap<AtomView<'a>, T>,
+    ) -> DataTensor<U, I>
     where
         T: symbolica::domains::float::Real
             + for<'c> std::convert::From<&'c symbolica::domains::rational::Rational>,
+        U: From<T>,
+
         'a: 'b,
     {
         match self {
@@ -71,10 +77,11 @@ impl<I> SparseTensor<Atom, I>
 where
     I: Clone,
 {
-    pub fn evaluate<'a, T>(&self, const_map: &HashMap<AtomView<'a>, T>) -> SparseTensor<T, I>
+    pub fn evaluate<'a, T, U>(&self, const_map: &HashMap<AtomView<'a>, T>) -> SparseTensor<U, I>
     where
         T: symbolica::domains::float::Real
             + for<'d> std::convert::From<&'d symbolica::domains::rational::Rational>,
+        U: From<T>,
     {
         let fn_map: HashMap<_, EvaluationFn<_>> = HashMap::default();
         let mut cache = HashMap::default();
@@ -85,7 +92,9 @@ where
             .map(|(idx, x)| {
                 (
                     *idx,
-                    x.as_view().evaluate::<T>(const_map, &fn_map, &mut cache),
+                    x.as_view()
+                        .evaluate::<T>(const_map, &fn_map, &mut cache)
+                        .into(),
                 )
             })
             .collect::<AHashMap<_, _>>();
@@ -101,10 +110,11 @@ impl<I> DenseTensor<Atom, I>
 where
     I: Clone,
 {
-    pub fn evaluate<'a, T>(&'a self, const_map: &HashMap<AtomView<'a>, T>) -> DenseTensor<T, I>
+    pub fn evaluate<'a, T, U>(&'a self, const_map: &HashMap<AtomView<'a>, T>) -> DenseTensor<U, I>
     where
         T: symbolica::domains::float::Real
             + for<'b> std::convert::From<&'b symbolica::domains::rational::Rational>,
+        U: From<T>,
     {
         let fn_map: HashMap<_, EvaluationFn<_>> = HashMap::default();
         let mut cache = HashMap::default();
@@ -112,24 +122,29 @@ where
         let data = self
             .data
             .iter()
-            .map(|x| x.as_view().evaluate::<T>(const_map, &fn_map, &mut cache))
+            .map(|x| {
+                x.as_view()
+                    .evaluate::<T>(const_map, &fn_map, &mut cache)
+                    .into()
+            })
             .collect::<Vec<_>>();
 
         DenseTensor { data, structure }
     }
 
-    pub fn append_const_map<'a, 'b, T>(
+    pub fn append_const_map<'a, 'b, T, U>(
         &'a self,
         data: &DenseTensor<T, I>,
-        const_map: &mut HashMap<AtomView<'b>, T>,
+        const_map: &mut HashMap<AtomView<'b>, U>,
     ) where
         I: TensorStructure,
         T: Copy,
+        U: From<T>,
         'a: 'b,
     {
         for ((i, a), (j, v)) in self.flat_iter().zip(data.flat_iter()) {
             assert_eq!(i, j);
-            const_map.insert(a.as_view(), *v);
+            const_map.insert(a.as_view(), (*v).into());
         }
     }
 }

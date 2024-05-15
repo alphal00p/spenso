@@ -4,11 +4,11 @@ use super::{
     SetTensorData, Shadowable, Slot, SparseTensor, TensorStructure,
 };
 
-use num::{NumCast, One, Zero};
+use num::{Complex, NumCast, One, Zero};
 
 use symbolica::{
-    domains::float::{Complex, Real},
-    representations::{Atom, Symbol},
+    atom::{Atom, Symbol},
+    domains::float::Real,
     state::State,
 };
 

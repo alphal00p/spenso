@@ -1,1 +1,1 @@
-![Header](./[spenso.rs.svg])
+![Header](./spenso.rs.svg)

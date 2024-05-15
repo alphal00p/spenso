@@ -143,15 +143,22 @@ fn indexflatten() {
 #[test]
 fn single_fiber() {
     let a = test_structure(5, 5);
+    println!("{:?}", a.strides());
     let fiber = Fiber::from_filter(&[true, false, false, false, false], &a);
     assert!(fiber.single().is_some());
 
-    let iter = fiber.iter();
+    let iter = fiber.clone().iter();
 
     let fciter: Vec<usize> = iter.collect();
 
     for i in fciter.iter() {
         println!("{:?}", a.expanded_index(*i).unwrap());
+    }
+
+    let fiberclass = FiberClass::from(fiber);
+
+    for fc in fiberclass.iter() {
+        println!("{:?}", a.expanded_index(fc.iter.zero_index).unwrap());
     }
 }
 

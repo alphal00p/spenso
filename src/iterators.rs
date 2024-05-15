@@ -496,20 +496,28 @@ impl MinimumFiberIterator {
         let fiber_stride = strides[fiber_position];
         let dim: usize = dims[fiber_position].into();
         let size = dims.iter().map(|x| usize::from(*x)).product::<usize>();
-
-        let max = size - fiber_stride * (dim - 1) - 1;
-
         let mut stride = None;
         let mut shift = None;
-        let mut increment = 1;
 
-        if fiber_position == dims.len() - 1 {
-            increment = *strides.get(dims.len().wrapping_sub(2)).unwrap_or(&1);
-        } else if fiber_position != 0 {
-            shift = Some(strides[fiber_position - 1]);
-            stride = Some(strides[fiber_position]);
+        if conj {
+            let max = size - fiber_stride * (dim - 1) - 1;
+
+            let mut increment = 1;
+
+            if fiber_position == dims.len() - 1 {
+                increment = *strides.get(dims.len().wrapping_sub(2)).unwrap_or(&1);
+            } else if fiber_position != 0 {
+                shift = Some(strides[fiber_position - 1]);
+                stride = Some(strides[fiber_position]);
+            }
+
+            (increment, stride, shift, max)
+        } else {
+            let increment = fiber_stride;
+            let max = fiber_stride * (dim - 1);
+
+            (increment, stride, shift, max)
         }
-        (increment, stride, shift, max)
     }
 
     pub fn new<I, J>(fiber: &I) -> Self
@@ -519,7 +527,7 @@ impl MinimumFiberIterator {
     {
         if let Some(single) = fiber.single() {
             let (increment, fixed_strides, shifts, max) =
-                Self::init_single_fiber_iter(fiber.strides(), single, fiber.shape(), true);
+                Self::init_single_fiber_iter(fiber.strides(), single, fiber.shape(), false);
 
             MinimumFiberIterator {
                 increment,
@@ -534,7 +542,7 @@ impl MinimumFiberIterator {
                 fiber.shape(),
                 fiber.order(),
                 fiber,
-                true,
+                false,
             );
 
             MinimumFiberIterator {

@@ -36,6 +36,10 @@ rand_xoshiro = "0.6.0"
 serde = "1.0.201"
 slotmap = { version = "1.0.7", features = ["serde"] }
 smartstring = { version = "1.0.1", features = ["serde"] }
-symbolica = { git = "https://github.com/alphal00p/symbolica" }
+symbolica = { version = "0.3" }
 # symbolica = { path = "../gammaloop/python/gammaloop/dependencies/symbolica" }
 thiserror = "1.0.60"
+
+
+[patch.crates-io]
+symbolica = { git = "https://github.com/alphal00p/symbolica" }

@@ -1,9 +1,9 @@
 use std::ops::Neg;
 
-use num::{Complex, ToPrimitive};
+use num::ToPrimitive;
 use spenso::{
     ufo::{euclidean_four_vector, gamma, mink_four_vector},
-    AbstractIndex, ContractionCountStructure, FallibleMul, NumTensor, TensorNetwork,
+    AbstractIndex, Complex, ContractionCountStructure, FallibleMul, NumTensor, TensorNetwork,
 };
 
 fn gamma_net_num(

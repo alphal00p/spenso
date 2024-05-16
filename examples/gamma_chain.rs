@@ -8,11 +8,11 @@ use spenso::{
         euclidean_four_vector, euclidean_four_vector_sym, gammasym, mink_four_vector,
         mink_four_vector_sym, param_euclidean_four_vector, param_mink_four_vector,
     },
-    AbstractIndex, Contract, DenseTensor, FallibleMul, HasTensorData, HistoryStructure, IntoId,
-    NumTensor, SparseTensor, TensorNetwork,
+    AbstractIndex, Complex, Contract, DenseTensor, FallibleMul, HasTensorData, HistoryStructure,
+    IntoId, NumTensor, SparseTensor, TensorNetwork,
 };
 
-use num::{traits::ToPrimitive, Complex};
+use num::traits::ToPrimitive;
 use symbolica::atom::{Atom, Symbol};
 
 // #[allow(dead_code)]

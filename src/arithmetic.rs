@@ -1,13 +1,15 @@
-use std::fmt::Debug;
-
 use crate::{ConcreteIndex, GetTensorData, SetTensorData};
+use std::{
+    fmt::Debug,
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+};
 
 use super::{
     DataTensor, DenseTensor, FallibleAdd, FallibleMul, FallibleSub, MixedTensor, SparseTensor,
     TensorStructure, TryFromUpgrade, TryIntoUpgrade,
 };
 
-use num::Complex;
+use crate::Complex;
 use symbolica::atom::Atom;
 
 impl<'a, T, U, I, Out> FallibleAdd<&DenseTensor<T, I>> for &'a DenseTensor<U, I>

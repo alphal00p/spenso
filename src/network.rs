@@ -4,9 +4,10 @@ use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
-    domains::float::Complex,
     state::State,
 };
+
+use symbolica::domains::float::Complex as SymComplex;
 
 use self::parametric::{MixedTensor, MixedTensors};
 use self::structure::HistoryStructure;
@@ -577,7 +578,7 @@ where
         }
     }
 
-    pub fn evaluate_complex<'a>(&'a mut self, const_map: &AHashMap<AtomView<'a>, Complex<f64>>)
+    pub fn evaluate_complex<'a>(&'a mut self, const_map: &AHashMap<AtomView<'a>, SymComplex<f64>>)
     where
         N: Clone,
     {

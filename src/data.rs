@@ -1,3 +1,5 @@
+use crate::Complex;
+
 use super::{
     atomic_expanded_label_id, ConcreteIndex, DenseTensorLinearIterator, HasName, Slot,
     SparseTensorLinearIterator, TensorStructure, TracksCount, TrySmallestUpgrade, VecStructure,
@@ -6,7 +8,7 @@ use ahash::AHashMap;
 use derive_more::From;
 use enum_try_as_inner::EnumTryAsInner;
 use indexmap::IndexMap;
-use num::{Complex, Zero};
+use num::Zero;
 
 use serde::{Deserialize, Serialize};
 use smartstring::alias::String;

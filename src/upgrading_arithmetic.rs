@@ -1,45 +1,708 @@
 use std::borrow::Cow;
-use std::ops::Mul;
 
 use duplicate::duplicate;
+use std::{
+    fmt::Debug,
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+};
 
-use num::Complex;
 use symbolica::atom::Atom;
 use symbolica::domains::float::Real;
 
 use symbolica::state::State;
 
-#[macro_export]
-macro_rules! forward_ref_bino {
-    (impl $imp:ident, $method:ident for $t:ty, $u:ty,$out:ty) => {
-        impl<'a> $imp<$u> for &'a $t {
-            type Output = $out;
+use crate::{Complex, Scalar};
 
-            #[inline]
-            fn $method(self, other: $u) -> Option<Self::Output> {
-                $imp::$method(self, &other)
-            }
-        }
+// #[derive(Copy, Clone, PartialEq)]
+// pub struct Complex<T: Scalar> {
+//     re: T,
+//     im: T,
+// }
 
-        impl $imp<&$u> for $t {
-            type Output = $out;
+// impl<T: Scalar> Complex<T> {
+//     #[inline]
+//     pub fn new(re: T, im: T) -> Complex<T> {
+//         Complex { re, im }
+//     }
 
-            #[inline]
-            fn $method(self, other: &$u) -> Option<Self::Output> {
-                $imp::$method(&self, other)
-            }
-        }
+//     #[inline]
+//     pub fn i() -> Complex<T>
+//     where
+//         T: num::Zero + num::One,
+//     {
+//         Complex {
+//             re: T::zero(),
+//             im: T::one(),
+//         }
+//     }
 
-        impl $imp<$u> for $t {
-            type Output = $out;
+//     #[inline]
+//     pub fn norm_squared(&self) -> T
+//     where
+//         for<'a, 'b> &'a T: Mul<&'b T, Output = T>,
+//         T: Add<T, Output = T>,
+// #[derive(Copy, Clone, PartialEq)]
+// pub struct Complex<T: Scalar> {
+//     re: T,
+//     im: T,
+// }
 
-            #[inline]
-            fn $method(self, other: $u) -> Option<Self::Output> {
-                $imp::$method(&self, &other)
-            }
-        }
-    };
-}
+// impl<T: Scalar> Complex<T> {
+//     #[inline]
+//     pub fn new(re: T, im: T) -> Complex<T> {
+//         Complex { re, im }
+//     }
+
+//     #[inline]
+//     pub fn i() -> Complex<T>
+//     where
+//         T: num::Zero + num::One,
+//     {
+//         Complex {
+//             re: T::zero(),
+//             im: T::one(),
+//         }
+//     }
+
+//     #[inline]
+//     pub fn norm_squared(&self) -> T
+//     where
+//         for<'a, 'b> &'a T: Mul<&'b T, Output = T>,
+//         T: Add<T, Output = T>,
+//     {
+//         &self.re * &self.re + &self.im * &self.im
+//     }
+
+//     #[inline]
+//     pub fn arg(&self) -> T
+//     where
+//         T: num::Float,
+//     {
+//         self.im.atan2(self.re)
+//     }
+
+//     #[inline]
+//     pub fn to_polar_coordinates(self) -> (T, T)
+//     where
+//         T: num::Float,
+//         for<'a, 'b> &'a T: Mul<&'b T, Output = T>,
+//         T: Add<T, Output = T>,
+//     {
+//         (self.norm_squared().sqrt(), self.arg())
+//     }
+
+//     #[inline]
+//     pub fn from_polar_coordinates(r: T, phi: T) -> Complex<T>
+//     where
+//         T: num::Float,
+//     {
+//         Complex::new(r * phi.cos(), r * phi.sin())
+//     }
+// }
+
+// impl<'a, 'b, T: Scalar> Add<&'a Complex<T>> for &'b Complex<T> {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn add(self, rhs: &'a Complex<T>) -> Self::Output {
+//         Complex::new(&self.re + &rhs.re, &self.im + &rhs.im)
+//     }
+// }
+
+// impl<'a, T: Scalar> Add<&'a Complex<T>> for Complex<T> {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn add(self, rhs: &'a Complex<T>) -> Self::Output {
+//         &self + rhs
+//     }
+// }
+
+// impl<'a, T: Scalar> Add<Complex<T>> for &'a Complex<T> {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn add(self, rhs: Complex<T>) -> Self::Output {
+//         self + &rhs
+//     }
+// }
+
+// impl<T: Scalar> Add for Complex<T> {
+//     type Output = Self;
+
+//     #[inline]
+//     fn add(self, rhs: Self) -> Self::Output {
+//         &self + &rhs
+//     }
+// }
+
+// impl<T: Scalar> AddAssign for Complex<T>
+// where
+//     for<'a> T: AddAssign<&'a T>,
+// {
+//     #[inline]
+//     fn add_assign(&mut self, rhs: Self) {
+//         self.add_assign(&rhs)
+//     }
+// }
+
+// impl<T: Scalar> AddAssign<&Complex<T>> for Complex<T>
+// where
+//     for<'a> T: AddAssign<&'a T>,
+// {
+//     #[inline]
+//     fn add_assign(&mut self, rhs: &Self) {
+//         self.re += &rhs.re;
+//         self.im += &rhs.im;
+//     }
+// }
+
+// impl<'a, 'b, T: Scalar> Sub<&'a Complex<T>> for &'b Complex<T>
+// where
+//     for<'c, 'd> &'c T: Sub<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn sub(self, rhs: &'a Complex<T>) -> Self::Output {
+//         Complex::new(&self.re - &rhs.re, &self.im - &rhs.im)
+//     }
+// }
+
+// impl<'a, T: Scalar> Sub<&'a Complex<T>> for Complex<T>
+// where
+//     for<'c, 'd> &'c T: Sub<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn sub(self, rhs: &'a Complex<T>) -> Self::Output {
+//         &self - rhs
+//     }
+// }
+
+// impl<'a, T: Scalar> Sub<Complex<T>> for &'a Complex<T>
+// where
+//     for<'c, 'd> &'c T: Sub<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn sub(self, rhs: Complex<T>) -> Self::Output {
+//         self - &rhs
+//     }
+// }
+
+// impl<T: Scalar> Sub for Complex<T>
+// where
+//     for<'a, 'b> &'a T: Sub<&'b T, Output = T>,
+// {
+//     type Output = Self;
+
+//     #[inline]
+//     fn sub(self, rhs: Self) -> Self::Output {
+//         &self - &rhs
+//     }
+// }
+
+// impl<T: Scalar> SubAssign for Complex<T>
+// where
+//     for<'a> T: SubAssign<&'a T>,
+// {
+//     #[inline]
+//     fn sub_assign(&mut self, rhs: Self) {
+//         self.sub_assign(&rhs)
+//     }
+// }
+
+// impl<T: Scalar> SubAssign<&Complex<T>> for Complex<T>
+// where
+//     for<'a> T: SubAssign<&'a T>,
+// {
+//     #[inline]
+//     fn sub_assign(&mut self, rhs: &Self) {
+//         self.re -= &rhs.re;
+//         self.im -= &rhs.im;
+//     }
+// }
+
+// impl<'a, 'b, T: Scalar> Mul<&'a Complex<T>> for &'b Complex<T>
+// where
+//     for<'c, 'd> &'c T: Mul<&'d T, Output = T>,
+//     T: Sub<T, Output = T> + Add<T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn mul(self, rhs: &'a Complex<T>) -> Self::Output {
+//         Complex::new(
+//             &self.re * &rhs.re - &self.im * &rhs.im,
+//             &self.re * &rhs.im + &self.im * &rhs.re,
+//         )
+//     }
+// }
+
+// impl<'a, T: Scalar> Mul<&'a Complex<T>> for Complex<T>
+// where
+//     for<'c, 'd> &'c T: Mul<&'d T, Output = T>,
+
+//     T: Sub<T, Output = T> + Add<T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn mul(self, rhs: &'a Complex<T>) -> Self::Output {
+//         &self * rhs
+//     }
+// }
+
+// impl<'a, T: Scalar> Mul<Complex<T>> for &'a Complex<T>
+// where
+//     for<'c, 'd> &'c T: Mul<&'d T, Output = T>,
+
+//     T: Sub<T, Output = T> + Add<T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn mul(self, rhs: Complex<T>) -> Self::Output {
+//         self * &rhs
+//     }
+// }
+
+// impl<T: Scalar> Mul for Complex<T>
+// where
+//     for<'a, 'b> &'a T: Mul<&'b T, Output = T>,
+
+//     T: Sub<T, Output = T> + Add<T, Output = T>,
+// {
+//     type Output = Self;
+
+//     #[inline]
+//     fn mul(self, rhs: Self) -> Self::Output {
+//         &self * &rhs
+//     }
+// }
+
+// impl<T: Scalar> MulAssign for Complex<T>
+// where
+//     for<'a> T: MulAssign<&'a T>,
+// {
+//     #[inline]
+//     fn mul_assign(&mut self, rhs: Self) {
+//         self.mul_assign(rhs)
+//     }
+// }
+
+// impl<T: Scalar> MulAssign<&Complex<T>> for Complex<T>
+// where
+//     for<'a, 'b> &'a T: Mul<&'b T, Output = T>,
+
+//     T: Sub<T, Output = T> + Add<T, Output = T>,
+// {
+//     #[inline]
+//     fn mul_assign(&mut self, rhs: &Self) {
+//         let res = Mul::mul(&*self, rhs);
+//         *self = res;
+//     }
+// }
+
+// impl<'a, 'b, T: Scalar> Div<&'a Complex<T>> for &'b Complex<T>
+// where
+//     for<'c, 'd> &'c T: Div<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn div(self, rhs: &'a Complex<T>) -> Self::Output {
+//         let n = rhs.norm_squared();
+//         let re = self.re * rhs.re + self.im * rhs.im;
+//         let im = self.im * rhs.re - self.re * rhs.im;
+//         Complex::new(re / n, im / n)
+//     }
+// }
+
+// impl<'a, T: Scalar> Div<&'a Complex<T>> for Complex<T>
+// where
+//     for<'c, 'd> &'c T: Div<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn div(self, rhs: &'a Complex<T>) -> Self::Output {
+//         &self / rhs
+//     }
+// }
+
+// impl<'a, T: Scalar> Div<Complex<T>> for &'a Complex<T>
+// where
+//     for<'c, 'd> &'c T: Div<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn div(self, rhs: Complex<T>) -> Self::Output {
+//         self / &rhs
+//     }
+// }
+
+// impl<T: Scalar> Div for Complex<T>
+// where
+//     for<'a, 'b> &'a T: Div<&'b T, Output = T>,
+// {
+//     type Output = Self;
+
+//     #[inline]
+//     fn div(self, rhs: Self) -> Self::Output {
+//         &self / &rhs
+//     }
+// }
+
+// impl<T: Scalar> DivAssign for Complex<T>
+// where
+//     for<'a> T: DivAssign<&'a T>,
+// {
+//     #[inline]
+//     fn div_assign(&mut self, rhs: Self) {
+//         self.div_assign(&rhs)
+//     }
+// }
+
+// impl<T: Scalar> DivAssign<&Complex<T>> for Complex<T>
+// where
+//     for<'a> T: DivAssign<&'a T>,
+// {
+//     #[inline]
+//     fn div_assign(&mut self, rhs: &Self) {
+//         self.re /= &rhs.re;
+//         self.im /= &rhs.im;
+//     }
+// }
+
+// impl<T: Scalar> Neg for Complex<T> {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn neg(self) -> Complex<T> {
+//         Complex::new(-self.re, -self.im)
+//     }
+// }
+
+// impl<T: Scalar> std::fmt::Display for Complex<T> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.write_fmt(format_args!("({}+{}i)", self.re, self.im))
+//     }
+// }
+
+// impl<T: Scalar> std::fmt::Debug for Complex<T> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.write_fmt(format_args!("({:?}+{:?}i)", self.re, self.im))
+//     }
+// }
+//         Complex::new(r * phi.cos(), r * phi.sin())
+//     }
+// }
+
+// impl<'a, 'b, T: Scalar> Add<&'a Complex<T>> for &'b Complex<T> {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn add(self, rhs: &'a Complex<T>) -> Self::Output {
+//         Complex::new(&self.re + &rhs.re, &self.im + &rhs.im)
+//     }
+// }
+
+// impl<'a, T: Scalar> Add<&'a Complex<T>> for Complex<T> {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn add(self, rhs: &'a Complex<T>) -> Self::Output {
+//         &self + rhs
+//     }
+// }
+
+// impl<'a, T: Scalar> Add<Complex<T>> for &'a Complex<T> {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn add(self, rhs: Complex<T>) -> Self::Output {
+//         self + &rhs
+//     }
+// }
+
+// impl<T: Scalar> Add for Complex<T> {
+//     type Output = Self;
+
+//     #[inline]
+//     fn add(self, rhs: Self) -> Self::Output {
+//         &self + &rhs
+//     }
+// }
+
+// impl<T: Scalar> AddAssign for Complex<T>
+// where
+//     for<'a> T: AddAssign<&'a T>,
+// {
+//     #[inline]
+//     fn add_assign(&mut self, rhs: Self) {
+//         self.add_assign(&rhs)
+//     }
+// }
+
+// impl<T: Scalar> AddAssign<&Complex<T>> for Complex<T>
+// where
+//     for<'a> T: AddAssign<&'a T>,
+// {
+//     #[inline]
+//     fn add_assign(&mut self, rhs: &Self) {
+//         self.re += &rhs.re;
+//         self.im += &rhs.im;
+//     }
+// }
+
+// impl<'a, 'b, T: Scalar> Sub<&'a Complex<T>> for &'b Complex<T>
+// where
+//     for<'c, 'd> &'c T: Sub<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn sub(self, rhs: &'a Complex<T>) -> Self::Output {
+//         Complex::new(&self.re - &rhs.re, &self.im - &rhs.im)
+//     }
+// }
+
+// impl<'a, T: Scalar> Sub<&'a Complex<T>> for Complex<T>
+// where
+//     for<'c, 'd> &'c T: Sub<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn sub(self, rhs: &'a Complex<T>) -> Self::Output {
+//         &self - rhs
+//     }
+// }
+
+// impl<'a, T: Scalar> Sub<Complex<T>> for &'a Complex<T>
+// where
+//     for<'c, 'd> &'c T: Sub<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn sub(self, rhs: Complex<T>) -> Self::Output {
+//         self - &rhs
+//     }
+// }
+
+// impl<T: Scalar> Sub for Complex<T>
+// where
+//     for<'a, 'b> &'a T: Sub<&'b T, Output = T>,
+// {
+//     type Output = Self;
+
+//     #[inline]
+//     fn sub(self, rhs: Self) -> Self::Output {
+//         &self - &rhs
+//     }
+// }
+
+// impl<T: Scalar> SubAssign for Complex<T>
+// where
+//     for<'a> T: SubAssign<&'a T>,
+// {
+//     #[inline]
+//     fn sub_assign(&mut self, rhs: Self) {
+//         self.sub_assign(&rhs)
+//     }
+// }
+
+// impl<T: Scalar> SubAssign<&Complex<T>> for Complex<T>
+// where
+//     for<'a> T: SubAssign<&'a T>,
+// {
+//     #[inline]
+//     fn sub_assign(&mut self, rhs: &Self) {
+//         self.re -= &rhs.re;
+//         self.im -= &rhs.im;
+//     }
+// }
+
+// impl<'a, 'b, T: Scalar> Mul<&'a Complex<T>> for &'b Complex<T>
+// where
+//     for<'c, 'd> &'c T: Mul<&'d T, Output = T>,
+//     T: Sub<T, Output = T> + Add<T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn mul(self, rhs: &'a Complex<T>) -> Self::Output {
+//         Complex::new(
+//             &self.re * &rhs.re - &self.im * &rhs.im,
+//             &self.re * &rhs.im + &self.im * &rhs.re,
+//         )
+//     }
+// }
+
+// impl<'a, T: Scalar> Mul<&'a Complex<T>> for Complex<T>
+// where
+//     for<'c, 'd> &'c T: Mul<&'d T, Output = T>,
+
+//     T: Sub<T, Output = T> + Add<T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn mul(self, rhs: &'a Complex<T>) -> Self::Output {
+//         &self * rhs
+//     }
+// }
+
+// impl<'a, T: Scalar> Mul<Complex<T>> for &'a Complex<T>
+// where
+//     for<'c, 'd> &'c T: Mul<&'d T, Output = T>,
+
+//     T: Sub<T, Output = T> + Add<T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn mul(self, rhs: Complex<T>) -> Self::Output {
+//         self * &rhs
+//     }
+// }
+
+// impl<T: Scalar> Mul for Complex<T>
+// where
+//     for<'a, 'b> &'a T: Mul<&'b T, Output = T>,
+
+//     T: Sub<T, Output = T> + Add<T, Output = T>,
+// {
+//     type Output = Self;
+
+//     #[inline]
+//     fn mul(self, rhs: Self) -> Self::Output {
+//         &self * &rhs
+//     }
+// }
+
+// impl<T: Scalar> MulAssign for Complex<T>
+// where
+//     for<'a> T: MulAssign<&'a T>,
+// {
+//     #[inline]
+//     fn mul_assign(&mut self, rhs: Self) {
+//         self.mul_assign(rhs)
+//     }
+// }
+
+// impl<T: Scalar> MulAssign<&Complex<T>> for Complex<T>
+// where
+//     for<'a, 'b> &'a T: Mul<&'b T, Output = T>,
+
+//     T: Sub<T, Output = T> + Add<T, Output = T>,
+// {
+//     #[inline]
+//     fn mul_assign(&mut self, rhs: &Self) {
+//         let res = Mul::mul(&*self, rhs);
+//         *self = res;
+//     }
+// }
+
+// impl<'a, 'b, T: Scalar> Div<&'a Complex<T>> for &'b Complex<T>
+// where
+//     for<'c, 'd> &'c T: Div<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn div(self, rhs: &'a Complex<T>) -> Self::Output {
+//         let n = rhs.norm_squared();
+//         let re = self.re * rhs.re + self.im * rhs.im;
+//         let im = self.im * rhs.re - self.re * rhs.im;
+//         Complex::new(re / n, im / n)
+//     }
+// }
+
+// impl<'a, T: Scalar> Div<&'a Complex<T>> for Complex<T>
+// where
+//     for<'c, 'd> &'c T: Div<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn div(self, rhs: &'a Complex<T>) -> Self::Output {
+//         &self / rhs
+//     }
+// }
+
+// impl<'a, T: Scalar> Div<Complex<T>> for &'a Complex<T>
+// where
+//     for<'c, 'd> &'c T: Div<&'d T, Output = T>,
+// {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn div(self, rhs: Complex<T>) -> Self::Output {
+//         self / &rhs
+//     }
+// }
+
+// impl<T: Scalar> Div for Complex<T>
+// where
+//     for<'a, 'b> &'a T: Div<&'b T, Output = T>,
+// {
+//     type Output = Self;
+
+//     #[inline]
+//     fn div(self, rhs: Self) -> Self::Output {
+//         &self / &rhs
+//     }
+// }
+
+// impl<T: Scalar> DivAssign for Complex<T>
+// where
+//     for<'a> T: DivAssign<&'a T>,
+// {
+//     #[inline]
+//     fn div_assign(&mut self, rhs: Self) {
+//         self.div_assign(&rhs)
+//     }
+// }
+
+// impl<T: Scalar> DivAssign<&Complex<T>> for Complex<T>
+// where
+//     for<'a> T: DivAssign<&'a T>,
+// {
+//     #[inline]
+//     fn div_assign(&mut self, rhs: &Self) {
+//         self.re /= &rhs.re;
+//         self.im /= &rhs.im;
+//     }
+// }
+
+// impl<T: Scalar> Neg for Complex<T> {
+//     type Output = Complex<T>;
+
+//     #[inline]
+//     fn neg(self) -> Complex<T> {
+//         Complex::new(-self.re, -self.im)
+//     }
+// }
+
+// impl<T: Scalar> std::fmt::Display for Complex<T> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.write_fmt(format_args!("({}+{}i)", self.re, self.im))
+//     }
+// }
+
+// impl<T: Scalar> std::fmt::Debug for Complex<T> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.write_fmt(format_args!("({:?}+{:?}i)", self.re, self.im))
+//     }
+// }
+
 pub trait SmallestUpgrade<T> {
     type LCM;
     fn upgrade(self) -> Self::LCM;
@@ -193,12 +856,12 @@ impl TrySmallestUpgrade<larger> for smaller {
 
 impl<T> TrySmallestUpgrade<Complex<T>> for T
 where
-    T: Real,
+    T: num::Zero + Clone,
 {
     type LCM = Complex<T>;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
-        let new = Complex::new(*self, T::zero());
+        let new = Complex::new(self.clone(), T::zero());
         Some(Cow::Owned(new))
     }
 }

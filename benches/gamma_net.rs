@@ -5,11 +5,11 @@ use spenso::{
         euclidean_four_vector, euclidean_four_vector_sym, gamma, gammasym, mink_four_vector,
         mink_four_vector_sym,
     },
-    AbstractIndex, FallibleMul, HistoryStructure, NumTensor, TensorNetwork,
+    AbstractIndex, Complex, FallibleMul, HistoryStructure, NumTensor, TensorNetwork,
 };
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use num::{Complex, ToPrimitive};
+use num::ToPrimitive;
 
 use symbolica::atom::Symbol;
 fn gamma_net_sym(

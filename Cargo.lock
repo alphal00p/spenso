@@ -939,7 +939,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "symbolica"
 version = "0.5.0"
-source = "git+https://github.com/lcnbr/symbolica#7c75deb13c20c643ca3253b74cd34a8cc524f900"
+source = "git+https://github.com/benruijl/symbolica#e344fd82b9b93c8891bf00d3350e84c351dd762f"
 dependencies = [
  "ahash",
  "append-only-vec",
@@ -948,7 +948,6 @@ dependencies = [
  "bytes",
  "colored",
  "dyn-clone",
- "num",
  "once_cell",
  "rand",
  "rand_xoshiro",

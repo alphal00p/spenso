@@ -4,7 +4,9 @@ use super::{
     SetTensorData, Shadowable, Slot, SparseTensor, TensorStructure,
 };
 
-use num::{Complex, NumCast, One, Zero};
+use num::{NumCast, One, Zero};
+
+use crate::Complex;
 
 use symbolica::{
     atom::{Atom, Symbol},

@@ -55,6 +55,14 @@ pub use network::*;
 /// Adding, subtracting, scalar multiplication of tensors
 pub mod arithmetic;
 
+/// data types for tensors
+pub mod scalar;
+pub use scalar::*;
+
+/// complex numbers
+pub mod complex;
+pub use complex::*;
+
 /// Tensors as defined in the UFO format
 pub mod ufo;
 

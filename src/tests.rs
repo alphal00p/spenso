@@ -8,8 +8,8 @@ use ahash::{HashMap, HashMapExt};
 
 use indexmap::{IndexMap, IndexSet};
 
+use crate::Complex;
 use insta::assert_ron_snapshot;
-use num::Complex;
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 

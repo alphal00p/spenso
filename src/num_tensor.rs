@@ -1,5 +1,5 @@
+use crate::Complex;
 use enum_dispatch::enum_dispatch;
-use num::Complex;
 use std::{borrow::Cow, collections::BTreeMap};
 
 use super::{

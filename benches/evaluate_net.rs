@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::Neg};
 
-use num::Complex;
+use spenso::Complex;
 use spenso::{
     ufo::{euclidean_four_vector, gamma},
     AbstractIndex, ContractionCountStructure, FallibleMul, MixedTensor, Representation,

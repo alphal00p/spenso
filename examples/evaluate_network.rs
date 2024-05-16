@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::ops::Neg;
 
 use ahash::{AHashMap, HashMap};
-use num::Complex;
+use spenso::Complex;
 use spenso::{
     ufo::{euclidean_four_vector, gamma},
     AbstractIndex, ContractionCountStructure, FallibleMul, HasTensorData, MixedTensor,

@@ -1,7 +1,7 @@
 use ahash::{AHashMap, HashMap};
 use enum_try_as_inner::EnumTryAsInner;
 
-use num::Complex;
+use crate::Complex;
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
     evaluate::EvaluationFn,

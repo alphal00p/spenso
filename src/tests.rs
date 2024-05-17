@@ -3,7 +3,10 @@ use crate::{
     GetTensorData, HasStructure, HasTensorData, MixedTensor, Representation, SparseTensor,
     StructureContract,
 };
-use crate::{AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, Fiber, FiberClass};
+use crate::{
+    AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, Fiber, FiberClass,
+    IteratesAlongFibers,
+};
 use ahash::{HashMap, HashMapExt};
 
 use indexmap::{IndexMap, IndexSet};
@@ -165,8 +168,8 @@ fn expanded_vs_flat_iter() {
     let a = test_structure(5, 5);
     let fiber = Fiber::from_filter(&[false, true, true, false, true], &a);
 
-    let flat_iter = CoreFlatFiberIterator::new(&fiber);
-    let expanded_iter = CoreExpandedFiberIterator::new(&fiber);
+    let flat_iter = CoreFlatFiberIterator::new(&fiber, false);
+    let expanded_iter = CoreExpandedFiberIterator::new(&fiber, false);
 
     let flat: Vec<usize> = flat_iter.collect();
     let expanded: Vec<usize> = expanded_iter.collect();

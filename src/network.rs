@@ -13,8 +13,8 @@ use self::parametric::{MixedTensor, MixedTensors};
 use self::structure::HistoryStructure;
 
 use super::{
-    arithmetic::ScalarMul, parametric, structure, Contract, DataTensor, HasName, Shadowable, Slot,
-    TensorStructure, TracksCount,
+    arithmetic::ScalarMul, parametric, structure, Contract, DataTensor, HasName, HasStructure,
+    Shadowable, Slot, TracksCount,
 };
 use smartstring::alias::String;
 use std::fmt::{Debug, Display};
@@ -536,7 +536,7 @@ impl<T> TensorNetwork<T> {
 
 impl<N> TensorNetwork<MixedTensor<N>>
 where
-    N: Debug + TensorStructure,
+    N: Debug + HasStructure,
 {
     pub fn to_symbolic_tensor_vec(mut self) -> Vec<DataTensor<Atom, N>> {
         self.graph
@@ -590,7 +590,7 @@ where
 
 impl<T> From<Vec<T>> for TensorNetwork<T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     fn from(tensors: Vec<T>) -> Self {
         TensorNetwork {
@@ -602,7 +602,7 @@ where
 
 impl<T> Default for TensorNetwork<T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     fn default() -> Self {
         Self::new()
@@ -611,7 +611,7 @@ where
 
 impl<T> TensorNetwork<T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     pub fn new() -> Self {
         TensorNetwork {
@@ -700,7 +700,7 @@ impl<T> TensorNetwork<T> {
 
 impl<I> TensorNetwork<MixedTensor<I>>
 where
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     pub fn generate_params(&mut self) {
         for (_i, n) in &self.graph.nodes {
@@ -713,7 +713,7 @@ where
 
 impl<T> TensorNetwork<T>
 where
-    T: TensorStructure<Structure = HistoryStructure<Symbol>> + Clone,
+    T: HasStructure<Structure = HistoryStructure<Symbol>> + Clone,
 {
     pub fn symbolic_shadow(&mut self, name: &str) -> TensorNetwork<MixedTensors> {
         {
@@ -795,7 +795,7 @@ where
 
 impl<T> TensorNetwork<T>
 where
-    T: Contract<T, LCM = T> + TensorStructure,
+    T: Contract<T, LCM = T> + HasStructure,
 {
     pub fn contract_algo(&mut self, edge_choice: fn(&TensorNetwork<T>) -> Option<HedgeId>) {
         if let Some(e) = edge_choice(self) {

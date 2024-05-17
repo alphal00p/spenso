@@ -1,7 +1,7 @@
 use super::{
-    AbstractIndex, DenseTensor, HistoryStructure, IntoId,
+    AbstractIndex, DenseTensor, HasStructure, HistoryStructure, IntoId,
     Representation::{self, Euclidean, Lorentz},
-    SetTensorData, Shadowable, Slot, SparseTensor, TensorStructure,
+    SetTensorData, Shadowable, Slot, SparseTensor,
 };
 
 use num::{NumCast, One, Zero};
@@ -40,7 +40,7 @@ pub fn identity<T, I>(
 ) -> SparseTensor<Complex<T>, I>
 where
     T: Real,
-    I: TensorStructure + FromIterator<Slot>,
+    I: HasStructure + FromIterator<Slot>,
 {
     //TODO: make it just swap indices
     let structure = [(indices.0, signature), (indices.1, signature)]
@@ -70,7 +70,7 @@ where
 pub fn identity_data<T, N>(structure: N) -> SparseTensor<T, N>
 where
     T: One,
-    N: TensorStructure,
+    N: HasStructure,
 {
     assert!(structure.order() == 2, "Identity tensor must be rank 2");
 
@@ -96,7 +96,7 @@ pub fn lorentz_identity<T, I>(
 ) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero + Real,
-    I: TensorStructure + FromIterator<Slot>,
+    I: HasStructure + FromIterator<Slot>,
 {
     // IdentityL(1,2) (Lorentz) Kronecker delta δ^μ1_μ1
     let signature = Lorentz(4.into());
@@ -106,7 +106,7 @@ where
 pub fn mink_four_vector<T, I>(index: AbstractIndex, p: &[T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
-    I: TensorStructure + FromIterator<Slot>,
+    I: HasStructure + FromIterator<Slot>,
 {
     DenseTensor::from_data(
         p,
@@ -134,7 +134,7 @@ where
 pub fn euclidean_four_vector<T, I>(index: AbstractIndex, p: &[T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
-    I: TensorStructure + FromIterator<Slot>,
+    I: HasStructure + FromIterator<Slot>,
 {
     DenseTensor::from_data(
         p,
@@ -190,7 +190,7 @@ pub fn euclidean_identity<T, I>(
 ) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero + Real,
-    I: TensorStructure + FromIterator<Slot>,
+    I: HasStructure + FromIterator<Slot>,
 {
     // Identity(1,2) (Spinorial) Kronecker delta δ_s1_s2
     let signature = Euclidean(4.into());
@@ -204,7 +204,7 @@ pub fn gamma<T, I>(
 ) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero + Copy + Real + std::ops::Neg<Output = T> + Real,
-    I: TensorStructure + FromIterator<Slot>,
+    I: HasStructure + FromIterator<Slot>,
 {
     // Gamma(1,2,3) Dirac matrix (γ^μ1)_s2_s3
     let structure = [
@@ -242,7 +242,7 @@ where
 pub fn gamma_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Real,
-    N: TensorStructure,
+    N: HasStructure,
 {
     let c1 = Complex::<T>::new(T::one(), T::zero());
     let cn1 = Complex::<T>::new(-T::one(), T::zero());
@@ -278,7 +278,7 @@ where
 pub fn gamma5<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero + Copy + Real,
-    I: TensorStructure + FromIterator<Slot>,
+    I: HasStructure + FromIterator<Slot>,
 {
     let structure = [
         (indices.0, Euclidean(4.into())),
@@ -311,7 +311,7 @@ where
 pub fn gamma5_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Real,
-    N: TensorStructure,
+    N: HasStructure,
 {
     let c1 = Complex::<T>::new(T::one(), T::zero());
 
@@ -328,7 +328,7 @@ where
 pub fn proj_m<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
 where
     T: Real + NumCast,
-    I: TensorStructure + FromIterator<Slot>,
+    I: HasStructure + FromIterator<Slot>,
 {
     // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
     let structure = [
@@ -363,7 +363,7 @@ where
 pub fn proj_m_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Real + NumCast,
-    N: TensorStructure,
+    N: HasStructure,
 {
     // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
     let chalf = Complex::<T>::new(T::from(0.5).unwrap(), T::zero());
@@ -387,7 +387,7 @@ where
 pub fn proj_p<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
 where
     T: Real + NumCast,
-    I: TensorStructure + FromIterator<Slot>,
+    I: HasStructure + FromIterator<Slot>,
 {
     // ProjP(1,2) Right chirality projector (( 1+γ5)/ 2 )_s1_s2
     let structure = [
@@ -421,7 +421,7 @@ where
 pub fn proj_p_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Real + NumCast,
-    N: TensorStructure,
+    N: HasStructure,
 {
     // ProjP(1,2) Right chirality projector (( 1+γ5)/ 2 )_s1_s2
     let chalf = Complex::<T>::new(T::from(0.5).unwrap_or_else(|| unreachable!()), T::zero());
@@ -463,7 +463,7 @@ pub fn sigma<T, I>(
 ) -> SparseTensor<Complex<T>, I>
 where
     T: Copy + Real,
-    I: TensorStructure + FromIterator<Slot>,
+    I: HasStructure + FromIterator<Slot>,
 {
     let structure = [
         (indices.0, Euclidean(4.into())),
@@ -502,7 +502,7 @@ where
 pub fn sigma_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Copy + Real,
-    N: TensorStructure,
+    N: HasStructure,
 {
     let c1 = Complex::<T>::new(T::one(), T::zero());
     let cn1 = Complex::<T>::new(-T::one(), T::zero());

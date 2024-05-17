@@ -1,6 +1,6 @@
 use super::{
-    Contract, FallibleAdd, HasName, IntoId, MixedTensor, Shadowable, Slot, StructureContract,
-    TensorNetwork, TensorStructure, VecStructure,
+    Contract, FallibleAdd, HasName, HasStructure, IntoId, MixedTensor, Shadowable, Slot,
+    StructureContract, TensorNetwork, VecStructure,
 };
 
 use symbolica::atom::{AddView, Atom, AtomView, MulView, Symbol};
@@ -17,7 +17,7 @@ pub struct SymbolicTensor {
     expression: symbolica::atom::Atom,
 }
 
-impl TensorStructure for SymbolicTensor {
+impl HasStructure for SymbolicTensor {
     type Structure = VecStructure;
 
     fn structure(&self) -> &Self::Structure {
@@ -62,7 +62,7 @@ impl StructureContract for SymbolicTensor {
 impl SymbolicTensor {
     pub fn from_named<N>(structure: &N) -> Option<Self>
     where
-        N: TensorStructure + HasName,
+        N: HasStructure + HasName,
         N::Name: IntoId + Clone,
     {
         Some(SymbolicTensor {

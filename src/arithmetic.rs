@@ -5,8 +5,8 @@ use std::{
 };
 
 use super::{
-    DataTensor, DenseTensor, FallibleAdd, FallibleMul, FallibleSub, MixedTensor, SparseTensor,
-    TensorStructure, TryFromUpgrade, TryIntoUpgrade,
+    DataTensor, DenseTensor, FallibleAdd, FallibleMul, FallibleSub, HasStructure, MixedTensor,
+    SparseTensor, TryFromUpgrade, TryIntoUpgrade,
 };
 
 use crate::Complex;
@@ -15,7 +15,7 @@ use symbolica::atom::Atom;
 impl<'a, T, U, I, Out> FallibleAdd<&DenseTensor<T, I>> for &'a DenseTensor<U, I>
 where
     for<'b, 'c> &'b U: FallibleAdd<&'c T, Output = Out>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = DenseTensor<Out, I>;
     fn add_fallible(self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
@@ -41,7 +41,7 @@ where
 impl<'a, T, U, I, Out> FallibleAdd<&SparseTensor<T, I>> for &'a DenseTensor<U, I>
 where
     for<'b, 'c> &'b U: FallibleAdd<&'c T, Output = Out>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
     T: Default + Clone,
 {
     type Output = DenseTensor<Out, I>;
@@ -67,7 +67,7 @@ where
 impl<'a, T, U, I, Out> FallibleAdd<&DenseTensor<T, I>> for &'a SparseTensor<U, I>
 where
     for<'b, 'c> &'b U: FallibleAdd<&'c T, Output = Out>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
     U: Default + Clone,
 {
     type Output = DenseTensor<Out, I>;
@@ -93,7 +93,7 @@ where
 impl<'a, T, U, I, Out> FallibleAdd<&SparseTensor<T, I>> for &'a SparseTensor<U, I>
 where
     for<'b, 'c> &'b U: FallibleAdd<&'c T, Output = Out>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
     T: Default + Clone + Debug,
     Out: Default + PartialEq + TryFromUpgrade<T>,
 {
@@ -131,7 +131,7 @@ where
     U: Default + Clone,
     T: Default + Clone + Debug,
     Out: Default + PartialEq + TryFromUpgrade<T>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = DataTensor<Out, I>;
     fn add_fallible(self, rhs: &DataTensor<T, I>) -> Option<Self::Output> {
@@ -154,7 +154,7 @@ where
 
 impl<'a, I> FallibleAdd<&MixedTensor<I>> for &'a MixedTensor<I>
 where
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = MixedTensor<I>;
     fn add_fallible(self, rhs: &MixedTensor<I>) -> Option<Self::Output> {
@@ -193,7 +193,7 @@ where
 impl<'a, T, U, I, Out> FallibleSub<&DenseTensor<T, I>> for &'a DenseTensor<U, I>
 where
     for<'b, 'c> &'b U: FallibleSub<&'c T, Output = Out>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = DenseTensor<Out, I>;
     fn sub_fallible(self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
@@ -218,7 +218,7 @@ where
 impl<'a, T, U, I, Out> FallibleSub<&DenseTensor<T, I>> for &'a SparseTensor<U, I>
 where
     for<'b, 'c> &'b U: FallibleSub<&'c T, Output = Out>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = DenseTensor<Out, I>;
     fn sub_fallible(self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
@@ -243,7 +243,7 @@ where
 impl<'a, T, U, I, Out> FallibleSub<&SparseTensor<T, I>> for &'a DenseTensor<U, I>
 where
     for<'b, 'c> &'b U: FallibleSub<&'c T, Output = Out>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
     T: Default + Clone,
 {
     type Output = DenseTensor<Out, I>;
@@ -269,7 +269,7 @@ where
 impl<'a, T, U, I, Out> FallibleSub<&SparseTensor<T, I>> for &'a SparseTensor<U, I>
 where
     for<'b, 'c> &'b U: FallibleSub<&'c T, Output = Out>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
     T: Default + Clone,
     U: Default,
     Out: Default + PartialEq,
@@ -306,7 +306,7 @@ where
     U: Default + Clone,
     T: Default + Clone,
     Out: Default + PartialEq,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = DataTensor<Out, I>;
     fn sub_fallible(self, rhs: &DataTensor<T, I>) -> Option<Self::Output> {
@@ -329,7 +329,7 @@ where
 
 impl<'a, I> FallibleSub<&MixedTensor<I>> for &'a MixedTensor<I>
 where
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = MixedTensor<I>;
     fn sub_fallible(self, rhs: &MixedTensor<I>) -> Option<Self::Output> {
@@ -373,7 +373,7 @@ pub trait ScalarMul<T> {
 impl<'a, T, U, I, Out> ScalarMul<&T> for &'a DenseTensor<U, I>
 where
     for<'b, 'c> &'b U: FallibleMul<&'c T, Output = Out>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = DenseTensor<Out, I>;
     fn scalar_mul(self, rhs: &T) -> Option<Self::Output> {
@@ -389,7 +389,7 @@ where
 impl<'a, T, U, I, Out> ScalarMul<&T> for &'a SparseTensor<U, I>
 where
     for<'b, 'c> &'b U: FallibleMul<&'c T, Output = Out>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = SparseTensor<Out, I>;
     fn scalar_mul(self, rhs: &T) -> Option<Self::Output> {
@@ -404,7 +404,7 @@ where
 impl<'a, T, U, I, Out> ScalarMul<&T> for &'a DataTensor<U, I>
 where
     for<'b, 'c> &'b U: FallibleMul<&'c T, Output = Out>,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = DataTensor<Out, I>;
     fn scalar_mul(self, rhs: &T) -> Option<Self::Output> {
@@ -417,7 +417,7 @@ where
 
 impl<'a, I> ScalarMul<&f64> for &'a MixedTensor<I>
 where
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = MixedTensor<I>;
     fn scalar_mul(self, rhs: &f64) -> Option<Self::Output> {
@@ -431,7 +431,7 @@ where
 
 impl<'a, I> ScalarMul<&Complex<f64>> for &'a MixedTensor<I>
 where
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = MixedTensor<I>;
     fn scalar_mul(self, rhs: &Complex<f64>) -> Option<Self::Output> {
@@ -445,7 +445,7 @@ where
 
 impl<'a, I> ScalarMul<&Atom> for &'a MixedTensor<I>
 where
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Output = MixedTensor<I>;
     fn scalar_mul(self, rhs: &Atom) -> Option<Self::Output> {

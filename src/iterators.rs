@@ -15,16 +15,16 @@ use std::{
 use crate::VecStructure;
 
 use super::{
-    ConcreteIndex, DenseTensor, Dimension, GetTensorData, Representation, Slot, SparseTensor,
-    TensorStructure,
+    ConcreteIndex, DenseTensor, Dimension, GetTensorData, HasStructure, Representation, Slot,
+    SparseTensor,
 };
 use ahash::{AHashMap, AHashSet};
 
+use crate::Permutation;
 use bitvec::{
     order,
     vec::{self, BitVec},
 };
-use permutation::Permutation;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
 use bitvec::prelude::*;
@@ -42,6 +42,7 @@ pub trait AbstractFiber {
     fn shape(&self) -> Vec<Dimension>;
     fn order(&self) -> usize;
     fn single(&self) -> Option<usize>;
+    fn bitvec(&self) -> BitVec;
 }
 
 /// An iterator over all indices of a tensor structure
@@ -95,7 +96,7 @@ impl BareFiber {
     }
     pub fn from_flat<I>(flat: usize, structure: &I) -> BareFiber
     where
-        I: TensorStructure,
+        I: HasStructure,
     {
         let expanded = structure.expanded_index(flat).unwrap();
 
@@ -122,7 +123,7 @@ impl BareFiber {
         f.is_single();
         f
     }
-    pub fn zeros<I: TensorStructure>(structure: &I) -> BareFiber {
+    pub fn zeros<I: HasStructure>(structure: &I) -> BareFiber {
         BareFiber {
             indices: vec![FiberIndex::Fixed(0); structure.order()],
             is_single: FiberIndex::Free,
@@ -179,12 +180,12 @@ impl Index<usize> for BareFiber {
 }
 
 #[derive(Debug)]
-pub struct Fiber<'a, I: TensorStructure> {
+pub struct Fiber<'a, I: HasStructure> {
     structure: &'a I,
     bare_fiber: BareFiber,
 }
 
-impl<'a, I: TensorStructure> Clone for Fiber<'a, I> {
+impl<'a, I: HasStructure> Clone for Fiber<'a, I> {
     fn clone(&self) -> Self {
         Fiber {
             structure: self.structure,
@@ -195,7 +196,7 @@ impl<'a, I: TensorStructure> Clone for Fiber<'a, I> {
 
 impl<'a, I> Index<usize> for Fiber<'a, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Output = FiberIndex;
 
@@ -206,7 +207,7 @@ where
 
 impl<'a, I> AbstractFiber for Fiber<'a, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     fn strides(&self) -> Vec<usize> {
         self.structure.strides()
@@ -227,11 +228,15 @@ where
             None
         }
     }
+
+    fn bitvec(&self) -> BitVec {
+        self.bare_fiber.bitvec()
+    }
 }
 
 impl<'a, I> Fiber<'a, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     pub fn conj(self) -> Self {
         self
@@ -279,7 +284,7 @@ where
     }
 }
 
-impl<'a, I: TensorStructure> Display for Fiber<'a, I> {
+impl<'a, I: HasStructure> Display for Fiber<'a, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for index in self.bare_fiber.indices.iter() {
             write!(f, "{} ", index)?
@@ -289,14 +294,14 @@ impl<'a, I: TensorStructure> Display for Fiber<'a, I> {
 }
 
 #[derive(Debug)]
-pub struct FiberMut<'a, I: TensorStructure> {
+pub struct FiberMut<'a, I: HasStructure> {
     structure: &'a mut I,
     bare_fiber: BareFiber,
 }
 
 impl<'a, I> Index<usize> for FiberMut<'a, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Output = FiberIndex;
 
@@ -307,7 +312,7 @@ where
 
 impl<'a, I> AbstractFiber for FiberMut<'a, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     fn strides(&self) -> Vec<usize> {
         self.structure.strides()
@@ -328,11 +333,15 @@ where
             None
         }
     }
+
+    fn bitvec(&self) -> BitVec {
+        self.bare_fiber.bitvec()
+    }
 }
 
 impl<'a, I> FiberMut<'a, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     pub fn conj(self) -> Self {
         self
@@ -376,7 +385,7 @@ where
     }
 }
 
-impl<'a, I: TensorStructure> Display for FiberMut<'a, I> {
+impl<'a, I: HasStructure> Display for FiberMut<'a, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for index in self.bare_fiber.indices.iter() {
             write!(f, "{} ", index)?
@@ -425,7 +434,7 @@ impl StrideShift {
     }
 }
 #[derive(Debug, Clone)]
-pub struct MinimumFiberIterator {
+pub struct CoreFlatFiberIterator {
     pub varying_fiber_index: usize,
     pub increment: usize,
     pub stride_shift: StrideShift,
@@ -433,7 +442,7 @@ pub struct MinimumFiberIterator {
     pub zero_index: usize,
 }
 
-impl MinimumFiberIterator {
+impl CoreFlatFiberIterator {
     fn init_multi_fiber_iter<I, J>(
         strides: Vec<usize>,
         dims: Vec<Dimension>,
@@ -529,7 +538,7 @@ impl MinimumFiberIterator {
             let (increment, fixed_strides, shifts, max) =
                 Self::init_single_fiber_iter(fiber.strides(), single, fiber.shape(), false);
 
-            MinimumFiberIterator {
+            CoreFlatFiberIterator {
                 increment,
                 stride_shift: StrideShift::new_single(fixed_strides, shifts),
                 max,
@@ -545,7 +554,7 @@ impl MinimumFiberIterator {
                 false,
             );
 
-            MinimumFiberIterator {
+            CoreFlatFiberIterator {
                 increment,
                 stride_shift: StrideShift::new_multi(fixed_strides, shifts),
                 max,
@@ -634,14 +643,14 @@ impl MinimumFiberIterator {
         }
 
         (
-            MinimumFiberIterator {
+            CoreFlatFiberIterator {
                 varying_fiber_index: 0,
                 stride_shift: StrideShift::new_multi(fixed_strides_conj, shifts_conj),
                 increment: increment_conj,
                 max: max_conj,
                 zero_index: 0,
             },
-            MinimumFiberIterator {
+            CoreFlatFiberIterator {
                 varying_fiber_index: 0,
                 increment,
                 stride_shift: StrideShift::new_multi(fixed_strides, shifts),
@@ -664,7 +673,7 @@ impl MinimumFiberIterator {
             false,
         );
 
-        MinimumFiberIterator {
+        CoreFlatFiberIterator {
             increment,
             stride_shift: StrideShift::new_multi(fixed_strides, shifts),
             max,
@@ -682,7 +691,7 @@ impl MinimumFiberIterator {
     }
 }
 
-impl Iterator for MinimumFiberIterator {
+impl Iterator for CoreFlatFiberIterator {
     type Item = usize;
     fn next(&mut self) -> Option<Self::Item> {
         if self.varying_fiber_index > self.max {
@@ -713,13 +722,131 @@ impl Iterator for MinimumFiberIterator {
     }
 }
 
-#[derive(Debug)]
-pub struct FiberIterator<'a, I: TensorStructure> {
-    pub fiber: Fiber<'a, I>,
-    pub iter: MinimumFiberIterator,
+#[derive(Debug, Clone)]
+pub struct CoreExpandedFiberIterator {
+    pub varying_fiber_index: Vec<ConcreteIndex>,
+    pub dims: Vec<Dimension>,
+    pub strides: Vec<usize>,
+    pub shift: usize,
+    pub flat: usize,
+    first_call: bool,
+}
+impl CoreExpandedFiberIterator {
+    fn init_iter<I>(fiber: &I, conj: bool, permutation: Option<Permutation>) -> Self
+    where
+        I: AbstractFiber,
+    {
+        let varying_indices = fiber.bitvec();
+        let mut dims = Self::filter(&varying_indices, &fiber.shape(), conj);
+
+        let mut strides = Self::filter(&varying_indices, &fiber.strides(), conj);
+        let varying_fiber_index = vec![0; dims.len()];
+
+        if let Some(perm) = permutation {
+            perm.apply_slice(&mut dims);
+            perm.apply_slice(&mut strides);
+        }
+
+        CoreExpandedFiberIterator {
+            varying_fiber_index,
+            shift: 0,
+            dims,
+            strides,
+            flat: 0,
+            first_call: true,
+        }
+    }
+
+    fn filter<T: Clone>(filter: &BitVec, vec: &[T], conj: bool) -> Vec<T> {
+        let mut res = vec![];
+        for (i, x) in filter.iter().enumerate() {
+            if conj ^ *x {
+                res.push(vec[i].clone());
+            }
+        }
+        res
+    }
+
+    pub fn new<I>(fiber: &I) -> Self
+    where
+        I: AbstractFiber,
+    {
+        Self::init_iter(fiber, false, None)
+    }
+
+    pub fn new_conjugate<I>(fiber: &I) -> Self
+    where
+        I: AbstractFiber,
+    {
+        Self::init_iter(fiber, true, None)
+    }
+
+    fn new_paired_conjugates<I>(fiber: &I) -> (Self, Self)
+    where
+        I: AbstractFiber,
+    {
+        (Self::new_conjugate(fiber), Self::new(fiber))
+    }
+
+    fn new_permuted<I>(fiber: &I, permutation: Permutation) -> Self
+    where
+        I: AbstractFiber,
+    {
+        Self::init_iter(fiber, false, Some(permutation))
+    }
+
+    fn new_permuted_conjugate<I>(fiber: &I, permutation: Permutation) -> Self
+    where
+        I: AbstractFiber,
+    {
+        Self::init_iter(fiber, true, Some(permutation))
+    }
+
+    pub fn reset(&mut self) {
+        self.varying_fiber_index = vec![0; self.dims.len()];
+    }
 }
 
-impl<'a, I: TensorStructure> Clone for FiberIterator<'a, I> {
+impl Iterator for CoreExpandedFiberIterator {
+    type Item = usize;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.first_call {
+            self.first_call = false; // Ensure this is a member initialized to true when the iterator is created
+            return Some(self.flat); // Return the initial state which should be 0
+        }
+        let mut carry = true;
+        for ((pos, dim), stride) in self
+            .varying_fiber_index
+            .iter_mut()
+            .zip(self.dims.iter())
+            .zip(self.strides.iter())
+            .rev()
+        {
+            if carry {
+                *pos += 1;
+                if *pos >= usize::from(*dim) {
+                    *pos = 0;
+                    self.flat -= stride * (usize::from(*dim) - 1);
+                } else {
+                    self.flat += stride;
+                    carry = false;
+                }
+            }
+        }
+        if carry {
+            return None;
+        }
+        Some(self.flat)
+    }
+}
+
+#[derive(Debug)]
+pub struct FiberIterator<'a, I: HasStructure> {
+    pub fiber: Fiber<'a, I>,
+    pub iter: CoreFlatFiberIterator,
+}
+
+impl<'a, I: HasStructure> Clone for FiberIterator<'a, I> {
     fn clone(&self) -> Self {
         FiberIterator {
             fiber: self.fiber.clone(),
@@ -728,10 +855,10 @@ impl<'a, I: TensorStructure> Clone for FiberIterator<'a, I> {
     }
 }
 
-impl<'a, I: TensorStructure> FiberIterator<'a, I> {
+impl<'a, I: HasStructure> FiberIterator<'a, I> {
     pub fn new(fiber: Fiber<'a, I>) -> Self {
         FiberIterator {
-            iter: MinimumFiberIterator::new(&fiber),
+            iter: CoreFlatFiberIterator::new(&fiber),
             fiber,
         }
     }
@@ -803,13 +930,13 @@ impl Display for FiberIndex {
     }
 }
 
-pub struct FiberClass<'a, I: TensorStructure> {
+pub struct FiberClass<'a, I: HasStructure> {
     fiber: Fiber<'a, I>,
     /// true is fixed (but varying when iterating) and false is free (but fixed to 0 when iterating)
     free: BitVec, //check performance when it is AHashSet<usize>
 }
 
-impl<'a, I: TensorStructure> Clone for FiberClass<'a, I> {
+impl<'a, I: HasStructure> Clone for FiberClass<'a, I> {
     fn clone(&self) -> Self {
         FiberClass {
             fiber: self.fiber.clone(),
@@ -820,7 +947,7 @@ impl<'a, I: TensorStructure> Clone for FiberClass<'a, I> {
 
 impl<'a, I> Index<usize> for FiberClass<'a, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Output = FiberClassIndex;
 
@@ -833,14 +960,14 @@ where
     }
 }
 
-impl<'a, I: TensorStructure> From<Fiber<'a, I>> for FiberClass<'a, I> {
+impl<'a, I: HasStructure> From<Fiber<'a, I>> for FiberClass<'a, I> {
     fn from(fiber: Fiber<'a, I>) -> Self {
         let free = fiber.bitvecinv();
         FiberClass { fiber, free }
     }
 }
 
-impl<'a, I: TensorStructure> AbstractFiber for FiberClass<'a, I> {
+impl<'a, I: HasStructure> AbstractFiber for FiberClass<'a, I> {
     fn strides(&self) -> Vec<usize> {
         self.fiber.strides()
     }
@@ -856,9 +983,13 @@ impl<'a, I: TensorStructure> AbstractFiber for FiberClass<'a, I> {
     fn single(&self) -> Option<usize> {
         self.fiber.single()
     }
+
+    fn bitvec(&self) -> BitVec {
+        self.fiber.bitvec()
+    }
 }
 
-impl<'a, I: TensorStructure> FiberClass<'a, I> {
+impl<'a, I: HasStructure> FiberClass<'a, I> {
     pub fn iter(self) -> FiberClassIterator<'a, I> {
         FiberClassIterator::new(self)
     }
@@ -868,14 +999,14 @@ impl<'a, I: TensorStructure> FiberClass<'a, I> {
     }
 }
 
-pub struct FiberClassIterator<'b, N: TensorStructure> {
+pub struct FiberClassIterator<'b, N: HasStructure> {
     pub fiber: FiberIterator<'b, N>,
-    pub iter: MinimumFiberIterator,
+    pub iter: CoreFlatFiberIterator,
 }
 
-impl<'b, N: TensorStructure> FiberClassIterator<'b, N> {
+impl<'b, N: HasStructure> FiberClassIterator<'b, N> {
     pub fn new(class: FiberClass<'b, N>) -> Self {
-        let (iter, iter_conj) = MinimumFiberIterator::new_paired_conjugates(&class);
+        let (iter, iter_conj) = CoreFlatFiberIterator::new_paired_conjugates(&class);
 
         let fiber = FiberIterator {
             fiber: class.fiber(),
@@ -889,7 +1020,7 @@ impl<'b, N: TensorStructure> FiberClassIterator<'b, N> {
     }
 }
 
-impl<'a, I: TensorStructure> Iterator for FiberClassIterator<'a, I> {
+impl<'a, I: HasStructure> Iterator for FiberClassIterator<'a, I> {
     type Item = FiberIterator<'a, I>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -922,7 +1053,7 @@ impl TensorStructureFiberIterator {
     /// If the fiber index is out of bounds
     pub fn new<S>(structure: &S, fiber_position: usize) -> Self
     where
-        S: TensorStructure,
+        S: HasStructure,
     {
         assert!(fiber_position < structure.order(), "Invalid fiber index");
 
@@ -983,7 +1114,7 @@ impl Iterator for TensorStructureFiberIterator {
     }
 }
 
-pub struct TensorStructureFiberClassIterator<'a, S: TensorStructure> {
+pub struct TensorStructureFiberClassIterator<'a, S: HasStructure> {
     pub fiber: Fiber<'a, S>,
     pub increment: usize,
     pub fixed_strides: Vec<usize>,
@@ -1006,7 +1137,7 @@ pub struct TensorStructureMultiFiberIteratorExpanded {
 impl TensorStructureMultiFiberIteratorExpanded {
     pub fn new<N>(structure: &N, fiber_positions: &[bool]) -> Self
     where
-        N: TensorStructure,
+        N: HasStructure,
     {
         let positions = fiber_positions
             .iter()
@@ -1089,7 +1220,7 @@ impl TensorStructureMultiFiberIterator {
     ///
     pub fn new<N>(fiber: &Fiber<N>) -> TensorStructureMultiFiberIterator
     where
-        N: TensorStructure,
+        N: HasStructure,
     {
         let strides = fiber.structure.strides();
         let dims = fiber.structure.shape();
@@ -1155,7 +1286,7 @@ impl TensorStructureMultiFiberIterator {
     /// The first iterator considers the true values of `fiber_positions` as free, and the second iterator considers them as fixed.
     pub fn new_conjugate<N>(structure: &N, fiber_positions: &[bool]) -> (Self, Self)
     where
-        N: TensorStructure,
+        N: HasStructure,
     {
         let strides = structure.strides();
         let dims = structure.shape();
@@ -1312,7 +1443,7 @@ impl TensorStructureMultiFiberMetricIterator {
         permutation: Permutation,
     ) -> TensorStructureMultiFiberMetricIterator
     where
-        N: TensorStructure,
+        N: HasStructure,
     {
         // for f in fiber_positions {
         //     filter[*f] = true;
@@ -1349,7 +1480,7 @@ impl TensorStructureMultiFiberMetricIterator {
         permutation: Permutation,
     ) -> (Self, TensorStructureMultiFiberIterator)
     where
-        N: TensorStructure,
+        N: HasStructure,
     {
         let iters = TensorStructureMultiFiberIterator::new_conjugate(structure, fiber_positions);
         let mut f = fiber_positions.iter();
@@ -1459,7 +1590,7 @@ impl Iterator for TensorStructureMultiFiberMetricIterator {
 /// For the dense tensor, the iterator only returns the the vectro of references.
 pub struct TensorFiberIterator<'a, T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     tensor: &'a T,
     fiber_iter: TensorStructureFiberIterator,
@@ -1470,7 +1601,7 @@ where
 
 impl<'a, T> TensorFiberIterator<'a, T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     /// Create a new fiber iterator, from a tensor and a fixed index
     pub fn new(tensor: &'a T, fiber_position: usize) -> Self {
@@ -1499,7 +1630,7 @@ where
 
 impl<'a, T, N> Iterator for TensorFiberIterator<'a, SparseTensor<T, N>>
 where
-    N: TensorStructure,
+    N: HasStructure,
 {
     type Item = (usize, Vec<ConcreteIndex>, Vec<&'a T>);
 
@@ -1529,7 +1660,7 @@ where
 
 impl<'a, T, N> Iterator for TensorFiberIterator<'a, DenseTensor<T, N>>
 where
-    N: TensorStructure,
+    N: HasStructure,
 {
     type Item = Vec<&'a T>;
 
@@ -1562,7 +1693,7 @@ where
 ///
 pub struct TensorMultiFiberMetricIterator<'a, T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     tensor: &'a T,
     fiber_iter: TensorStructureMultiFiberMetricIterator,
@@ -1574,7 +1705,7 @@ where
 
 impl<'a, T> TensorMultiFiberMetricIterator<'a, T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     /// Create a new multi fiber metric iterator
     ///
@@ -1617,7 +1748,7 @@ where
 
 impl<'a, T, N> Iterator for TensorMultiFiberMetricIterator<'a, SparseTensor<T, N>>
 where
-    N: TensorStructure,
+    N: HasStructure,
 {
     type Item = (usize, Vec<ConcreteIndex>, Vec<(&'a T, bool)>);
 
@@ -1653,7 +1784,7 @@ where
 
 impl<'a, T, N> Iterator for TensorMultiFiberMetricIterator<'a, DenseTensor<T, N>>
 where
-    N: TensorStructure,
+    N: HasStructure,
 {
     type Item = Vec<(&'a T, bool)>;
 
@@ -1694,7 +1825,7 @@ where
 ///
 pub struct TensorMultiFiberIterator<'a, T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     tensor: &'a T,
     fiber_iter: TensorStructureMultiFiberIterator,
@@ -1704,7 +1835,7 @@ where
 
 impl<'a, T> TensorMultiFiberIterator<'a, T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     pub fn new(tensor: &'a T, fiber_positions: &[bool]) -> Self {
         let iters = TensorStructureMultiFiberIterator::new_conjugate(
@@ -1731,7 +1862,7 @@ where
 
 impl<'a, T, N> Iterator for TensorMultiFiberIterator<'a, SparseTensor<T, N>>
 where
-    N: TensorStructure,
+    N: HasStructure,
 {
     type Item = (usize, Vec<ConcreteIndex>, Vec<&'a T>);
 
@@ -1762,7 +1893,7 @@ where
 
 impl<'a, T, N> Iterator for TensorMultiFiberIterator<'a, DenseTensor<T, N>>
 where
-    N: TensorStructure,
+    N: HasStructure,
 {
     type Item = Vec<&'a T>;
 
@@ -1801,7 +1932,7 @@ impl<'a, T, N> SparseTensorIterator<'a, T, N> {
 
 impl<'a, T, N> Iterator for SparseTensorIterator<'a, T, N>
 where
-    N: TensorStructure,
+    N: HasStructure,
 {
     type Item = (Vec<ConcreteIndex>, &'a T);
 
@@ -1861,7 +1992,7 @@ pub struct SparseTensorTraceIterator<'a, T, I> {
 
 impl<'a, T, I> SparseTensorTraceIterator<'a, T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     /// Create a new trace iterator
     ///
@@ -1919,7 +2050,7 @@ where
         + for<'b> std::ops::SubAssign<&'b T>
         + std::ops::Neg<Output = T>
         + Clone,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type Item = (Vec<ConcreteIndex>, T);
     fn next(&mut self) -> Option<Self::Item> {
@@ -1982,7 +2113,7 @@ where
 
 impl<T, I> SparseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     pub fn iter_fiber(&self, fiber_index: usize) -> TensorFiberIterator<Self> {
         TensorFiberIterator::new(self, fiber_index)
@@ -2037,7 +2168,7 @@ impl<'a, T, I> DenseTensorIterator<'a, T, I> {
 
 impl<'a, T, I> Iterator for DenseTensorIterator<'a, T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Item = (Vec<ConcreteIndex>, &'a T);
 
@@ -2074,7 +2205,7 @@ impl<'a, T, I> DenseTensorLinearIterator<'a, T, I> {
 
 impl<'a, T, I> Iterator for DenseTensorLinearIterator<'a, T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Item = (usize, &'a T);
 
@@ -2088,7 +2219,7 @@ where
 
 impl<'a, T, I> IntoIterator for &'a DenseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Item = (Vec<ConcreteIndex>, &'a T);
     type IntoIter = DenseTensorIterator<'a, T, I>;
@@ -2100,7 +2231,7 @@ where
 
 impl<T, I> IntoIterator for DenseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Item = (Vec<ConcreteIndex>, T);
     type IntoIter = DenseTensorIntoIterator<T, I>;
@@ -2131,7 +2262,7 @@ impl<T, I> DenseTensorIntoIterator<T, I> {
 
 impl<T, I> Iterator for DenseTensorIntoIterator<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Item = (Vec<ConcreteIndex>, T);
 
@@ -2161,7 +2292,7 @@ pub struct DenseTensorTraceIterator<'a, T, I> {
 
 impl<'a, T, I> DenseTensorTraceIterator<'a, T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     /// Create a new trace iterator
     ///
@@ -2217,7 +2348,7 @@ where
         + Neg<Output = T>
         + Clone
         + std::fmt::Debug,
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Item = (Vec<ConcreteIndex>, T);
     fn next(&mut self) -> Option<Self::Item> {
@@ -2273,7 +2404,7 @@ where
 
 impl<T, I> DenseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     pub fn iter(&self) -> DenseTensorIterator<T, I> {
         DenseTensorIterator::new(self)

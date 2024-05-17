@@ -30,10 +30,10 @@ duplicate = "1.0.0"
 enum-try-as-inner = "0.1.1"
 indexmap = { version = "2.2.6", features = ["serde"] }
 num = { version = "0.4.3", features = ["serde"] }
-permutation = "0.4.1"
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
 serde = "1.0.201"
+serde_toml = "0.0.1"
 slotmap = { version = "1.0.7", features = ["serde"] }
 smartstring = { version = "1.0.1", features = ["serde"] }
 symbolica = { git = "https://github.com/benruijl/symbolica" }

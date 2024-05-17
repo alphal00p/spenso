@@ -23,7 +23,7 @@ use symbolica::coefficient::CoefficientView;
 
 use symbolica::atom::AtomView;
 
-use permutation::Permutation;
+use crate::Permutation;
 
 use symbolica::atom::{AsAtomView, Atom, FunctionBuilder, Symbol};
 use symbolica::state::{State, Workspace};
@@ -551,7 +551,7 @@ impl std::fmt::Display for Slot {
 /// The associated type `Structure` is the type of the structure. This is usefull for containers of structures, like a datatensor.
 /// The two methods `structure` and `mut_structure` are used to get a reference to the structure, and a mutable reference to the structure.
 ///
-pub trait TensorStructure {
+pub trait HasStructure {
     type Structure;
     /// returns the list of slots that are the external indices of the tensor
     fn external_structure(&self) -> &[Slot];
@@ -624,7 +624,7 @@ pub trait TensorStructure {
         if perm.is_empty() {
             None
         } else {
-            let p: Permutation = permutation::sort(&mut perm);
+            let p: Permutation = Permutation::sort(&mut perm);
             Some((p, self_matches, other_matches))
         }
     }
@@ -850,7 +850,7 @@ pub trait TensorStructure {
 
     fn to_explicit_rep(self, f_id: Symbol) -> MixedTensor<Self>
     where
-        Self: std::marker::Sized + Clone + TensorStructure,
+        Self: std::marker::Sized + Clone + HasStructure,
     {
         let id = State::get_symbol("id");
         let gamma = State::get_symbol("γ");
@@ -872,7 +872,7 @@ pub trait TensorStructure {
     }
 }
 
-impl<'a> TensorStructure for &'a [Slot] {
+impl<'a> HasStructure for &'a [Slot] {
     type Structure = &'a [Slot];
 
     fn external_structure(&self) -> &[Slot] {
@@ -888,7 +888,7 @@ impl<'a> TensorStructure for &'a [Slot] {
     }
 }
 
-impl TensorStructure for Vec<Slot> {
+impl HasStructure for Vec<Slot> {
     type Structure = Self;
 
     fn structure(&self) -> &Self::Structure {
@@ -1150,7 +1150,7 @@ impl std::fmt::Display for VecStructure {
     }
 }
 
-impl TensorStructure for VecStructure {
+impl HasStructure for VecStructure {
     type Structure = VecStructure;
     fn structure(&self) -> &Self::Structure {
         self
@@ -1241,7 +1241,7 @@ impl HasName for NamedStructure {
     }
 }
 
-impl TensorStructure for NamedStructure {
+impl HasStructure for NamedStructure {
     type Structure = Self;
     fn structure(&self) -> &Self::Structure {
         self
@@ -1340,7 +1340,7 @@ impl TracksCount for ContractionCountStructure {
     }
 }
 
-impl TensorStructure for ContractionCountStructure {
+impl HasStructure for ContractionCountStructure {
     type Structure = ContractionCountStructure;
     fn structure(&self) -> &Self::Structure {
         self
@@ -1425,7 +1425,7 @@ impl TracksCount for SmartShadowStructure {
     }
 }
 
-impl TensorStructure for SmartShadowStructure {
+impl HasStructure for SmartShadowStructure {
     type Structure = SmartShadowStructure;
     fn structure(&self) -> &Self::Structure {
         self
@@ -1556,7 +1556,7 @@ impl<N> TracksCount for HistoryStructure<N> {
     }
 }
 
-impl<N> TensorStructure for HistoryStructure<N> {
+impl<N> HasStructure for HistoryStructure<N> {
     type Structure = HistoryStructure<N>;
 
     fn structure(&self) -> &Self::Structure {
@@ -1726,12 +1726,12 @@ impl IntoId for std::string::String {
 /// Trait that enables shadowing of a tensor
 ///
 /// This creates a dense tensor of atoms, where the atoms are the expanded indices of the tensor, with the global name as the name of the labels.
-pub trait Shadowable: TensorStructure {
+pub trait Shadowable: HasStructure {
     type Name: IntoId + Clone;
     fn shadow(self) -> Option<DenseTensor<Atom, Self::Structure>>
     where
         Self: std::marker::Sized + HasName<Name = <Self as Shadowable>::Name>,
-        Self::Structure: Clone + TensorStructure,
+        Self::Structure: Clone + HasStructure,
     {
         let name = self.name()?.into_owned();
 
@@ -1741,7 +1741,7 @@ pub trait Shadowable: TensorStructure {
     fn smart_shadow(self) -> Option<MixedTensor<Self::Structure>>
     where
         Self: std::marker::Sized + HasName<Name = <Self as Shadowable>::Name>,
-        Self::Structure: Clone + TensorStructure,
+        Self::Structure: Clone + HasStructure,
     {
         let name = self.name()?.into_owned();
         Some(self.structure().clone().to_explicit_rep(name.into_id()))
@@ -1771,7 +1771,7 @@ pub trait Shadowable: TensorStructure {
 
 impl<N> Shadowable for N
 where
-    N: TensorStructure + HasName,
+    N: HasStructure + HasName,
     N::Name: IntoId + Clone,
 {
     type Name = N::Name;

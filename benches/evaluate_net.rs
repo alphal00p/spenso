@@ -3,8 +3,8 @@ use std::{fmt::Debug, ops::Neg};
 use spenso::Complex;
 use spenso::{
     ufo::{euclidean_four_vector, gamma},
-    AbstractIndex, ContractionCountStructure, FallibleMul, MixedTensor, Representation,
-    SetTensorData, Slot, SparseTensor, TensorNetwork, TensorStructure,
+    AbstractIndex, ContractionCountStructure, FallibleMul, HasStructure, MixedTensor,
+    Representation, SetTensorData, Slot, SparseTensor, TensorNetwork,
 };
 
 use ahash::{AHashMap, HashMap};
@@ -72,7 +72,7 @@ fn gamma_net_param(
 
 fn test_tensor<S>(structure: S) -> SparseTensor<Complex<f64>, S>
 where
-    S: TensorStructure,
+    S: HasStructure,
 {
     let mut rng: Xoroshiro64Star = Xoroshiro64Star::from_entropy();
 
@@ -99,7 +99,7 @@ fn const_map_gen<'a, 'b, I>(
     const_map: &mut HashMap<AtomView<'b>, symbolica::domains::float::Complex<f64>>,
 ) where
     'a: 'b,
-    I: TensorStructure + Clone + Debug,
+    I: HasStructure + Clone + Debug,
 {
     #[allow(clippy::unused_enumerate_index)]
     for (_i, p) in params.iter().enumerate() {

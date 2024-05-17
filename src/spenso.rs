@@ -63,6 +63,10 @@ pub use scalar::*;
 pub mod complex;
 pub use complex::*;
 
+/// Permutation
+pub mod permutation;
+pub use permutation::*;
+
 /// Tensors as defined in the UFO format
 pub mod ufo;
 

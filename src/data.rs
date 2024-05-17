@@ -1,8 +1,8 @@
 use crate::Complex;
 
 use super::{
-    atomic_expanded_label_id, ConcreteIndex, DenseTensorLinearIterator, HasName, Slot,
-    SparseTensorLinearIterator, TensorStructure, TracksCount, TrySmallestUpgrade, VecStructure,
+    atomic_expanded_label_id, ConcreteIndex, DenseTensorLinearIterator, HasName, HasStructure,
+    Slot, SparseTensorLinearIterator, TracksCount, TrySmallestUpgrade, VecStructure,
 };
 use ahash::AHashMap;
 use derive_more::From;
@@ -33,7 +33,7 @@ impl<T, I> DataIterator<T> for SparseTensor<T, I> {
     }
 }
 
-impl<T, I: TensorStructure> DataIterator<T> for DenseTensor<T, I> {
+impl<T, I: HasStructure> DataIterator<T> for DenseTensor<T, I> {
     type FlatIter<'a> = DenseTensorLinearIterator<'a,T,I> where  I:'a,T: 'a;
 
     fn flat_iter(&self) -> Self::FlatIter<'_> {
@@ -61,7 +61,7 @@ impl<T> Settable for AHashMap<usize, T> {
 }
 
 /// Trait for getting the data of a tensor
-pub trait HasTensorData: TensorStructure {
+pub trait HasTensorData: HasStructure {
     type Data: Clone;
     // type Storage: Settable<SetData = Self::Data>;
     /// Returns all the data in the tensor, withouth any structure
@@ -113,7 +113,7 @@ pub struct SparseTensor<T, I = VecStructure> {
 impl<T, I> HasTensorData for SparseTensor<T, I>
 where
     T: Clone,
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Data = T;
     // type Storage = AHashMap<usize, T>;
@@ -152,7 +152,7 @@ where
 
 impl<T, I> SetTensorData for SparseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type SetData = T;
     /// falible set method, returns an error if the indices are out of bounds.
@@ -175,7 +175,7 @@ where
 }
 impl<T, I> GetTensorData for SparseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type GetData = T;
     fn get(&self, indices: &[ConcreteIndex]) -> Result<&T, String> {
@@ -199,9 +199,9 @@ where
     }
 }
 
-impl<T, I> TensorStructure for SparseTensor<T, I>
+impl<T, I> HasStructure for SparseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Structure = I;
     fn structure(&self) -> &Self::Structure {
@@ -243,7 +243,7 @@ impl<T, U, I> TrySmallestUpgrade<SparseTensor<T, I>> for SparseTensor<U, I>
 where
     U: TrySmallestUpgrade<T>,
     U::LCM: Clone,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type LCM = SparseTensor<U::LCM, I>;
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
@@ -269,7 +269,7 @@ where
 
 impl<T, I> SparseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     /// Create a new empty sparse tensor with the given structure
     pub fn empty(structure: I) -> Self {
@@ -370,9 +370,9 @@ pub struct DenseTensor<T, I = VecStructure> {
     pub structure: I,
 }
 
-impl<T, I> TensorStructure for DenseTensor<T, I>
+impl<T, I> HasStructure for DenseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Structure = I;
     fn structure(&self) -> &Self::Structure {
@@ -411,7 +411,7 @@ where
 
 impl<T: Default + Clone, I> DenseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     pub fn default(structure: I) -> Self {
         let length = if structure.is_scalar() {
@@ -428,7 +428,7 @@ where
 
 impl<T: Zero + Clone, I> DenseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     pub fn zero(structure: I) -> Self {
         let length = if structure.is_scalar() {
@@ -447,7 +447,7 @@ impl<T, U, I> TrySmallestUpgrade<DenseTensor<T, I>> for DenseTensor<U, I>
 where
     U: TrySmallestUpgrade<T>,
     U::LCM: Clone,
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     type LCM = DenseTensor<U::LCM, I>;
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
@@ -473,7 +473,7 @@ where
 
 impl<T: Clone, I> DenseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     /// Generates a new dense tensor from the given data and structure
     pub fn from_data(data: &[T], structure: I) -> Result<Self, String> {
@@ -503,7 +503,7 @@ where
 
 impl<T, I> DenseTensor<T, I>
 where
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     /// converts the dense tensor to a sparse tensor, with the same structure
     pub fn to_sparse(&self) -> SparseTensor<T, I>
@@ -568,7 +568,7 @@ where
 impl<T, I> HasTensorData for DenseTensor<T, I>
 where
     T: Clone,
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Data = T;
     fn data(&self) -> Vec<T> {
@@ -603,7 +603,7 @@ where
 
 impl<T, I> SetTensorData for DenseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type SetData = T;
     fn set(&mut self, indices: &[ConcreteIndex], value: T) -> Result<(), String> {
@@ -627,7 +627,7 @@ where
 
 impl<T, I> GetTensorData for DenseTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     type GetData = T;
     fn get_linear(&self, index: usize) -> Option<&T> {
@@ -648,14 +648,14 @@ where
 /// Enum for storing either a dense or a sparse tensor, with the same structure
 #[derive(Debug, Clone, EnumTryAsInner, Serialize, Deserialize, From)]
 #[derive_err(Debug)]
-pub enum DataTensor<T, I: TensorStructure = VecStructure> {
+pub enum DataTensor<T, I: HasStructure = VecStructure> {
     Dense(DenseTensor<T, I>),
     Sparse(SparseTensor<T, I>),
 }
 
 impl<T, I> DataTensor<T, I>
 where
-    I: TensorStructure + Clone,
+    I: HasStructure + Clone,
 {
     pub fn to_sparse(self) -> SparseTensor<T, I>
     where
@@ -680,7 +680,7 @@ where
 
 impl<T, I> HasTensorData for DataTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
     T: Clone,
 {
     type Data = T;
@@ -713,9 +713,9 @@ where
     }
 }
 
-impl<T, I> TensorStructure for DataTensor<T, I>
+impl<T, I> HasStructure for DataTensor<T, I>
 where
-    I: TensorStructure,
+    I: HasStructure,
     T: Clone,
 {
     type Structure = I;
@@ -744,7 +744,7 @@ impl<T, I> HasName for DataTensor<T, I>
 where
     I: HasName,
     T: Clone,
-    I: TensorStructure,
+    I: HasStructure,
 {
     type Name = I::Name;
 
@@ -766,7 +766,7 @@ impl<T, I> TracksCount for DataTensor<T, I>
 where
     I: TracksCount,
     T: Clone,
-    I: TensorStructure,
+    I: HasStructure,
 {
     fn contractions_num(&self) -> usize {
         match self {
@@ -799,7 +799,7 @@ where
 
 impl<T, S> SetTensorData for DataTensor<T, S>
 where
-    S: TensorStructure,
+    S: HasStructure,
 {
     type SetData = T;
 
@@ -820,7 +820,7 @@ where
 
 impl<T, S> GetTensorData for DataTensor<T, S>
 where
-    S: TensorStructure,
+    S: HasStructure,
 {
     type GetData = T;
 
@@ -842,14 +842,14 @@ where
 /// Enum for a datatensor with specific numeric data type, generic on the structure type `I`
 #[derive(Debug, Clone, EnumTryAsInner, Serialize, Deserialize)]
 #[derive_err(Debug)]
-pub enum NumTensor<T: TensorStructure = VecStructure> {
+pub enum NumTensor<T: HasStructure = VecStructure> {
     Float(DataTensor<f64, T>),
     Complex(DataTensor<Complex<f64>, T>),
 }
 
-impl<T> TensorStructure for NumTensor<T>
+impl<T> HasStructure for NumTensor<T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     type Structure = T;
     fn structure(&self) -> &Self::Structure {
@@ -876,7 +876,7 @@ where
 
 impl<T> HasName for NumTensor<T>
 where
-    T: HasName + TensorStructure,
+    T: HasName + HasStructure,
 {
     type Name = T::Name;
 
@@ -896,7 +896,7 @@ where
 
 impl<T> TracksCount for NumTensor<T>
 where
-    T: TracksCount + TensorStructure,
+    T: TracksCount + HasStructure,
 {
     fn contractions_num(&self) -> usize {
         match self {
@@ -908,7 +908,7 @@ where
 
 impl<T> From<DenseTensor<f64, T>> for NumTensor<T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     fn from(other: DenseTensor<f64, T>) -> Self {
         NumTensor::Float(DataTensor::Dense(other))
@@ -917,7 +917,7 @@ where
 
 impl<T> From<SparseTensor<f64, T>> for NumTensor<T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     fn from(other: SparseTensor<f64, T>) -> Self {
         NumTensor::Float(DataTensor::Sparse(other))
@@ -926,7 +926,7 @@ where
 
 impl<T> From<DenseTensor<Complex<f64>, T>> for NumTensor<T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     fn from(other: DenseTensor<Complex<f64>, T>) -> Self {
         NumTensor::Complex(DataTensor::Dense(other))
@@ -935,7 +935,7 @@ where
 
 impl<T> From<SparseTensor<Complex<f64>, T>> for NumTensor<T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     fn from(other: SparseTensor<Complex<f64>, T>) -> Self {
         NumTensor::Complex(DataTensor::Sparse(other))

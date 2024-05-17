@@ -8,20 +8,20 @@ use symbolica::{
 };
 
 use super::{
-    Contract, DataIterator, DataTensor, DenseTensor, HasName, HistoryStructure, Slot, SparseTensor,
-    StructureContract, TensorStructure, TracksCount, VecStructure,
+    Contract, DataIterator, DataTensor, DenseTensor, HasName, HasStructure, HistoryStructure, Slot,
+    SparseTensor, StructureContract, TracksCount, VecStructure,
 };
 use symbolica::domains::float::Complex as SymComplex;
 
 #[derive(Clone, Debug, EnumTryAsInner)]
 #[derive_err(Debug)]
-pub enum MixedTensor<T: TensorStructure = VecStructure> {
+pub enum MixedTensor<T: HasStructure = VecStructure> {
     Float(DataTensor<f64, T>),
     Complex(DataTensor<Complex<f64>, T>),
     Symbolic(DataTensor<Atom, T>),
 }
 
-impl<'a, I: TensorStructure + Clone + 'a> MixedTensor<I> {
+impl<'a, I: HasStructure + Clone + 'a> MixedTensor<I> {
     pub fn evaluate_float<'b>(&mut self, const_map: &'b HashMap<AtomView<'a>, f64>)
     where
         'b: 'a,
@@ -53,7 +53,7 @@ impl<'a, I: TensorStructure + Clone + 'a> MixedTensor<I> {
 
 impl<I> DataTensor<Atom, I>
 where
-    I: Clone + TensorStructure,
+    I: Clone + HasStructure,
 {
     pub fn evaluate<'a, 'b, T, U>(
         &self,
@@ -137,7 +137,7 @@ where
         data: &DenseTensor<T, I>,
         const_map: &mut HashMap<AtomView<'b>, U>,
     ) where
-        I: TensorStructure,
+        I: HasStructure,
         T: Copy,
         U: From<T>,
         'a: 'b,
@@ -149,9 +149,9 @@ where
     }
 }
 
-impl<T> TensorStructure for MixedTensor<T>
+impl<T> HasStructure for MixedTensor<T>
 where
-    T: TensorStructure,
+    T: HasStructure,
 {
     type Structure = T;
 
@@ -181,7 +181,7 @@ where
 
 impl<T> HasName for MixedTensor<T>
 where
-    T: HasName + TensorStructure,
+    T: HasName + HasStructure,
 {
     type Name = T::Name;
 
@@ -204,7 +204,7 @@ where
 
 impl<T> TracksCount for MixedTensor<T>
 where
-    T: TracksCount + TensorStructure,
+    T: TracksCount + HasStructure,
 {
     fn contractions_num(&self) -> usize {
         match self {
@@ -219,7 +219,7 @@ pub type MixedTensors = MixedTensor<HistoryStructure<Symbol>>;
 
 impl<I> From<DenseTensor<f64, I>> for MixedTensor<I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     fn from(other: DenseTensor<f64, I>) -> Self {
         MixedTensor::<I>::Float(DataTensor::Dense(other))
@@ -228,7 +228,7 @@ where
 
 impl<I> From<SparseTensor<f64, I>> for MixedTensor<I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     fn from(other: SparseTensor<f64, I>) -> Self {
         MixedTensor::<I>::Float(DataTensor::Sparse(other))
@@ -237,7 +237,7 @@ where
 
 impl<I> From<DenseTensor<Complex<f64>, I>> for MixedTensor<I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     fn from(other: DenseTensor<Complex<f64>, I>) -> Self {
         MixedTensor::<I>::Complex(DataTensor::Dense(other))
@@ -246,7 +246,7 @@ where
 
 impl<I> From<SparseTensor<Complex<f64>, I>> for MixedTensor<I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     fn from(other: SparseTensor<Complex<f64>, I>) -> Self {
         MixedTensor::<I>::Complex(DataTensor::Sparse(other))
@@ -255,7 +255,7 @@ where
 
 impl<I> From<DenseTensor<Atom, I>> for MixedTensor<I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     fn from(other: DenseTensor<Atom, I>) -> Self {
         MixedTensor::<I>::Symbolic(DataTensor::Dense(other))
@@ -264,7 +264,7 @@ where
 
 impl<I> From<SparseTensor<Atom, I>> for MixedTensor<I>
 where
-    I: TensorStructure,
+    I: HasStructure,
 {
     fn from(other: SparseTensor<Atom, I>) -> Self {
         MixedTensor::<I>::Symbolic(DataTensor::Sparse(other))
@@ -273,7 +273,7 @@ where
 
 impl<I> Contract<MixedTensor<I>> for MixedTensor<I>
 where
-    I: TensorStructure + Clone + StructureContract,
+    I: HasStructure + Clone + StructureContract,
 {
     type LCM = MixedTensor<I>;
     fn contract(&self, other: &MixedTensor<I>) -> Option<Self::LCM> {

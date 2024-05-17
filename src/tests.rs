@@ -1,15 +1,15 @@
 use crate::{
     ufo::mink_four_vector, Contract, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSub,
-    GetTensorData, HasTensorData, MixedTensor, Representation, SparseTensor, StructureContract,
-    TensorStructure,
+    GetTensorData, HasStructure, HasTensorData, MixedTensor, Representation, SparseTensor,
+    StructureContract,
 };
-use crate::{AbstractFiber, Fiber, FiberClass};
+use crate::{AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, Fiber, FiberClass};
 use ahash::{HashMap, HashMapExt};
 
 use indexmap::{IndexMap, IndexSet};
 
 use crate::Complex;
-use insta::assert_ron_snapshot;
+use insta::{assert_ron_snapshot, assert_toml_snapshot};
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 
@@ -26,7 +26,7 @@ use super::{
 
 fn test_tensor<D, S>(structure: S, seed: u64, range: Option<(D, D)>) -> SparseTensor<D, S>
 where
-    S: TensorStructure,
+    S: HasStructure,
     D: rand::distributions::uniform::SampleUniform,
     Uniform<D>: Copy,
 
@@ -144,7 +144,7 @@ fn indexflatten() {
 #[test]
 fn single_fiber() {
     let a = test_structure(5, 5);
-    println!("{:?}", a.strides());
+
     let fiber = Fiber::from_filter(&[true, false, false, false, false], &a);
     assert!(fiber.single().is_some());
 
@@ -152,15 +152,26 @@ fn single_fiber() {
 
     let fciter: Vec<usize> = iter.collect();
 
-    for i in fciter.iter() {
-        println!("{:?}", a.expanded_index(*i).unwrap());
-    }
+    let fiberclass: Vec<usize> = FiberClass::from(fiber)
+        .iter()
+        .map(|fc| fc.iter.zero_index)
+        .collect::<Vec<_>>();
 
-    let fiberclass = FiberClass::from(fiber);
+    assert_ron_snapshot!((a, fciter, fiberclass));
+}
 
-    for fc in fiberclass.iter() {
-        println!("{:?}", a.expanded_index(fc.iter.zero_index).unwrap());
-    }
+#[test]
+fn expanded_vs_flat_iter() {
+    let a = test_structure(5, 5);
+    let fiber = Fiber::from_filter(&[false, true, true, false, true], &a);
+
+    let flat_iter = CoreFlatFiberIterator::new(&fiber);
+    let expanded_iter = CoreExpandedFiberIterator::new(&fiber);
+
+    let flat: Vec<usize> = flat_iter.collect();
+    let expanded: Vec<usize> = expanded_iter.collect();
+
+    assert_eq!(flat, expanded);
 }
 
 #[test]

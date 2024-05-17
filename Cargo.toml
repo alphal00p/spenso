@@ -24,10 +24,12 @@ harness = false
 
 [dependencies]
 ahash = { version = "0.8.11", features = ["serde"] }
+ambassador = "0.3.6"
 bitvec = { version = "1.0.1", features = ["serde"] }
 derive_more = "0.99.17"
 duplicate = "1.0.0"
 enum-try-as-inner = "0.1.1"
+gat-lending-iterator = "0.1.5"
 indexmap = { version = "2.2.6", features = ["serde"] }
 num = { version = "0.4.3", features = ["serde"] }
 rand = "0.8.5"

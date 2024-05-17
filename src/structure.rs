@@ -1,4 +1,5 @@
 use ahash::AHashMap;
+use ambassador::delegatable_trait;
 use derive_more::Add;
 use derive_more::AddAssign;
 use derive_more::Display;
@@ -551,6 +552,7 @@ impl std::fmt::Display for Slot {
 /// The associated type `Structure` is the type of the structure. This is usefull for containers of structures, like a datatensor.
 /// The two methods `structure` and `mut_structure` are used to get a reference to the structure, and a mutable reference to the structure.
 ///
+#[delegatable_trait]
 pub trait HasStructure {
     type Structure;
     /// returns the list of slots that are the external indices of the tensor

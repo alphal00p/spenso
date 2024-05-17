@@ -41,6 +41,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ambassador"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2362d85b9d773d0d6ec70d6cc8f27ddef81edd11b05bc4e18281e4993b6e6d6"
+dependencies = [
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "anes"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -363,6 +375,12 @@ name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
+
+[[package]]
+name = "gat-lending-iterator"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42327bb9f2aad5b6400dea3e3aea3a4959529387186d3dc27c08d401c808fda9"
 
 [[package]]
 name = "getrandom"
@@ -912,11 +930,13 @@ name = "spenso"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "ambassador",
  "bitvec",
  "criterion",
  "derive_more",
  "duplicate",
  "enum-try-as-inner",
+ "gat-lending-iterator",
  "indexmap",
  "insta",
  "num",

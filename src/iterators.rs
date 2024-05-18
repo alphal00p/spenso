@@ -12,7 +12,7 @@ use std::{
     ops::{AddAssign, Index, Neg, SubAssign},
 };
 
-use crate::VecStructure;
+use crate::{data, permutation, VecStructure};
 
 use super::{
     ConcreteIndex, DenseTensor, Dimension, GetTensorData, HasStructure, Representation, Slot,
@@ -85,6 +85,23 @@ impl Display for FiberIndex {
     }
 }
 
+pub enum FiberData<'a> {
+    Single(usize),
+    BoolFilter(&'a [bool]),
+}
+
+impl From<usize> for FiberData<'_> {
+    fn from(value: usize) -> Self {
+        Self::Single(value)
+    }
+}
+
+impl<'a> From<&'a [bool]> for FiberData<'a> {
+    fn from(value: &'a [bool]) -> Self {
+        Self::BoolFilter(value)
+    }
+}
+
 pub trait AbstractFiber<Out: AbstractFiberIndex>: Index<usize, Output = Out> {
     fn strides(&self) -> Vec<usize>;
     fn shape(&self) -> Vec<Dimension>;
@@ -103,6 +120,13 @@ struct BareFiber {
 impl BareFiber {
     pub fn conj(self) -> Self {
         self
+    }
+
+    pub fn from<I: HasStructure>(data: FiberData, structure: &I) -> Self {
+        match data {
+            FiberData::Single(i) => Self::from_flat(i, structure),
+            FiberData::BoolFilter(b) => Self::from_filter(b),
+        }
     }
 
     pub fn bitvec(&self) -> BitVec {
@@ -256,16 +280,41 @@ where
     }
 }
 
-impl<'a, I> Fiber<'a, I>
+impl<'a, S> Fiber<'a, S>
 where
-    I: HasStructure,
+    S: HasStructure,
 {
     pub fn conj(self) -> Self {
         self
     }
 
-    pub fn iter(self) -> FiberIterator<'a, I, CoreFlatFiberIterator> {
+    pub fn iter(self) -> FiberIterator<'a, S, CoreFlatFiberIterator> {
         FiberIterator::new(self, false)
+    }
+
+    pub fn iter_conj(self) -> FiberIterator<'a, S, CoreFlatFiberIterator> {
+        FiberIterator::new(self, true)
+    }
+
+    pub fn iter_perm(
+        self,
+        permutation: Permutation,
+    ) -> FiberIterator<'a, S, CoreExpandedFiberIterator> {
+        FiberIterator::new_permuted(self, permutation, false)
+    }
+
+    pub fn iter_perm_metric(
+        self,
+        permutation: Permutation,
+    ) -> FiberIterator<'a, S, MetricFiberIterator> {
+        FiberIterator::new_permuted(self, permutation, false)
+    }
+
+    pub fn from<'b>(data: FiberData<'b>, structure: &'a S) -> Self {
+        Fiber {
+            bare_fiber: BareFiber::from(data, structure),
+            structure,
+        }
     }
 
     pub fn bitvec(&self) -> BitVec {
@@ -275,21 +324,21 @@ where
     pub fn bitvecinv(&self) -> BitVec {
         self.bare_fiber.bitvecinv()
     }
-    pub fn from_flat(flat: usize, structure: &'a I) -> Fiber<'a, I> {
+    pub fn from_flat(flat: usize, structure: &'a S) -> Fiber<'a, S> {
         Fiber {
             bare_fiber: BareFiber::from_flat(flat, structure),
             structure,
         }
     }
     /// true is free, false is fixed
-    pub fn from_filter(filter: &[bool], structure: &'a I) -> Fiber<'a, I> {
+    pub fn from_filter(filter: &[bool], structure: &'a S) -> Fiber<'a, S> {
         //check compatibility
         Fiber {
             bare_fiber: BareFiber::from_filter(filter),
             structure,
         }
     }
-    pub fn zeros(structure: &'a I) -> Fiber<'a, I> {
+    pub fn zeros(structure: &'a S) -> Fiber<'a, S> {
         Fiber {
             bare_fiber: BareFiber::zeros(structure),
             structure,
@@ -369,6 +418,14 @@ impl<'a, I> FiberMut<'a, I>
 where
     I: HasStructure,
 {
+    pub fn from<'b>(data: FiberData<'b>, structure: &'a mut I) -> Self {
+        //TODO check fiberdata compatibility
+        FiberMut {
+            bare_fiber: BareFiber::from(data, &*structure),
+            structure,
+        }
+    }
+
     pub fn conj(self) -> Self {
         self
     }
@@ -380,20 +437,7 @@ where
     pub fn bitvecinv(&self) -> BitVec {
         self.bare_fiber.bitvecinv()
     }
-    pub fn from_flat(flat: usize, structure: &'a I) -> Fiber<'a, I> {
-        Fiber {
-            bare_fiber: BareFiber::from_flat(flat, structure),
-            structure,
-        }
-    }
-    /// true is free, false is fixed
-    pub fn from_filter(filter: &[bool], structure: &'a I) -> Fiber<'a, I> {
-        //check compatibility
-        Fiber {
-            bare_fiber: BareFiber::from_filter(filter),
-            structure,
-        }
-    }
+
     pub fn zeros(structure: &'a I) -> Fiber<'a, I> {
         Fiber {
             bare_fiber: BareFiber::zeros(structure),
@@ -421,16 +465,18 @@ impl<'a, I: HasStructure> Display for FiberMut<'a, I> {
 }
 
 pub struct FiberClass<'a, I: HasStructure> {
-    fiber: Fiber<'a, I>,
-    /// true is fixed (but varying when iterating) and false is free (but fixed to 0 when iterating)
-    free: BitVec, //check performance when it is AHashSet<usize>
+    structure: &'a I,
+    bare_fiber: BareFiber, // A representant of the class
+
+                           // /// true is fixed (but varying when iterating) and false is free (but fixed to 0 when iterating)
+                           // free: BitVec, //check performance when it is AHashSet<usize>
 }
 
 impl<'a, I: HasStructure> Clone for FiberClass<'a, I> {
     fn clone(&self) -> Self {
         FiberClass {
-            fiber: self.fiber.clone(),
-            free: self.free.clone(),
+            bare_fiber: self.bare_fiber.clone(),
+            structure: self.structure,
         }
     }
 }
@@ -442,7 +488,7 @@ where
     type Output = FiberClassIndex;
 
     fn index(&self, index: usize) -> &Self::Output {
-        if self.free[index] {
+        if self.bare_fiber[index].is_fixed() {
             return &FiberClassIndex::Free;
         } else {
             return &FiberClassIndex::Fixed;
@@ -452,44 +498,68 @@ where
 
 impl<'a, I: HasStructure> From<Fiber<'a, I>> for FiberClass<'a, I> {
     fn from(fiber: Fiber<'a, I>) -> Self {
-        let free = fiber.bitvecinv();
-        FiberClass { fiber, free }
+        FiberClass {
+            bare_fiber: fiber.bare_fiber,
+            structure: fiber.structure,
+        }
+    }
+}
+
+impl<'a, I: HasStructure> From<FiberClass<'a, I>> for Fiber<'a, I> {
+    fn from(fiber: FiberClass<'a, I>) -> Self {
+        Fiber {
+            bare_fiber: fiber.bare_fiber,
+            structure: fiber.structure,
+        }
     }
 }
 
 impl<'a, I: HasStructure> AbstractFiber<FiberClassIndex> for FiberClass<'a, I> {
     fn strides(&self) -> Vec<usize> {
-        self.fiber.strides()
+        self.structure.strides()
     }
 
     fn shape(&self) -> Vec<Dimension> {
-        self.fiber.shape()
+        self.structure.shape()
     }
 
     fn reps(&self) -> Vec<Representation> {
-        self.fiber.reps()
+        self.structure.reps()
     }
 
     fn order(&self) -> usize {
-        self.fiber.order()
+        self.structure.order()
     }
 
     fn single(&self) -> Option<usize> {
-        self.fiber.single()
+        match self.bare_fiber.is_single {
+            FiberIndex::Fixed(i) => Some(i),
+            _ => None,
+        }
     }
 
     fn bitvec(&self) -> BitVec {
-        self.free.clone()
+        !self.bare_fiber.bitvec()
     }
 }
 
-impl<'a, I: HasStructure> FiberClass<'a, I> {
-    pub fn iter(self) -> FiberClassIterator<'a, I> {
+impl<'a, S: HasStructure> FiberClass<'a, S> {
+    pub fn iter(self) -> FiberClassIterator<'a, S> {
         FiberClassIterator::new(self)
     }
 
-    pub fn fiber(self) -> Fiber<'a, I> {
-        self.fiber
+    pub fn iter_perm(
+        self,
+        permutation: Permutation,
+    ) -> FiberClassIterator<'a, S, CoreExpandedFiberIterator> {
+        FiberClassIterator::new_permuted(self, permutation)
+    }
+
+    pub fn iter_perm_metric(
+        self,
+        permutation: Permutation,
+    ) -> FiberClassIterator<'a, S, MetricFiberIterator> {
+        FiberClassIterator::new_permuted(self, permutation)
     }
 }
 // Iterators for fibers
@@ -531,6 +601,52 @@ impl StrideShift {
 
     pub fn new_multi(strides: Vec<usize>, shifts: Vec<usize>) -> Self {
         StrideShift::Multi(MultiStrideShift { strides, shifts })
+    }
+}
+
+pub trait FiberIteratorItem {
+    type OtherData;
+    fn flat_idx(&self) -> usize;
+
+    fn other_data(self) -> Self::OtherData;
+}
+
+impl FiberIteratorItem for usize {
+    type OtherData = ();
+    fn flat_idx(&self) -> usize {
+        *self
+    }
+
+    fn other_data(self) -> Self::OtherData {}
+}
+
+struct SkippingItem<I: FiberIteratorItem> {
+    skips: usize,
+    item: I,
+}
+
+impl<I: FiberIteratorItem> FiberIteratorItem for SkippingItem<I> {
+    type OtherData = (usize, I::OtherData);
+    fn flat_idx(&self) -> usize {
+        self.item.flat_idx()
+    }
+    fn other_data(self) -> Self::OtherData {
+        (self.skips, self.item.other_data())
+    }
+}
+
+pub struct MetricItem<I: FiberIteratorItem> {
+    neg: bool,
+    item: I,
+}
+
+impl<I: FiberIteratorItem> FiberIteratorItem for MetricItem<I> {
+    type OtherData = (bool, I::OtherData);
+    fn flat_idx(&self) -> usize {
+        self.item.flat_idx()
+    }
+    fn other_data(self) -> Self::OtherData {
+        (self.neg, self.item.other_data())
     }
 }
 
@@ -955,7 +1071,8 @@ impl IteratesAlongPermutedFibers for CoreExpandedFiberIterator {
     }
 }
 
-struct MetricFiberIterator {
+#[derive(Debug, Clone)]
+pub struct MetricFiberIterator {
     iter: CoreExpandedFiberIterator,
     neg: bool,
 }
@@ -1013,7 +1130,7 @@ impl IteratesAlongPermutedFibers for MetricFiberIterator {
 }
 
 impl Iterator for MetricFiberIterator {
-    type Item = (bool, usize);
+    type Item = MetricItem<usize>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.iter.exhausted {
             return None;
@@ -1048,7 +1165,10 @@ impl Iterator for MetricFiberIterator {
             self.iter.exhausted = true; // Set the flag to prevent further iterations after this one
         }
 
-        Some((self.neg, current_flat))
+        Some(MetricItem {
+            neg: self.neg,
+            item: current_flat,
+        })
     }
 }
 
@@ -1104,27 +1224,34 @@ impl<'a, I: IteratesAlongFibers> Iterator for FiberIterator<'a, VecStructure, I>
     }
 }
 
-impl<'a, I: IteratesAlongFibers<Item = usize>, S: HasStructure, T> Iterator
+impl<'a, I: IteratesAlongFibers<Item = It>, S: HasStructure, T, It> Iterator
     for FiberIterator<'a, DenseTensor<T, S>, I>
+where
+    It: FiberIteratorItem,
 {
-    type Item = &'a T;
+    type Item = (&'a T, It::OtherData);
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter
-            .next()
-            .map(|x| self.fiber.structure.get_linear(x).unwrap())
+        self.iter.next().map(|x| {
+            (
+                self.fiber.structure.get_linear(x.flat_idx()).unwrap(),
+                x.other_data(),
+            )
+        })
     }
 }
 
-impl<'a, I: IteratesAlongFibers<Item = usize>, S: HasStructure, T> Iterator
+impl<'a, I: IteratesAlongFibers<Item = It>, S: HasStructure, T, It> Iterator
     for FiberIterator<'a, SparseTensor<T, S>, I>
+where
+    It: FiberIteratorItem,
 {
-    type Item = (usize, &'a T);
+    type Item = (&'a T, usize, It::OtherData);
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(i) = self.iter.next() {
-            if let Some(t) = self.fiber.structure.get_linear(i) {
+            if let Some(t) = self.fiber.structure.get_linear(i.flat_idx()) {
                 let skipped = self.skipped;
                 self.skipped = 0;
-                return Some((skipped, t));
+                return Some((t, skipped, i.other_data()));
             } else {
                 self.skipped += 1;
                 return self.next();
@@ -1175,7 +1302,7 @@ impl<'b, N: HasStructure> FiberClassIterator<'b, N, CoreFlatFiberIterator> {
         let (iter, iter_conj) = CoreFlatFiberIterator::new_paired_conjugates(&class);
 
         let fiber = FiberIterator {
-            fiber: class.fiber(),
+            fiber: class.into(),
             iter,
             skipped: 0,
         };
@@ -1187,11 +1314,18 @@ impl<'b, N: HasStructure> FiberClassIterator<'b, N, CoreFlatFiberIterator> {
     }
 }
 
+impl<'b, N: HasStructure, I: IteratesAlongFibers> FiberClassIterator<'b, N, I> {
+    pub fn reset(&mut self) {
+        self.iter.reset();
+        self.fiber.reset();
+    }
+}
+
 impl<'b, N: HasStructure, I: IteratesAlongPermutedFibers> FiberClassIterator<'b, N, I> {
     pub fn new_permuted(class: FiberClass<'b, N>, permutation: Permutation) -> Self {
         let iter = CoreFlatFiberIterator::new(&class, false);
 
-        let fiber = FiberIterator::new_permuted(class.fiber(), permutation, false);
+        let fiber = FiberIterator::new_permuted(class.into(), permutation, false);
 
         FiberClassIterator { fiber, iter }
     }
@@ -1424,8 +1558,12 @@ impl<T, I> SparseTensor<T, I>
 where
     I: HasStructure,
 {
-    pub fn iter_fiber(&self, fiber_index: usize) -> TensorFiberIterator<Self> {
-        TensorFiberIterator::new(self, fiber_index)
+    pub fn fiber<'a, 'r>(&'r self, fiber_data: FiberData<'a>) -> Fiber<'r, Self> {
+        Fiber::from(fiber_data, self)
+    }
+
+    pub fn fiber_class<'a, 'r>(&'r self, fiber_data: FiberData<'a>) -> FiberClass<'r, Self> {
+        Fiber::from(fiber_data, self).into()
     }
 
     pub fn iter_trace(&self, trace_indices: [usize; 2]) -> SparseTensorTraceIterator<T, I> {
@@ -1438,18 +1576,6 @@ where
 
     pub fn iter_flat(&self) -> SparseTensorLinearIterator<T> {
         SparseTensorLinearIterator::new(self)
-    }
-
-    pub fn iter_multi_fibers_metric(
-        &self,
-        fiber_positions: &[bool],
-        permutation: Permutation,
-    ) -> TensorMultiFiberMetricIterator<Self> {
-        TensorMultiFiberMetricIterator::new(self, fiber_positions, permutation)
-    }
-
-    pub fn iter_multi_fibers(&self, fiber_positions: &[bool]) -> TensorMultiFiberIterator<Self> {
-        TensorMultiFiberIterator::new(self, fiber_positions)
     }
 }
 
@@ -1719,28 +1845,20 @@ where
         DenseTensorIterator::new(self)
     }
 
+    pub fn fiber<'a, 'r>(&'r self, fiber_data: FiberData<'a>) -> Fiber<'r, Self> {
+        Fiber::from(fiber_data, self)
+    }
+
+    pub fn fiber_class<'a, 'r>(&'r self, fiber_data: FiberData<'a>) -> FiberClass<'r, Self> {
+        Fiber::from(fiber_data, self).into()
+    }
+
     pub fn iter_flat(&self) -> DenseTensorLinearIterator<T, I> {
         DenseTensorLinearIterator::new(self)
     }
 
-    pub fn iter_fiber(&self, fixedindex: usize) -> TensorFiberIterator<Self> {
-        TensorFiberIterator::new(self, fixedindex)
-    }
-
     pub fn iter_trace(&self, trace_indices: [usize; 2]) -> DenseTensorTraceIterator<T, I> {
         DenseTensorTraceIterator::new(self, trace_indices)
-    }
-
-    pub fn iter_multi_fibers_metric(
-        &self,
-        fiber_positions: &[bool],
-        permutation: Permutation,
-    ) -> TensorMultiFiberMetricIterator<Self> {
-        TensorMultiFiberMetricIterator::new(self, fiber_positions, permutation)
-    }
-
-    pub fn iter_multi_fibers(&self, fiber_positions: &[bool]) -> TensorMultiFiberIterator<Self> {
-        TensorMultiFiberIterator::new(self, fiber_positions)
     }
 }
 

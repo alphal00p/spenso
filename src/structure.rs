@@ -33,8 +33,6 @@ use std::collections::HashSet;
 use std::{cmp::Ordering, collections::HashMap};
 
 use crate::Fiber;
-use crate::TensorStructureFiberIterator;
-use crate::TensorStructureMultiFiberIterator;
 
 use super::ufo;
 use super::DenseTensor;

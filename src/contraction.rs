@@ -1,4 +1,5 @@
 use ahash::AHashMap;
+use gat_lending_iterator::Skip;
 
 use super::{
     DataIterator, DataTensor, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSubAssign,
@@ -262,23 +263,22 @@ where
         let mut result_data = vec![U::Out::default(); final_structure.size()];
         let mut result_index = 0;
 
-        let mut self_iter = self.iter_fiber(i);
-        let mut other_iter = other.iter_fiber(j);
+        let mut self_iter = self.fiber_class(i.into()).iter();
+        let mut other_iter = other.fiber_class(j.into()).iter();
 
         let fiber_representation: Representation = self.reps()[i];
 
-        for fiber_a in self_iter.by_ref() {
+        for mut fiber_a in self_iter.by_ref() {
             for fiber_b in other_iter.by_ref() {
-                for k in 0..usize::from(fiber_representation) {
+                for (k, ((a, _), (b, _))) in (fiber_a.by_ref()).zip(fiber_b).enumerate() {
                     if fiber_representation.is_neg(k) {
-                        result_data[result_index]
-                            .sub_assign_fallible(fiber_a[k].mul_fallible(fiber_b[k]).unwrap());
+                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
-                        result_data[result_index]
-                            .add_assign_fallible(fiber_a[k].mul_fallible(fiber_b[k]).unwrap());
+                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
                     }
                 }
                 result_index += 1;
+                fiber_a.reset();
             }
             let _ = other_iter.reset();
         }
@@ -310,23 +310,25 @@ where
         let mut result_data = vec![U::Out::default(); final_structure.size()];
         let mut result_index = 0;
 
-        let mut selfiter = self.iter_multi_fibers_metric(&self_matches, permutation);
+        let self_matches = self_matches.as_slice();
 
-        let mut other_iter = other.iter_multi_fibers(&other_matches);
-        while let Some(fiber_a) = selfiter.next() {
+        let mut selfiter = self
+            .fiber_class(self_matches.into())
+            .iter_perm_metric(permutation);
+
+        let mut other_iter = other.fiber_class(other_matches.as_slice().into()).iter();
+
+        while let Some(mut fiber_a) = selfiter.next() {
             for fiber_b in other_iter.by_ref() {
-                for k in 0..fiber_a.len() {
-                    if fiber_a[k].1 {
-                        result_data[result_index].sub_assign_fallible(
-                            fiber_b[selfiter.map[k]].mul_fallible(fiber_a[k].0).unwrap(),
-                        );
+                for ((a, (neg_a, _)), (b, _)) in (fiber_a.by_ref()).zip(fiber_b) {
+                    if neg_a {
+                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
-                        result_data[result_index].add_assign_fallible(
-                            fiber_b[selfiter.map[k]].mul_fallible(fiber_a[k].0).unwrap(),
-                        );
+                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
                     }
                 }
                 result_index += 1;
+                fiber_a.reset();
             }
             let _ = other_iter.reset();
         }
@@ -385,8 +387,8 @@ where
         let mut result_data = vec![U::Out::default(); final_structure.size()];
         let mut result_index = 0;
 
-        let mut self_iter = self.iter_fiber(i);
-        let mut other_iter = other.iter_fiber(j);
+        let mut self_iter = self.fiber_class(i.into()).iter();
+        let mut other_iter = other.fiber_class(j.into()).iter();
 
         let fiber_representation: Representation = self.reps()[i];
 
@@ -396,23 +398,22 @@ where
             .get(pos.wrapping_sub(2))
             .unwrap_or(&1);
 
-        for (skipped, nonzeros, fiber_a) in self_iter.by_ref() {
-            result_index += skipped * stride;
-
-            for fiber_b in other_iter.by_ref() {
-                for (i, k) in nonzeros.iter().enumerate() {
-                    if fiber_representation.is_neg(*k) {
-                        result_data[result_index]
-                            .sub_assign_fallible(fiber_a[i].mul_fallible(fiber_b[*k]).unwrap());
+        for mut fiber_a in self_iter.by_ref() {
+            for mut fiber_b in other_iter.by_ref() {
+                for (k, (a, skip, _)) in fiber_a.by_ref().enumerate() {
+                    fiber_b.by_ref().skip(skip);
+                    let (b, _) = fiber_b.next().unwrap();
+                    if fiber_representation.is_neg(k) {
+                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
-                        result_data[result_index]
-                            .add_assign_fallible(fiber_a[i].mul_fallible(fiber_b[*k]).unwrap());
+                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
                     }
                 }
                 result_index += 1;
+                fiber_a.reset();
             }
 
-            result_index += other_iter.reset();
+            other_iter.reset();
         }
 
         let result = DenseTensor {
@@ -438,27 +439,26 @@ where
         let mut result_data = vec![U::Out::default(); final_structure.size()];
         let mut result_index = 0;
 
-        let mut self_iter = self.iter_fiber(i);
-        let mut other_iter = other.iter_fiber(j);
+        let mut self_iter = self.fiber_class(i.into()).iter();
+        let mut other_iter = other.fiber_class(j.into()).iter();
 
         let fiber_representation: Representation = self.reps()[i];
 
-        for fiber_a in self_iter.by_ref() {
-            for (skipped, nonzeros, fiber_b) in other_iter.by_ref() {
-                result_index += skipped;
-
-                for (i, k) in nonzeros.iter().enumerate() {
-                    if fiber_representation.is_neg(*k) {
-                        result_data[result_index]
-                            .sub_assign_fallible(fiber_a[*k].mul_fallible(fiber_b[i]).unwrap());
+        for mut fiber_a in self_iter.by_ref() {
+            for mut fiber_b in other_iter.by_ref() {
+                for (k, (b, skip, _)) in fiber_b.by_ref().enumerate() {
+                    fiber_a.by_ref().skip(skip);
+                    let (a, _) = fiber_a.next().unwrap();
+                    if fiber_representation.is_neg(k) {
+                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
-                        result_data[result_index]
-                            .add_assign_fallible(fiber_a[*k].mul_fallible(fiber_b[i]).unwrap());
+                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
                     }
                 }
                 result_index += 1;
+                fiber_a.reset();
             }
-            result_index += other_iter.reset();
+            other_iter.reset();
         }
 
         let result = DenseTensor {
@@ -498,40 +498,28 @@ where
         let mut result_data = vec![U::Out::default(); final_structure.size()];
         let mut result_index = 0;
 
-        let mut selfiter = self.iter_multi_fibers_metric(&self_matches, permutation);
-        let mut other_iter = other.iter_multi_fibers(&other_matches);
+        let selfiter = self
+            .fiber_class(self_matches.as_slice().into())
+            .iter_perm_metric(permutation);
+        let mut other_iter = other.fiber_class(other_matches.as_slice().into()).iter();
 
-        let mut max_skip = 0;
-        while let Some((skipped, nonzeros, fiber_a)) = selfiter.next() {
-            result_index += skipped * stride;
-            if skipped > max_skip {
-                max_skip = skipped;
-            }
-            for fiber_b in other_iter.by_ref() {
-                for (i, k) in nonzeros.iter().enumerate() {
-                    if fiber_a[i].1 {
-                        result_data[result_index].sub_assign_fallible(
-                            fiber_a[i]
-                                .0
-                                .mul_fallible(fiber_b[selfiter.map[*k]])
-                                .unwrap(),
-                        );
+        for mut fiber_a in selfiter {
+            for mut fiber_b in other_iter.by_ref() {
+                for (a, skip, (neg, _)) in fiber_a.by_ref() {
+                    fiber_b.by_ref().skip(skip);
+                    let (b, _) = fiber_b.next().unwrap();
+                    if neg {
+                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
-                        result_data[result_index].add_assign_fallible(
-                            fiber_a[i]
-                                .0
-                                .mul_fallible(fiber_b[selfiter.map[*k]])
-                                .unwrap(),
-                        );
+                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
                     }
                 }
                 result_index += 1;
+                fiber_a.reset();
             }
-            let _ = other_iter.reset();
+            other_iter.reset();
         }
-        if max_skip > 0 {
-            // println!("skippedDS {max_skip}");
-        }
+
         let result = DenseTensor {
             data: result_data,
             structure: final_structure,
@@ -560,41 +548,25 @@ where
         let mut result_data = vec![U::Out::default(); final_structure.size()];
         let mut result_index = 0;
 
-        let selfiter = self.iter_multi_fibers_metric(&self_matches, permutation.clone());
-        let mut other_iter = other.iter_multi_fibers_metric(&other_matches, permutation.inverse());
+        let selfiter = self
+            .fiber_class(self_matches.as_slice().into())
+            .iter_perm_metric(permutation);
+        let mut other_iter = other.fiber_class(other_matches.as_slice().into()).iter();
 
-        let mut max_skip = 0;
-        for fiber_a in selfiter {
-            while let Some((skipped, nonzeros, fiber_b)) = other_iter.next() {
-                result_index += skipped;
-                if skipped > max_skip {
-                    max_skip = skipped;
-                }
-
-                for (i, k) in nonzeros.iter().enumerate() {
-                    if fiber_a[other_iter.map[*k]].1 {
-                        result_data[result_index].sub_assign_fallible(
-                            fiber_a[other_iter.map[*k]]
-                                .0
-                                .mul_fallible(fiber_b[i].0)
-                                .unwrap(),
-                        );
+        for mut fiber_a in selfiter {
+            for mut fiber_b in other_iter.by_ref() {
+                for (b, skip, _) in fiber_b.by_ref() {
+                    fiber_a.by_ref().skip(skip);
+                    let (a, (neg, _)) = fiber_a.next().unwrap();
+                    if neg {
+                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
-                        result_data[result_index].add_assign_fallible(
-                            fiber_a[other_iter.map[*k]]
-                                .0
-                                .mul_fallible(fiber_b[i].0)
-                                .unwrap(),
-                        );
+                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
                     }
                 }
                 result_index += 1;
+                fiber_a.reset();
             }
-            result_index += other_iter.reset();
-        }
-
-        if max_skip > 0 {
-            // println!("skippedSD {max_skip}");
         }
 
         let result = DenseTensor {
@@ -622,8 +594,8 @@ where
         let mut result_index = 0;
         let pos = self.order();
 
-        let mut self_iter = self.iter_fiber(i);
-        let mut other_iter = other.iter_fiber(j);
+        let mut self_iter = self.fiber_class(i.into()).iter();
+        let mut other_iter = other.fiber_class(j.into()).iter();
 
         let metric = self.external_structure()[i].representation.negative();
 
@@ -632,32 +604,45 @@ where
             .get(pos.wrapping_sub(2))
             .unwrap_or(&1);
 
-        for (skipped_a, nonzeros_a, fiber_a) in self_iter.by_ref() {
-            result_index += skipped_a * stride;
-            for (skipped_b, nonzeros_b, fiber_b) in other_iter.by_ref() {
-                result_index += skipped_b;
+        for mut fiber_a in self_iter {
+            for mut fiber_b in other_iter.by_ref() {
+                let mut items = fiber_a
+                    .next()
+                    .map(|(a, skip, _)| (a, skip))
+                    .zip(fiber_b.next().map(|(b, skip, _)| (b, skip)));
+
                 let mut value = U::Out::default();
                 let mut nonzero = false;
 
-                for (i, j, x) in nonzeros_a
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, &x)| nonzeros_b.binary_search(&x).ok().map(|j| (i, j, x)))
-                {
-                    if metric[x] {
-                        value.sub_assign_fallible(fiber_a[i].mul_fallible(fiber_b[j]).unwrap());
+                while let Some(((a, skip_a), (b, skip_b))) = items {
+                    if skip_a > skip_b {
+                        let b = fiber_b
+                            .by_ref()
+                            .next()
+                            .map(|(b, skip, _)| (b, skip + skip_b + 1));
+                        items = Some((a, skip_a)).zip(b);
+                    } else if skip_b > skip_a {
+                        let a = fiber_a
+                            .by_ref()
+                            .next()
+                            .map(|(a, skip, _)| (a, skip + skip_a + 1));
+                        items = a.zip(Some((b, skip_b)));
                     } else {
-                        value.add_assign_fallible(fiber_a[i].mul_fallible(fiber_b[j]).unwrap());
+                        if metric[skip_a] {
+                            value.sub_assign_fallible(a.mul_fallible(b).unwrap());
+                        } else {
+                            value.add_assign_fallible(a.mul_fallible(b).unwrap());
+                        }
+                        nonzero = true;
                     }
-                    nonzero = true;
                 }
-
                 if nonzero && value != U::Out::default() {
                     result_data.insert(result_index, value);
                 }
                 result_index += 1;
+                fiber_a.reset();
             }
-            result_index += other_iter.reset();
+            other_iter.reset();
         }
 
         let result = SparseTensor {
@@ -699,38 +684,51 @@ where
 
         let mut result_index = 0;
 
-        let mut self_iter = self.iter_multi_fibers_metric(&self_matches, permutation);
-        let mut other_iter = other.iter_multi_fibers(&other_matches);
-        while let Some((skipped_a, nonzeros_a, fiber_a)) = self_iter.next() {
-            result_index += skipped_a * stride;
+        let mut self_iter = self
+            .fiber_class(self_matches.as_slice().into())
+            .iter_perm_metric(permutation);
+        let mut other_iter = other.fiber_class(other_matches.as_slice().into()).iter();
 
-            for (skipped_b, nonzeros_b, fiber_b) in other_iter.by_ref() {
-                result_index += skipped_b;
+        for mut fiber_a in self_iter {
+            for mut fiber_b in other_iter.by_ref() {
+                let mut items = fiber_a
+                    .next()
+                    .map(|(a, skip, (neg, _))| (a, skip, neg))
+                    .zip(fiber_b.next().map(|(b, skip, _)| (b, skip)));
+
                 let mut value = U::Out::default();
                 let mut nonzero = false;
 
-                for (i, j, _x) in nonzeros_a.iter().enumerate().filter_map(|(i, &x)| {
-                    nonzeros_b
-                        .binary_search(&self_iter.map[x])
-                        .ok()
-                        .map(|j| (i, j, x))
-                }) {
-                    if fiber_a[i].1 {
-                        value.sub_assign_fallible(fiber_a[i].0.mul_fallible(fiber_b[j]).unwrap());
+                while let Some(((a, skip_a, neg), (b, skip_b))) = items {
+                    if skip_a > skip_b {
+                        let b = fiber_b
+                            .by_ref()
+                            .next()
+                            .map(|(b, skip, _)| (b, skip + skip_b + 1));
+                        items = Some((a, skip_a, neg)).zip(b);
+                    } else if skip_b > skip_a {
+                        let a = fiber_a
+                            .by_ref()
+                            .next()
+                            .map(|(a, skip, (neg, _))| (a, skip + skip_a + 1, neg));
+                        items = a.zip(Some((b, skip_b)));
                     } else {
-                        value.add_assign_fallible(fiber_a[i].0.mul_fallible(fiber_b[j]).unwrap());
+                        if neg {
+                            value.sub_assign_fallible(a.mul_fallible(b).unwrap());
+                        } else {
+                            value.add_assign_fallible(a.mul_fallible(b).unwrap());
+                        }
+                        nonzero = true;
                     }
-                    nonzero = true;
                 }
-
                 if nonzero && value != U::Out::default() {
                     result_data.insert(result_index, value);
                 }
                 result_index += 1;
+                fiber_a.reset();
             }
-            result_index += other_iter.reset();
+            other_iter.reset();
         }
-
         let result = SparseTensor {
             elements: result_data,
             structure: final_structure,

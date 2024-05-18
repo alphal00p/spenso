@@ -1,4 +1,4 @@
-use crate::Complex;
+use crate::{Complex, ExpandedIndex, FlatIndex};
 
 use super::{
     atomic_expanded_label_id, ConcreteIndex, DenseTensorLinearIterator, HasName, HasStructure,
@@ -12,12 +12,16 @@ use num::Zero;
 
 use serde::{Deserialize, Serialize};
 use smartstring::alias::String;
-use std::{borrow::Cow, collections::HashMap};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    ops::{Index, IndexMut},
+};
 
 use symbolica::{atom::Atom, atom::Symbol};
 
 pub trait DataIterator<T> {
-    type FlatIter<'a>: Iterator<Item = (usize, &'a T)>
+    type FlatIter<'a>: Iterator<Item = (FlatIndex, &'a T)>
     where
         Self: 'a,
         T: 'a;
@@ -68,10 +72,10 @@ pub trait HasTensorData: HasStructure {
     fn data(&self) -> Vec<Self::Data>;
 
     /// Returns all the indices of the tensor, the order of the indices is the same as the order of the data
-    fn indices(&self) -> Vec<Vec<ConcreteIndex>>;
+    fn indices(&self) -> Vec<ExpandedIndex>;
 
     /// Returns a hashmap of the data, with the (expanded) indices as keys
-    fn hashmap(&self) -> IndexMap<Vec<ConcreteIndex>, Self::Data>;
+    fn hashmap(&self) -> IndexMap<ExpandedIndex, Self::Data>;
 
     /// Returns a hashmap of the data, with the the shadowed indices as keys
     fn symhashmap(&self, id: Symbol) -> HashMap<Atom, Self::Data>;
@@ -88,7 +92,7 @@ pub trait SetTensorData {
     ///
     fn set(&mut self, indices: &[ConcreteIndex], value: Self::SetData) -> Result<(), String>;
 
-    fn set_flat(&mut self, index: usize, value: Self::SetData) -> Result<(), String>;
+    fn set_flat(&mut self, index: FlatIndex, value: Self::SetData) -> Result<(), String>;
 }
 
 /// Trait for getting the data of a tensor
@@ -97,7 +101,7 @@ pub trait GetTensorData {
 
     fn get(&self, indices: &[ConcreteIndex]) -> Result<&Self::GetData, String>;
 
-    fn get_linear(&self, index: usize) -> Option<&Self::GetData>;
+    fn get_linear(&self, index: FlatIndex) -> Option<&Self::GetData>;
 }
 
 /// Sparse data tensor, generic on storage type `T`, and structure type `I`.  
@@ -106,7 +110,7 @@ pub trait GetTensorData {
 /// The usize key is the flattened index of the corresponding position in the dense tensor
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SparseTensor<T, I = VecStructure> {
-    pub elements: AHashMap<usize, T>,
+    pub elements: AHashMap<FlatIndex, T>,
     pub structure: I,
 }
 
@@ -122,14 +126,14 @@ where
         self.elements.values().cloned().collect()
     }
 
-    fn indices(&self) -> Vec<Vec<ConcreteIndex>> {
+    fn indices(&self) -> Vec<ExpandedIndex> {
         self.elements
             .keys()
             .map(|k| self.expanded_index(*k).unwrap())
             .collect()
     }
 
-    fn hashmap(&self) -> IndexMap<Vec<ConcreteIndex>, T> {
+    fn hashmap(&self) -> IndexMap<ExpandedIndex, T> {
         let mut hashmap = IndexMap::new();
         for (k, v) in self.iter() {
             hashmap.insert(k.clone(), v.clone());
@@ -165,8 +169,8 @@ where
     }
 
     /// falible set given a flat index, returns an error if the indices are out of bounds.
-    fn set_flat(&mut self, index: usize, value: T) -> Result<(), String> {
-        if index >= self.size() {
+    fn set_flat(&mut self, index: FlatIndex, value: T) -> Result<(), String> {
+        if index >= self.size().into() {
             return Err("Index out of bounds".into());
         }
         self.elements.insert(index, value);
@@ -194,7 +198,7 @@ where
         }
     }
 
-    fn get_linear(&self, index: usize) -> Option<&T> {
+    fn get_linear(&self, index: FlatIndex) -> Option<&T> {
         self.elements.get(&index)
     }
 }
@@ -251,7 +255,7 @@ where
         Self::LCM: Clone,
     {
         let structure = self.structure.clone();
-        let elements: Option<AHashMap<usize, U::LCM>> = self
+        let elements: Option<AHashMap<FlatIndex, U::LCM>> = self
             .elements
             .iter()
             .map(|(k, v)| match v.try_upgrade() {
@@ -368,6 +372,22 @@ where
 pub struct DenseTensor<T, I = VecStructure> {
     pub data: Vec<T>,
     pub structure: I,
+}
+
+impl<T, I> Index<FlatIndex> for DenseTensor<T, I> {
+    type Output = T;
+
+    fn index(&self, index: FlatIndex) -> &Self::Output {
+        let i: usize = index.into();
+        &self.data[i]
+    }
+}
+
+impl<T, I> IndexMut<FlatIndex> for DenseTensor<T, I> {
+    fn index_mut(&mut self, index: FlatIndex) -> &mut Self::Output {
+        let i: usize = index.into();
+        &mut self.data[i]
+    }
 }
 
 impl<T, I> HasStructure for DenseTensor<T, I>
@@ -575,15 +595,15 @@ where
         self.data.clone()
     }
 
-    fn indices(&self) -> Vec<Vec<ConcreteIndex>> {
+    fn indices(&self) -> Vec<ExpandedIndex> {
         let mut indices = Vec::new();
         for i in 0..self.size() {
-            indices.push(self.expanded_index(i).unwrap());
+            indices.push(self.expanded_index(i.into()).unwrap());
         }
         indices
     }
 
-    fn hashmap(&self) -> IndexMap<Vec<ConcreteIndex>, T> {
+    fn hashmap(&self) -> IndexMap<ExpandedIndex, T> {
         let mut hashmap = IndexMap::new();
         for (k, v) in self.iter() {
             hashmap.insert(k.clone(), v.clone());
@@ -610,14 +630,14 @@ where
         self.verify_indices(indices)?;
         let idx = self.flat_index(indices);
         if let Ok(i) = idx {
-            self.data[i] = value;
+            self[i] = value;
         }
         Ok(())
     }
 
-    fn set_flat(&mut self, index: usize, value: T) -> Result<(), String> {
-        if index < self.size() {
-            self.data[index] = value;
+    fn set_flat(&mut self, index: FlatIndex, value: T) -> Result<(), String> {
+        if index < self.size().into() {
+            self[index] = value;
         } else {
             return Err("Index out of bounds".into());
         }
@@ -630,13 +650,14 @@ where
     I: HasStructure,
 {
     type GetData = T;
-    fn get_linear(&self, index: usize) -> Option<&T> {
-        self.data.get(index)
+    fn get_linear(&self, index: FlatIndex) -> Option<&T> {
+        let i: usize = index.into();
+        self.data.get(i)
     }
 
     fn get(&self, indices: &[ConcreteIndex]) -> Result<&T, String> {
         if let Ok(idx) = self.flat_index(indices) {
-            Ok(&self.data[idx])
+            Ok(&self[idx])
         } else if self.structure.is_scalar() && indices.is_empty() {
             Ok(&self.data[0])
         } else {
@@ -691,14 +712,14 @@ where
         }
     }
 
-    fn indices(&self) -> Vec<Vec<ConcreteIndex>> {
+    fn indices(&self) -> Vec<ExpandedIndex> {
         match self {
             DataTensor::Dense(d) => d.indices(),
             DataTensor::Sparse(s) => s.indices(),
         }
     }
 
-    fn hashmap(&self) -> IndexMap<Vec<ConcreteIndex>, T> {
+    fn hashmap(&self) -> IndexMap<ExpandedIndex, T> {
         match self {
             DataTensor::Dense(d) => d.hashmap(),
             DataTensor::Sparse(s) => s.hashmap(),
@@ -810,7 +831,7 @@ where
         }
     }
 
-    fn set_flat(&mut self, index: usize, value: Self::SetData) -> Result<(), String> {
+    fn set_flat(&mut self, index: FlatIndex, value: Self::SetData) -> Result<(), String> {
         match self {
             DataTensor::Dense(d) => d.set_flat(index, value),
             DataTensor::Sparse(s) => s.set_flat(index, value),
@@ -831,7 +852,7 @@ where
         }
     }
 
-    fn get_linear(&self, index: usize) -> Option<&Self::GetData> {
+    fn get_linear(&self, index: FlatIndex) -> Option<&Self::GetData> {
         match self {
             DataTensor::Dense(d) => d.get_linear(index),
             DataTensor::Sparse(s) => s.get_linear(index),

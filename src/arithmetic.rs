@@ -1,8 +1,5 @@
 use crate::{ConcreteIndex, GetTensorData, SetTensorData};
-use std::{
-    fmt::Debug,
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
-};
+use std::fmt::Debug;
 
 use super::{
     DataTensor, DenseTensor, FallibleAdd, FallibleMul, FallibleSub, HasStructure, MixedTensor,

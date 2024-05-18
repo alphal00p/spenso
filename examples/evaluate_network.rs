@@ -71,7 +71,7 @@ where
     for _ in 0..density {
         tensor
             .set_flat(
-                rng.gen_range(0..tensor.size()),
+                rng.gen_range(0..tensor.size()).into(),
                 Complex::<f64>::new(rng.sample(multipliable), rng.sample(multipliable)),
             )
             .unwrap();

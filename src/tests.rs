@@ -4,8 +4,8 @@ use crate::{
     StructureContract,
 };
 use crate::{
-    AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, Fiber, FiberClass,
-    IteratesAlongFibers,
+    AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, ExpandedIndex, Fiber,
+    FiberClass, FlatIndex, IteratesAlongFibers,
 };
 use ahash::{HashMap, HashMapExt};
 
@@ -45,13 +45,16 @@ where
         let multipliable = Uniform::new(low, high);
         for _ in 0..density {
             tensor
-                .set_flat(rng.gen_range(0..tensor.size()), rng.sample(multipliable))
+                .set_flat(
+                    rng.gen_range(0..tensor.size()).into(),
+                    rng.sample(multipliable),
+                )
                 .unwrap();
         }
     } else {
         for _ in 0..density {
             tensor
-                .set_flat(rng.gen_range(0..tensor.size()), rng.gen())
+                .set_flat(rng.gen_range(0..tensor.size()).into(), rng.gen())
                 .unwrap();
         }
     }
@@ -106,26 +109,26 @@ fn test_structure_with_dims(dims: &[usize], seed: u64) -> VecStructure {
 #[test]
 fn rng_is_deterministic() {
     let valid = IndexMap::from([
-        (vec![3, 0, 3], 53),
-        (vec![1, 1, 0], 45),
-        (vec![1, 1, 2], -99),
-        (vec![2, 1, 0], -59),
-        (vec![0, 1, 1], -93),
-        (vec![2, 0, 1], 105),
-        (vec![4, 1, 0], 125),
-        (vec![1, 0, 0], -118),
-        (vec![0, 0, 3], -26),
-        (vec![4, 0, 0], 59),
-        (vec![3, 1, 2], 84),
-        (vec![3, 1, 0], -13),
-        (vec![1, 0, 3], 119),
-        (vec![0, 1, 2], 48),
-        (vec![1, 0, 2], 17),
-        (vec![0, 0, 0], 34),
-        (vec![3, 0, 2], 20),
-        (vec![4, 0, 2], -3),
-        (vec![3, 1, 3], 69),
-        (vec![4, 0, 1], 125),
+        (vec![3, 0, 3].into(), 53),
+        (vec![1, 1, 0].into(), 45),
+        (vec![1, 1, 2].into(), -99),
+        (vec![2, 1, 0].into(), -59),
+        (vec![0, 1, 1].into(), -93),
+        (vec![2, 0, 1].into(), 105),
+        (vec![4, 1, 0].into(), 125),
+        (vec![1, 0, 0].into(), -118),
+        (vec![0, 0, 3].into(), -26),
+        (vec![4, 0, 0].into(), 59),
+        (vec![3, 1, 2].into(), 84),
+        (vec![3, 1, 0].into(), -13),
+        (vec![1, 0, 3].into(), 119),
+        (vec![0, 1, 2].into(), 48),
+        (vec![1, 0, 2].into(), 17),
+        (vec![0, 0, 0].into(), 34),
+        (vec![3, 0, 2].into(), 20),
+        (vec![4, 0, 2].into(), -3),
+        (vec![3, 1, 3].into(), 69),
+        (vec![4, 0, 1].into(), 125),
     ]);
     for _ in 0..10 {
         let a = test_structure(3, 11);
@@ -141,7 +144,7 @@ fn indexflatten() {
     let a = test_structure(4, 31);
     let idx = vec![1, 2, 3, 1];
     let flatidx = a.flat_index(&idx).unwrap();
-    assert_eq!(idx, a.expanded_index(flatidx).unwrap());
+    assert_eq!(ExpandedIndex::from(idx), a.expanded_index(flatidx).unwrap());
 }
 
 #[test]
@@ -153,9 +156,9 @@ fn single_fiber() {
 
     let iter = fiber.clone().iter();
 
-    let fciter: Vec<usize> = iter.collect();
+    let fciter: Vec<FlatIndex> = iter.collect();
 
-    let fiberclass: Vec<usize> = FiberClass::from(fiber)
+    let fiberclass: Vec<FlatIndex> = FiberClass::from(fiber)
         .iter()
         .map(|fc| fc.iter.zero_index)
         .collect::<Vec<_>>();
@@ -171,10 +174,32 @@ fn expanded_vs_flat_iter() {
     let flat_iter = CoreFlatFiberIterator::new(&fiber, false);
     let expanded_iter = CoreExpandedFiberIterator::new(&fiber, false);
 
-    let flat: Vec<usize> = flat_iter.collect();
-    let expanded: Vec<usize> = expanded_iter.collect();
+    let flat: Vec<FlatIndex> = flat_iter.collect();
+    let expanded: Vec<FlatIndex> = expanded_iter.collect();
 
     assert_eq!(flat, expanded);
+}
+
+#[test]
+fn fiber_class_vs_fiber_iterator() {
+    let a = test_structure(5, 5);
+    let fiber_class: FiberClass<'_, VecStructure> =
+        Fiber::from_filter(&[false, true, true, false, true], &a).into();
+
+    let fiber = Fiber::from_filter(&[true, false, false, true, false], &a);
+
+    let flat_iter = CoreFlatFiberIterator::new(&fiber, false);
+    let flat_class_iter = CoreFlatFiberIterator::new(&fiber_class, false);
+    let flat: Vec<FlatIndex> = flat_iter.collect();
+    let flat_class: Vec<FlatIndex> = flat_class_iter.collect();
+
+    assert_eq!(flat, flat_class);
+    let expanded_iter = CoreExpandedFiberIterator::new(&fiber, false);
+    let expanded_class_iter = CoreExpandedFiberIterator::new(&fiber_class, false);
+
+    let expanded: Vec<FlatIndex> = expanded_iter.collect();
+    let expanded_class: Vec<FlatIndex> = expanded_class_iter.collect();
+    assert_eq!(expanded, expanded_class);
 }
 
 #[test]
@@ -183,13 +208,26 @@ fn fibers() {
     let fiber = Fiber::from_filter(&[true, true, false, false, true], &a);
     let fiberclass: FiberClass<'_, VecStructure> = fiber.into();
     let iter = fiberclass.clone().iter();
-    let fciter: Vec<usize> = iter.map(|fc| fc.iter.zero_index).collect();
+    let fciter: Vec<FlatIndex> = iter.map(|fc| fc.iter.zero_index).collect();
 
-    let fiter: Vec<usize> = fiberclass
+    let fiter: Vec<FlatIndex> = fiberclass
         .iter()
-        .flat_map(|fc| fc.collect::<Vec<usize>>())
+        .flat_map(|fc| fc.collect::<Vec<FlatIndex>>())
         .collect();
     assert_ron_snapshot!((a, fiter, fciter));
+}
+
+#[test]
+fn fiber_from_structure() {
+    let a = test_structure(5, 5);
+    println!("{:?}", a);
+    let fiber = Fiber::from(([0u8, 1, 0, 1, 1].as_slice()).into(), &a);
+
+    println!("{:?}", fiber);
+
+    for i in fiber.iter() {
+        println!("{:?}", a.expanded_index(i).unwrap());
+    }
 }
 
 #[test]
@@ -277,22 +315,22 @@ fn scalar_and_dim1_conract() {
     let range = Some((-100, 100));
 
     let mut tensor_1: SparseTensor<i16> = test_tensor(structa, 3, range);
-    tensor_1.set_flat(0, 45).unwrap();
+    tensor_1.set_flat(0.into(), 45).unwrap();
     let mut tensor_2: SparseTensor<i16> = test_tensor(structb, 2, range);
-    tensor_2.set_flat(0, 2).unwrap();
+    tensor_2.set_flat(0.into(), 2).unwrap();
     let f = tensor_1.contract(&tensor_2).unwrap();
 
     let valid = IndexMap::from([
-        (vec![0, 3], 5908),
-        (vec![2, 1], 2491),
-        (vec![3, 1], -1081),
-        (vec![0, 0], 90),
-        (vec![3, 0], -1200),
-        (vec![3, 3], -788),
-        (vec![1, 1], 2961),
-        (vec![2, 3], -4004),
-        (vec![2, 0], 160),
-        (vec![0, 1], -987),
+        (vec![0, 3].into(), 5908),
+        (vec![2, 1].into(), 2491),
+        (vec![3, 1].into(), -1081),
+        (vec![0, 0].into(), 90),
+        (vec![3, 0].into(), -1200),
+        (vec![3, 3].into(), -788),
+        (vec![1, 1].into(), 2961),
+        (vec![2, 3].into(), -4004),
+        (vec![2, 0].into(), 160),
+        (vec![0, 1].into(), -987),
     ]);
 
     assert_eq!(f.hashmap(), valid);
@@ -358,8 +396,9 @@ fn single_contract() {
     structb.insert(rng.gen_range(0..structb.len()), common[0]);
     structa.sort();
     let structa: VecStructure = structa.into();
+    assert_ron_snapshot!(structa);
     let structb: VecStructure = structb.into();
-
+    assert_ron_snapshot!(structb);
     let spensor_a: SparseTensor<i32, VecStructure> = test_tensor(structa.clone(), s + 3, range);
 
     let densor_a: DenseTensor<i32, VecStructure> = spensor_a.to_dense();
@@ -694,7 +733,7 @@ fn contract_spensor() {
 
     let f = a.contract(&b).unwrap();
 
-    let result = IndexMap::from([(vec![0, 1], 2.0), (vec![1, 0], 2.0)]);
+    let result = IndexMap::from([(vec![0, 1].into(), 2.0), (vec![1, 0].into(), 2.0)]);
 
     assert_eq!(f.hashmap(), result)
 }
@@ -715,7 +754,7 @@ fn sparse_addition() {
 
     let f = a.add_fallible(&b).unwrap();
 
-    let result = IndexMap::from([(vec![0, 1], 3.0), (vec![1, 0], 3.0)]);
+    let result = IndexMap::from([(vec![0, 1].into(), 3.0), (vec![1, 0].into(), 3.0)]);
 
     assert_eq!(f.hashmap(), result)
 }
@@ -737,7 +776,7 @@ fn sparse_sub() {
 
     let f = a.sub_fallible(&b).unwrap();
 
-    let result = IndexMap::from([(vec![0, 1], -1.0)]);
+    let result = IndexMap::from([(vec![0, 1].into(), -1.0)]);
     assert_eq!(f.hashmap(), result);
     // println!("{:?}", f);
 }

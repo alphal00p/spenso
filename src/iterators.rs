@@ -12,19 +12,18 @@ use std::{
     ops::{AddAssign, Index, Neg, SubAssign},
 };
 
-use crate::{data, permutation, VecStructure};
+use crate::{ExpandedIndex, FlatIndex, VecStructure};
 
 use super::{
     ConcreteIndex, DenseTensor, Dimension, GetTensorData, HasStructure, Representation, Slot,
     SparseTensor,
 };
-use ahash::AHashMap;
-use ambassador::{delegatable_trait, Delegate};
+
 use gat_lending_iterator::LendingIterator;
 
 use crate::Permutation;
 use bitvec::vec::BitVec;
-use serde::{Deserialize, Serialize};
+use serde::{de::IntoDeserializer, Deserialize, Serialize};
 
 pub trait AbstractFiberIndex {
     fn is_free(&self) -> bool;
@@ -87,7 +86,10 @@ impl Display for FiberIndex {
 
 pub enum FiberData<'a> {
     Single(usize),
+    Flat(FlatIndex),
     BoolFilter(&'a [bool]),
+    Pos(&'a [isize]),
+    IntFilter(&'a [u8]),
 }
 
 impl From<usize> for FiberData<'_> {
@@ -99,6 +101,24 @@ impl From<usize> for FiberData<'_> {
 impl<'a> From<&'a [bool]> for FiberData<'a> {
     fn from(value: &'a [bool]) -> Self {
         Self::BoolFilter(value)
+    }
+}
+
+impl<'a> From<&'a [u8]> for FiberData<'a> {
+    fn from(value: &'a [u8]) -> Self {
+        Self::IntFilter(value)
+    }
+}
+
+impl<'a> From<&'a [isize]> for FiberData<'a> {
+    fn from(value: &'a [isize]) -> Self {
+        Self::Pos(value)
+    }
+}
+
+impl From<FlatIndex> for FiberData<'_> {
+    fn from(value: FlatIndex) -> Self {
+        Self::Flat(value)
     }
 }
 
@@ -121,11 +141,35 @@ impl BareFiber {
     pub fn conj(self) -> Self {
         self
     }
-
     pub fn from<I: HasStructure>(data: FiberData, structure: &I) -> Self {
         match data {
-            FiberData::Single(i) => Self::from_flat(i, structure),
+            FiberData::Flat(i) => Self::from_flat(i, structure),
             FiberData::BoolFilter(b) => Self::from_filter(b),
+            FiberData::Single(i) => {
+                let mut out = Self::zeros(structure);
+                out.free(i);
+                out
+            }
+            FiberData::IntFilter(i) => {
+                let mut out = Self::zeros(structure);
+                for (pos, val) in i.iter().enumerate() {
+                    if *val > 0 {
+                        out.free(pos);
+                    }
+                }
+                out
+            }
+            FiberData::Pos(i) => {
+                let mut out = Self::zeros(structure);
+                for (pos, val) in i.iter().enumerate() {
+                    if *val < 0 {
+                        out.free(pos);
+                    } else {
+                        out.fix(pos, *val as usize);
+                    }
+                }
+                out
+            }
         }
     }
 
@@ -136,7 +180,7 @@ impl BareFiber {
     pub fn bitvecinv(&self) -> BitVec {
         self.indices.iter().map(|x| x.is_fixed()).collect()
     }
-    pub fn from_flat<I>(flat: usize, structure: &I) -> BareFiber
+    pub fn from_flat<I>(flat: FlatIndex, structure: &I) -> BareFiber
     where
         I: HasStructure,
     {
@@ -324,7 +368,7 @@ where
     pub fn bitvecinv(&self) -> BitVec {
         self.bare_fiber.bitvecinv()
     }
-    pub fn from_flat(flat: usize, structure: &'a S) -> Fiber<'a, S> {
+    pub fn from_flat(flat: FlatIndex, structure: &'a S) -> Fiber<'a, S> {
         Fiber {
             bare_fiber: BareFiber::from_flat(flat, structure),
             structure,
@@ -565,13 +609,13 @@ impl<'a, S: HasStructure> FiberClass<'a, S> {
 // Iterators for fibers
 
 #[derive(Debug, Clone, Copy)]
-struct SingleStrideShift {
+pub struct SingleStrideShift {
     stride: usize,
     shift: usize,
 }
 
 #[derive(Debug, Clone)]
-struct MultiStrideShift {
+pub struct MultiStrideShift {
     strides: Vec<usize>,
     shifts: Vec<usize>,
 }
@@ -606,14 +650,14 @@ impl StrideShift {
 
 pub trait FiberIteratorItem {
     type OtherData;
-    fn flat_idx(&self) -> usize;
+    fn flat_idx(&self) -> FlatIndex;
 
     fn other_data(self) -> Self::OtherData;
 }
 
-impl FiberIteratorItem for usize {
+impl FiberIteratorItem for FlatIndex {
     type OtherData = ();
-    fn flat_idx(&self) -> usize {
+    fn flat_idx(&self) -> FlatIndex {
         *self
     }
 
@@ -627,7 +671,7 @@ struct SkippingItem<I: FiberIteratorItem> {
 
 impl<I: FiberIteratorItem> FiberIteratorItem for SkippingItem<I> {
     type OtherData = (usize, I::OtherData);
-    fn flat_idx(&self) -> usize {
+    fn flat_idx(&self) -> FlatIndex {
         self.item.flat_idx()
     }
     fn other_data(self) -> Self::OtherData {
@@ -642,7 +686,7 @@ pub struct MetricItem<I: FiberIteratorItem> {
 
 impl<I: FiberIteratorItem> FiberIteratorItem for MetricItem<I> {
     type OtherData = (bool, I::OtherData);
-    fn flat_idx(&self) -> usize {
+    fn flat_idx(&self) -> FlatIndex {
         self.item.flat_idx()
     }
     fn other_data(self) -> Self::OtherData {
@@ -677,11 +721,11 @@ pub trait IteratesAlongPermutedFibers: IteratesAlongFibers {
 
 #[derive(Debug, Clone)]
 pub struct CoreFlatFiberIterator {
-    pub varying_fiber_index: usize,
-    pub increment: usize,
+    pub varying_fiber_index: FlatIndex,
+    pub increment: FlatIndex,
     pub stride_shift: StrideShift,
-    pub max: usize,
-    pub zero_index: usize,
+    pub max: FlatIndex,
+    pub zero_index: FlatIndex,
 }
 
 impl CoreFlatFiberIterator {
@@ -691,7 +735,7 @@ impl CoreFlatFiberIterator {
         order: usize,
         fiber: &I,
         conj: bool,
-    ) -> (usize, Vec<usize>, Vec<usize>, usize)
+    ) -> (FlatIndex, Vec<usize>, Vec<usize>, FlatIndex)
     where
         I: Index<usize, Output = J>,
         J: AbstractFiberIndex,
@@ -733,7 +777,7 @@ impl CoreFlatFiberIterator {
         if fixed_strides.len() > shifts.len() {
             fixed_strides.pop();
         }
-        (increment, fixed_strides, shifts, max)
+        (increment.into(), fixed_strides, shifts, max.into())
     }
 
     fn init_single_fiber_iter(
@@ -741,7 +785,7 @@ impl CoreFlatFiberIterator {
         fiber_position: usize,
         dims: Vec<Dimension>,
         conj: bool,
-    ) -> (usize, Option<usize>, Option<usize>, usize) {
+    ) -> (FlatIndex, Option<usize>, Option<usize>, FlatIndex) {
         // max -= 1;
 
         let fiber_stride = strides[fiber_position];
@@ -762,20 +806,20 @@ impl CoreFlatFiberIterator {
                 stride = Some(strides[fiber_position]);
             }
 
-            (increment, stride, shift, max)
+            (increment.into(), stride, shift, max.into())
         } else {
             let increment = fiber_stride;
             let max = fiber_stride * (dim - 1);
 
-            (increment, stride, shift, max)
+            (increment.into(), stride, shift, max.into())
         }
     }
 }
 
 impl Iterator for CoreFlatFiberIterator {
-    type Item = usize;
+    type Item = FlatIndex;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.varying_fiber_index > self.max {
+        if self.varying_fiber_index > self.max.into() {
             return None;
         }
         let index = self.varying_fiber_index + self.zero_index;
@@ -785,16 +829,16 @@ impl Iterator for CoreFlatFiberIterator {
         match self.stride_shift {
             StrideShift::Multi(ref ss) => {
                 for (i, s) in ss.strides.iter().enumerate() {
-                    if self.varying_fiber_index % s == 0 {
-                        self.varying_fiber_index += ss.shifts[i] - s;
+                    if self.varying_fiber_index % s == 0.into() {
+                        self.varying_fiber_index += (ss.shifts[i] - s).into();
                     } else {
                         break;
                     }
                 }
             }
             StrideShift::Single(Some(ss)) => {
-                if self.varying_fiber_index % ss.stride == 0 {
-                    self.varying_fiber_index += ss.shift - ss.stride;
+                if self.varying_fiber_index % ss.stride == 0.into() {
+                    self.varying_fiber_index += (ss.shift - ss.stride).into();
                 }
             }
             _ => {}
@@ -805,11 +849,11 @@ impl Iterator for CoreFlatFiberIterator {
 
 impl IteratesAlongFibers for CoreFlatFiberIterator {
     fn reset(&mut self) {
-        self.varying_fiber_index = 0;
+        self.varying_fiber_index = 0.into();
     }
 
     fn shift(&mut self, shift: usize) {
-        self.zero_index = shift;
+        self.zero_index = shift.into();
     }
 
     fn new<I, J>(fiber: &I, conj: bool) -> Self
@@ -826,8 +870,8 @@ impl IteratesAlongFibers for CoreFlatFiberIterator {
                 increment,
                 stride_shift: StrideShift::new_single(fixed_strides, shifts),
                 max,
-                zero_index: 0,
-                varying_fiber_index: 0,
+                zero_index: 0.into(),
+                varying_fiber_index: 0.into(),
             }
         } else {
             let (increment, fixed_strides, shifts, max) = Self::init_multi_fiber_iter(
@@ -842,8 +886,8 @@ impl IteratesAlongFibers for CoreFlatFiberIterator {
                 increment,
                 stride_shift: StrideShift::new_multi(fixed_strides, shifts),
                 max,
-                zero_index: 0,
-                varying_fiber_index: 0,
+                zero_index: 0.into(),
+                varying_fiber_index: 0.into(),
             }
         }
     }
@@ -929,18 +973,18 @@ impl IteratesAlongFibers for CoreFlatFiberIterator {
 
         (
             CoreFlatFiberIterator {
-                varying_fiber_index: 0,
+                varying_fiber_index: 0.into(),
                 stride_shift: StrideShift::new_multi(fixed_strides_conj, shifts_conj),
-                increment: increment_conj,
-                max: max_conj,
-                zero_index: 0,
+                increment: increment_conj.into(),
+                max: max_conj.into(),
+                zero_index: 0.into(),
             },
             CoreFlatFiberIterator {
-                varying_fiber_index: 0,
-                increment,
+                varying_fiber_index: 0.into(),
+                increment: increment.into(),
                 stride_shift: StrideShift::new_multi(fixed_strides, shifts),
-                max,
-                zero_index: 0,
+                max: max.into(),
+                zero_index: 0.into(),
             },
         )
     }
@@ -952,7 +996,7 @@ pub struct CoreExpandedFiberIterator {
     pub dims: Vec<Representation>,
     pub strides: Vec<usize>,
     pub shift: usize,
-    pub flat: usize,
+    pub flat: FlatIndex,
     exhausted: bool,
 }
 
@@ -978,7 +1022,7 @@ impl CoreExpandedFiberIterator {
             shift: 0,
             dims,
             strides,
-            flat: 0,
+            flat: 0.into(),
             exhausted: false,
         }
     }
@@ -995,7 +1039,7 @@ impl CoreExpandedFiberIterator {
 }
 
 impl Iterator for CoreExpandedFiberIterator {
-    type Item = usize;
+    type Item = FlatIndex;
     fn next(&mut self) -> Option<Self::Item> {
         if self.exhausted {
             return None;
@@ -1015,9 +1059,9 @@ impl Iterator for CoreExpandedFiberIterator {
                 *pos += 1;
                 if *pos >= usize::from(*dim) {
                     *pos = 0;
-                    self.flat -= stride * (usize::from(*dim) - 1);
+                    self.flat -= (stride * (usize::from(*dim) - 1)).into();
                 } else {
-                    self.flat += stride;
+                    self.flat += (*stride).into();
                     carry = false;
                 }
             }
@@ -1057,7 +1101,7 @@ impl IteratesAlongFibers for CoreExpandedFiberIterator {
     }
 
     fn shift(&mut self, shift: usize) {
-        self.flat = shift;
+        self.flat = shift.into();
     }
 }
 
@@ -1130,7 +1174,7 @@ impl IteratesAlongPermutedFibers for MetricFiberIterator {
 }
 
 impl Iterator for MetricFiberIterator {
-    type Item = MetricItem<usize>;
+    type Item = MetricItem<FlatIndex>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.iter.exhausted {
             return None;
@@ -1153,9 +1197,9 @@ impl Iterator for MetricFiberIterator {
                 *pos += 1;
                 if *pos >= usize::from(*dim) {
                     *pos = 0;
-                    self.iter.flat -= stride * (usize::from(*dim) - 1);
+                    self.iter.flat -= (stride * (usize::from(*dim) - 1)).into();
                 } else {
-                    self.iter.flat += stride;
+                    self.iter.flat += (*stride).into();
                     carry = false;
                 }
             }
@@ -1338,7 +1382,7 @@ impl<'a, S: HasStructure + 'a, I: IteratesAlongFibers + Clone> Iterator
 
     fn next(&mut self) -> Option<Self::Item> {
         let shift = self.iter.next()?;
-        self.fiber.shift(shift);
+        self.fiber.shift(shift.into());
         Some(self.fiber.clone())
     }
 }
@@ -1351,7 +1395,7 @@ impl<'a, S: HasStructure + 'a, I: IteratesAlongFibers> LendingIterator
     fn next(&mut self) -> Option<Self::Item<'_>> {
         let shift = self.iter.next()?;
         self.fiber.reset();
-        self.fiber.shift(shift);
+        self.fiber.shift(shift.into());
         Some(&mut self.fiber)
     }
 }
@@ -1360,7 +1404,7 @@ impl<'a, S: HasStructure + 'a, I: IteratesAlongFibers> LendingIterator
 ///
 /// Returns the expanded indices and the element at that index
 pub struct SparseTensorIterator<'a, T, N> {
-    iter: std::collections::hash_map::Iter<'a, usize, T>,
+    iter: std::collections::hash_map::Iter<'a, FlatIndex, T>,
     structure: &'a N,
 }
 
@@ -1377,7 +1421,7 @@ impl<'a, T, N> Iterator for SparseTensorIterator<'a, T, N>
 where
     N: HasStructure,
 {
-    type Item = (Vec<ConcreteIndex>, &'a T);
+    type Item = (ExpandedIndex, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((k, v)) = self.iter.next() {
@@ -1394,7 +1438,7 @@ where
 /// Returns the flat index and the element at that index
 
 pub struct SparseTensorLinearIterator<'a, T> {
-    iter: std::collections::hash_map::Iter<'a, usize, T>,
+    iter: std::collections::hash_map::Iter<'a, FlatIndex, T>,
 }
 
 impl<'a, T> SparseTensorLinearIterator<'a, T> {
@@ -1406,7 +1450,7 @@ impl<'a, T> SparseTensorLinearIterator<'a, T> {
 }
 
 impl<'a, T> Iterator for SparseTensorLinearIterator<'a, T> {
-    type Item = (usize, &'a T);
+    type Item = (FlatIndex, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|(k, v)| (*k, v))
@@ -1584,7 +1628,7 @@ where
 /// Returns the expanded indices and the element at that index
 pub struct DenseTensorIterator<'a, T, I> {
     tensor: &'a DenseTensor<T, I>,
-    current_flat_index: usize,
+    current_flat_index: FlatIndex,
 }
 
 impl<'a, T, I> DenseTensorIterator<'a, T, I> {
@@ -1596,7 +1640,7 @@ impl<'a, T, I> DenseTensorIterator<'a, T, I> {
     fn new(tensor: &'a DenseTensor<T, I>) -> Self {
         DenseTensorIterator {
             tensor,
-            current_flat_index: 0,
+            current_flat_index: 0.into(),
         }
     }
 }
@@ -1605,13 +1649,13 @@ impl<'a, T, I> Iterator for DenseTensorIterator<'a, T, I>
 where
     I: HasStructure,
 {
-    type Item = (Vec<ConcreteIndex>, &'a T);
+    type Item = (ExpandedIndex, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Ok(indices) = self.tensor.expanded_index(self.current_flat_index) {
             let value = self.tensor.get_linear(self.current_flat_index).unwrap();
 
-            self.current_flat_index += 1;
+            self.current_flat_index += 1.into();
 
             Some((indices, value))
         } else {
@@ -1626,14 +1670,14 @@ where
 
 pub struct DenseTensorLinearIterator<'a, T, I> {
     tensor: &'a DenseTensor<T, I>,
-    current_flat_index: usize,
+    current_flat_index: FlatIndex,
 }
 
 impl<'a, T, I> DenseTensorLinearIterator<'a, T, I> {
     pub fn new(tensor: &'a DenseTensor<T, I>) -> Self {
         DenseTensorLinearIterator {
             tensor,
-            current_flat_index: 0,
+            current_flat_index: 0.into(),
         }
     }
 }
@@ -1642,12 +1686,12 @@ impl<'a, T, I> Iterator for DenseTensorLinearIterator<'a, T, I>
 where
     I: HasStructure,
 {
-    type Item = (usize, &'a T);
+    type Item = (FlatIndex, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
         let value = self.tensor.get_linear(self.current_flat_index)?;
         let index = self.current_flat_index;
-        self.current_flat_index += 1;
+        self.current_flat_index += 1.into();
         Some((index, value))
     }
 }
@@ -1656,7 +1700,7 @@ impl<'a, T, I> IntoIterator for &'a DenseTensor<T, I>
 where
     I: HasStructure,
 {
-    type Item = (Vec<ConcreteIndex>, &'a T);
+    type Item = (ExpandedIndex, &'a T);
     type IntoIter = DenseTensorIterator<'a, T, I>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -1668,7 +1712,7 @@ impl<T, I> IntoIterator for DenseTensor<T, I>
 where
     I: HasStructure,
 {
-    type Item = (Vec<ConcreteIndex>, T);
+    type Item = (ExpandedIndex, T);
     type IntoIter = DenseTensorIntoIterator<T, I>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -1683,14 +1727,14 @@ where
 ///
 pub struct DenseTensorIntoIterator<T, I> {
     tensor: DenseTensor<T, I>,
-    current_flat_index: usize,
+    current_flat_index: FlatIndex,
 }
 
 impl<T, I> DenseTensorIntoIterator<T, I> {
     fn new(tensor: DenseTensor<T, I>) -> Self {
         DenseTensorIntoIterator {
             tensor,
-            current_flat_index: 0,
+            current_flat_index: 0.into(),
         }
     }
 }
@@ -1699,14 +1743,14 @@ impl<T, I> Iterator for DenseTensorIntoIterator<T, I>
 where
     I: HasStructure,
 {
-    type Item = (Vec<ConcreteIndex>, T);
+    type Item = (ExpandedIndex, T);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Ok(indices) = self.tensor.expanded_index(self.current_flat_index) {
             let indices = indices.clone();
-            let value = self.tensor.data.remove(self.current_flat_index);
+            let value = self.tensor.data.remove(self.current_flat_index.into());
 
-            self.current_flat_index += 1;
+            self.current_flat_index += 1.into();
 
             Some((indices, value))
         } else {
@@ -1868,14 +1912,14 @@ where
 
 pub struct TensorStructureIndexIterator<'a> {
     structure: &'a [Slot],
-    current_flat_index: usize,
+    current_flat_index: FlatIndex,
 }
 
 impl<'a> Iterator for TensorStructureIndexIterator<'a> {
-    type Item = Vec<ConcreteIndex>;
+    type Item = ExpandedIndex;
     fn next(&mut self) -> Option<Self::Item> {
         if let Ok(indices) = self.structure.expanded_index(self.current_flat_index) {
-            self.current_flat_index += 1;
+            self.current_flat_index += 1.into();
 
             Some(indices)
         } else {
@@ -1889,7 +1933,7 @@ impl<'a> TensorStructureIndexIterator<'a> {
     pub fn new(structure: &'a [Slot]) -> Self {
         TensorStructureIndexIterator {
             structure,
-            current_flat_index: 0,
+            current_flat_index: 0.into(),
         }
     }
 }

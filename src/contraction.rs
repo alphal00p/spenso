@@ -1,11 +1,14 @@
 use ahash::AHashMap;
-use gat_lending_iterator::Skip;
+
+use crate::FlatIndex;
 
 use super::{
     DataIterator, DataTensor, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSubAssign,
     HasStructure, HasTensorData, NumTensor, Representation, SetTensorData, SparseTensor,
     StructureContract, TrySmallestUpgrade,
 };
+
+use std::iter::Iterator;
 
 use std::{
     fmt::Debug,
@@ -272,12 +275,13 @@ where
             for fiber_b in other_iter.by_ref() {
                 for (k, ((a, _), (b, _))) in (fiber_a.by_ref()).zip(fiber_b).enumerate() {
                     if fiber_representation.is_neg(k) {
-                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
+                        result_data[0].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
-                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
+                        result_data[0].add_assign_fallible(a.mul_fallible(b).unwrap());
                     }
                 }
                 result_index += 1;
+                println!("result_index: {}", result_index);
                 fiber_a.reset();
             }
             let _ = other_iter.reset();
@@ -392,17 +396,10 @@ where
 
         let fiber_representation: Representation = self.reps()[i];
 
-        let pos = self.order();
-        let stride = *final_structure
-            .strides()
-            .get(pos.wrapping_sub(2))
-            .unwrap_or(&1);
-
         for mut fiber_a in self_iter.by_ref() {
             for mut fiber_b in other_iter.by_ref() {
                 for (k, (a, skip, _)) in fiber_a.by_ref().enumerate() {
-                    fiber_b.by_ref().skip(skip);
-                    let (b, _) = fiber_b.next().unwrap();
+                    let (b, _) = fiber_b.by_ref().skip(skip).next().unwrap();
                     if fiber_representation.is_neg(k) {
                         result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
@@ -447,8 +444,7 @@ where
         for mut fiber_a in self_iter.by_ref() {
             for mut fiber_b in other_iter.by_ref() {
                 for (k, (b, skip, _)) in fiber_b.by_ref().enumerate() {
-                    fiber_a.by_ref().skip(skip);
-                    let (a, _) = fiber_a.next().unwrap();
+                    let (a, _) = fiber_a.by_ref().skip(skip).next().unwrap();
                     if fiber_representation.is_neg(k) {
                         result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
@@ -483,17 +479,7 @@ where
             self.structure().match_indices(other.structure()).unwrap();
 
         let mut final_structure = self.structure.clone();
-        let mergepoint = final_structure.merge(&other.structure);
-
-        // println!("mergepoint {:?}", mergepoint);
-        let stride = if let Some(pos) = mergepoint {
-            *final_structure
-                .strides()
-                .get(pos.saturating_sub(1))
-                .unwrap_or(&1)
-        } else {
-            1
-        };
+        let _ = final_structure.merge(&other.structure);
 
         let mut result_data = vec![U::Out::default(); final_structure.size()];
         let mut result_index = 0;
@@ -506,8 +492,7 @@ where
         for mut fiber_a in selfiter {
             for mut fiber_b in other_iter.by_ref() {
                 for (a, skip, (neg, _)) in fiber_a.by_ref() {
-                    fiber_b.by_ref().skip(skip);
-                    let (b, _) = fiber_b.next().unwrap();
+                    let (b, _) = fiber_b.by_ref().skip(skip).next().unwrap();
                     if neg {
                         result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
@@ -556,8 +541,7 @@ where
         for mut fiber_a in selfiter {
             for mut fiber_b in other_iter.by_ref() {
                 for (b, skip, _) in fiber_b.by_ref() {
-                    fiber_a.by_ref().skip(skip);
-                    let (a, (neg, _)) = fiber_a.next().unwrap();
+                    let (a, (neg, _)) = fiber_a.by_ref().skip(skip).next().unwrap();
                     if neg {
                         result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
@@ -592,17 +576,11 @@ where
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = AHashMap::default();
         let mut result_index = 0;
-        let pos = self.order();
 
-        let mut self_iter = self.fiber_class(i.into()).iter();
+        let self_iter = self.fiber_class(i.into()).iter();
         let mut other_iter = other.fiber_class(j.into()).iter();
 
         let metric = self.external_structure()[i].representation.negative();
-
-        let stride = *final_structure
-            .strides()
-            .get(pos.wrapping_sub(2))
-            .unwrap_or(&1);
 
         for mut fiber_a in self_iter {
             for mut fiber_b in other_iter.by_ref() {
@@ -637,7 +615,7 @@ where
                     }
                 }
                 if nonzero && value != U::Out::default() {
-                    result_data.insert(result_index, value);
+                    result_data.insert(result_index.into(), value);
                 }
                 result_index += 1;
                 fiber_a.reset();
@@ -669,22 +647,12 @@ where
             self.structure().match_indices(other.structure()).unwrap();
 
         let mut final_structure = self.structure.clone();
-        let mergepoint = final_structure.merge(&other.structure);
+        let _ = final_structure.merge(&other.structure);
         let mut result_data = AHashMap::default();
-
-        // println!("mergepoint {:?}", mergepoint);
-        let stride = if let Some(pos) = mergepoint {
-            *final_structure
-                .strides()
-                .get(pos.saturating_sub(1))
-                .unwrap_or(&1)
-        } else {
-            1
-        };
 
         let mut result_index = 0;
 
-        let mut self_iter = self
+        let self_iter = self
             .fiber_class(self_matches.as_slice().into())
             .iter_perm_metric(permutation);
         let mut other_iter = other.fiber_class(other_matches.as_slice().into()).iter();
@@ -722,7 +690,7 @@ where
                     }
                 }
                 if nonzero && value != U::Out::default() {
-                    result_data.insert(result_index, value);
+                    result_data.insert(result_index.into(), value);
                 }
                 result_index += 1;
                 fiber_a.reset();

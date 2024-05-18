@@ -1,0 +1,16 @@
+---
+source: src/tests.rs
+expression: structa
+---
+VecStructure(
+  structure: [
+    Slot(
+      index: AbstractIndex(0),
+      representation: Lorentz(Dimension(4)),
+    ),
+    Slot(
+      index: AbstractIndex(1),
+      representation: Lorentz(Dimension(4)),
+    ),
+  ],
+)

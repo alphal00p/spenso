@@ -4,7 +4,15 @@ use derive_more::Add;
 use derive_more::AddAssign;
 use derive_more::Display;
 use derive_more::From;
+use derive_more::Index;
 use derive_more::Into;
+use derive_more::IntoIterator;
+use derive_more::Mul;
+use derive_more::MulAssign;
+use derive_more::Rem;
+use derive_more::RemAssign;
+use derive_more::Sub;
+use derive_more::SubAssign;
 use duplicate::duplicate;
 use indexmap::IndexMap;
 use serde::Deserialize;
@@ -14,6 +22,7 @@ use smartstring::LazyCompact;
 use smartstring::SmartString;
 use std::borrow::Cow;
 use std::fmt::Debug;
+use std::ops::Deref;
 use symbolica::atom::ListIterator;
 
 use std::i64;
@@ -31,8 +40,6 @@ use symbolica::state::{State, Workspace};
 
 use std::collections::HashSet;
 use std::{cmp::Ordering, collections::HashMap};
-
-use crate::Fiber;
 
 use super::ufo;
 use super::DenseTensor;
@@ -139,10 +146,68 @@ impl PartialOrd<Dimension> for usize {
 
 pub type ConcreteIndex = usize;
 
-pub struct ExpandedConcreteIndex {
+#[derive(
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Hash,
+    Index,
+    Serialize,
+    Deserialize,
+    From,
+    Into,
+    Display,
+    IntoIterator,
+)]
+#[display(fmt = "{:?}", indices)]
+
+pub struct ExpandedIndex {
     indices: Vec<ConcreteIndex>,
 }
 
+impl Deref for ExpandedIndex {
+    type Target = [ConcreteIndex];
+
+    fn deref(&self) -> &Self::Target {
+        &self.indices
+    }
+}
+
+impl FromIterator<ConcreteIndex> for ExpandedIndex {
+    fn from_iter<T: IntoIterator<Item = ConcreteIndex>>(iter: T) -> Self {
+        ExpandedIndex {
+            indices: iter.into_iter().collect(),
+        }
+    }
+}
+
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Hash,
+    Serialize,
+    Deserialize,
+    From,
+    Rem,
+    RemAssign,
+    Into,
+    Display,
+    Add,
+    Mul,
+    MulAssign,
+    AddAssign,
+    Sub,
+    SubAssign,
+)]
+#[display(fmt = "{}", index)]
 pub struct FlatIndex {
     index: usize,
 }
@@ -783,7 +848,7 @@ pub trait HasStructure {
     /// # Errors
     ///
     /// Same as [`Self::verify_indices`]
-    fn flat_index(&self, indices: &[ConcreteIndex]) -> Result<usize, String> {
+    fn flat_index(&self, indices: &[ConcreteIndex]) -> Result<FlatIndex, String> {
         let strides = self.strides();
         self.verify_indices(indices)?;
 
@@ -791,7 +856,7 @@ pub trait HasStructure {
         for (i, &index) in indices.iter().enumerate() {
             idx += index * strides[i];
         }
-        Ok(idx)
+        Ok(FlatIndex { index: idx })
     }
 
     /// yields the expanded index of the tensor given a flat index
@@ -799,15 +864,15 @@ pub trait HasStructure {
     /// # Errors
     ///
     /// `Index out of bounds` = if the flat index is out of bounds for the tensor
-    fn expanded_index(&self, flat_index: usize) -> Result<Vec<ConcreteIndex>, String> {
+    fn expanded_index(&self, flat_index: FlatIndex) -> Result<ExpandedIndex, String> {
         let mut indices = vec![];
-        let mut index = flat_index;
+        let mut index = flat_index.index;
         for &stride in &self.strides() {
             indices.push(index / stride);
             index %= stride;
         }
-        if flat_index < self.size() {
-            Ok(indices)
+        if flat_index.index < self.size() {
+            Ok(indices.into())
         } else {
             Err(format!("Index {flat_index} out of bounds").into())
         }

@@ -1033,6 +1033,82 @@ where
     }
 }
 
+#[cfg(test)]
+
+mod test {
+    use ahash::{HashMap, HashMapExt};
+    use symbolica::{atom::Atom, state::State};
+
+    use crate::{
+        Complex, FallibleAdd, FallibleAddAssign, FallibleMul, FallibleSub, FallibleSubAssign,
+    };
+
+    #[test]
+    fn i32_arithmetic() {
+        let a: i32 = 4;
+        let b: i32 = 4;
+        let mut c = a.mul_fallible(b).unwrap();
+        c.add_assign_fallible(&a);
+        c.sub_assign_fallible(&b);
+        let d = b.sub_fallible(a);
+        let e = a.add_fallible(b);
+        assert_eq!(c, 16);
+        assert_eq!(d, Some(0));
+        assert_eq!(e, Some(8));
+    }
+
+    #[test]
+    fn test_fallible_mul() {
+        let a: i32 = 4;
+        let b: f64 = 4.;
+        let mut c: f64 = a.mul_fallible(&b).unwrap();
+        c.add_assign_fallible(&a);
+        let d: Option<f64> = b.mul_fallible(&a);
+        let a: &i32 = &a;
+        let e: Option<f64> = a.mul_fallible(&b);
+        assert_eq!(c, 20.);
+        assert_eq!(d, Some(16.));
+        assert_eq!(e, Some(16.));
+
+        let a = &Atom::parse("a(2)").unwrap();
+        let b = &Atom::parse("b(1)").unwrap();
+
+        let mut f = a.mul_fallible(4.).unwrap();
+        f.add_assign_fallible(b);
+
+        let i = Atom::new_var(State::I);
+
+        f.add_assign_fallible(&i);
+
+        let function_map = HashMap::new();
+        let mut cache = HashMap::new();
+
+        let mut const_map = HashMap::new();
+        const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.).into());
+
+        const_map.insert(a.as_view(), Complex::<f64>::new(3., 1.).into());
+
+        const_map.insert(b.as_view(), Complex::<f64>::new(3., 1.).into());
+
+        let ev: symbolica::domains::float::Complex<f64> =
+            f.as_view().evaluate(&const_map, &function_map, &mut cache);
+
+        println!("{}", ev);
+        // print!("{}", f.unwrap());
+
+        let g = Complex::new(0.1, 3.);
+
+        let mut h = a.sub_fallible(g).unwrap();
+
+        h.add_assign_fallible(a);
+        let _f = a.mul_fallible(a);
+
+        Atom::default();
+
+        println!("{}", h);
+    }
+}
+
 // impl<T, U> SmallestUpgrade<U> for T
 // where
 //     U: From<T>,

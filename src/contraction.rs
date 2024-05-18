@@ -1,6 +1,6 @@
 use ahash::AHashMap;
 
-use crate::FlatIndex;
+use crate::{FlatIndex, GetTensorData};
 
 use super::{
     DataIterator, DataTensor, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSubAssign,
@@ -275,13 +275,12 @@ where
             for fiber_b in other_iter.by_ref() {
                 for (k, ((a, _), (b, _))) in (fiber_a.by_ref()).zip(fiber_b).enumerate() {
                     if fiber_representation.is_neg(k) {
-                        result_data[0].sub_assign_fallible(a.mul_fallible(b).unwrap());
+                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
                     } else {
-                        result_data[0].add_assign_fallible(a.mul_fallible(b).unwrap());
+                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
                     }
                 }
                 result_index += 1;
-                println!("result_index: {}", result_index);
                 fiber_a.reset();
             }
             let _ = other_iter.reset();
@@ -399,17 +398,19 @@ where
         for mut fiber_a in self_iter.by_ref() {
             for mut fiber_b in other_iter.by_ref() {
                 for (k, (a, skip, _)) in fiber_a.by_ref().enumerate() {
-                    let (b, _) = fiber_b.by_ref().skip(skip).next().unwrap();
-                    if fiber_representation.is_neg(k) {
-                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
-                    } else {
-                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
+                    if let Some((b, _)) = fiber_b.by_ref().skip(skip).next() {
+                        if fiber_representation.is_neg(k + skip) {
+                            result_data[result_index]
+                                .sub_assign_fallible(a.mul_fallible(b).unwrap());
+                        } else {
+                            result_data[result_index]
+                                .add_assign_fallible(a.mul_fallible(b).unwrap());
+                        }
                     }
                 }
                 result_index += 1;
                 fiber_a.reset();
             }
-
             other_iter.reset();
         }
 
@@ -444,11 +445,14 @@ where
         for mut fiber_a in self_iter.by_ref() {
             for mut fiber_b in other_iter.by_ref() {
                 for (k, (b, skip, _)) in fiber_b.by_ref().enumerate() {
-                    let (a, _) = fiber_a.by_ref().skip(skip).next().unwrap();
-                    if fiber_representation.is_neg(k) {
-                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
-                    } else {
-                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
+                    if let Some((a, _)) = fiber_a.by_ref().skip(skip).next() {
+                        if fiber_representation.is_neg(k + skip) {
+                            result_data[result_index]
+                                .sub_assign_fallible(a.mul_fallible(b).unwrap());
+                        } else {
+                            result_data[result_index]
+                                .add_assign_fallible(a.mul_fallible(b).unwrap());
+                        }
                     }
                 }
                 result_index += 1;
@@ -541,11 +545,16 @@ where
         for mut fiber_a in selfiter {
             for mut fiber_b in other_iter.by_ref() {
                 for (b, skip, _) in fiber_b.by_ref() {
-                    let (a, (neg, _)) = fiber_a.by_ref().skip(skip).next().unwrap();
-                    if neg {
-                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
-                    } else {
-                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
+                    let a = fiber_a.by_ref().skip(skip).next();
+                    if let Some((a, (neg, _))) = a {
+                        println!("{}", neg);
+                        if neg {
+                            result_data[result_index]
+                                .sub_assign_fallible(a.mul_fallible(b).unwrap());
+                        } else {
+                            result_data[result_index]
+                                .add_assign_fallible(a.mul_fallible(b).unwrap());
+                        }
                     }
                 }
                 result_index += 1;
@@ -611,6 +620,15 @@ where
                         } else {
                             value.add_assign_fallible(a.mul_fallible(b).unwrap());
                         }
+                        let b = fiber_b
+                            .by_ref()
+                            .next()
+                            .map(|(b, skip, _)| (b, skip + skip_b + 1));
+                        let a = fiber_a
+                            .by_ref()
+                            .next()
+                            .map(|(a, skip, _)| (a, skip + skip_a + 1));
+                        items = a.zip(b);
                         nonzero = true;
                     }
                 }
@@ -638,7 +656,7 @@ where
     for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
     U: DotProduct<T>,
     I: HasStructure + Clone + StructureContract,
-    U::Out: PartialEq,
+    U::Out: PartialEq + Debug,
 {
     type LCM = SparseTensor<U::Out, I>;
 
@@ -681,11 +699,21 @@ where
                             .map(|(a, skip, (neg, _))| (a, skip + skip_a + 1, neg));
                         items = a.zip(Some((b, skip_b)));
                     } else {
+                        println!("v{:?}", value);
                         if neg {
                             value.sub_assign_fallible(a.mul_fallible(b).unwrap());
                         } else {
                             value.add_assign_fallible(a.mul_fallible(b).unwrap());
                         }
+                        let b = fiber_b
+                            .by_ref()
+                            .next()
+                            .map(|(b, skip, _)| (b, skip + skip_b + 1));
+                        let a = fiber_a
+                            .by_ref()
+                            .next()
+                            .map(|(a, skip, (neg, _))| (a, skip + skip_a + 1, neg));
+                        items = a.zip(b);
                         nonzero = true;
                     }
                 }
@@ -714,7 +742,7 @@ where
         FallibleMul<&'b U, Output = U::Out> + TrySmallestUpgrade<&'b U, LCM = U::Out>,
     U: DotProduct<T>,
     I: HasStructure + Clone + StructureContract,
-    U::Out: PartialEq,
+    U::Out: PartialEq + Debug,
     I: Clone + HasStructure + StructureContract,
     T: Clone + Debug,
     U: Clone + Debug,

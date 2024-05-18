@@ -1,0 +1,25 @@
+---
+source: src/tests.rs
+expression: f
+---
+data:
+  - 70
+  - 80
+  - 90
+  - 158
+  - 184
+  - 210
+  - 246
+  - 288
+  - 330
+  - 334
+  - 392
+  - 450
+structure:
+  structure:
+    - index: 1
+      representation:
+        Euclidean: 4
+    - index: 3
+      representation:
+        Euclidean: 3

@@ -1244,6 +1244,7 @@ impl<'a, S: HasStructure, I: IteratesAlongFibers> FiberIterator<'a, S, I> {
 
     pub fn reset(&mut self) {
         self.iter.reset();
+        self.skipped = 0;
     }
 
     pub fn shift(&mut self, shift: usize) {

@@ -12,7 +12,7 @@ use ahash::{HashMap, HashMapExt};
 use indexmap::{IndexMap, IndexSet};
 
 use crate::Complex;
-use insta::{assert_ron_snapshot, assert_toml_snapshot};
+use insta::{assert_ron_snapshot, assert_toml_snapshot, assert_yaml_snapshot};
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 
@@ -220,14 +220,25 @@ fn fibers() {
 #[test]
 fn fiber_from_structure() {
     let a = test_structure(5, 5);
-    println!("{:?}", a);
-    let fiber = Fiber::from(([0u8, 1, 0, 1, 1].as_slice()).into(), &a);
 
-    println!("{:?}", fiber);
+    let fiber = Fiber::from(([1u8, 1, 0, 1, 0].as_slice()).into(), &a);
 
-    for i in fiber.iter() {
-        println!("{:?}", a.expanded_index(i).unwrap());
-    }
+    let fiber_iter = fiber
+        .clone()
+        .iter()
+        .map(|f| a.expanded_index(f).unwrap())
+        .collect::<Vec<_>>();
+
+    let fiberclass: FiberClass<'_, VecStructure> = fiber.into();
+
+    let fiberclass_iter: Vec<ExpandedIndex> = fiberclass
+        .iter()
+        .map(|i| i.map(|f| a.expanded_index(f).unwrap()).collect::<Vec<_>>())
+        .flatten()
+        .collect();
+
+    assert_eq!(fiberclass_iter.len(), a.size());
+    assert_yaml_snapshot!((fiberclass_iter, fiber_iter));
 }
 
 #[test]
@@ -335,6 +346,57 @@ fn scalar_and_dim1_conract() {
 
     assert_eq!(f.hashmap(), valid);
 }
+
+#[test]
+fn dense_dense_single_contract() {
+    let structura = VecStructure::new(vec![(1, 4).into(), (2, 4).into()]);
+    let structurb = VecStructure::new(vec![(2, 4).into(), (3, 3).into()]);
+
+    let a = DenseTensor::from_data(
+        &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        structura,
+    )
+    .unwrap();
+
+    let b = DenseTensor::from_data(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], structurb.clone())
+        .unwrap();
+
+    let f = a.contract(&b).unwrap();
+
+    assert_yaml_snapshot!(f);
+}
+
+#[test]
+fn sparse_diag_dense_contract() {
+    let structura = VecStructure::new(vec![(1, 4).into(), (2, 4).into()]);
+    let structurb = VecStructure::new(vec![(2, 4).into(), (3, 3).into()]);
+
+    let a = SparseTensor::from_data(
+        &[
+            (vec![0, 0].into(), 1),
+            (vec![1, 1].into(), 2),
+            (vec![2, 2].into(), 3),
+            (vec![3, 3].into(), 4),
+        ],
+        structura.clone(),
+    )
+    .unwrap();
+
+    let b = DenseTensor::from_data(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], structurb.clone())
+        .unwrap();
+
+    let f = a.contract(&b).unwrap();
+    let g = b.contract(&a).unwrap();
+    let h = a.contract(&b.to_sparse()).unwrap();
+    let i = b.contract(&a.to_dense()).unwrap();
+
+    assert_eq!(i.data(), g.data());
+    assert_eq!(i.data(), h.to_dense().data());
+    assert_eq!(f.data(), i.data());
+
+    assert_yaml_snapshot!(f);
+}
+
 #[test]
 fn contract_with_rank_one_in_middle() {
     let s = 12;
@@ -375,7 +437,7 @@ where
         let id = AbstractIndex(id);
         let rep = match rep {
             0 => Representation::Euclidean(dim),
-            _ => Representation::Lorentz(dim),
+            _ => Representation::Euclidean(dim),
         };
 
         s.push((id, rep).into());
@@ -396,15 +458,15 @@ fn single_contract() {
     structb.insert(rng.gen_range(0..structb.len()), common[0]);
     structa.sort();
     let structa: VecStructure = structa.into();
-    assert_ron_snapshot!(structa);
+
     let structb: VecStructure = structb.into();
-    assert_ron_snapshot!(structb);
     let spensor_a: SparseTensor<i32, VecStructure> = test_tensor(structa.clone(), s + 3, range);
 
     let densor_a: DenseTensor<i32, VecStructure> = spensor_a.to_dense();
     // println!("A={:?}", densor_a);
 
     let spensor_b: SparseTensor<i32, VecStructure> = test_tensor(structb.clone(), s + 4, range);
+    assert_ron_snapshot!((structa, structb));
     let densor_b: DenseTensor<i32, VecStructure> = spensor_b.to_dense();
     // println!("B={:?}", densor_b);
 

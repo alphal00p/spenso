@@ -26,79 +26,227 @@ expression: "(a, fciter, fiberclass)"
     ),
   ],
 ), [
-  0,
-  70,
-  140,
-  210,
+  FlatIndex(
+    index: 0,
+  ),
+  FlatIndex(
+    index: 70,
+  ),
+  FlatIndex(
+    index: 140,
+  ),
+  FlatIndex(
+    index: 210,
+  ),
 ], [
-  0,
-  1,
-  2,
-  3,
-  4,
-  5,
-  6,
-  7,
-  8,
-  9,
-  10,
-  11,
-  12,
-  13,
-  14,
-  15,
-  16,
-  17,
-  18,
-  19,
-  20,
-  21,
-  22,
-  23,
-  24,
-  25,
-  26,
-  27,
-  28,
-  29,
-  30,
-  31,
-  32,
-  33,
-  34,
-  35,
-  36,
-  37,
-  38,
-  39,
-  40,
-  41,
-  42,
-  43,
-  44,
-  45,
-  46,
-  47,
-  48,
-  49,
-  50,
-  51,
-  52,
-  53,
-  54,
-  55,
-  56,
-  57,
-  58,
-  59,
-  60,
-  61,
-  62,
-  63,
-  64,
-  65,
-  66,
-  67,
-  68,
-  69,
+  FlatIndex(
+    index: 0,
+  ),
+  FlatIndex(
+    index: 1,
+  ),
+  FlatIndex(
+    index: 2,
+  ),
+  FlatIndex(
+    index: 3,
+  ),
+  FlatIndex(
+    index: 4,
+  ),
+  FlatIndex(
+    index: 5,
+  ),
+  FlatIndex(
+    index: 6,
+  ),
+  FlatIndex(
+    index: 7,
+  ),
+  FlatIndex(
+    index: 8,
+  ),
+  FlatIndex(
+    index: 9,
+  ),
+  FlatIndex(
+    index: 10,
+  ),
+  FlatIndex(
+    index: 11,
+  ),
+  FlatIndex(
+    index: 12,
+  ),
+  FlatIndex(
+    index: 13,
+  ),
+  FlatIndex(
+    index: 14,
+  ),
+  FlatIndex(
+    index: 15,
+  ),
+  FlatIndex(
+    index: 16,
+  ),
+  FlatIndex(
+    index: 17,
+  ),
+  FlatIndex(
+    index: 18,
+  ),
+  FlatIndex(
+    index: 19,
+  ),
+  FlatIndex(
+    index: 20,
+  ),
+  FlatIndex(
+    index: 21,
+  ),
+  FlatIndex(
+    index: 22,
+  ),
+  FlatIndex(
+    index: 23,
+  ),
+  FlatIndex(
+    index: 24,
+  ),
+  FlatIndex(
+    index: 25,
+  ),
+  FlatIndex(
+    index: 26,
+  ),
+  FlatIndex(
+    index: 27,
+  ),
+  FlatIndex(
+    index: 28,
+  ),
+  FlatIndex(
+    index: 29,
+  ),
+  FlatIndex(
+    index: 30,
+  ),
+  FlatIndex(
+    index: 31,
+  ),
+  FlatIndex(
+    index: 32,
+  ),
+  FlatIndex(
+    index: 33,
+  ),
+  FlatIndex(
+    index: 34,
+  ),
+  FlatIndex(
+    index: 35,
+  ),
+  FlatIndex(
+    index: 36,
+  ),
+  FlatIndex(
+    index: 37,
+  ),
+  FlatIndex(
+    index: 38,
+  ),
+  FlatIndex(
+    index: 39,
+  ),
+  FlatIndex(
+    index: 40,
+  ),
+  FlatIndex(
+    index: 41,
+  ),
+  FlatIndex(
+    index: 42,
+  ),
+  FlatIndex(
+    index: 43,
+  ),
+  FlatIndex(
+    index: 44,
+  ),
+  FlatIndex(
+    index: 45,
+  ),
+  FlatIndex(
+    index: 46,
+  ),
+  FlatIndex(
+    index: 47,
+  ),
+  FlatIndex(
+    index: 48,
+  ),
+  FlatIndex(
+    index: 49,
+  ),
+  FlatIndex(
+    index: 50,
+  ),
+  FlatIndex(
+    index: 51,
+  ),
+  FlatIndex(
+    index: 52,
+  ),
+  FlatIndex(
+    index: 53,
+  ),
+  FlatIndex(
+    index: 54,
+  ),
+  FlatIndex(
+    index: 55,
+  ),
+  FlatIndex(
+    index: 56,
+  ),
+  FlatIndex(
+    index: 57,
+  ),
+  FlatIndex(
+    index: 58,
+  ),
+  FlatIndex(
+    index: 59,
+  ),
+  FlatIndex(
+    index: 60,
+  ),
+  FlatIndex(
+    index: 61,
+  ),
+  FlatIndex(
+    index: 62,
+  ),
+  FlatIndex(
+    index: 63,
+  ),
+  FlatIndex(
+    index: 64,
+  ),
+  FlatIndex(
+    index: 65,
+  ),
+  FlatIndex(
+    index: 66,
+  ),
+  FlatIndex(
+    index: 67,
+  ),
+  FlatIndex(
+    index: 68,
+  ),
+  FlatIndex(
+    index: 69,
+  ),
 ])

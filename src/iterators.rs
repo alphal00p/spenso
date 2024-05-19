@@ -8,6 +8,7 @@
 //!
 
 use std::{
+    collections::HashSet,
     fmt::{Debug, Display},
     ops::{AddAssign, Index, Neg, SubAssign},
 };
@@ -971,6 +972,8 @@ impl IteratesAlongFibers for CoreFlatFiberIterator {
             fixed_strides_conj.pop();
         }
 
+        println!("{max} {max_conj}");
+
         (
             CoreFlatFiberIterator {
                 varying_fiber_index: 0.into(),
@@ -1012,10 +1015,16 @@ impl CoreExpandedFiberIterator {
         let mut strides = Self::filter(&varying_indices, &fiber.strides(), conj);
         let varying_fiber_index = vec![0; dims.len()];
 
+        println!("dims {:?}", dims);
+        println!("strides {:?}", strides);
+
         if let Some(perm) = permutation {
-            perm.apply_slice(&mut dims);
-            perm.apply_slice(&mut strides);
+            perm.apply_slice_in_place(&mut dims);
+            perm.apply_slice_in_place(&mut strides);
         }
+
+        println!("bermuted dims {:?}", dims);
+        println!("permuted strides {:?}", strides);
 
         CoreExpandedFiberIterator {
             varying_fiber_index,
@@ -1075,6 +1084,76 @@ impl Iterator for CoreExpandedFiberIterator {
     }
 }
 
+#[test]
+fn test() {
+    let structure = VecStructure::new(vec![(2, 2).into(), (3, 3).into(), (4, 4).into()]);
+    let fiber = Fiber::from([true, false, true].as_slice().into(), &structure);
+
+    println!(
+        "{:?}",
+        Permutation::myrvold_ruskey_unrank1(2, 2).find_cycles()
+    );
+
+    let mut iter = CoreExpandedFiberIterator::new_permuted(
+        &fiber,
+        false,
+        Permutation::myrvold_ruskey_unrank1(2, 2),
+    );
+
+    for i in iter {
+        println!("{:?}", structure.expanded_index(i));
+    }
+
+    let structura = VecStructure::new(vec![
+        (0, 4).into(),
+        (4, 4).into(),
+        (1, 5).into(),
+        (3, 7).into(),
+        (2, 8).into(),
+    ]);
+
+    let structurb = VecStructure::new(vec![
+        (2, 8).into(),
+        (3, 7).into(),
+        (0, 4).into(),
+        (1, 5).into(),
+        (5, 4).into(),
+    ]);
+
+    let fibera = Fiber::from(
+        [true, false, true, true, true].as_slice().into(),
+        &structura,
+    );
+    let fiberb = Fiber::from(
+        [true, true, true, true, false].as_slice().into(),
+        &structurb,
+    );
+
+    let perm = Permutation::myrvold_ruskey_unrank1(4, 1);
+
+    let (permuta, filter_a, filter_b) = structura.match_indices(&structurb).unwrap();
+    let mut itera = CoreExpandedFiberIterator::new_permuted(&fibera, false, permuta.clone());
+    let mut iterb = CoreExpandedFiberIterator::new(&fiberb, false);
+
+    println!("{:?} {:?}", permuta, filter_a);
+    println!("{:?} {:?}", perm, filter_b);
+
+    let collecteda: Vec<HashSet<usize>> = itera
+        .map(|f| HashSet::from_iter(structura.expanded_index(f).unwrap().into_iter()))
+        .collect::<Vec<_>>();
+    let collectedb: Vec<HashSet<usize>> = iterb
+        .map(|f| HashSet::from_iter(structurb.expanded_index(f).unwrap().into_iter()))
+        .collect::<Vec<_>>();
+
+    for (k, i) in collecteda.iter().zip(collectedb.iter()).enumerate() {
+        assert_eq!(i.0, i.1, "Error at index {}", k)
+    }
+
+    // assert_eq!(collecteda, collectedb);
+
+    // assert_ron_snapshot!(collecteda);
+}
+
 impl IteratesAlongFibers for CoreExpandedFiberIterator {
     fn new<I, J>(fiber: &I, conj: bool) -> Self
     where
@@ -1097,6 +1176,7 @@ impl IteratesAlongFibers for CoreExpandedFiberIterator {
     }
 
     fn reset(&mut self) {
+        self.flat = 0.into();
         self.varying_fiber_index = vec![0; self.dims.len()];
     }
 
@@ -1117,7 +1197,7 @@ impl IteratesAlongPermutedFibers for CoreExpandedFiberIterator {
 
 #[derive(Debug, Clone)]
 pub struct MetricFiberIterator {
-    iter: CoreExpandedFiberIterator,
+    pub iter: CoreExpandedFiberIterator,
     neg: bool,
 }
 
@@ -1153,6 +1233,7 @@ impl IteratesAlongFibers for MetricFiberIterator {
 
     fn reset(&mut self) {
         self.iter.reset();
+        self.neg = false;
     }
 
     fn shift(&mut self, shift: usize) {
@@ -1220,7 +1301,7 @@ impl Iterator for MetricFiberIterator {
 pub struct FiberIterator<'a, S: HasStructure, I: IteratesAlongFibers> {
     pub fiber: Fiber<'a, S>,
     pub iter: I,
-    skipped: usize,
+    pub skipped: usize,
 }
 
 impl<'a, S: HasStructure, I: IteratesAlongFibers + Clone> Clone for FiberIterator<'a, S, I> {
@@ -1277,6 +1358,8 @@ where
     type Item = (&'a T, It::OtherData);
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|x| {
+            // println!("{}", x.flat_idx());
+            // println!("{}", self.fiber.structure.size());
             (
                 self.fiber.structure.get_linear(x.flat_idx()).unwrap(),
                 x.other_data(),
@@ -1383,6 +1466,7 @@ impl<'a, S: HasStructure + 'a, I: IteratesAlongFibers + Clone> Iterator
 
     fn next(&mut self) -> Option<Self::Item> {
         let shift = self.iter.next()?;
+        self.fiber.reset();
         self.fiber.shift(shift.into());
         Some(self.fiber.clone())
     }

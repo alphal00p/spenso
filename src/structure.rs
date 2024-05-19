@@ -682,14 +682,15 @@ pub trait HasStructure {
             if let Some(&i) = posmap.get(slot_other) {
                 self_matches[i] = true;
                 other_matches[j] = true;
-                perm.push(j);
+                perm.push(i);
             }
         }
 
         if perm.is_empty() {
             None
         } else {
-            let p: Permutation = Permutation::sort(&mut perm);
+            println!("{:?}", perm);
+            let p: Permutation = Permutation::sort(&perm);
             Some((p, self_matches, other_matches))
         }
     }

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use ahash::{AHashMap, HashMap};
 use enum_try_as_inner::EnumTryAsInner;
 
@@ -273,7 +275,7 @@ where
 
 impl<I> Contract<MixedTensor<I>> for MixedTensor<I>
 where
-    I: HasStructure + Clone + StructureContract,
+    I: HasStructure + Clone + StructureContract + Debug,
 {
     type LCM = MixedTensor<I>;
     fn contract(&self, other: &MixedTensor<I>) -> Option<Self::LCM> {

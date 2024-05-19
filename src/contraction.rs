@@ -262,6 +262,7 @@ where
     type LCM = DenseTensor<U::Out, I>;
 
     fn single_contract(&self, other: &DenseTensor<T, I>, i: usize, j: usize) -> Option<Self::LCM> {
+        // println!("single contract dense dense");
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = vec![U::Out::default(); final_structure.size()];
         let mut result_index = 0;
@@ -303,9 +304,11 @@ where
 {
     type LCM = DenseTensor<U::Out, I>;
     fn multi_contract(&self, other: &DenseTensor<T, I>) -> Option<Self::LCM> {
+        // println!("multi contract dense dense");
         let (permutation, self_matches, other_matches) =
             self.structure().match_indices(other.structure()).unwrap();
 
+        println!("permutation {:?}", permutation);
         let mut final_structure = self.structure.clone();
         final_structure.merge(&other.structure);
 
@@ -386,6 +389,7 @@ where
     type LCM = DenseTensor<U::Out, I>;
 
     fn single_contract(&self, other: &DenseTensor<T, I>, i: usize, j: usize) -> Option<Self::LCM> {
+        // println!("single contract sparse dense");
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = vec![U::Out::default(); final_structure.size()];
         let mut result_index = 0;
@@ -433,6 +437,7 @@ where
     type LCM = DenseTensor<U::Out, I>;
 
     fn single_contract(&self, other: &SparseTensor<T, I>, i: usize, j: usize) -> Option<Self::LCM> {
+        // println!("single contract dense sparse");
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = vec![U::Out::default(); final_structure.size()];
         let mut result_index = 0;
@@ -479,6 +484,7 @@ where
 {
     type LCM = DenseTensor<U::Out, I>;
     fn multi_contract(&self, other: &DenseTensor<T, I>) -> Option<Self::LCM> {
+        // println!("multi contract sparse dense");
         let (permutation, self_matches, other_matches) =
             self.structure().match_indices(other.structure()).unwrap();
 
@@ -496,11 +502,14 @@ where
         for mut fiber_a in selfiter {
             for mut fiber_b in other_iter.by_ref() {
                 for (a, skip, (neg, _)) in fiber_a.by_ref() {
-                    let (b, _) = fiber_b.by_ref().skip(skip).next().unwrap();
-                    if neg {
-                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
-                    } else {
-                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
+                    if let Some((b, _)) = fiber_b.by_ref().skip(skip).next() {
+                        if neg {
+                            result_data[result_index]
+                                .sub_assign_fallible(a.mul_fallible(b).unwrap());
+                        } else {
+                            result_data[result_index]
+                                .add_assign_fallible(a.mul_fallible(b).unwrap());
+                        }
                     }
                 }
                 result_index += 1;
@@ -522,12 +531,13 @@ impl<T, U, I> MultiContract<SparseTensor<T, I>> for DenseTensor<U, I>
 where
     for<'a, 'b> &'a U: FallibleMul<&'b T, Output = U::Out>,
     for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
-    U: DotProduct<T>,
-    I: HasStructure + Clone + StructureContract,
+    U: DotProduct<T> + Debug,
+    I: HasStructure + Clone + StructureContract + Debug,
 {
     type LCM = DenseTensor<U::Out, I>;
 
     fn multi_contract(&self, other: &SparseTensor<T, I>) -> Option<Self::LCM> {
+        // println!("multi contract dense sparse");
         let (permutation, self_matches, other_matches) =
             self.structure().match_indices(other.structure()).unwrap();
 
@@ -543,11 +553,23 @@ where
         let mut other_iter = other.fiber_class(other_matches.as_slice().into()).iter();
 
         for mut fiber_a in selfiter {
+            println!("fiber_a");
+            let max: usize = fiber_a
+                .iter
+                .iter
+                .dims
+                .iter()
+                .map(|f| usize::from(f))
+                .product();
+            println!("{}", max);
             for mut fiber_b in other_iter.by_ref() {
+                println!("fiber_b");
+                println!("{}", fiber_b.clone().fold(0, |acc, x| acc + x.1 + 1));
                 for (b, skip, _) in fiber_b.by_ref() {
+                    println!("{}", skip);
                     let a = fiber_a.by_ref().skip(skip).next();
                     if let Some((a, (neg, _))) = a {
-                        println!("{}", neg);
+                        // println!("{}", neg);
                         if neg {
                             result_data[result_index]
                                 .sub_assign_fallible(a.mul_fallible(b).unwrap());
@@ -557,7 +579,9 @@ where
                         }
                     }
                 }
+                println!("{}", fiber_b.skipped);
                 result_index += 1;
+                println!("{:?}", fiber_a);
                 fiber_a.reset();
             }
         }
@@ -582,6 +606,7 @@ where
     type LCM = SparseTensor<U::Out, I>;
 
     fn single_contract(&self, other: &SparseTensor<T, I>, i: usize, j: usize) -> Option<Self::LCM> {
+        // println!("single contract sparse sparse");
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = AHashMap::default();
         let mut result_index = 0;
@@ -661,6 +686,7 @@ where
     type LCM = SparseTensor<U::Out, I>;
 
     fn multi_contract(&self, other: &SparseTensor<T, I>) -> Option<Self::LCM> {
+        // println!("multi contract sparse sparse");
         let (permutation, self_matches, other_matches) =
             self.structure().match_indices(other.structure()).unwrap();
 
@@ -699,7 +725,7 @@ where
                             .map(|(a, skip, (neg, _))| (a, skip + skip_a + 1, neg));
                         items = a.zip(Some((b, skip_b)));
                     } else {
-                        println!("v{:?}", value);
+                        // println!("v{:?}", value);
                         if neg {
                             value.sub_assign_fallible(a.mul_fallible(b).unwrap());
                         } else {
@@ -743,7 +769,7 @@ where
     U: DotProduct<T>,
     I: HasStructure + Clone + StructureContract,
     U::Out: PartialEq + Debug,
-    I: Clone + HasStructure + StructureContract,
+    I: Clone + HasStructure + StructureContract + Debug,
     T: Clone + Debug,
     U: Clone + Debug,
 {
@@ -766,7 +792,7 @@ where
 
 impl<I> Contract<NumTensor<I>> for NumTensor<I>
 where
-    I: Clone + HasStructure + StructureContract,
+    I: Clone + HasStructure + StructureContract + Debug,
 {
     type LCM = NumTensor<I>;
     fn contract(&self, other: &NumTensor<I>) -> Option<Self::LCM> {

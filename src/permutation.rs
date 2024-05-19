@@ -52,7 +52,7 @@ impl Permutation {
         self.inv.iter().map(|&idx| s[idx].clone()).collect()
     }
 
-    fn find_cycles(&self) -> Vec<Vec<usize>> {
+    pub fn find_cycles(&self) -> Vec<Vec<usize>> {
         let mut visited = vec![false; self.map.len()];
         let mut cycles = Vec::new();
         for i in 0..self.map.len() {
@@ -75,13 +75,13 @@ impl Permutation {
 
     fn cycle_to_transpositions(cycle: &[usize]) -> Vec<(usize, usize)> {
         let mut transpositions = Vec::new();
-        for i in 0..cycle.len() {
-            transpositions.push((cycle[i], cycle[(i + 1) % cycle.len()]));
+        for i in (1..cycle.len()).rev() {
+            transpositions.push((cycle[0], cycle[i]));
         }
         transpositions
     }
 
-    fn transpositions(&self) -> Vec<(usize, usize)> {
+    pub fn transpositions(&self) -> Vec<(usize, usize)> {
         let cycles = self.find_cycles();
         let mut transpositions = Vec::new();
         for cycle in cycles {
@@ -90,7 +90,7 @@ impl Permutation {
         transpositions
     }
 
-    pub fn apply_slice_in_place<T: Clone, S>(&self, slice: &mut S)
+    pub fn apply_slice_in_place_inv<T: Clone, S>(&self, slice: &mut S)
     where
         S: AsMut<[T]>,
     {
@@ -101,7 +101,7 @@ impl Permutation {
         }
     }
 
-    pub fn apply_slice_in_place_inv<T: Clone, S>(&self, slice: &mut S)
+    pub fn apply_slice_in_place<T: Clone, S>(&self, slice: &mut S)
     where
         S: AsMut<[T]>,
     {
@@ -112,7 +112,7 @@ impl Permutation {
         }
     }
 
-    fn from_map(map: Vec<usize>) -> Self {
+    pub fn from_map(map: Vec<usize>) -> Self {
         let mut inv = vec![0; map.len()];
         for (i, &j) in map.iter().enumerate() {
             inv[j] = i;
@@ -196,5 +196,80 @@ mod tests {
                 Permutation::myrvold_ruskey_rank2(Permutation::myrvold_ruskey_unrank2(4, i))
             );
         }
+    }
+
+    #[test]
+    fn test_apply_slice() {
+        let p = Permutation::from_map(vec![2, 1, 3, 0]);
+        let data = vec![10, 20, 30, 40];
+        let permuted = p.apply_slice(&data);
+        assert_eq!(permuted, vec![30, 20, 40, 10]);
+    }
+
+    #[test]
+    fn test_apply_slice_inv() {
+        let p = Permutation::from_map(vec![2, 1, 3, 0]);
+        let data = vec![10, 20, 30, 40];
+        let permuted = p.apply_slice_inv(&data);
+        assert_eq!(permuted, vec![40, 20, 10, 30]);
+    }
+
+    #[test]
+    fn test_find_cycles() {
+        let p = Permutation::from_map(vec![2, 0, 1, 3]);
+        let cycles = p.find_cycles();
+        assert_eq!(cycles, vec![vec![0, 2, 1], vec![3]]);
+    }
+
+    #[test]
+    fn test_cycle_to_transpositions() {
+        let cycle = vec![0, 2, 1];
+        let transpositions = Permutation::cycle_to_transpositions(&cycle);
+        assert_eq!(transpositions, vec![(0, 1), (0, 2)]);
+    }
+
+    #[test]
+    fn test_transpositions() {
+        let p = Permutation::from_map(vec![2, 0, 1, 3]);
+        let transpositions = p.transpositions();
+        assert_eq!(transpositions, vec![(0, 1), (0, 2)]);
+    }
+
+    #[test]
+    fn test_apply_slice_in_place() {
+        let p = Permutation::from_map(vec![2, 0, 1, 3]);
+        let mut data = vec![10, 20, 30, 40];
+        p.apply_slice_in_place(&mut data);
+        assert_eq!(data, vec![20, 30, 10, 40]);
+    }
+
+    #[test]
+    fn test_apply_slice_in_place_inv() {
+        let p = Permutation::from_map(vec![2, 0, 1, 3]);
+        let mut data = vec![10, 20, 30, 40];
+        p.apply_slice_in_place_inv(&mut data);
+        assert_eq!(data, vec![30, 10, 20, 40]);
+    }
+
+    #[test]
+    fn test_sort() {
+        let data = vec![30, 10, 20, 40];
+        let perm = Permutation::sort(&data);
+        assert_eq!(perm.map, vec![1, 2, 0, 3]);
+
+        let sorted_data = perm.apply_slice(&data);
+        assert_eq!(sorted_data, vec![10, 20, 30, 40]);
+    }
+
+    #[test]
+    fn test_sort_inverse() {
+        let data = vec![30, 10, 20, 40];
+        let perm = Permutation::sort(&data);
+        let sorted_data = perm.apply_slice(&data);
+        assert_eq!(sorted_data, vec![10, 20, 30, 40]);
+
+        let inv_perm = perm.inverse();
+        let original_data = inv_perm.apply_slice(&sorted_data);
+        assert_eq!(original_data, data);
     }
 }

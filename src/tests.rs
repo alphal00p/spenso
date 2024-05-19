@@ -559,20 +559,13 @@ fn multi_contract() {
     let structa: VecStructure = structa.into();
     let structb: VecStructure = structb.into();
 
+    println!("structa = {}", structa);
+    println!("structb = {}", structb);
+
     let spensor_a: SparseTensor<i32, VecStructure> = test_tensor(structa.clone(), s + 3, range);
     let densor_a: DenseTensor<i32, VecStructure> = spensor_a.to_dense();
     let spensor_b: SparseTensor<i32, VecStructure> = test_tensor(structb.clone(), s + 4, range);
     let densor_b: DenseTensor<i32, VecStructure> = spensor_b.to_dense();
-
-    let data_a = DataTensor::from(spensor_a.clone());
-    let sym_a: DataTensor<Atom> = data_a.try_into_upgrade().unwrap();
-
-    let data_b = DataTensor::from(spensor_b.clone());
-    let sym_b: DataTensor<Atom> = data_b.try_into_upgrade().unwrap();
-
-    let b = sym_b.contract(&sym_a);
-
-    <DataTensor<Atom, _> as Contract<DataTensor<Atom, _>>>::contract(&sym_a, &sym_b);
 
     let dense_dense = densor_b.contract(&densor_a).unwrap();
     // println!("{}", dense_dense.structure());
@@ -582,8 +575,8 @@ fn multi_contract() {
 
     assert_eq!(
         dense_dense.data(),
-        sparse_sparse.data(),
-        "S-S not match at seed: {s}"
+        sparse_dense.data(),
+        "S-D not match at seed: {s}"
     );
     assert_eq!(
         dense_dense.data(),
@@ -592,8 +585,8 @@ fn multi_contract() {
     );
     assert_eq!(
         dense_dense.data(),
-        sparse_dense.data(),
-        "S-D not match at seed: {s}"
+        sparse_sparse.data(),
+        "S-S not match at seed: {s}"
     );
 
     insta::assert_ron_snapshot!(dense_dense);
@@ -644,9 +637,9 @@ fn all_multi_contractions() {
             sdeq.push(s);
         }
     }
-    assert_eq!(sseq.len(), 0, "Sparse-Sparse failed at seeds {sseq:?}");
-    assert_eq!(dseq.len(), 0, "Dense-Sparse failed at seeds {dseq:?}");
     assert_eq!(sdeq.len(), 0, "Sparse-Dense failed at seeds {sdeq:?}");
+    assert_eq!(dseq.len(), 0, "Dense-Sparse failed at seeds {dseq:?}");
+    assert_eq!(sseq.len(), 0, "Sparse-Sparse failed at seeds {sseq:?}");
 }
 
 #[test]

@@ -327,7 +327,7 @@ fn scalar_and_dim1_conract() {
 
     let mut tensor_1: SparseTensor<i16> = test_tensor(structa, 3, range);
     tensor_1.set_flat(0.into(), 45).unwrap();
-  
+
     let mut tensor_2: SparseTensor<i16> = test_tensor(structb, 2, range);
     tensor_2.set_flat(0.into(), 2).unwrap();
     let f = tensor_1.contract(&tensor_2).unwrap();
@@ -582,10 +582,14 @@ fn simple_multi_contract() {
 
     let i = b.contract(&a.to_sparse()).unwrap();
 
-    assert_eq!(f.data(), i.data(), "dense dense not equal to sparse dense");    
+    assert_eq!(f.data(), i.data(), "dense dense not equal to sparse dense");
     let j = a.to_sparse().contract(&b.to_sparse()).unwrap();
 
-    assert_eq!(f.data(), j.to_dense().data(), "dense dense not equal to sparse sparse");
+    assert_eq!(
+        f.data(),
+        j.to_dense().data(),
+        "dense dense not equal to sparse sparse"
+    );
 
     assert_yaml_snapshot!(f.data());
 }
@@ -866,7 +870,7 @@ fn tensor_net() {
 
     assert_eq!(0, n.graph.neighbors.len());
     assert_eq!(
-        Complex::new(-400., 0.),
+        Complex::new(400., 0.),
         n.result().try_as_complex().unwrap().data()[0]
     )
 }

@@ -327,18 +327,17 @@ fn scalar_and_dim1_conract() {
 
     let mut tensor_1: SparseTensor<i16> = test_tensor(structa, 3, range);
     tensor_1.set_flat(0.into(), 45).unwrap();
-    println!("{:?}", tensor_1);
+  
     let mut tensor_2: SparseTensor<i16> = test_tensor(structb, 2, range);
     tensor_2.set_flat(0.into(), 2).unwrap();
-    println!("{:?}", tensor_2);
     let f = tensor_1.contract(&tensor_2).unwrap();
-    println!("{:?}", f.to_dense().data());
-    let g = tensor_2.contract(&tensor_1.to_dense()).unwrap();
+
+    let g = tensor_1.contract(&tensor_2.to_dense()).unwrap();
     let h = tensor_1.to_dense().contract(&tensor_2).unwrap();
 
-    let i = tensor_2.to_dense().contract(&tensor_1.to_dense()).unwrap();
-    // assert_eq!(f.to_dense().data(), h.data());
-    // assert_eq!(f.to_dense().data(), g.data());
+    let i = tensor_1.to_dense().contract(&tensor_2.to_dense()).unwrap();
+    assert_eq!(f.to_dense().data(), h.data());
+    assert_eq!(f.to_dense().data(), g.data());
     assert_eq!(f.to_dense().data(), i.data());
 
     let valid = IndexMap::from([

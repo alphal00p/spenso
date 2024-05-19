@@ -6,22 +6,22 @@ expression: "(structa, structb)"
   structure: [
     Slot(
       index: AbstractIndex(0),
-      representation: Euclidean(Dimension(4)),
+      representation: Lorentz(Dimension(4)),
     ),
     Slot(
       index: AbstractIndex(1),
-      representation: Euclidean(Dimension(4)),
+      representation: Lorentz(Dimension(4)),
     ),
   ],
 ), VecStructure(
   structure: [
     Slot(
       index: AbstractIndex(0),
-      representation: Euclidean(Dimension(4)),
+      representation: Lorentz(Dimension(4)),
     ),
     Slot(
       index: AbstractIndex(2),
-      representation: Euclidean(Dimension(4)),
+      representation: Lorentz(Dimension(4)),
     ),
   ],
 ))

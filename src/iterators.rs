@@ -972,8 +972,6 @@ impl IteratesAlongFibers for CoreFlatFiberIterator {
             fixed_strides_conj.pop();
         }
 
-        println!("{max} {max_conj}");
-
         (
             CoreFlatFiberIterator {
                 varying_fiber_index: 0.into(),
@@ -998,7 +996,7 @@ pub struct CoreExpandedFiberIterator {
     pub varying_fiber_index: Vec<ConcreteIndex>,
     pub dims: Vec<Representation>,
     pub strides: Vec<usize>,
-    pub shift: usize,
+    pub zero_index: FlatIndex,
     pub flat: FlatIndex,
     exhausted: bool,
 }
@@ -1015,20 +1013,14 @@ impl CoreExpandedFiberIterator {
         let mut strides = Self::filter(&varying_indices, &fiber.strides(), conj);
         let varying_fiber_index = vec![0; dims.len()];
 
-        println!("dims {:?}", dims);
-        println!("strides {:?}", strides);
-
         if let Some(perm) = permutation {
             perm.apply_slice_in_place(&mut dims);
             perm.apply_slice_in_place(&mut strides);
         }
 
-        println!("bermuted dims {:?}", dims);
-        println!("permuted strides {:?}", strides);
-
         CoreExpandedFiberIterator {
             varying_fiber_index,
-            shift: 0,
+            zero_index: 0.into(),
             dims,
             strides,
             flat: 0.into(),
@@ -1054,7 +1046,7 @@ impl Iterator for CoreExpandedFiberIterator {
             return None;
         }
 
-        let current_flat = self.flat; // Store the current flat value before modifications
+        let current_flat = self.flat + self.zero_index; // Store the current flat value before modifications
 
         let mut carry = true;
         for ((pos, dim), stride) in self
@@ -1177,11 +1169,12 @@ impl IteratesAlongFibers for CoreExpandedFiberIterator {
 
     fn reset(&mut self) {
         self.flat = 0.into();
+        self.exhausted = false;
         self.varying_fiber_index = vec![0; self.dims.len()];
     }
 
     fn shift(&mut self, shift: usize) {
-        self.flat = shift.into();
+        self.zero_index = shift.into();
     }
 }
 
@@ -1233,7 +1226,8 @@ impl IteratesAlongFibers for MetricFiberIterator {
 
     fn reset(&mut self) {
         self.iter.reset();
-        self.neg = false;
+
+        // self.neg = false;
     }
 
     fn shift(&mut self, shift: usize) {
@@ -1261,7 +1255,7 @@ impl Iterator for MetricFiberIterator {
             return None;
         }
 
-        let current_flat = self.iter.flat; // Store the current flat value before modifications
+        let current_flat = self.iter.flat + self.iter.zero_index.into(); // Store the current flat value before modifications
 
         let mut carry = true;
         self.neg = false;
@@ -1329,6 +1323,7 @@ impl<'a, S: HasStructure, I: IteratesAlongFibers> FiberIterator<'a, S, I> {
     }
 
     pub fn shift(&mut self, shift: usize) {
+        self.reset();
         self.iter.shift(shift);
     }
 }
@@ -1358,7 +1353,7 @@ where
     type Item = (&'a T, It::OtherData);
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|x| {
-            // println!("{}", x.flat_idx());
+            // println!("dense {}", x.flat_idx());
             // println!("{}", self.fiber.structure.size());
             (
                 self.fiber.structure.get_linear(x.flat_idx()).unwrap(),
@@ -1376,6 +1371,7 @@ where
     type Item = (&'a T, usize, It::OtherData);
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(i) = self.iter.next() {
+            // println!("sparse {}", i.flat_idx());
             if let Some(t) = self.fiber.structure.get_linear(i.flat_idx()) {
                 let skipped = self.skipped;
                 self.skipped = 0;
@@ -1421,8 +1417,8 @@ impl<'a, S: HasStructure, I: IteratesAlongPermutedFibers> MutFiberIterator<'a, S
 }
 
 pub struct FiberClassIterator<'b, S: HasStructure, I: IteratesAlongFibers = CoreFlatFiberIterator> {
-    pub fiber: FiberIterator<'b, S, I>,
-    pub iter: CoreFlatFiberIterator,
+    pub fiber_iter: FiberIterator<'b, S, I>,
+    pub class_iter: CoreFlatFiberIterator,
 }
 
 impl<'b, N: HasStructure> FiberClassIterator<'b, N, CoreFlatFiberIterator> {
@@ -1436,16 +1432,17 @@ impl<'b, N: HasStructure> FiberClassIterator<'b, N, CoreFlatFiberIterator> {
         };
 
         FiberClassIterator {
-            fiber,
-            iter: iter_conj,
+            fiber_iter: fiber,
+            class_iter: iter_conj,
         }
     }
 }
 
 impl<'b, N: HasStructure, I: IteratesAlongFibers> FiberClassIterator<'b, N, I> {
     pub fn reset(&mut self) {
-        self.iter.reset();
-        self.fiber.reset();
+        self.class_iter.reset();
+        self.fiber_iter.reset();
+        self.fiber_iter.shift(0);
     }
 }
 
@@ -1455,20 +1452,24 @@ impl<'b, N: HasStructure, I: IteratesAlongPermutedFibers> FiberClassIterator<'b,
 
         let fiber = FiberIterator::new_permuted(class.into(), permutation, false);
 
-        FiberClassIterator { fiber, iter }
+        FiberClassIterator {
+            fiber_iter: fiber,
+            class_iter: iter,
+        }
     }
 }
 
-impl<'a, S: HasStructure + 'a, I: IteratesAlongFibers + Clone> Iterator
+impl<'a, S: HasStructure + 'a, I: IteratesAlongFibers + Clone + Debug> Iterator
     for FiberClassIterator<'a, S, I>
 {
     type Item = FiberIterator<'a, S, I>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let shift = self.iter.next()?;
-        self.fiber.reset();
-        self.fiber.shift(shift.into());
-        Some(self.fiber.clone())
+        let shift = self.class_iter.next()?;
+        self.fiber_iter.reset();
+        self.fiber_iter.shift(shift.into());
+        // println!("new {:?}", self.fiber_iter.iter);
+        Some(self.fiber_iter.clone())
     }
 }
 
@@ -1478,10 +1479,10 @@ impl<'a, S: HasStructure + 'a, I: IteratesAlongFibers> LendingIterator
     type Item<'r> = &'r mut FiberIterator<'a, S, I> where Self: 'r;
 
     fn next(&mut self) -> Option<Self::Item<'_>> {
-        let shift = self.iter.next()?;
-        self.fiber.reset();
-        self.fiber.shift(shift.into());
-        Some(&mut self.fiber)
+        let shift = self.class_iter.next()?;
+        self.fiber_iter.reset();
+        self.fiber_iter.shift(shift.into());
+        Some(&mut self.fiber_iter)
     }
 }
 

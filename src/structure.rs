@@ -689,7 +689,6 @@ pub trait HasStructure {
         if perm.is_empty() {
             None
         } else {
-            println!("{:?}", perm);
             let p: Permutation = Permutation::sort(&perm);
             Some((p, self_matches, other_matches))
         }

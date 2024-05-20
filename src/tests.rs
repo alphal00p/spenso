@@ -11,7 +11,7 @@ use ahash::{HashMap, HashMapExt};
 use indexmap::{IndexMap, IndexSet};
 
 use crate::Complex;
-use insta::{assert_ron_snapshot, assert_toml_snapshot, assert_yaml_snapshot};
+use insta::{assert_ron_snapshot, assert_yaml_snapshot};
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 

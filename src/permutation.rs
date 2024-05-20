@@ -41,7 +41,7 @@ impl Permutation {
         let s = slice.as_ref();
         let mut permutation: Vec<usize> = (0..s.len()).collect();
         permutation.sort_by_key(|&i| &s[i]);
-        return Self::from_map(permutation);
+        Self::from_map(permutation)
     }
 
     pub fn apply_slice_inv<T: Clone, S>(&self, slice: S) -> Vec<T>
@@ -130,7 +130,7 @@ impl Permutation {
         self.map.swap_remove(self.inv[n - 1]);
         self.inv.swap_remove(s);
 
-        return s + n * self.myrvold_ruskey_rank1();
+        s + n * self.myrvold_ruskey_rank1()
     }
 
     pub fn myrvold_ruskey_unrank1(n: usize, mut rank: usize) -> Self {
@@ -151,7 +151,7 @@ impl Permutation {
         let s = self.map[n - 1];
         self.map.swap_remove(self.inv[n - 1]);
         self.inv.swap_remove(s);
-        return s * Self::factorial(n - 1) + self.myrvold_ruskey_rank2();
+        s * Self::factorial(n - 1) + self.myrvold_ruskey_rank2()
     }
 
     fn factorial(n: usize) -> usize {
@@ -163,7 +163,7 @@ impl Permutation {
         for i in (1..=n).rev() {
             let s = &rank / (Self::factorial(i - 1));
             p.swap(i - 1, s);
-            rank = rank % Self::factorial(i - 1);
+            rank %= Self::factorial(i - 1);
         }
         Permutation::from_map(p)
     }

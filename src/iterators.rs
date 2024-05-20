@@ -8,7 +8,6 @@
 //!
 
 use std::{
-    collections::HashSet,
     fmt::{Debug, Display},
     ops::{AddAssign, Index, Neg, SubAssign},
 };
@@ -24,7 +23,7 @@ use gat_lending_iterator::LendingIterator;
 
 use crate::Permutation;
 use bitvec::vec::BitVec;
-use serde::{de::IntoDeserializer, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 pub trait AbstractFiberIndex {
     fn is_free(&self) -> bool;
@@ -43,9 +42,9 @@ pub enum FiberClassIndex {
 impl AbstractFiberIndex for FiberClassIndex {
     fn is_free(&self) -> bool {
         if let FiberClassIndex::Free = self {
-            return true;
+            true
         } else {
-            return false;
+            false
         }
     }
 }
@@ -59,9 +58,9 @@ pub enum FiberIndex {
 impl AbstractFiberIndex for FiberIndex {
     fn is_free(&self) -> bool {
         if let FiberIndex::Free = self {
-            return true;
+            true
         } else {
-            return false;
+            false
         }
     }
 }
@@ -188,7 +187,7 @@ impl BareFiber {
         let expanded = structure.expanded_index(flat).unwrap();
 
         BareFiber {
-            indices: expanded.into_iter().map(|i| FiberIndex::from(i)).collect(),
+            indices: expanded.into_iter().map(FiberIndex::from).collect(),
             is_single: FiberIndex::Free,
         }
     }
@@ -196,7 +195,7 @@ impl BareFiber {
     pub fn from_filter(filter: &[bool]) -> BareFiber {
         let mut f = BareFiber {
             indices: filter
-                .into_iter()
+                .iter()
                 .map(|i| {
                     if *i {
                         FiberIndex::Free
@@ -534,9 +533,9 @@ where
 
     fn index(&self, index: usize) -> &Self::Output {
         if self.bare_fiber[index].is_fixed() {
-            return &FiberClassIndex::Free;
+            &FiberClassIndex::Free
         } else {
-            return &FiberClassIndex::Fixed;
+            &FiberClassIndex::Fixed
         }
     }
 }
@@ -820,7 +819,7 @@ impl CoreFlatFiberIterator {
 impl Iterator for CoreFlatFiberIterator {
     type Item = FlatIndex;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.varying_fiber_index > self.max.into() {
+        if self.varying_fiber_index > self.max {
             return None;
         }
         let index = self.varying_fiber_index + self.zero_index;
@@ -1078,23 +1077,7 @@ impl Iterator for CoreExpandedFiberIterator {
 
 #[test]
 fn test() {
-    let structure = VecStructure::new(vec![(2, 2).into(), (3, 3).into(), (4, 4).into()]);
-    let fiber = Fiber::from([true, false, true].as_slice().into(), &structure);
-
-    println!(
-        "{:?}",
-        Permutation::myrvold_ruskey_unrank1(2, 2).find_cycles()
-    );
-
-    let mut iter = CoreExpandedFiberIterator::new_permuted(
-        &fiber,
-        false,
-        Permutation::myrvold_ruskey_unrank1(2, 2),
-    );
-
-    for i in iter {
-        println!("{:?}", structure.expanded_index(i));
-    }
+    use std::collections::HashSet;
 
     let structura = VecStructure::new(vec![
         (0, 4).into(),
@@ -1121,14 +1104,9 @@ fn test() {
         &structurb,
     );
 
-    let perm = Permutation::myrvold_ruskey_unrank1(4, 1);
-
-    let (permuta, filter_a, filter_b) = structura.match_indices(&structurb).unwrap();
-    let mut itera = CoreExpandedFiberIterator::new_permuted(&fibera, false, permuta.clone());
-    let mut iterb = CoreExpandedFiberIterator::new(&fiberb, false);
-
-    println!("{:?} {:?}", permuta, filter_a);
-    println!("{:?} {:?}", perm, filter_b);
+    let (permuta, _filter_a, _filter_b) = structura.match_indices(&structurb).unwrap();
+    let itera = CoreExpandedFiberIterator::new_permuted(&fibera, false, permuta.clone());
+    let iterb = CoreExpandedFiberIterator::new(&fiberb, false);
 
     let collecteda: Vec<HashSet<usize>> = itera
         .map(|f| HashSet::from_iter(structura.expanded_index(f).unwrap().into_iter()))
@@ -1255,7 +1233,7 @@ impl Iterator for MetricFiberIterator {
             return None;
         }
 
-        let current_flat = self.iter.flat + self.iter.zero_index.into(); // Store the current flat value before modifications
+        let current_flat = self.iter.flat + self.iter.zero_index; // Store the current flat value before modifications
 
         let mut carry = true;
         self.neg = false;
@@ -1688,11 +1666,11 @@ impl<T, I> SparseTensor<T, I>
 where
     I: HasStructure,
 {
-    pub fn fiber<'a, 'r>(&'r self, fiber_data: FiberData<'a>) -> Fiber<'r, Self> {
+    pub fn fiber<'r>(&'r self, fiber_data: FiberData<'_>) -> Fiber<'r, Self> {
         Fiber::from(fiber_data, self)
     }
 
-    pub fn fiber_class<'a, 'r>(&'r self, fiber_data: FiberData<'a>) -> FiberClass<'r, Self> {
+    pub fn fiber_class<'r>(&'r self, fiber_data: FiberData<'_>) -> FiberClass<'r, Self> {
         Fiber::from(fiber_data, self).into()
     }
 
@@ -1975,11 +1953,11 @@ where
         DenseTensorIterator::new(self)
     }
 
-    pub fn fiber<'a, 'r>(&'r self, fiber_data: FiberData<'a>) -> Fiber<'r, Self> {
+    pub fn fiber<'r>(&'r self, fiber_data: FiberData<'_>) -> Fiber<'r, Self> {
         Fiber::from(fiber_data, self)
     }
 
-    pub fn fiber_class<'a, 'r>(&'r self, fiber_data: FiberData<'a>) -> FiberClass<'r, Self> {
+    pub fn fiber_class<'r>(&'r self, fiber_data: FiberData<'_>) -> FiberClass<'r, Self> {
         Fiber::from(fiber_data, self).into()
     }
 

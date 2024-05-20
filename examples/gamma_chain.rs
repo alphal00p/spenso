@@ -1,11 +1,10 @@
 // Gamma chain example
 
-use std::{ops::Neg, time::Instant};
+use std::time::Instant;
 
 use spenso::{
     ufo::{euclidean_four_vector, mink_four_vector},
-    AbstractIndex, Complex, Contract, DenseTensor, FallibleMul, HasTensorData, HistoryStructure,
-    NumTensor, SparseTensor, TensorNetwork,
+    Complex, Contract, DenseTensor, FallibleMul, SparseTensor,
 };
 
 use num::traits::ToPrimitive;
@@ -14,13 +13,16 @@ use num::traits::ToPrimitive;
 use symbolica::atom::{Atom, Symbol};
 
 #[cfg(feature = "shadowing")]
+use std::ops::Neg;
+
+#[cfg(feature = "shadowing")]
 use spenso::{
     parametric::MixedTensor,
     ufo::{
         euclidean_four_vector_sym, gammasym, mink_four_vector_sym, param_euclidean_four_vector,
         param_mink_four_vector,
     },
-    IntoId,
+    AbstractIndex, HasTensorData, HistoryStructure, IntoId, NumTensor, TensorNetwork,
 };
 
 // #[allow(dead_code)]

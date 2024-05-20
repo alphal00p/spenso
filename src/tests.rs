@@ -1,7 +1,6 @@
 use crate::{
     ufo::mink_four_vector, Contract, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSub,
-    GetTensorData, HasStructure, HasTensorData, MixedTensor, Representation, SparseTensor,
-    StructureContract,
+    GetTensorData, HasStructure, HasTensorData, Representation, SparseTensor, StructureContract,
 };
 use crate::{
     AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, ExpandedIndex, Fiber,
@@ -17,14 +16,19 @@ use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 
 use smartstring::alias::String;
-use symbolica::atom::AtomView;
-use symbolica::{atom::Atom, state::State};
+
+#[cfg(feature = "shadowing")]
+use super::{symbolic::SymbolicTensor, MixedTensor, Shadowable};
+#[cfg(feature = "shadowing")]
+use symbolica::{
+    atom::{Atom, AtomView},
+    state::State,
+};
 
 use super::FallibleAdd;
 use super::{
-    symbolic::SymbolicTensor, ufo, AbstractIndex, DataTensor, Dimension, HistoryStructure,
-    NamedStructure, NumTensor, SetTensorData, Shadowable, Slot, TensorNetwork, TryIntoUpgrade,
-    VecStructure,
+    ufo, AbstractIndex, DataTensor, Dimension, HistoryStructure, NamedStructure, NumTensor,
+    SetTensorData, Slot, TensorNetwork, TryIntoUpgrade, VecStructure,
 };
 
 fn test_tensor<D, S>(structure: S, seed: u64, range: Option<(D, D)>) -> SparseTensor<D, S>
@@ -272,9 +276,13 @@ fn construct_dense_tensor() {
     let tensor = super::DenseTensor::from_data(&data, a).unwrap();
     let num_tensor: NumTensor = tensor.clone().into();
     let data_tensor: DataTensor<f64, _> = tensor.clone().into();
-    let mixed_tensor: MixedTensor<_> = tensor.clone().into();
 
-    assert_eq!(mixed_tensor.try_as_float().unwrap().data(), data);
+    #[cfg(feature = "shadowing")]
+    {
+        let mixed_tensor: MixedTensor<_> = tensor.clone().into();
+        assert_eq!(mixed_tensor.try_as_float().unwrap().data(), data);
+    }
+
     assert_eq!(data_tensor.data(), data);
     assert_eq!(num_tensor.try_as_float().unwrap().data(), data);
 }
@@ -292,14 +300,17 @@ fn construct_sparse_tensor() -> Result<(), String> {
 
     let num_tensor: NumTensor = a.clone().into();
     let data_tensor: DataTensor<f64, _> = a.clone().into();
-    let mixed_tensor: MixedTensor<_> = a.clone().into();
 
+    #[cfg(feature = "shadowing")]
+    {
+        let mixed_tensor: MixedTensor<_> = a.clone().into();
+        assert_eq!(mixed_tensor.try_as_float().unwrap().hashmap(), a.hashmap());
+    }
     assert_eq!(
         num_tensor.try_as_float().unwrap().hashmap(),
         data_tensor.hashmap()
     );
     assert_eq!(data_tensor.hashmap(), a.hashmap());
-    assert_eq!(mixed_tensor.try_as_float().unwrap().hashmap(), a.hashmap());
 
     Ok(())
 }
@@ -998,6 +1009,7 @@ fn contract_densor_with_spensor() {
 // }
 
 #[test]
+#[cfg(feature = "shadowing")]
 fn evaluate() {
     let structure = test_structure(3, 1).to_named("a");
 
@@ -1015,6 +1027,7 @@ fn evaluate() {
 }
 
 #[test]
+#[cfg(feature = "shadowing")]
 fn convert_sym() {
     let i = Complex::new(0.0, 1.0);
     let mut data_b = vec![i * Complex::from(5.0), Complex::from(2.6) + i];
@@ -1100,6 +1113,7 @@ fn complex() {
 }
 
 #[test]
+#[cfg(feature = "shadowing")]
 fn symbolic_contract() {
     let structura = HistoryStructure::from_integers(
         &[(1, 2), (4, 3)].map(|(a, d)| (a.into(), d.into())),
@@ -1132,6 +1146,7 @@ fn symbolic_contract() {
 }
 
 #[test]
+
 fn test_fallible_mul() {
     let a: i32 = 4;
     let b: f64 = 4.;
@@ -1144,40 +1159,41 @@ fn test_fallible_mul() {
     assert_eq!(d, Some(16.));
     assert_eq!(e, Some(16.));
 
-    let a = &Atom::parse("a(2)").unwrap();
-    let b = &Atom::parse("b(1)").unwrap();
+    #[cfg(feature = "shadowing")]
+    {
+        let a = &Atom::parse("a(2)").unwrap();
 
-    let mut f = a.mul_fallible(4.).unwrap();
-    f.add_assign_fallible(b);
+        let b = &Atom::parse("b(1)").unwrap();
+        let i = Atom::new_var(State::I);
+        let mut f = a.mul_fallible(4.).unwrap();
+        f.add_assign_fallible(b);
+        f.add_assign_fallible(&i);
 
-    let i = Atom::new_var(State::I);
+        let function_map = HashMap::new();
+        let mut cache = HashMap::new();
 
-    f.add_assign_fallible(&i);
+        let mut const_map = HashMap::new();
+        const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.).into());
 
-    let function_map = HashMap::new();
-    let mut cache = HashMap::new();
+        const_map.insert(a.as_view(), Complex::<f64>::new(3., 1.).into());
 
-    let mut const_map = HashMap::new();
-    const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.).into());
+        const_map.insert(b.as_view(), Complex::<f64>::new(3., 1.).into());
 
-    const_map.insert(a.as_view(), Complex::<f64>::new(3., 1.).into());
+        let ev: symbolica::domains::float::Complex<f64> =
+            f.as_view().evaluate(&const_map, &function_map, &mut cache);
 
-    const_map.insert(b.as_view(), Complex::<f64>::new(3., 1.).into());
+        println!("{}", ev);
+        // print!("{}", f.unwrap());
 
-    let ev: symbolica::domains::float::Complex<f64> =
-        f.as_view().evaluate(&const_map, &function_map, &mut cache);
+        let g = Complex::new(0.1, 3.);
 
-    println!("{}", ev);
-    // print!("{}", f.unwrap());
+        let mut h = a.sub_fallible(g).unwrap();
 
-    let g = Complex::new(0.1, 3.);
+        h.add_assign_fallible(a);
+        let _f = a.mul_fallible(a);
 
-    let mut h = a.sub_fallible(g).unwrap();
+        Atom::default();
 
-    h.add_assign_fallible(a);
-    let _f = a.mul_fallible(a);
-
-    Atom::default();
-
-    println!("{}", h);
+        println!("{}", h);
+    }
 }

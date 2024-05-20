@@ -2,19 +2,21 @@ use ahash::AHashMap;
 
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
+
+use self::structure::HistoryStructure;
+#[cfg(feature = "shadowing")]
+use crate::{MixedTensor, MixedTensors, Shadowable};
+#[cfg(feature = "shadowing")]
+use symbolica::domains::float::Complex as SymComplex;
+#[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
     state::State,
 };
 
-use symbolica::domains::float::Complex as SymComplex;
-
-use self::parametric::{MixedTensor, MixedTensors};
-use self::structure::HistoryStructure;
-
 use super::{
-    arithmetic::ScalarMul, parametric, structure, Contract, DataTensor, HasName, HasStructure,
-    Shadowable, Slot, TracksCount,
+    arithmetic::ScalarMul, structure, Contract, DataTensor, HasName, HasStructure, Slot,
+    TracksCount,
 };
 use smartstring::alias::String;
 use std::fmt::{Debug, Display};
@@ -534,10 +536,12 @@ impl<T> TensorNetwork<T> {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<N> TensorNetwork<MixedTensor<N>>
 where
     N: Debug + HasStructure,
 {
+    #[cfg(feature = "shadowing")]
     pub fn to_symbolic_tensor_vec(mut self) -> Vec<DataTensor<Atom, N>> {
         self.graph
             .nodes
@@ -569,6 +573,7 @@ where
     //     // evaluated_net
     // }
 
+    #[cfg(feature = "shadowing")]
     pub fn evaluate_float<'a>(&'a mut self, const_map: &AHashMap<AtomView<'a>, f64>)
     where
         N: Clone,
@@ -578,6 +583,7 @@ where
         }
     }
 
+    #[cfg(feature = "shadowing")]
     pub fn evaluate_complex<'a>(&'a mut self, const_map: &AHashMap<AtomView<'a>, SymComplex<f64>>)
     where
         N: Clone,
@@ -698,6 +704,7 @@ impl<T> TensorNetwork<T> {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<I> TensorNetwork<MixedTensor<I>>
 where
     I: HasStructure + Clone,
@@ -711,6 +718,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T> TensorNetwork<T>
 where
     T: HasStructure<Structure = HistoryStructure<Symbol>> + Clone,
@@ -778,6 +786,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T> TensorNetwork<T>
 where
     T: HasName<Name = Symbol>,

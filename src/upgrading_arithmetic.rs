@@ -6,10 +6,8 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-use symbolica::atom::Atom;
-use symbolica::domains::float::Real;
-
-use symbolica::state::State;
+#[cfg(feature = "shadowing")]
+use symbolica::{atom::Atom, domains::float::Real, state::State};
 
 use crate::{Complex, Scalar};
 
@@ -785,6 +783,51 @@ where
 //     }
 // } can't do this because of future impls GRR.
 
+#[cfg(feature = "shadowing")]
+duplicate! {
+    [smaller larger;
+[f64] [Atom];
+    [Atom] [Atom];
+    [Complex<f64>] [Atom];
+    [i32] [Atom];]
+impl TrySmallestUpgrade<smaller> for larger {
+    type LCM = larger;
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+        where
+            Self::LCM: Clone {
+        Some(Cow::Borrowed(self))
+    }
+}
+
+impl<'a> TrySmallestUpgrade<&'a smaller> for larger {
+    type LCM = larger;
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+        where
+            Self::LCM: Clone {
+        Some(Cow::Borrowed(self))
+    }
+}
+
+impl<'a,'b> TrySmallestUpgrade<&'a smaller> for &'b larger {
+    type LCM = larger;
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+        where
+            Self::LCM: Clone {
+        Some(Cow::Borrowed(*self))
+    }
+}
+
+impl<'b> TrySmallestUpgrade<smaller> for &'b larger {
+    type LCM = larger;
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+        where
+            Self::LCM: Clone {
+        Some(Cow::Borrowed(*self))
+    }
+}
+
+}
+
 duplicate! {
     [smaller larger;
     [i16] [i16];
@@ -792,10 +835,8 @@ duplicate! {
     [f64] [f64];
     [Complex<f64>] [Complex<f64>];
     [f64] [Complex<f64>];
-    [f64] [Atom];
-    [Atom] [Atom];
-    [Complex<f64>] [Atom];
-    [i32] [Atom];
+
+
     [f32] [f64];
     [i32] [f64];]
 
@@ -866,6 +907,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Atom> for f64 {
     type LCM = Atom;
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
@@ -876,6 +918,7 @@ impl TrySmallestUpgrade<Atom> for f64 {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Atom> for i32 {
     type LCM = Atom;
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
@@ -885,6 +928,7 @@ impl TrySmallestUpgrade<Atom> for i32 {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Atom> for Complex<f64> {
     type LCM = Atom;
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
@@ -897,11 +941,42 @@ impl TrySmallestUpgrade<Atom> for Complex<f64> {
     }
 }
 
+#[cfg(feature = "shadowing")]
+duplicate! {
+[smaller larger;
+[f64] [Atom];
+[i32] [Atom];
+[Complex<f64>] [Atom];]
+
+impl<'a> TrySmallestUpgrade<&'a larger> for smaller {
+    type LCM = larger;
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+        where
+            Self::LCM: Clone {
+        <smaller as TrySmallestUpgrade<larger>>::try_upgrade(self)
+    }
+}
+
+impl<'a,'b> TrySmallestUpgrade<&'a larger> for &'b smaller {
+    type LCM = larger;
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+        where
+            Self::LCM: Clone {
+       <smaller as TrySmallestUpgrade<larger>>::try_upgrade(*self)
+    }}
+
+impl<'b> TrySmallestUpgrade<larger> for &'b smaller {
+    type LCM = larger;
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+        where
+            Self::LCM: Clone {
+        <smaller as TrySmallestUpgrade<larger>>::try_upgrade(*self)
+    }
+}}
+
 duplicate! {
     [smaller larger;
-    [f64] [Atom];
-    [i32] [Atom];
-    [Complex<f64>] [Atom];
+
     [f64][Complex<f64>];
     [f32] [f64];
     [i32] [f64];]
@@ -1037,6 +1112,8 @@ where
 
 mod test {
     use ahash::{HashMap, HashMapExt};
+
+    #[cfg(feature = "shadowing")]
     use symbolica::{atom::Atom, state::State};
 
     use crate::{
@@ -1058,6 +1135,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "shadowing")]
     fn test_fallible_mul() {
         let a: i32 = 4;
         let b: f64 = 4.;

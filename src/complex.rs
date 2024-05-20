@@ -4,6 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "shadowing")]
 use symbolica::domains::float::Real;
 
 #[derive(Copy, Clone, PartialEq, Serialize, Deserialize)]
@@ -21,12 +22,14 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: Real> From<Complex<T>> for symbolica::domains::float::Complex<T> {
     fn from(complex: Complex<T>) -> Self {
         symbolica::domains::float::Complex::new(complex.re, complex.im)
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: Real> From<symbolica::domains::float::Complex<T>> for Complex<T> {
     fn from(complex: symbolica::domains::float::Complex<T>) -> Self {
         Complex::new(complex.re, complex.im)

@@ -1,18 +1,23 @@
+use std::ops::Neg;
+
 use super::{
-    AbstractIndex, DenseTensor, HasStructure, HistoryStructure, IntoId,
+    AbstractIndex, DenseTensor, HasStructure, HistoryStructure,
     Representation::{self, Euclidean, Lorentz},
-    SetTensorData, Shadowable, Slot, SparseTensor,
+    SetTensorData, Slot, SparseTensor,
 };
 
 use num::{NumCast, One, Zero};
 
 use crate::Complex;
 
+#[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, Symbol},
-    domains::float::Real,
     state::State,
 };
+
+#[cfg(feature = "shadowing")]
+use super::{IntoId, Shadowable};
 
 // pub fn init_state() {
 //     assert!(EUC == State::get_symbol("euc", None).unwrap());
@@ -39,7 +44,7 @@ pub fn identity<T, I>(
     signature: Representation,
 ) -> SparseTensor<Complex<T>, I>
 where
-    T: Real,
+    T: One + Zero,
     I: HasStructure + FromIterator<Slot>,
 {
     //TODO: make it just swap indices
@@ -95,7 +100,7 @@ pub fn lorentz_identity<T, I>(
     indices: (AbstractIndex, AbstractIndex),
 ) -> SparseTensor<Complex<T>, I>
 where
-    T: One + Zero + Real,
+    T: One + Zero,
     I: HasStructure + FromIterator<Slot>,
 {
     // IdentityL(1,2) (Lorentz) Kronecker delta δ^μ1_μ1
@@ -117,6 +122,7 @@ where
     .unwrap_or_else(|_| unreachable!())
 }
 
+#[cfg(feature = "shadowing")]
 pub fn mink_four_vector_sym<T>(
     index: AbstractIndex,
     p: &[T; 4],
@@ -145,6 +151,7 @@ where
     .unwrap_or_else(|_| unreachable!())
 }
 
+#[cfg(feature = "shadowing")]
 pub fn euclidean_four_vector_sym<T>(
     index: AbstractIndex,
     p: &[T; 4],
@@ -159,6 +166,7 @@ where
     .unwrap_or_else(|_| unreachable!())
 }
 
+#[cfg(feature = "shadowing")]
 pub fn param_mink_four_vector<N>(
     index: AbstractIndex,
     name: N,
@@ -171,6 +179,7 @@ where
         .unwrap_or_else(|| unreachable!())
 }
 
+#[cfg(feature = "shadowing")]
 pub fn param_euclidean_four_vector<N>(
     index: AbstractIndex,
     name: N,
@@ -189,7 +198,7 @@ pub fn euclidean_identity<T, I>(
     indices: (AbstractIndex, AbstractIndex),
 ) -> SparseTensor<Complex<T>, I>
 where
-    T: One + Zero + Real,
+    T: One + Zero,
     I: HasStructure + FromIterator<Slot>,
 {
     // Identity(1,2) (Spinorial) Kronecker delta δ_s1_s2
@@ -203,7 +212,7 @@ pub fn gamma<T, I>(
     indices: (AbstractIndex, AbstractIndex),
 ) -> SparseTensor<Complex<T>, I>
 where
-    T: One + Zero + Copy + Real + std::ops::Neg<Output = T> + Real,
+    T: One + Zero + Copy + std::ops::Neg<Output = T>,
     I: HasStructure + FromIterator<Slot>,
 {
     // Gamma(1,2,3) Dirac matrix (γ^μ1)_s2_s3
@@ -218,13 +227,13 @@ where
 
     gamma_data(structure)
 }
-
+#[cfg(feature = "shadowing")]
 pub fn gammasym<T>(
     minkindex: AbstractIndex,
     indices: (AbstractIndex, AbstractIndex),
 ) -> SparseTensor<Complex<T>, HistoryStructure<Symbol>>
 where
-    T: One + Zero + Copy + Real + std::ops::Neg<Output = T> + Real,
+    T: One + Zero + Copy + std::ops::Neg<Output = T>,
 {
     let structure = HistoryStructure::new(
         &[
@@ -241,7 +250,7 @@ where
 #[allow(clippy::similar_names)]
 pub fn gamma_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
-    T: Real,
+    T: Zero + One + Neg<Output = T> + Clone,
     N: HasStructure,
 {
     let c1 = Complex::<T>::new(T::one(), T::zero());
@@ -252,32 +261,32 @@ where
 
     // dirac gamma matrices
 
-    gamma.set(&[0, 0, 0], c1).unwrap();
-    gamma.set(&[1, 1, 0], c1).unwrap();
-    gamma.set(&[2, 2, 0], cn1).unwrap();
-    gamma.set(&[3, 3, 0], cn1).unwrap();
+    gamma.set(&[0, 0, 0], c1.clone()).unwrap();
+    gamma.set(&[1, 1, 0], c1.clone()).unwrap();
+    gamma.set(&[2, 2, 0], cn1.clone()).unwrap();
+    gamma.set(&[3, 3, 0], cn1.clone()).unwrap();
 
-    gamma.set(&[0, 3, 1], c1).unwrap();
-    gamma.set(&[1, 2, 1], c1).unwrap();
-    gamma.set(&[2, 1, 1], cn1).unwrap();
-    gamma.set(&[3, 0, 1], cn1).unwrap();
+    gamma.set(&[0, 3, 1], c1.clone()).unwrap();
+    gamma.set(&[1, 2, 1], c1.clone()).unwrap();
+    gamma.set(&[2, 1, 1], cn1.clone()).unwrap();
+    gamma.set(&[3, 0, 1], cn1.clone()).unwrap();
 
-    gamma.set(&[0, 3, 2], cni).unwrap();
-    gamma.set(&[1, 2, 2], ci).unwrap();
-    gamma.set(&[2, 1, 2], ci).unwrap();
-    gamma.set(&[3, 0, 2], cni).unwrap();
+    gamma.set(&[0, 3, 2], cni.clone()).unwrap();
+    gamma.set(&[1, 2, 2], ci.clone()).unwrap();
+    gamma.set(&[2, 1, 2], ci.clone()).unwrap();
+    gamma.set(&[3, 0, 2], cni.clone()).unwrap();
 
-    gamma.set(&[0, 2, 3], c1).unwrap();
-    gamma.set(&[1, 3, 3], cn1).unwrap();
-    gamma.set(&[2, 0, 3], cn1).unwrap();
-    gamma.set(&[3, 1, 3], c1).unwrap();
+    gamma.set(&[0, 2, 3], c1.clone()).unwrap();
+    gamma.set(&[1, 3, 3], cn1.clone()).unwrap();
+    gamma.set(&[2, 0, 3], cn1.clone()).unwrap();
+    gamma.set(&[3, 1, 3], c1.clone()).unwrap();
 
     gamma //.to_dense()
 }
 
 pub fn gamma5<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
 where
-    T: One + Zero + Copy + Real,
+    T: One + Zero + Copy,
     I: HasStructure + FromIterator<Slot>,
 {
     let structure = [
@@ -291,11 +300,12 @@ where
     gamma5_data(structure)
 }
 
+#[cfg(feature = "shadowing")]
 pub fn gamma5sym<T>(
     indices: (AbstractIndex, AbstractIndex),
 ) -> SparseTensor<Complex<T>, HistoryStructure<Symbol>>
 where
-    T: One + Zero + Copy + Real,
+    T: One + Zero + Copy,
 {
     let structure = HistoryStructure::new(
         &[
@@ -310,24 +320,24 @@ where
 
 pub fn gamma5_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
-    T: Real,
+    T: Zero + One + Clone,
     N: HasStructure,
 {
     let c1 = Complex::<T>::new(T::one(), T::zero());
 
     let mut gamma5 = SparseTensor::empty(structure);
 
-    gamma5.set(&[0, 2], c1).unwrap();
-    gamma5.set(&[1, 3], c1).unwrap();
-    gamma5.set(&[2, 0], c1).unwrap();
-    gamma5.set(&[3, 1], c1).unwrap();
+    gamma5.set(&[0, 2], c1.clone()).unwrap();
+    gamma5.set(&[1, 3], c1.clone()).unwrap();
+    gamma5.set(&[2, 0], c1.clone()).unwrap();
+    gamma5.set(&[3, 1], c1.clone()).unwrap();
 
     gamma5
 }
 
 pub fn proj_m<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
 where
-    T: Real + NumCast,
+    T: Zero + One + NumCast + Clone,
     I: HasStructure + FromIterator<Slot>,
 {
     // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
@@ -342,11 +352,12 @@ where
     proj_m_data(structure)
 }
 
+#[cfg(feature = "shadowing")]
 pub fn proj_msym<T>(
     indices: (AbstractIndex, AbstractIndex),
 ) -> SparseTensor<Complex<T>, HistoryStructure<Symbol>>
 where
-    T: Real + NumCast,
+    T: Zero + One + NumCast + Clone,
 {
     let structure = HistoryStructure::new(
         &[
@@ -362,7 +373,7 @@ where
 #[allow(clippy::similar_names)]
 pub fn proj_m_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
-    T: Real + NumCast,
+    T: Zero + One + NumCast + Clone,
     N: HasStructure,
 {
     // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
@@ -371,22 +382,22 @@ where
 
     let mut proj_m = SparseTensor::empty(structure);
 
-    proj_m.set(&[0, 0], chalf).unwrap();
-    proj_m.set(&[1, 1], chalf).unwrap();
-    proj_m.set(&[2, 2], chalf).unwrap();
-    proj_m.set(&[3, 3], chalf).unwrap();
+    proj_m.set(&[0, 0], chalf.clone()).unwrap();
+    proj_m.set(&[1, 1], chalf.clone()).unwrap();
+    proj_m.set(&[2, 2], chalf.clone()).unwrap();
+    proj_m.set(&[3, 3], chalf.clone()).unwrap();
 
-    proj_m.set(&[0, 2], cnhalf).unwrap();
-    proj_m.set(&[1, 3], cnhalf).unwrap();
-    proj_m.set(&[2, 0], cnhalf).unwrap();
-    proj_m.set(&[3, 1], cnhalf).unwrap();
+    proj_m.set(&[0, 2], cnhalf.clone()).unwrap();
+    proj_m.set(&[1, 3], cnhalf.clone()).unwrap();
+    proj_m.set(&[2, 0], cnhalf.clone()).unwrap();
+    proj_m.set(&[3, 1], cnhalf.clone()).unwrap();
 
     proj_m
 }
 
 pub fn proj_p<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
 where
-    T: Real + NumCast,
+    T: NumCast + Zero + Clone,
     I: HasStructure + FromIterator<Slot>,
 {
     // ProjP(1,2) Right chirality projector (( 1+γ5)/ 2 )_s1_s2
@@ -401,11 +412,12 @@ where
     proj_p_data(structure)
 }
 
+#[cfg(feature = "shadowing")]
 pub fn proj_psym<T>(
     indices: (AbstractIndex, AbstractIndex),
 ) -> SparseTensor<Complex<T>, HistoryStructure<Symbol>>
 where
-    T: Real + NumCast,
+    T: Zero + Clone + NumCast,
 {
     let structure = HistoryStructure::new(
         &[
@@ -420,7 +432,7 @@ where
 
 pub fn proj_p_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
-    T: Real + NumCast,
+    T: NumCast + Zero + Clone,
     N: HasStructure,
 {
     // ProjP(1,2) Right chirality projector (( 1+γ5)/ 2 )_s1_s2
@@ -429,29 +441,29 @@ where
     let mut proj_p = SparseTensor::empty(structure);
 
     proj_p
-        .set(&[0, 0], chalf)
+        .set(&[0, 0], chalf.clone())
         .unwrap_or_else(|_| unreachable!());
     proj_p
-        .set(&[1, 1], chalf)
+        .set(&[1, 1], chalf.clone())
         .unwrap_or_else(|_| unreachable!());
     proj_p
-        .set(&[2, 2], chalf)
+        .set(&[2, 2], chalf.clone())
         .unwrap_or_else(|_| unreachable!());
     proj_p
-        .set(&[3, 3], chalf)
+        .set(&[3, 3], chalf.clone())
         .unwrap_or_else(|_| unreachable!());
 
     proj_p
-        .set(&[0, 2], chalf)
+        .set(&[0, 2], chalf.clone())
         .unwrap_or_else(|_| unreachable!());
     proj_p
-        .set(&[1, 3], chalf)
+        .set(&[1, 3], chalf.clone())
         .unwrap_or_else(|_| unreachable!());
     proj_p
-        .set(&[2, 0], chalf)
+        .set(&[2, 0], chalf.clone())
         .unwrap_or_else(|_| unreachable!());
     proj_p
-        .set(&[3, 1], chalf)
+        .set(&[3, 1], chalf.clone())
         .unwrap_or_else(|_| unreachable!());
 
     proj_p
@@ -462,7 +474,7 @@ pub fn sigma<T, I>(
     minkdices: (AbstractIndex, AbstractIndex),
 ) -> SparseTensor<Complex<T>, I>
 where
-    T: Copy + Real,
+    T: Copy + Zero + One + Neg<Output = T>,
     I: HasStructure + FromIterator<Slot>,
 {
     let structure = [
@@ -478,12 +490,13 @@ where
     sigma_data(structure)
 }
 
+#[cfg(feature = "shadowing")]
 pub fn sigmasym<T>(
     indices: (AbstractIndex, AbstractIndex),
     minkdices: (AbstractIndex, AbstractIndex),
 ) -> SparseTensor<Complex<T>, HistoryStructure<Symbol>>
 where
-    T: Copy + Real,
+    T: Copy + Zero + Clone + One + Neg<Output = T>,
 {
     let structure = HistoryStructure::new(
         &[
@@ -501,7 +514,7 @@ where
 #[allow(clippy::similar_names)]
 pub fn sigma_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
-    T: Copy + Real,
+    T: Copy + Zero + One + Neg<Output = T>,
     N: HasStructure,
 {
     let c1 = Complex::<T>::new(T::one(), T::zero());

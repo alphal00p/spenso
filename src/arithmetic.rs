@@ -2,11 +2,15 @@ use crate::{ConcreteIndex, GetTensorData, SetTensorData};
 use std::fmt::Debug;
 
 use super::{
-    DataTensor, DenseTensor, FallibleAdd, FallibleMul, FallibleSub, HasStructure, MixedTensor,
-    SparseTensor, TryFromUpgrade, TryIntoUpgrade,
+    DataTensor, DenseTensor, FallibleAdd, FallibleMul, FallibleSub, HasStructure, SparseTensor,
+    TryFromUpgrade, TryIntoUpgrade,
 };
 
 use crate::Complex;
+
+#[cfg(feature = "shadowing")]
+use super::MixedTensor;
+#[cfg(feature = "shadowing")]
 use symbolica::atom::Atom;
 
 impl<'a, T, U, I, Out> FallibleAdd<&DenseTensor<T, I>> for &'a DenseTensor<U, I>
@@ -149,6 +153,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a, I> FallibleAdd<&MixedTensor<I>> for &'a MixedTensor<I>
 where
     I: HasStructure + Clone,
@@ -324,6 +329,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a, I> FallibleSub<&MixedTensor<I>> for &'a MixedTensor<I>
 where
     I: HasStructure + Clone,
@@ -412,6 +418,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a, I> ScalarMul<&f64> for &'a MixedTensor<I>
 where
     I: HasStructure + Clone,
@@ -426,6 +433,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a, I> ScalarMul<&Complex<f64>> for &'a MixedTensor<I>
 where
     I: HasStructure + Clone,
@@ -440,6 +448,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a, I> ScalarMul<&Atom> for &'a MixedTensor<I>
 where
     I: HasStructure + Clone,

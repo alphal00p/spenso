@@ -12,6 +12,7 @@ on:
 jobs:
   release-plz:
     name: Release-plz
+    environment: symbolica_keys
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

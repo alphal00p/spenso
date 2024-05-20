@@ -23,26 +23,27 @@ use smartstring::SmartString;
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::ops::Deref;
-use symbolica::atom::ListIterator;
+
+#[cfg(feature = "shadowing")]
+use symbolica::{
+    atom::{AsAtomView, Atom, AtomView, FunctionBuilder, ListIterator, Symbol},
+    coefficient::CoefficientView,
+    state::{State, Workspace},
+};
 
 use std::i64;
 
 use std::ops::Range;
 
-use symbolica::coefficient::CoefficientView;
-
-use symbolica::atom::AtomView;
-
 use crate::Permutation;
-
-use symbolica::atom::{AsAtomView, Atom, FunctionBuilder, Symbol};
-use symbolica::state::{State, Workspace};
 
 use std::collections::HashSet;
 use std::{cmp::Ordering, collections::HashMap};
 
 use super::ufo;
 use super::DenseTensor;
+
+#[cfg(feature = "shadowing")]
 use super::MixedTensor;
 use super::TensorStructureIndexIterator;
 use smartstring::alias::String;
@@ -67,6 +68,7 @@ use smartstring::alias::String;
 #[display(fmt = "id{}", _0)]
 pub struct AbstractIndex(pub usize);
 
+#[cfg(feature = "shadowing")]
 impl TryFrom<AtomView<'_>> for AbstractIndex {
     type Error = String;
 
@@ -79,6 +81,7 @@ impl TryFrom<AtomView<'_>> for AbstractIndex {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl TryFrom<std::string::String> for AbstractIndex {
     type Error = String;
 
@@ -88,6 +91,7 @@ impl TryFrom<std::string::String> for AbstractIndex {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl TryFrom<&'_ str> for AbstractIndex {
     type Error = String;
 
@@ -306,6 +310,7 @@ impl Representation {
     ///
     /// for example see [`Slot::to_symbolic`]
     #[allow(clippy::cast_possible_wrap)]
+    #[cfg(feature = "shadowing")]
     pub fn to_fnbuilder<'a, 'b: 'a>(&'a self) -> FunctionBuilder {
         let (value, id) = match *self {
             Self::Euclidean(value) => (value, State::get_symbol(EUCLIDEAN)),
@@ -342,6 +347,7 @@ impl Representation {
     /// assert_eq!("lor(4)",format!("{}",mink.to_symbolic()));
     /// assert_eq!("lor4",format!("{}",mink));
     /// ```
+    #[cfg(feature = "shadowing")]
     pub fn to_symbolic(&self) -> Atom {
         self.to_fnbuilder().finish()
     }
@@ -475,6 +481,7 @@ pub struct Slot {
 ///    let slot = Slot::try_from(atom.as_view()).unwrap();
 ///    assert_eq!(slot, mu);
 /// ```
+#[cfg(feature = "shadowing")]
 impl TryFrom<AtomView<'_>> for Slot {
     type Error = &'static str;
 
@@ -595,6 +602,7 @@ impl Slot {
     /// assert_eq!("lor(4,0)",format!("{}",mu.to_symbolic()));
     /// assert_eq!("id0lor4",format!("{}",mu));
     /// ```
+    #[cfg(feature = "shadowing")]
     pub fn to_symbolic(&self) -> Atom {
         let mut value_builder = self.representation.to_fnbuilder();
         value_builder =
@@ -897,7 +905,7 @@ pub trait HasStructure {
     fn size(&self) -> usize {
         self.shape().iter().map(|x| usize::from(*x)).product()
     }
-
+    #[cfg(feature = "shadowing")]
     fn shadow_with(self, f_id: Symbol) -> DenseTensor<Atom, Self>
     where
         Self: std::marker::Sized + Clone,
@@ -912,7 +920,7 @@ pub trait HasStructure {
             structure: self,
         }
     }
-
+    #[cfg(feature = "shadowing")]
     fn to_explicit_rep(self, f_id: Symbol) -> MixedTensor<Self>
     where
         Self: std::marker::Sized + Clone + HasStructure,
@@ -1080,7 +1088,7 @@ impl StructureContract for Vec<Slot> {
 }
 
 /// A trait for a structure that can be traced and merged, during a contraction, maybe using symbolic state and workspace.
-
+#[cfg(feature = "shadowing")]
 pub trait SymbolicStructureContract {
     fn trace_sym(&mut self, i: usize, j: usize, state: &State, ws: &Workspace);
 
@@ -1097,7 +1105,7 @@ pub trait SymbolicStructureContract {
         ws: &Workspace,
     ) -> Self;
 }
-
+#[cfg(feature = "shadowing")]
 impl<T> SymbolicStructureContract for T
 where
     T: StructureContract,
@@ -1130,6 +1138,7 @@ pub struct VecStructure {
     pub structure: Vec<Slot>,
 }
 
+#[cfg(feature = "shadowing")]
 impl TryFrom<AtomView<'_>> for VecStructure {
     type Error = &'static str;
     fn try_from(value: AtomView) -> Result<Self, Self::Error> {
@@ -1729,7 +1738,7 @@ where
         }
     }
 }
-
+#[cfg(feature = "shadowing")]
 pub fn atomic_expanded_label<I: IntoId>(
     indices: &[ConcreteIndex],
     name: I,
@@ -1739,19 +1748,20 @@ pub fn atomic_expanded_label<I: IntoId>(
     let id = name.into_id();
     atomic_expanded_label_id(indices, id)
 }
-
+#[cfg(feature = "shadowing")]
 pub fn atomic_flat_label<I: IntoId>(index: usize, name: I) -> Atom {
     let id = name.into_id();
     atomic_flat_label_id(index, id)
 }
 
 #[allow(clippy::cast_possible_wrap)]
+#[cfg(feature = "shadowing")]
 pub fn atomic_flat_label_id(index: usize, id: Symbol) -> Atom {
     let mut value_builder = FunctionBuilder::new(id);
     value_builder = value_builder.add_arg(Atom::new_num(index as i64).as_atom_view());
     value_builder.finish()
 }
-
+#[cfg(feature = "shadowing")]
 #[allow(clippy::cast_possible_wrap)]
 pub fn atomic_expanded_label_id(indices: &[ConcreteIndex], id: Symbol) -> Atom {
     let mut value_builder = FunctionBuilder::new(id);
@@ -1760,28 +1770,34 @@ pub fn atomic_expanded_label_id(indices: &[ConcreteIndex], id: Symbol) -> Atom {
     }
     value_builder.finish()
 }
+
+#[cfg(feature = "shadowing")]
 pub trait IntoId {
     fn into_id(self) -> Symbol;
 }
 
+#[cfg(feature = "shadowing")]
 impl IntoId for SmartString<LazyCompact> {
     fn into_id(self) -> Symbol {
         State::get_symbol(self)
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl IntoId for Symbol {
     fn into_id(self) -> Symbol {
         self
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl IntoId for &str {
     fn into_id(self) -> Symbol {
         State::get_symbol(self)
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl IntoId for std::string::String {
     fn into_id(self) -> Symbol {
         State::get_symbol(self)
@@ -1791,6 +1807,7 @@ impl IntoId for std::string::String {
 /// Trait that enables shadowing of a tensor
 ///
 /// This creates a dense tensor of atoms, where the atoms are the expanded indices of the tensor, with the global name as the name of the labels.
+#[cfg(feature = "shadowing")]
 pub trait Shadowable: HasStructure {
     type Name: IntoId + Clone;
     fn shadow(self) -> Option<DenseTensor<Atom, Self::Structure>>
@@ -1834,6 +1851,7 @@ pub trait Shadowable: HasStructure {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<N> Shadowable for N
 where
     N: HasStructure + HasName,
@@ -1870,6 +1888,7 @@ impl std::fmt::Display for N
     }
 }
 }
+#[cfg(feature = "shadowing")]
 impl HistoryStructure<Symbol> {
     #[must_use]
     pub fn to_string(&self, _state: &State) -> String {

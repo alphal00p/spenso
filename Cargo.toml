@@ -17,10 +17,18 @@ insta = { version = "1.38.0", features = ["yaml", "json", "ron", "toml"] }
 [[bench]]
 name = "gamma_net"
 harness = false
+required-features = ["shadowing"]
 
 [[bench]]
 name = "evaluate_net"
 harness = false
+required-features = ["shadowing"]
+
+
+[[example]]
+name = "evaluate_network"
+required-features = ["shadowing"]
+
 
 [dependencies]
 ahash = { version = "0.8.11", features = ["serde"] }
@@ -38,10 +46,13 @@ serde = "1.0.201"
 serde_toml = "0.0.1"
 slotmap = { version = "1.0.7", features = ["serde"] }
 smartstring = { version = "1.0.1", features = ["serde"] }
-symbolica = { git = "https://github.com/benruijl/symbolica" }
+symbolica = { git = "https://github.com/benruijl/symbolica", optional = true }
 # symbolica = { path = "../gammaloop/python/gammaloop/dependencies/symbolica" }
 thiserror = "1.0.60"
 
+
+[features]
+shadowing = ["dep:symbolica"]
 
 # [patch.crates-io]
 # symbolica = { git = "https://github.com/lcnbr/symbolica" }

@@ -1,5 +1,6 @@
 use std::ops::{Add, Div, Mul, Sub};
 
+#[cfg(feature = "shadowing")]
 use symbolica::atom::Atom;
 
 pub trait FieldOps<Lhs, Rhs>
@@ -32,6 +33,7 @@ impl Scalar for f64 {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl Scalar for Atom {
     fn zero() -> Self {
         Atom::new_num(0)

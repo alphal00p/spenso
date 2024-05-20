@@ -3,17 +3,25 @@
 use std::{ops::Neg, time::Instant};
 
 use spenso::{
-    parametric::MixedTensor,
-    ufo::{
-        euclidean_four_vector, euclidean_four_vector_sym, gammasym, mink_four_vector,
-        mink_four_vector_sym, param_euclidean_four_vector, param_mink_four_vector,
-    },
+    ufo::{euclidean_four_vector, mink_four_vector},
     AbstractIndex, Complex, Contract, DenseTensor, FallibleMul, HasTensorData, HistoryStructure,
-    IntoId, NumTensor, SparseTensor, TensorNetwork,
+    NumTensor, SparseTensor, TensorNetwork,
 };
 
 use num::traits::ToPrimitive;
+
+#[cfg(feature = "shadowing")]
 use symbolica::atom::{Atom, Symbol};
+
+#[cfg(feature = "shadowing")]
+use spenso::{
+    parametric::MixedTensor,
+    ufo::{
+        euclidean_four_vector_sym, gammasym, mink_four_vector_sym, param_euclidean_four_vector,
+        param_mink_four_vector,
+    },
+    IntoId,
+};
 
 // #[allow(dead_code)]
 // fn gamma_trace<T>(minkindices: &[i32]) -> SparseTensor<Complex<T>>
@@ -97,6 +105,7 @@ use symbolica::atom::{Atom, Symbol};
 // }
 
 #[allow(dead_code)]
+#[cfg(feature = "shadowing")]
 fn gamma_net(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
@@ -165,6 +174,7 @@ fn defered_chain(
 }
 
 #[allow(dead_code)]
+#[cfg(feature = "shadowing")]
 fn gamma_net_param(minkindices: &[i32]) -> TensorNetwork<MixedTensor<HistoryStructure<Symbol>>> {
     let mut i = 0;
     let mut contracting_index: AbstractIndex = 0.into();
@@ -194,6 +204,7 @@ fn gamma_net_param(minkindices: &[i32]) -> TensorNetwork<MixedTensor<HistoryStru
 }
 
 #[allow(dead_code)]
+#[cfg(feature = "shadowing")]
 fn dump_c_with_func(_levels: Vec<Vec<(Symbol, Vec<Atom>)>>) {}
 
 #[allow(unused_variables)]
@@ -253,33 +264,36 @@ fn main() {
 
     let startfull = Instant::now();
 
-    let mut chain = gamma_net(&vec, vbar, u);
-    println!("{}", chain.graph.edges.len());
-    println!("{}", chain.graph.nodes.len());
-    println!("{}", chain.graph.involution.len());
-    println!("{}", chain.graph.neighbors.len());
+    #[cfg(feature = "shadowing")]
+    {
+        let mut chain = gamma_net(&vec, vbar, u);
+        println!("{}", chain.graph.edges.len());
+        println!("{}", chain.graph.nodes.len());
+        println!("{}", chain.graph.involution.len());
+        println!("{}", chain.graph.neighbors.len());
 
-    println!("{}", chain.dot());
-    let start = Instant::now();
-    chain.contract();
-    let duration = start.elapsed();
-    let durationfull = startfull.elapsed();
+        println!("{}", chain.dot());
+        let start = Instant::now();
+        chain.contract();
+        let duration = start.elapsed();
+        let durationfull = startfull.elapsed();
 
-    println!("{}", chain.dot());
+        println!("{}", chain.dot());
 
-    println!(
+        println!(
         "Gamma net with {} gammas, fully numeric, takes {:?} for the contraction, and {:?} with initialization",
         vec.len(),
         duration,
         durationfull
     );
 
-    // [Complex { re: 5.341852612369398e16, im: -136854212797686.44 }]
-    // [Complex { re: 5.3418526123694e16, im: -136854212797684.0 }] for 20, 24
-    println!(
-        "Result: {:?}",
-        chain.result().try_as_complex().unwrap().data()
-    );
+        // [Complex { re: 5.341852612369398e16, im: -136854212797686.44 }]
+        // [Complex { re: 5.3418526123694e16, im: -136854212797684.0 }] for 20, 24
+        println!(
+            "Result: {:?}",
+            chain.result().try_as_complex().unwrap().data()
+        );
+    }
 
     // // let mut chain = gamma_net(&vec, vbar, u);
     // let ws: Workspace<Linear> = Workspace::new();

@@ -35,11 +35,15 @@ pub mod data;
 pub use data::*;
 
 /// Parametric tensor contraction
+#[cfg(feature = "shadowing")]
 pub mod parametric;
+#[cfg(feature = "shadowing")]
 pub use parametric::*;
 
 /// Symbolic tensors
+#[cfg(feature = "shadowing")]
 pub mod symbolic;
+#[cfg(feature = "shadowing")]
 pub use symbolic::*;
 /// Iterators on fibers of tensors
 pub mod iterators;

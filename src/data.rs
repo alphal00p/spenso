@@ -1,8 +1,8 @@
 use crate::{Complex, ExpandedIndex, FlatIndex};
 
 use super::{
-    atomic_expanded_label_id, ConcreteIndex, DenseTensorLinearIterator, HasName, HasStructure,
-    Slot, SparseTensorLinearIterator, TracksCount, TrySmallestUpgrade, VecStructure,
+    ConcreteIndex, DenseTensorLinearIterator, HasName, HasStructure, Slot,
+    SparseTensorLinearIterator, TracksCount, TrySmallestUpgrade, VecStructure,
 };
 use ahash::AHashMap;
 use derive_more::From;
@@ -14,12 +14,15 @@ use serde::{Deserialize, Serialize};
 use smartstring::alias::String;
 use std::{
     borrow::Cow,
-    collections::HashMap,
     ops::{Index, IndexMut},
 };
 
+#[cfg(feature = "shadowing")]
+use super::atomic_expanded_label_id;
+#[cfg(feature = "shadowing")]
+use std::collections::HashMap;
+#[cfg(feature = "shadowing")]
 use symbolica::{atom::Atom, atom::Symbol};
-
 pub trait DataIterator<T> {
     type FlatIter<'a>: Iterator<Item = (FlatIndex, &'a T)>
     where
@@ -78,6 +81,7 @@ pub trait HasTensorData: HasStructure {
     fn hashmap(&self) -> IndexMap<ExpandedIndex, Self::Data>;
 
     /// Returns a hashmap of the data, with the the shadowed indices as keys
+    #[cfg(feature = "shadowing")]
     fn symhashmap(&self, id: Symbol) -> HashMap<Atom, Self::Data>;
 }
 
@@ -140,7 +144,7 @@ where
         }
         hashmap
     }
-
+    #[cfg(feature = "shadowing")]
     fn symhashmap(&self, id: Symbol) -> HashMap<Atom, T> {
         let mut hashmap = HashMap::new();
 
@@ -610,7 +614,7 @@ where
         }
         hashmap
     }
-
+    #[cfg(feature = "shadowing")]
     fn symhashmap(&self, id: Symbol) -> HashMap<Atom, T> {
         let mut hashmap = HashMap::new();
 
@@ -725,7 +729,7 @@ where
             DataTensor::Sparse(s) => s.hashmap(),
         }
     }
-
+    #[cfg(feature = "shadowing")]
     fn symhashmap(&self, id: Symbol) -> HashMap<Atom, T> {
         match self {
             DataTensor::Dense(d) => d.symhashmap(id),

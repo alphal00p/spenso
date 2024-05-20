@@ -1,23 +1,20 @@
-use ahash::AHashMap;
-
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
 
-use self::structure::HistoryStructure;
 #[cfg(feature = "shadowing")]
-use crate::{MixedTensor, MixedTensors, Shadowable};
-#[cfg(feature = "shadowing")]
-use symbolica::domains::float::Complex as SymComplex;
+use crate::{DataTensor, HistoryStructure, MixedTensor, MixedTensors, Shadowable};
+
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
+    domains::float::Complex as SymComplex,
     state::State,
 };
 
-use super::{
-    arithmetic::ScalarMul, structure, Contract, DataTensor, HasName, HasStructure, Slot,
-    TracksCount,
-};
+#[cfg(feature = "shadowing")]
+use ahash::AHashMap;
+
+use super::{arithmetic::ScalarMul, structure, Contract, HasName, HasStructure, Slot, TracksCount};
 use smartstring::alias::String;
 use std::fmt::{Debug, Display};
 

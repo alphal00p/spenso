@@ -1,6 +1,5 @@
 use ahash::AHashMap;
 
-use crate::{FlatIndex, GetTensorData};
 
 use super::{
     DataIterator, DataTensor, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSubAssign,
@@ -284,7 +283,7 @@ where
                 result_index += 1;
                 fiber_a.reset();
             }
-            let _ = other_iter.reset();
+            other_iter.reset();
         }
         let result = DenseTensor {
             data: result_data,
@@ -402,7 +401,7 @@ where
         for mut fiber_a in self_iter.by_ref() {
             for mut fiber_b in other_iter.by_ref() {
                 for (k, (a, skip, _)) in fiber_a.by_ref().enumerate() {
-                    if let Some((b, _)) = fiber_b.by_ref().skip(skip).next() {
+                    if let Some((b, _)) = fiber_b.by_ref().nth(skip) {
                         if fiber_representation.is_neg(k + skip) {
                             result_data[result_index]
                                 .sub_assign_fallible(a.mul_fallible(b).unwrap());
@@ -450,7 +449,7 @@ where
         for mut fiber_a in self_iter.by_ref() {
             for mut fiber_b in other_iter.by_ref() {
                 for (k, (b, skip, _)) in fiber_b.by_ref().enumerate() {
-                    if let Some((a, _)) = fiber_a.by_ref().skip(skip).next() {
+                    if let Some((a, _)) = fiber_a.by_ref().nth(skip) {
                         if fiber_representation.is_neg(k + skip) {
                             result_data[result_index]
                                 .sub_assign_fallible(a.mul_fallible(b).unwrap());
@@ -502,7 +501,7 @@ where
         for mut fiber_a in selfiter {
             for mut fiber_b in other_iter.by_ref() {
                 for (a, skip, (neg, _)) in fiber_a.by_ref() {
-                    if let Some((b, _)) = fiber_b.by_ref().skip(skip).next() {
+                    if let Some((b, _)) = fiber_b.by_ref().nth(skip) {
                         if neg {
                             result_data[result_index]
                                 .sub_assign_fallible(a.mul_fallible(b).unwrap());
@@ -555,7 +554,7 @@ where
         for mut fiber_a in selfiter {
             for mut fiber_b in other_iter.by_ref() {
                 for (b, skip, _) in fiber_b.by_ref() {
-                    if let Some((a, (neg, _))) = fiber_a.by_ref().skip(skip).next() {
+                    if let Some((a, (neg, _))) = fiber_a.by_ref().nth(skip) {
                         if neg {
                             result_data[result_index]
                                 .sub_assign_fallible(a.mul_fallible(b).unwrap());

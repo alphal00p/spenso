@@ -6,10 +6,8 @@ use super::{
     TryFromUpgrade, TryIntoUpgrade,
 };
 
-use crate::Complex;
-
 #[cfg(feature = "shadowing")]
-use super::MixedTensor;
+use super::{Complex, MixedTensor};
 #[cfg(feature = "shadowing")]
 use symbolica::atom::Atom;
 

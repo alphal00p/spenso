@@ -31,8 +31,6 @@ use symbolica::{
     state::{State, Workspace},
 };
 
-use std::i64;
-
 use std::ops::Range;
 
 use crate::Permutation;
@@ -40,12 +38,9 @@ use crate::Permutation;
 use std::collections::HashSet;
 use std::{cmp::Ordering, collections::HashMap};
 
-use super::ufo;
-use super::DenseTensor;
-
-#[cfg(feature = "shadowing")]
-use super::MixedTensor;
 use super::TensorStructureIndexIterator;
+#[cfg(feature = "shadowing")]
+use super::{ufo, DenseTensor, MixedTensor};
 use smartstring::alias::String;
 /// A type that represents the name of an index in a tensor.
 #[derive(

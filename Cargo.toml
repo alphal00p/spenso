@@ -46,7 +46,7 @@ serde = "1.0.201"
 serde_toml = "0.0.1"
 slotmap = { version = "1.0.7", features = ["serde"] }
 smartstring = { version = "1.0.1", features = ["serde"] }
-symbolica = { git = "https://github.com/benruijl/symbolica", optional = true }
+symbolica = { version = "0.5.0", optional = true }
 # symbolica = { path = "../gammaloop/python/gammaloop/dependencies/symbolica" }
 thiserror = "1.0.60"
 

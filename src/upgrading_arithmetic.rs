@@ -1,14 +1,12 @@
 use std::borrow::Cow;
 
 use duplicate::duplicate;
-use std::{
-    ops::{Mul},
-};
+use std::ops::Mul;
 
 #[cfg(feature = "shadowing")]
-use symbolica::{atom::Atom, domains::float::Real, state::State};
+use symbolica::{atom::Atom, state::State};
 
-use crate::{Complex, Scalar};
+use crate::Complex;
 
 // #[derive(Copy, Clone, PartialEq)]
 // pub struct Complex<T: Scalar> {

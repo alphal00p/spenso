@@ -2,6 +2,9 @@
 name = "spenso"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Lucien Huber <cargo+mail@lucien.ch>"]
+description = "A tensor (n-dim array) network, iterating, and contraction (using automatic abstract index matching) library."
 
 [lib]
 path = "src/spenso.rs"

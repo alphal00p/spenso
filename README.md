@@ -1,6 +1,6 @@
 <div align="center">
 
-![logo](https://github.com/alphal00p/spenso/blob/master/spensologo.svg)
+![logo](https://raw.githubusercontent.com/alphal00p/spenso/master/spensologo.svg)
 
 [![Documentation](https://img.shields.io/docsrs/spenso/latest)](https://docs.rs/spenso/latest/spenso/)
 [![crates.io](https://img.shields.io/crates/v/spenso.svg)](https://crates.io/crates/spenso)

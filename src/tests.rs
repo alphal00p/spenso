@@ -1062,6 +1062,7 @@ fn convert_sym() {
 }
 
 #[test]
+#[cfg(feature = "shadowing")]
 fn simple_multi_contract_sym() {
     let structa = VecStructure::new(vec![(1, 3).into(), (2, 4).into(), (3, 4).into()]);
     // let structa = structa.to_named("a");

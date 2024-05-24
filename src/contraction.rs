@@ -1,6 +1,5 @@
 use ahash::AHashMap;
 
-
 use super::{
     DataIterator, DataTensor, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSubAssign,
     HasStructure, HasTensorData, NumTensor, Representation, SetTensorData, SparseTensor,
@@ -530,8 +529,8 @@ impl<T, U, I> MultiContract<SparseTensor<T, I>> for DenseTensor<U, I>
 where
     for<'a, 'b> &'a U: FallibleMul<&'b T, Output = U::Out>,
     for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
-    U: DotProduct<T> + Debug,
-    I: HasStructure + Clone + StructureContract + Debug,
+    U: DotProduct<T>,
+    I: HasStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
 
@@ -665,7 +664,7 @@ where
     for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
     U: DotProduct<T>,
     I: HasStructure + Clone + StructureContract,
-    U::Out: PartialEq + Debug,
+    U::Out: PartialEq,
 {
     type LCM = SparseTensor<U::Out, I>;
 
@@ -752,10 +751,10 @@ where
         FallibleMul<&'b U, Output = U::Out> + TrySmallestUpgrade<&'b U, LCM = U::Out>,
     U: DotProduct<T>,
     I: HasStructure + Clone + StructureContract,
-    U::Out: PartialEq + Debug,
-    I: Clone + HasStructure + StructureContract + Debug,
-    T: Clone + Debug,
-    U: Clone + Debug,
+    U::Out: PartialEq,
+    I: Clone + HasStructure + StructureContract,
+    T: Clone,
+    U: Clone,
 {
     type LCM = DataTensor<U::Out, I>;
     fn contract(&self, other: &DataTensor<T, I>) -> Option<DataTensor<U::Out, I>> {
@@ -776,7 +775,7 @@ where
 
 impl<I> Contract<NumTensor<I>> for NumTensor<I>
 where
-    I: Clone + HasStructure + StructureContract + Debug,
+    I: Clone + HasStructure + StructureContract,
 {
     type LCM = NumTensor<I>;
     fn contract(&self, other: &NumTensor<I>) -> Option<Self::LCM> {

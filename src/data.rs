@@ -106,6 +106,8 @@ pub trait GetTensorData {
     fn get(&self, indices: &[ConcreteIndex]) -> Result<&Self::GetData, String>;
 
     fn get_linear(&self, index: FlatIndex) -> Option<&Self::GetData>;
+
+    fn get_linear_mut(&mut self, index: FlatIndex) -> Option<&mut Self::GetData>;
 }
 
 /// Sparse data tensor, generic on storage type `T`, and structure type `I`.  
@@ -205,6 +207,10 @@ where
     fn get_linear(&self, index: FlatIndex) -> Option<&T> {
         self.elements.get(&index)
     }
+
+    fn get_linear_mut(&mut self, index: FlatIndex) -> Option<&mut T> {
+        self.elements.get_mut(&index)
+    }
 }
 
 impl<T, I> HasStructure for SparseTensor<T, I>
@@ -288,12 +294,15 @@ where
     }
 
     /// Checks if there is a value at the given indices
-    pub fn is_empty_at(&self, indices: &[ConcreteIndex]) -> bool {
+    pub fn is_empty_at_expanded(&self, indices: &[ConcreteIndex]) -> bool {
         !self
             .elements
             .contains_key(&self.flat_index(indices).unwrap())
     }
 
+    pub fn is_empty_at_flat(&self, index: FlatIndex) -> bool {
+        !self.elements.contains_key(&index)
+    }
     /// Calulates how dense the tensor is, i.e. the ratio of non-zero elements to total elements
     pub fn density(&self) -> f64 {
         f64::from(self.elements.len() as u32) / f64::from(self.size() as u32)
@@ -668,6 +677,11 @@ where
             Err("Index out of bounds".into())
         }
     }
+
+    fn get_linear_mut(&mut self, index: FlatIndex) -> Option<&mut Self::GetData> {
+        let i: usize = index.into();
+        self.data.get_mut(i)
+    }
 }
 
 /// Enum for storing either a dense or a sparse tensor, with the same structure
@@ -860,6 +874,13 @@ where
         match self {
             DataTensor::Dense(d) => d.get_linear(index),
             DataTensor::Sparse(s) => s.get_linear(index),
+        }
+    }
+
+    fn get_linear_mut(&mut self, index: FlatIndex) -> Option<&mut Self::GetData> {
+        match self {
+            DataTensor::Dense(d) => d.get_linear_mut(index),
+            DataTensor::Sparse(s) => s.get_linear_mut(index),
         }
     }
 }

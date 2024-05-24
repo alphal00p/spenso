@@ -4,7 +4,7 @@ use crate::{
 };
 use crate::{
     AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, ExpandedIndex, Fiber,
-    FiberClass, FlatIndex, IteratesAlongFibers,
+    FiberClass, FlatIndex, IntoId, IteratesAlongFibers,
 };
 use ahash::{HashMap, HashMapExt};
 
@@ -1061,39 +1061,36 @@ fn convert_sym() {
     );
 }
 
-// #[test]
-// fn symbolic_matrix_mult() {
-//     let mut state = State::get_global_state().write().unwrap();
-//     let ws = Workspace::new();
+#[test]
+fn simple_multi_contract_sym() {
+    let structa = VecStructure::new(vec![(1, 3).into(), (2, 4).into(), (3, 4).into()]);
+    // let structa = structa.to_named("a");
+    let structb = VecStructure::new(vec![(2, 4).into(), (4, 3).into(), (3, 4).into()]);
+    // let structb = structb.to_named("b");
 
-//     let structura = TensorStructure::from_integers(&[1, 4], &[2, 3]);
-//     let aatom = DenseTensor::symbolic_labels("a", structura, &ws, &mut state);
-//     let structurb = TensorStructure::from_integers(&[4, 1], &[3, 2]);
-//     let _batom = DenseTensor::symbolic_labels("b", structurb.clone(), &ws, &mut state);
+    let a = DenseTensor::from_data(
+        &[
+            1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 12, 13, 14, 15, 16, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11,
+            12, 13, 14, 15, 16, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 12, 13, 14, 15, 16,
+        ],
+        structa.clone(),
+    )
+    .unwrap();
 
-//     let data_b = [1.5, 2.25, 3.5, -17.125, 5.0, 6.0];
-//     let b = DenseTensor::from_data(&data_b, structurb).unwrap();
+    let b = DenseTensor::from_data(
+        &[
+            3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 3, 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0,
+            3, 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 3, 2, 1,
+        ],
+        structb.clone(),
+    )
+    .unwrap();
 
-//     let symb = b.to_symbolic(&ws, &mut state);
+    let a: DataTensor<Atom> = structa.shadow_with("a".into_id()).into();
+    let b: DataTensor<Atom> = structb.shadow_with("b".into_id()).into();
 
-//     let f = aatom
-//         .builder(&state, &ws)
-//         .contract(&symb.builder(&state, &ws));
-
-//     assert_eq!(
-//         *f.unwrap().finish().get(&[]).unwrap(),
-//         Atom::parse(
-//             "3/2*a_0_0+7/2*a_0_1+5*a_0_2+9/4*a_1_0-137/8*a_1_1+6*a_1_2",
-//             &mut state,
-//             &ws
-//         )
-//         .unwrap()
-//     );    /// let state = State:
-
-//     // symb.contract_with_dense(&a);
-//     // let structurb = TensorStructure::from_integers(&[2, 4], &[2, 3]);
-//     // let b = DenseTensor::symbolic_labels("b", structurb, &ws, &mut state);
-// }
+    let f = a.contract(&b).unwrap();
+}
 
 #[test]
 fn empty_densor() {

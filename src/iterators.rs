@@ -606,6 +606,77 @@ impl<'a, S: HasStructure> FiberClass<'a, S> {
         FiberClassIterator::new_permuted(self, permutation)
     }
 }
+
+pub struct FiberClassMut<'a, I: HasStructure> {
+    structure: &'a mut I,
+    bare_fiber: BareFiber, // A representant of the class
+
+                           // /// true is fixed (but varying when iterating) and false is free (but fixed to 0 when iterating)
+                           // free: BitVec, //check performance when it is AHashSet<usize>
+}
+
+impl<'a, I> Index<usize> for FiberClassMut<'a, I>
+where
+    I: HasStructure,
+{
+    type Output = FiberClassIndex;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        if self.bare_fiber[index].is_fixed() {
+            &FiberClassIndex::Free
+        } else {
+            &FiberClassIndex::Fixed
+        }
+    }
+}
+
+impl<'a, I: HasStructure> From<FiberMut<'a, I>> for FiberClassMut<'a, I> {
+    fn from(fiber: FiberMut<'a, I>) -> Self {
+        FiberClassMut {
+            bare_fiber: fiber.bare_fiber,
+            structure: fiber.structure,
+        }
+    }
+}
+
+impl<'a, I: HasStructure> From<FiberClassMut<'a, I>> for FiberMut<'a, I> {
+    fn from(fiber: FiberClassMut<'a, I>) -> Self {
+        FiberMut {
+            bare_fiber: fiber.bare_fiber,
+            structure: fiber.structure,
+        }
+    }
+}
+
+impl<'a, I: HasStructure> AbstractFiber<FiberClassIndex> for FiberClassMut<'a, I> {
+    fn strides(&self) -> Vec<usize> {
+        self.structure.strides()
+    }
+
+    fn shape(&self) -> Vec<Dimension> {
+        self.structure.shape()
+    }
+
+    fn reps(&self) -> Vec<Representation> {
+        self.structure.reps()
+    }
+
+    fn order(&self) -> usize {
+        self.structure.order()
+    }
+
+    fn single(&self) -> Option<usize> {
+        match self.bare_fiber.is_single {
+            FiberIndex::Fixed(i) => Some(i),
+            _ => None,
+        }
+    }
+
+    fn bitvec(&self) -> BitVec {
+        !self.bare_fiber.bitvec()
+    }
+}
+
 // Iterators for fibers
 
 #[derive(Debug, Clone, Copy)]
@@ -1366,6 +1437,51 @@ where
 struct MutFiberIterator<'a, S: HasStructure, I: IteratesAlongFibers> {
     iter: I,
     fiber: FiberMut<'a, S>,
+    skipped: usize,
+}
+
+impl<'a, I: IteratesAlongFibers<Item = It>, S: HasStructure, T, It> LendingIterator
+    for MutFiberIterator<'a, SparseTensor<T, S>, I>
+where
+    It: FiberIteratorItem,
+{
+    type Item<'r> = (&'r mut T, usize, It::OtherData) where Self: 'r;
+    fn next(&mut self) -> Option<Self::Item<'_>> {
+        let flat = self.iter.next()?;
+        if self.fiber.structure.is_empty_at_flat(flat.flat_idx()) {
+            let skipped = self.skipped;
+            self.skipped = 0;
+            return Some((
+                self.fiber
+                    .structure
+                    .get_linear_mut(flat.flat_idx())
+                    .unwrap(),
+                skipped,
+                flat.other_data(),
+            ));
+        } else {
+            self.skipped += 1;
+            return self.next();
+        }
+    }
+}
+
+impl<'a, I: IteratesAlongFibers<Item = It>, S: HasStructure, T, It> LendingIterator
+    for MutFiberIterator<'a, DenseTensor<T, S>, I>
+where
+    It: FiberIteratorItem,
+{
+    type Item<'r> = (&'r mut T,  It::OtherData) where Self: 'r;
+    fn next(&mut self) -> Option<Self::Item<'_>> {
+        self.iter.next().map(|x| {
+            // println!("dense {}", x.flat_idx());
+            // println!("{}", self.fiber.structure.size());
+            (
+                self.fiber.structure.get_linear_mut(x.flat_idx()).unwrap(),
+                x.other_data(),
+            )
+        })
+    }
 }
 
 impl<'a, S: HasStructure, I: IteratesAlongFibers> MutFiberIterator<'a, S, I> {
@@ -1373,11 +1489,13 @@ impl<'a, S: HasStructure, I: IteratesAlongFibers> MutFiberIterator<'a, S, I> {
         MutFiberIterator {
             iter: I::new(&fiber, conj),
             fiber,
+            skipped: 0,
         }
     }
 
     pub fn reset(&mut self) {
         self.iter.reset();
+        self.skipped = 0;
     }
 
     pub fn shift(&mut self, shift: usize) {
@@ -1390,6 +1508,7 @@ impl<'a, S: HasStructure, I: IteratesAlongPermutedFibers> MutFiberIterator<'a, S
         MutFiberIterator {
             iter: I::new_permuted(&fiber, conj, permutation),
             fiber,
+            skipped: 0,
         }
     }
 }
@@ -1621,7 +1740,7 @@ where
 
         // Data might not exist at that concrete index usize, we advance it till it does, and if not we skip
 
-        while self.tensor.is_empty_at(&indices) {
+        while self.tensor.is_empty_at_expanded(&indices) {
             let Some((i, signint)) = iter.next() else {
                 self.done = !self.increment_indices();
                 return self.next(); // skip
@@ -1957,8 +2076,16 @@ where
         Fiber::from(fiber_data, self)
     }
 
+    pub fn fiber_mut<'r>(&'r mut self, fiber_data: FiberData<'_>) -> FiberMut<'r, Self> {
+        FiberMut::from(fiber_data, self)
+    }
+
     pub fn fiber_class<'r>(&'r self, fiber_data: FiberData<'_>) -> FiberClass<'r, Self> {
         Fiber::from(fiber_data, self).into()
+    }
+
+    pub fn fiber_class_mut<'r>(&'r mut self, fiber_data: FiberData<'_>) -> FiberClassMut<'r, Self> {
+        FiberMut::from(fiber_data, self).into()
     }
 
     pub fn iter_flat(&self) -> DenseTensorLinearIterator<T, I> {

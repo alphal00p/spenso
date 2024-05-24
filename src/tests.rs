@@ -4,7 +4,7 @@ use crate::{
 };
 use crate::{
     AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, ExpandedIndex, Fiber,
-    FiberClass, FlatIndex, IntoId, IteratesAlongFibers,
+    FiberClass, FlatIndex, IteratesAlongFibers,
 };
 use ahash::{HashMap, HashMapExt};
 
@@ -18,7 +18,7 @@ use rand_xoshiro::Xoroshiro64Star;
 use smartstring::alias::String;
 
 #[cfg(feature = "shadowing")]
-use super::{symbolic::SymbolicTensor, MixedTensor, Shadowable};
+use super::{symbolic::SymbolicTensor, IntoId, MixedTensor, Shadowable};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView},

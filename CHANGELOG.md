@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/alphal00p/spenso/compare/v0.1.1...v0.2.0) - 2024-05-24
+
+### Added
+- *(iterators)* :sparkles: lending mut iterators
+
+### Fixed
+- *(test)* :bug: added feature flag on parametric tensor tests
+- logo points to raw githubusercontent
+
+### Other
+- *(iterators)* :white_check_mark: added mutating iterator test
+- Modified README such that the logo shows up on crates.io
+
 ## [0.1.1](https://github.com/alphal00p/spenso/compare/v0.1.0...v0.1.1) - 2024-05-20
 
 ### Other

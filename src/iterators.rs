@@ -508,6 +508,12 @@ impl<'a, I: HasStructure> Display for FiberMut<'a, I> {
     }
 }
 
+impl<'a, I: HasStructure> FiberMut<'a, I> {
+    pub fn iter(self) -> MutFiberIterator<'a, I, CoreFlatFiberIterator> {
+        MutFiberIterator::new(self, false)
+    }
+}
+
 pub struct FiberClass<'a, I: HasStructure> {
     structure: &'a I,
     bare_fiber: BareFiber, // A representant of the class
@@ -1434,7 +1440,7 @@ where
     }
 }
 
-struct MutFiberIterator<'a, S: HasStructure, I: IteratesAlongFibers> {
+pub struct MutFiberIterator<'a, S: HasStructure, I: IteratesAlongFibers> {
     iter: I,
     fiber: FiberMut<'a, S>,
     skipped: usize,
@@ -1511,6 +1517,29 @@ impl<'a, S: HasStructure, I: IteratesAlongPermutedFibers> MutFiberIterator<'a, S
             skipped: 0,
         }
     }
+}
+
+#[test]
+fn mutiter() {
+    let structa = VecStructure::new(vec![
+        (0, 4).into(),
+        (4, 4).into(),
+        (1, 5).into(),
+        (3, 7).into(),
+        (2, 8).into(),
+    ]);
+
+    let mut a: DenseTensor<f64> = DenseTensor::zero(structa);
+
+    let fiber = a.fiber_mut([1u8, 0, 1, 1, 1].as_slice().into());
+
+    let mut iter = fiber.iter();
+
+    while let Some(i) = iter.next() {
+        *i.0 = 1.0;
+    }
+
+    println!("{:?}", a);
 }
 
 pub struct FiberClassIterator<'b, S: HasStructure, I: IteratesAlongFibers = CoreFlatFiberIterator> {

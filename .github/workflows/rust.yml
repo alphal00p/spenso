@@ -23,8 +23,8 @@ jobs:
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@v6
       - name: Build
-        run: nix build --verbose
+        run: nix build
       - name: Run tests
-        run: nix flake check --verbose
+        run: nix flake check
       - name: Run benchmarks
         run: cargo bench

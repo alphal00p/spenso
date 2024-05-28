@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  test:
     environment: symbolica_keys
     runs-on: ubuntu-latest
     env:
@@ -26,5 +26,3 @@ jobs:
         run: nix build
       - name: Run tests
         run: nix flake check
-      - name: Run benchmarks
-        run: cargo bench

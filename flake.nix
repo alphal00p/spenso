@@ -67,6 +67,7 @@
             # Additional darwin specific inputs can be set here
             pkgs.libiconv
           ];
+        ***REMOVED***
 
         # Additional environment variables can be set directly
         # MY_CUSTOM_VAR = "some value";
@@ -140,6 +141,12 @@
             partitions = 1;
             partitionType = "count";
             cargoNextestExtraArgs = "--all-features";
+            ***REMOVED***
+          });
+
+        myCrateCoverage = craneLib.cargoTarpaulin (commonArgs
+          // {
+            inherit cargoArtifacts;
           });
       };
 
@@ -148,10 +155,10 @@
           default = my-crate;
         }
         // lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
-          my-crate-llvm-coverage = craneLibLLvmTools.cargoLlvmCov (commonArgs
+          spenso-llvm-coverage = craneLibLLvmTools.cargoLlvmCov (commonArgs
             // {
               inherit cargoArtifacts;
-              cargoExtraArgs = "-- --all-features";
+              cargoExtraArgs = "";
             });
         };
 

@@ -2,8 +2,5 @@
   "editor.formatOnSave": true,
   "editor.formatOnPaste": true,
   "rust-analyzer.cargo.features": "all",
-  "conventionalCommits.scopes": [
-    "iterators",
-    "test"
-  ]
+  "conventionalCommits.scopes": ["iterators", "test", "CI"]
 }

@@ -266,7 +266,7 @@ fn trace() {
     let f = a.internal_contract();
 
     assert!(f.is_scalar());
-    assert_eq!(f.data(), vec![79]);
+    assert_eq!(f.data(), vec![71]);
 }
 
 #[test]

@@ -40,8 +40,11 @@
       craneLib =
         (crane.mkLib nixpkgs.legacyPackages.${system}).overrideToolchain
         fenix.packages.${system}.stable.toolchain;
-      src = craneLib.cleanCargoSource (craneLib.path ./.);
 
+      src = lib.cleanSourceWith {
+        src = craneLib.path ./.; # The original, unfiltered source
+        filter = path: type: (craneLib.filterCargoSources path type) || (builtins.match ".*snap$" path != null);
+      };
       # Common arguments can be set here to avoid repeating them later
       commonArgs = {
         inherit src;
@@ -86,7 +89,7 @@
       my-crate = craneLib.buildPackage (commonArgs
         // {
           inherit cargoArtifacts;
-          doCheck = false;
+          doCheck = true;
           cargoExtraArgs = " --all-features";
         });
     in {
@@ -128,6 +131,12 @@
         my-crate-nextest = craneLib.cargoNextest (commonArgs
           // {
             inherit cargoArtifacts;
+            nativeBuildInputs =
+              commonArgs.nativeBuildInputs
+              ++ [
+                pkgs.cargo-insta
+                # pkgs.breakpointHook
+              ];
             partitions = 1;
             partitionType = "count";
             cargoNextestExtraArgs = "--all-features";

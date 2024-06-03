@@ -227,7 +227,7 @@ fn main() {
         one.mul_fallible(4.3).unwrap(),
     ];
 
-    let spacings: [i32; 2] = [20, 24];
+    let spacings: [i32; 2] = [2, 4];
     let mut start = 1;
     let mut ranges = Vec::new();
 
@@ -268,7 +268,7 @@ fn main() {
 
     #[cfg(feature = "shadowing")]
     {
-        let mut chain = gamma_net(&vec, vbar, u);
+        let mut chain = gamma_net_param(&vec);
         println!("{}", chain.graph.edges.len());
         println!("{}", chain.graph.nodes.len());
         println!("{}", chain.graph.involution.len());

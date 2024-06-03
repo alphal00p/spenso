@@ -445,8 +445,10 @@ impl std::fmt::Display for Representation {
 /// # use spenso::{Representation,Slot,Dimension,AbstractIndex};
 /// let mink = Representation::Lorentz(Dimension(4));
 /// let mu = Slot::from((AbstractIndex(0),mink));
+/// let nu = Slot::from((AbstractIndex(1),mink));
 ///
 /// assert_eq!("id0lor4",format!("{}",mu));
+/// assert_eq!("id1lor4",format!("{}",nu));
 /// ```
 ///
 /// It can also be built from a tuple of `usize` and `usize`, where we default to `Representation::Euclidean`

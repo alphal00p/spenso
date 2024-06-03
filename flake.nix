@@ -174,6 +174,8 @@
           pkgs.cargo-insta
           pkgs.git
           # pkgs.ripgrep
+          pkgs.quarto
+          pkgs.deno
         ];
       };
     });

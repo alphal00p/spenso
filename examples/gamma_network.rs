@@ -59,7 +59,7 @@ fn main() {
         one.mul_fallible(4.3).unwrap(),
     ];
 
-    let spacings: [i32; 2] = [20, 24];
+    let spacings: [i32; 2] = [2, 4];
     let mut start = 1;
     let mut ranges = Vec::new();
 

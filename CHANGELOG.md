@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/alphal00p/spenso/compare/v0.2.0...v0.2.1) - 2024-06-03
+
+### Added
+- *(CI)* :sparkles: Codecov
+
+### Fixed
+- *(test)* :rewind: revert failingr
+- *(CI)* :pencil2: typo again
+- *(CI)* :bug: typo
+
+### Other
+- *(CI)* try to upload coverage
+- :memo: added presentation for FORM and Symbolica dev conf
+- *(CI)* :zap: remove benchmarks from test action
+- test(test):
+- *(CI)* :sparkles: use nix
+
 ## [0.2.0](https://github.com/alphal00p/spenso/compare/v0.1.1...v0.2.0) - 2024-05-24
 
 ### Added

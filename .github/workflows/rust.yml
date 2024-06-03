@@ -29,5 +29,5 @@ jobs:
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
         with:
-          file: ./outputs/out
+          working-directory: ./outputs/out
           fail_ci_if_error: true

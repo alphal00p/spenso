@@ -1,0 +1,738 @@
+---
+title: "Spenso"
+subtitle: "a rust-based framework for symbolic and numerical tensor computation"
+author: "Lucien Huber"
+institute: "Bern University"
+format:
+  revealjs: 
+    slide-number: true
+    chalkboard: false
+    auto-animate: true
+    incremental: true   
+    transition: slide
+    transition-speed: fast
+    preview-links: auto
+    logo: luLogo.png
+    code-overflow: wrap
+    highlight-style: breeze
+    embed-resources: true
+    footnotes-hover: true
+---
+
+# Introduction
+
+Tensors are pervasive in High Energy Physics.
+
+
+We wanted a library that implements tensor contractions, and arithmetic, component wise and synergises well with symbolica.
+
+
+::: {.notes}
+  For our project with Mathjis, Zeno, and Valentin we wanted a library that implements tensor contractions, and arithmetic, all component wise.
+
+  I will go more in depth, into our use case but tensors have many uses.
+:::
+
+## Uses
+
+Evaluating:
+
+- Feynman Rules (e.g. gamma chains)
+- IBP (multi-dim. array)
+- Tensor Networks for lattice QCD
+
+::: {.notes}
+  Component wise tensors are good for evaluating applied feynman rules of course. (lorentz and spinor structure)
+:::
+
+## It already exists, no?
+
+Not really
+
+- Mathematica
+  - Too slow
+- NDarray (Rust)
+  - Wanted Einstein/Abstract Index notation
+  - Needed Generic Dimensions 
+- cuTensorNet (CUDA)
+  - Support for non-euclidean metric
+  - Physical indices
+- ITensors.jl (Julia/C++) 
+  - Wanted Rust (for LU/gammaloop), zero-cost abstractions FTW
+  - Does not talk Symbolica
+
+
+::: {.notes}
+  Why make such a library when this isn't a new concept?
+
+  Well no package really fits our bill..
+
+  Mathematica: we need to evaluate tensor contractions at each integration point, it needs to be fast
+
+  We use rust: for nice language features and speed.
+
+  Rust: tensor package ecosystem is barren
+
+  if we wanted speed:
+
+  cutensoret
+
+  there does exist a very close in feature set library
+:::
+
+
+
+# Introducing Spenso!
+
+![](spenso.png){fig-align="center" width=100}
+
+- Provides two data storage layouts:
+    - Dense (flat vector)
+    - Sparse (hashmap based)
+
+- The components can be any type
+  - Crucially Symbolica `Atom`
+- Can create tensor "networks" for deferred contraction
+
+
+## Initializing
+
+Each tensor needs at minimum ae index `Structure`. 
+The `Structure` encodes the indices of the tensor, including the representation and dimensionality
+
+```rust
+let mink = Representation::Lorentz(Dimension(4));
+let mu = Slot::from((AbstractIndex(0),mink));
+let bis = Representation::Bispinor(Dimension(4));
+let i = Slot::from((AbstractIndex(1),bis));
+let j = Slot::from((AbstractIndex(2),bis));
+
+let structure = NamedStructure::new(&[mu,i,j],"γ");
+```
+Represents:
+$$
+\gamma^{\mu}_{ij}
+$$
+
+
+
+## Adding data
+
+Now we can add data to this structure.
+```{.rust code-line-numbers="|2|4|5"}
+let iunit = Complex::<f64>::i();
+let mut gamma = SparseTensor::empty(structure);
+
+gamma.set(&[0, 0, 0], 1.);
+gamma.set(&[1, 1, 0], 1.);
+gamma.set(&[2, 2, 0], -1.);
+gamma.set(&[3, 3, 0], -1.);
+
+gamma.set(&[0, 3, 1], 1.);
+gamma.set(&[1, 2, 1], 1.);
+gamma.set(&[2, 1, 1], -1.);
+gamma.set(&[3, 0, 1], -1.);
+
+gamma.set(&[0, 3, 2], -iunit);
+gamma.set(&[1, 2, 2], iunit);
+gamma.set(&[2, 1, 2], iunit);
+gamma.set(&[3, 0, 2], -iunit);
+
+gamma.set(&[0, 2, 3], 1.);
+gamma.set(&[1, 3, 3], -1.);
+gamma.set(&[2, 0, 3], -1.);
+gamma.set(&[3, 1, 3], 1.);
+```
+
+
+:::{.notes}
+ you can do this from a flattened vector, directly creating a dense tensor. You can also easily convert between the two storage options.
+:::
+
+## What if I don't yet know the data:
+
+The tensor can be symbolic, or parametric!
+
+```{.rust code-line-numbers="|4|5|7|"}
+let nu = Slot::from((AbstractIndex(1), mink));
+let structure = NamedStructure::from_slots(vec![mu, nu], "T");
+
+let symbolicT: SymbolicTensor = SymbolicTensor::from_named(&structure).unwrap();
+println!("{}", symbolicT); // T(lor(4,0),lor(4,1))
+let paramT: DenseTensor<Atom, _> = symbolicT.shadow().unwrap();
+let t12: Atom = paramT.get(&[1, 2]).unwrap());// T(1,2)
+```
+
+## What can you do with tensors:
+
+- Iterate along specific dimensions:
+  ```rust
+  for (c, _, _) in gamma.fiber(&[true, false, true].into()).iter() {
+          //stuff
+  }
+  ```
+- Arithmetic, when structures match:
+  ```rust
+    let 2gamma = gamma+gamma
+  ```
+- Contractions, when indices match:
+  ```rust
+    let cont = gamma.contract(&paramT);
+  ```
+
+## Specific example {auto-animate=true }
+
+consider this triangle diagram:
+
+![](diag.svg){fig-align="center" width="30%"}
+
+The numerator spinor structure looks like
+
+
+
+$$p_1^{\mu_1} p_2^{\mu_2}p_3^{\mu_3} \mathrm{Tr} (\gamma_\mu \gamma_{\mu_1} \gamma_\nu \gamma_{\mu_2} \gamma_\rho \gamma_{\mu_3})$$
+
+
+:::{.notes}
+what do we use it for?
+:::
+
+## Specific example {auto-animate=true }
+
+
+$$p_1^{\mu_1} p_2^{\mu_2}p_3^{\mu_3} \mathrm{Tr} (\gamma_\mu \gamma_{\mu_1} \gamma_\nu \gamma_{\mu_2} \gamma_\rho \gamma_{\mu_3})$$
+
+Usually we turn this into dot products by repeatedly applying the defining relation:
+
+$$\left\{ \gamma_\mu, \gamma_\nu \right\} = \gamma_\mu \gamma_\nu + \gamma_\nu \gamma_\mu = 2 \eta_{\mu \nu} I_4$$
+
+
+## Specific example {auto-animate=true }
+
+
+$$2 p_1^{\mu_1} p_2^{\mu_2}p_{3,\rho} \mathrm{Tr} (\gamma_\mu \gamma_{\mu_1} \gamma_\nu \gamma_{\mu_2}) \\ 
+-p_1^{\mu_1} p_2^{\mu_2}p_3^{\mu_3} \mathrm{Tr} (\gamma_\mu \gamma_{\mu_1} \gamma_\nu \gamma_{\mu_2}  \gamma_{\mu_3}\gamma_\rho)$$
+
+Usually we turn this into dot products by repeatedly applying the defining relation:
+
+$$\left\{ \gamma_\mu, \gamma_\nu \right\} = \gamma_\mu \gamma_\nu + \gamma_\nu \gamma_\mu = 2 \eta_{\mu \nu} I_4$$
+
+## Specific example {auto-animate=true }
+
+
+$$2 p_1^{\mu_1} p_2^{\mu_2}p_{3,\rho} \mathrm{Tr} (\gamma_\mu \gamma_{\mu_1} \gamma_\nu \gamma_{\mu_2}) \\ 
+-2 p_2 \cdot p_3 p_1^{\mu_1}  \mathrm{Tr} (\gamma_\mu \gamma_{\mu_1} \gamma_\nu \gamma_\rho) \\
++p_1^{\mu_1} p_2^{\mu_2}p_3^{\mu_3} \mathrm{Tr} (\gamma_\mu \gamma_{\mu_1} \gamma_\nu \gamma_{\mu_3}\gamma_{\mu_2}  \gamma_\rho)
+$$
+
+
+Usually we turn this into dot products by repeatedly applying the defining relation:
+
+$$\left\{ \gamma_\mu, \gamma_\nu \right\} = \gamma_\mu \gamma_\nu + \gamma_\nu \gamma_\mu = 2 \eta_{\mu \nu} I_4$$
+
+
+:::{.notes}
+gamma mu 3 is parading down the length of the gamma chain,leaving a trail of shorter chains, and dot products
+:::
+
+## Specific example {auto-animate=true }
+
+
+$$-4(p_1 \cdot p_2) p_{3,\mu}\eta_{\nu\rho}
+	\\ +4(p_1\cdot p_2)p_{3,\nu}\eta_{\mu\rho}
+	\\ -4(p_1\cdot p_2)p_{3,\rho}\eta_{\mu\nu}
+	\\ +4(p_1\cdot p_3)p_{2,\mu}\eta_{\nu\rho}
+	\\ -4(p_1\cdot p_3)p_{2,\nu}\eta_{\mu\rho}
+	\\ -4(p_1\cdot p_3)p_{2,\rho}\eta_{\mu\nu}
+	\\ -4p_{1,\mu} (p_2\cdot p_3)\eta_{\nu\rho}
+	\\ +4p_{1,\mu} p_{2,\nu}p_{3,\rho}
+	\\ +4p_{1,\mu} p_{2,\rho}p_{3,\nu}
+	\\ -4p_{1,\nu}(p_2\cdot p_3)\eta_{\mu\rho}
+	\\ +4p_{1,\nu}p_{2,\mu}p_{3,\rho}
+	\\ +4p_{1,\nu}p_{2,\rho}p_{3,\mu}
+	\\ +4p_{1,\rho}(p_2\cdot p_3)\eta_{\mu\nu}
+	\\ -4p_{1,\rho}p_{2,\mu}p_{3,\nu}
+	\\ +4p_{1,\rho}p_{2,\nu}p_{3,\mu}
+$$
+
+## Problem
+
+Exponential growth of the terms:
+
+
+::: {.nonincremental}
+- length 6: 15
+- length 10: ~1000
+:::
+
+If you do componentwise contraction on the unmodified trace:
+
+$$p_1^{\mu_1} p_2^{\mu_2}p_3^{\mu_3} \mathrm{Tr} (\gamma_\mu \gamma_{\mu_1} \gamma_\nu \gamma_{\mu_2} \gamma_\rho \gamma_{\mu_3})$$
+
+The scaling is linear in the chain length!
+
+
+## Deffered contraction {auto-animate=true }
+
+Consider a string of tensors
+
+Example 
+
+::: {data-id="gammachain"}
+
+$$\bar{v}_{i_1} u_{i_3}p_1^{\mu_1} p_2^{\mu_2}p_3^{\mu_3}p_4^{\mu_4}p_5^{\mu_5}p_6^{\mu_6}p_7^{\mu_7} \gamma_{i_1 i_2}^{\mu_1}  
+\\ \gamma_{i_2 i_3}^{\nu} 
+\gamma_{i_4 i_5}^{\nu}
+\gamma_{i_5 i_6}^{\mu_2} 
+\gamma_{i_6 i_7}^{\mu_3} 
+\gamma_{i_7 i_8}^{\mu_4} 
+\gamma_{i_8 i_9}^{\mu_5}
+\gamma_{i_9 i_4}^{\mu_6}$$ 
+
+:::
+
+
+
+
+
+## Deffered contraction {auto-animate=true }
+
+We can model a string of tensors, with repeated indices as a graph, each edge is an index, each node a tensor.
+
+Example 
+
+::: {data-id="gammachain"}
+
+```{dot .fragment}
+//| echo: false
+graph {  node [shape=circle,height=0.1,label=""];  overlap="scale";
+layout=neato
+ 4294967299 -- 4294967297 [color=red]
+ 4294967299 -- 4294967298 
+ 4294967301 -- 4294967299 
+ 4294967301 -- 4294967300 
+ 4294967302 -- 4294967301 [color=red]
+ 4294967304 -- 4294967302
+ 4294967304 -- 4294967303[color=red]
+ 4294967306 -- 4294967304 
+ 4294967306 -- 4294967305 [color=red]
+ 4294967308 -- 4294967306
+ 4294967308 -- 4294967307 [color=red]
+ 4294967310 -- 4294967308
+ 4294967310 -- 4294967309 [color=red]
+ 4294967311 -- 4294967310
+ 4294967311 -- 4294967302 
+ 4294967312 -- 4294967311 [color=red]}
+graph {  node [shape=circle,height=0.1,label=""];  overlap="scale";}
+```
+:::
+
+## Deffered contraction {auto-animate=true }
+
+We can model a string of tensors, with repeated indices as a graph, each edge is an index, each node a tensor.
+
+Example 
+
+::: {data-id="gammachain"}
+
+```{.rust}
+let γ1: MixedTensor<_> = gamma(1.into(), (1.into(), 2.into())).into();
+println!("{}", γ1.to_symbolic().unwrap()); 
+//γ(lor(4,1),spin(4,1),spina(4,2))
+let γ2: MixedTensor<_> = gamma(10.into(), (2.into(), 3.into())).into();
+// ...
+let p1: MixedTensor<_> = param_mink_four_vector(1.into(), "p1").into();
+/// ...
+let u: MixedTensor<_> = param_four_vector(1.into(), "u").into();
+println!("{}", u.to_symbolic().unwrap()); 
+// u(spin(4,1))
+
+let net: TensorNetwork<NumTensor> = TensorNetwork::from(vec![u,v,p1,p2,
+                                                            p3,p4,p5,p6,
+                                                            γ1,γ2,γ3,γ4,
+                                                            γ5,γ6,γ7,γ8]);
+
+println!("{}",net.dot());
+```
+:::
+
+## Tensor Network
+
+::: {.columns}
+::: {.column width="30%" }
+```{dot .fragment}
+//| echo: false
+//| fig-width: 3
+graph {  node [shape=circle,height=0.1,label=""];  overlap="scale";
+layout=neato
+ 4294967299 -- 4294967297 [color=red]
+ 4294967299 -- 4294967298 
+ 4294967301 -- 4294967299 
+ 4294967301 -- 4294967300 
+ 4294967302 -- 4294967301 [color=red]
+ 4294967304 -- 4294967302
+ 4294967304 -- 4294967303[color=red]
+ 4294967306 -- 4294967304 
+ 4294967306 -- 4294967305 [color=red]
+ 4294967308 -- 4294967306
+ 4294967308 -- 4294967307 [color=red]
+ 4294967310 -- 4294967308
+ 4294967310 -- 4294967309 [color=red]
+ 4294967311 -- 4294967310
+ 4294967311 -- 4294967302 
+ 4294967312 -- 4294967311 [color=red]}
+graph {  node [shape=circle,height=0.1,label=""];  overlap="scale";}
+```
+
+:::
+
+::: {.column width="70%"}
+
+- We now essentially have a tensor network
+
+- Contraction needs to happen according to some algorithm
+
+  ```{.rust .smaller}
+  net.contract_algo(Self::edge_to_min_degree_node)
+
+  ```
+
+- This can be custom. 
+ - Don't need to contract all the way down
+
+
+:::
+:::
+
+
+## Shadowing {auto-animate=true auto-animate-id="shadowing" }
+
+::: {.nonincremental}
+- If some tensors are fully parametric, there is a quick explosion of terms.
+- We can contract until a certain limit, then "shadow" the obtained network with parametric tensors
+:::
+
+:::::: {.columns}
+::: {.column .fragment width="40%"}
+
+```{dot .fragment data-id="shadow"}
+//| echo: false
+//| fig-width: 3
+graph {  node [shape=circle,height=0.1,label=""];  overlap="scale";
+layout=neato
+edge [penwidth=10.0]
+start=rsts
+ 4294967299 -- 4294967297
+ 4294967299 -- 4294967298
+ 4294967301 -- 4294967299
+ 4294967301 -- 4294967300
+ 4294967303 -- 4294967301
+ 4294967303 -- 4294967302
+ 4294967305 -- 4294967303
+ 4294967305 -- 4294967304
+ 4294967307 -- 4294967305
+ 4294967307 -- 4294967306
+ 4294967309 -- 4294967307
+ 4294967309 -- 4294967308
+ 4294967311 -- 4294967309
+ 4294967311 -- 4294967310
+ 4294967313 -- 4294967311
+ 4294967313 -- 4294967312
+ 4294967315 -- 4294967313
+ 4294967315 -- 4294967314
+ 4294967317 -- 4294967315
+ 4294967317 -- 4294967316
+ 4294967319 -- 4294967317
+ 4294967319 -- 4294967318
+ 4294967321 -- 4294967319
+ 4294967321 -- 4294967320
+ 4294967323 -- 4294967321
+ 4294967323 -- 4294967322
+ 4294967325 -- 4294967323
+ 4294967325 -- 4294967324
+ 4294967327 -- 4294967325
+ 4294967327 -- 4294967326
+ 4294967329 -- 4294967327
+ 4294967329 -- 4294967328
+ 4294967331 -- 4294967329
+ 4294967331 -- 4294967330
+ 4294967333 -- 4294967331
+ 4294967333 -- 4294967332
+ 4294967335 -- 4294967333
+ 4294967335 -- 4294967334
+ 4294967337 -- 4294967335
+ 4294967337 -- 4294967336
+ 4294967338 -- 4294967337
+ 4294967340 -- 4294967338
+ 4294967340 -- 4294967339
+ 4294967342 -- 4294967340
+ 4294967342 -- 4294967341
+ 4294967344 -- 4294967342
+ 4294967344 -- 4294967343
+ 4294967346 -- 4294967344
+ 4294967346 -- 4294967345
+ 4294967348 -- 4294967346
+ 4294967348 -- 4294967347
+ 4294967350 -- 4294967348
+ 4294967350 -- 4294967349
+ 4294967352 -- 4294967350
+ 4294967352 -- 4294967351
+ 4294967354 -- 4294967352
+ 4294967354 -- 4294967353
+ 4294967356 -- 4294967354
+ 4294967356 -- 4294967355
+ 4294967358 -- 4294967356
+ 4294967358 -- 4294967357
+ 4294967360 -- 4294967358
+ 4294967360 -- 4294967359
+ 4294967362 -- 4294967360
+ 4294967362 -- 4294967361
+ 4294967364 -- 4294967362
+ 4294967364 -- 4294967363
+ 4294967366 -- 4294967364
+ 4294967366 -- 4294967365
+ 4294967368 -- 4294967366
+ 4294967368 -- 4294967367
+ 4294967370 -- 4294967368
+ 4294967370 -- 4294967369
+ 4294967372 -- 4294967370
+ 4294967372 -- 4294967371
+ 4294967374 -- 4294967372
+ 4294967374 -- 4294967373
+ 4294967376 -- 4294967374
+ 4294967376 -- 4294967375
+ 4294967378 -- 4294967376
+ 4294967378 -- 4294967377
+ 4294967380 -- 4294967378
+ 4294967380 -- 4294967379
+ 4294967382 -- 4294967380
+ 4294967382 -- 4294967381
+ 4294967384 -- 4294967382
+ 4294967384 -- 4294967383
+ 4294967386 -- 4294967384
+ 4294967386 -- 4294967385
+ 4294967387 -- 4294967386
+ 4294967387 -- 4294967338
+ 4294967388 -- 4294967387}
+```
+
+:::
+::: {.column .fragment width="30%"}
+```{dot .fragment data-id="shadow"}
+//| echo: false
+//| fig-width: 3
+graph {  node [shape=circle,height=0.1,label=""];  overlap="scale";
+edge [penwidth=3.0]
+start=trst
+layout=neato
+ 30064771165 -- 12884901893
+ 21474836491 -- 30064771165
+ 21474836497 -- 21474836491
+ 21474836503 -- 21474836497
+ 21474836509 -- 21474836503
+ 21474836515 -- 21474836509
+ 12884901930 -- 21474836515
+ 21474836526 -- 12884901930
+ 21474836532 -- 21474836526
+ 21474836538 -- 21474836532
+ 21474836544 -- 21474836538
+ 21474836550 -- 21474836544
+ 21474836556 -- 21474836550
+ 21474836562 -- 21474836556
+ 12884901976 -- 21474836562
+ 12884901978 -- 12884901976
+ 12884901978 -- 12884901930}
+```
+:::
+::: {.column .fragment width="30%"}
+
+```{dot .fragment data-id="shadow"}
+//| echo: false
+//| fig-width: 3
+
+graph {  node [shape=circle,height=0.1,label=""];  overlap="scale";
+edge [penwidth=2.0]
+start=st
+layout=neato
+ 38654705757 -- 133143986267
+ 30064771089 -- 38654705757
+ 30064771101 -- 30064771089
+ 21474836522 -- 30064771101
+ 30064771124 -- 21474836522
+ 30064771136 -- 30064771124
+ 30064771148 -- 30064771136
+ 12884901978 -- 30064771148
+ 12884901978 -- 30064771101}
+```
+:::
+::::::
+
+- A similar idea has already been done in cuTensorNet!
+
+## Synergy with symbolica
+
+Spenso understands a specific format of symbolica expressions and can recognise known tensors with numerical counterparts:
+
+```rust
+let structure = NamedStructure::from_slots(vec![mu, i, j], "γ");
+let p_struct = NamedStructure::from_slots(vec![mu], "p");
+let t_struct = NamedStructure::from_slots(vec![i, j, k], "T");
+
+let gamma_sym = SymbolicTensor::from_named(&structure).unwrap();
+let p_sym = SymbolicTensor::from_named(&p_struct).unwrap();
+let t_sym = SymbolicTensor::from_named(&t_struct).unwrap();
+
+let f = gamma_sym.contract(&p_sym).unwrap().contract(&t_sym).unwrap();
+
+println!("{}", *f.get_atom()); 
+```
+```python
+p(lor(4,0))*γ(lor(4,0),bis(4,1),bis(4,2))*T(bis(4,1),bis(4,2),bis(4,3))
+```
+
+```rust
+let net: TensorNetwork<MixedTensor> = f.to_network().unwrap();
+```
+
+```{dot}
+graph {  node [shape=circle,height=0.1,label=""];  overlap="scale";
+layout=neato
+ 4294967298 -- 4294967297
+ 4294967299 -- 4294967298
+ 4294967299 -- 4294967298ext4294967303 [shape=none, label=""];
+ 4294967299 -- ext4294967303;}
+```
+
+## Performance
+
+
+:::::: {.columns}
+::: {.column }
+```{dot .fragment data-id="shadow"}
+//| echo: false
+//| fig-width: 2
+graph {  node [shape=circle,height=0.1,label=""];  overlap="scale";
+edge [penwidth=10.0]
+
+layout=neato
+ 4294967299 -- 4294967297
+ 4294967299 -- 4294967298
+ 4294967301 -- 4294967299
+ 4294967301 -- 4294967300
+ 4294967303 -- 4294967301
+ 4294967303 -- 4294967302
+ 4294967305 -- 4294967303
+ 4294967305 -- 4294967304
+ 4294967307 -- 4294967305
+ 4294967307 -- 4294967306
+ 4294967309 -- 4294967307
+ 4294967309 -- 4294967308
+ 4294967311 -- 4294967309
+ 4294967311 -- 4294967310
+ 4294967313 -- 4294967311
+ 4294967313 -- 4294967312
+ 4294967315 -- 4294967313
+ 4294967315 -- 4294967314
+ 4294967317 -- 4294967315
+ 4294967317 -- 4294967316
+ 4294967319 -- 4294967317
+ 4294967319 -- 4294967318
+ 4294967321 -- 4294967319
+ 4294967321 -- 4294967320
+ 4294967323 -- 4294967321
+ 4294967323 -- 4294967322
+ 4294967325 -- 4294967323
+ 4294967325 -- 4294967324
+ 4294967327 -- 4294967325
+ 4294967327 -- 4294967326
+ 4294967329 -- 4294967327
+ 4294967329 -- 4294967328
+ 4294967331 -- 4294967329
+ 4294967331 -- 4294967330
+ 4294967333 -- 4294967331
+ 4294967333 -- 4294967332
+ 4294967335 -- 4294967333
+ 4294967335 -- 4294967334
+ 4294967337 -- 4294967335
+ 4294967337 -- 4294967336
+ 4294967338 -- 4294967337
+ 4294967340 -- 4294967338
+ 4294967340 -- 4294967339
+ 4294967342 -- 4294967340
+ 4294967342 -- 4294967341
+ 4294967344 -- 4294967342
+ 4294967344 -- 4294967343
+ 4294967346 -- 4294967344
+ 4294967346 -- 4294967345
+ 4294967348 -- 4294967346
+ 4294967348 -- 4294967347
+ 4294967350 -- 4294967348
+ 4294967350 -- 4294967349
+ 4294967352 -- 4294967350
+ 4294967352 -- 4294967351
+ 4294967354 -- 4294967352
+ 4294967354 -- 4294967353
+ 4294967356 -- 4294967354
+ 4294967356 -- 4294967355
+ 4294967358 -- 4294967356
+ 4294967358 -- 4294967357
+ 4294967360 -- 4294967358
+ 4294967360 -- 4294967359
+ 4294967362 -- 4294967360
+ 4294967362 -- 4294967361
+ 4294967364 -- 4294967362
+ 4294967364 -- 4294967363
+ 4294967366 -- 4294967364
+ 4294967366 -- 4294967365
+ 4294967368 -- 4294967366
+ 4294967368 -- 4294967367
+ 4294967370 -- 4294967368
+ 4294967370 -- 4294967369
+ 4294967372 -- 4294967370
+ 4294967372 -- 4294967371
+ 4294967374 -- 4294967372
+ 4294967374 -- 4294967373
+ 4294967376 -- 4294967374
+ 4294967376 -- 4294967375
+ 4294967378 -- 4294967376
+ 4294967378 -- 4294967377
+ 4294967380 -- 4294967378
+ 4294967380 -- 4294967379
+ 4294967382 -- 4294967380
+ 4294967382 -- 4294967381
+ 4294967384 -- 4294967382
+ 4294967384 -- 4294967383
+ 4294967386 -- 4294967384
+ 4294967386 -- 4294967385
+ 4294967387 -- 4294967386
+ 4294967387 -- 4294967338
+ 4294967388 -- 4294967387}
+ ```
+:::
+::: {.column}
+
+| Spenso  | Spenso Compiled | Hardcoded Fortran |
+|---------|:-----:|:------:|
+| 104 μs     | 16 μs  |    31μs |
+
+We can use a compiled version of the stacked shadowing using symbolica!
+
+:::
+::::::
+# Outlook
+
+- More tooling to deal with specific tensor index symmetries
+- Python bindings compatible with symbolica
+- GPU support
+- SIMD support
+
+
+# Thanks
+
+If you want to check it out it is on crates.io:
+
+<https://crates.io/crates/spenso>
+
+And on github:
+
+<https://github.com/alphal00p/spenso>

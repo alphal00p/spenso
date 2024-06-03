@@ -147,6 +147,7 @@
         myCrateCoverage = craneLib.cargoTarpaulin (commonArgs
           // {
             inherit cargoArtifacts;
+            cargoTarpaulinExtraArgs = "--all-features";
           });
       };
 

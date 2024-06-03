@@ -25,8 +25,9 @@ jobs:
       - name: Build
         run: nix build
       - name: Run tests
-        run: nix flake check -v --print-build-logs
+        run: nix flake check -v --print-build-logs -L --out-link coverage-result
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
         with:
+          file: ./coverage-result/
           fail_ci_if_error: true

@@ -175,6 +175,8 @@
           # pkgs.ripgrep
           pkgs.quarto
           pkgs.deno
+
+          pkgs.bfg-repo-cleaner
         ];
       };
     });

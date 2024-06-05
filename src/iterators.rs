@@ -138,6 +138,7 @@ struct BareFiber {
 }
 
 impl BareFiber {
+    #[allow(dead_code)]
     pub fn conj(self) -> Self {
         self
     }

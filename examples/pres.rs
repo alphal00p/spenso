@@ -1,19 +1,14 @@
 use std::ops::Neg;
 
 use spenso::{
-    ufo::{
-        euclidean_four_vector, euclidean_four_vector_sym, gamma, gammasym, mink_four_vector,
-        mink_four_vector_sym, param_euclidean_four_vector, param_mink_four_vector,
-    },
-    AbstractIndex, Complex, Contract, Dimension, FallibleMul, HasName, HasStructure,
-    HistoryStructure, MixedTensor, NamedStructure, NumTensor, Representation, Shadowable, Slot,
-    SparseTensor, SymbolicTensor, TensorNetwork,
+    ufo::{euclidean_four_vector_sym, gammasym, mink_four_vector_sym, param_mink_four_vector},
+    AbstractIndex, Complex, Contract, Dimension, FallibleMul, HistoryStructure, MixedTensor,
+    NamedStructure, NumTensor, Representation, Shadowable, Slot, SymbolicTensor, TensorNetwork,
 };
 
-use criterion::{criterion_group, criterion_main, Criterion};
 use num::ToPrimitive;
 
-use symbolica::atom::{Atom, Symbol};
+use symbolica::atom::Symbol;
 
 fn gamma_net_sym(
     minkindices: &[i32],
@@ -70,16 +65,16 @@ fn main() {
     let _zero = Complex::<f64>::new(0.0, 0.0);
 
     let vbar = [
-        one.mul_fallible(3.0).unwrap(),
-        one.mul_fallible(3.1).unwrap(),
-        one.mul_fallible(3.2).unwrap(),
-        one.mul_fallible(3.3).unwrap(),
+        one.mul_fallible(&3.0).unwrap(),
+        one.mul_fallible(&3.1).unwrap(),
+        one.mul_fallible(&3.2).unwrap(),
+        one.mul_fallible(&3.3).unwrap(),
     ];
     let u = [
-        one.mul_fallible(4.0).unwrap(),
-        one.mul_fallible(4.1).unwrap(),
-        one.mul_fallible(4.2).unwrap(),
-        one.mul_fallible(4.3).unwrap(),
+        one.mul_fallible(&4.0).unwrap(),
+        one.mul_fallible(&4.1).unwrap(),
+        one.mul_fallible(&4.2).unwrap(),
+        one.mul_fallible(&4.3).unwrap(),
     ];
     let minkindices = indices(20, 24);
 
@@ -116,7 +111,7 @@ fn main() {
 
     println!("{}", *f.get_atom());
 
-    let a: TensorNetwork<MixedTensor> = f.to_network().unwrap();
+    let _a: TensorNetwork<MixedTensor> = f.to_network().unwrap();
 
     // println!("{}", a.dot());
 
@@ -124,7 +119,7 @@ fn main() {
 
     // let γ2: MixedTensor<_> = gamma(10.into(), (2.into(), 3.into())).into();
 
-    let p1: MixedTensor<_> = param_mink_four_vector(1.into(), "p1").into();
+    let _p1: MixedTensor<_> = param_mink_four_vector(1.into(), "p1").into();
 
     let u: MixedTensor<_> = NamedStructure::new(
         &[(1.into(), Representation::SpinFundamental(4.into()))],

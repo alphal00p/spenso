@@ -48,6 +48,7 @@ impl<T, I: HasStructure> DataIterator<T> for DenseTensor<T, I> {
     }
 }
 
+#[allow(dead_code)]
 trait Settable {
     type SetData;
     fn set(&mut self, index: usize, data: Self::SetData);

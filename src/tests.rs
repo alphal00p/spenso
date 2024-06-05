@@ -816,10 +816,10 @@ fn mixed_tensor_contraction() {
 
     let b = DenseTensor::from_data(
         &[
-            im.mul_fallible(1.0).unwrap(),
-            2.0.mul_fallible(im).unwrap(),
-            3.0.mul_fallible(im).unwrap(),
-            4.0.mul_fallible(im).unwrap(),
+            im.mul_fallible(&1.0).unwrap(),
+            2.0.mul_fallible(&im).unwrap(),
+            3.0.mul_fallible(&im).unwrap(),
+            4.0.mul_fallible(&im).unwrap(),
         ],
         structur_b.clone(),
     )
@@ -830,16 +830,16 @@ fn mixed_tensor_contraction() {
     assert_eq!(
         f.data,
         [
-            1.0.mul_fallible(im).unwrap(),
-            6.0.mul_fallible(im).unwrap(),
-            2.0.mul_fallible(im).unwrap(),
-            8.0.mul_fallible(im).unwrap()
+            1.0.mul_fallible(&im).unwrap(),
+            6.0.mul_fallible(&im).unwrap(),
+            2.0.mul_fallible(&im).unwrap(),
+            8.0.mul_fallible(&im).unwrap()
         ]
     );
 
     let data_a = [
-        (vec![0, 0], 1.0.mul_fallible(im).unwrap()),
-        (vec![1, 1], 2.0.mul_fallible(im).unwrap()),
+        (vec![0, 0], 1.0.mul_fallible(&im).unwrap()),
+        (vec![1, 1], 2.0.mul_fallible(&im).unwrap()),
     ];
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
@@ -850,10 +850,10 @@ fn mixed_tensor_contraction() {
     assert_eq!(
         f.data,
         [
-            1.0.mul_fallible(im).unwrap(),
-            2.0.mul_fallible(im).unwrap(),
-            6.0.mul_fallible(im).unwrap(),
-            8.0.mul_fallible(im).unwrap()
+            1.0.mul_fallible(&im).unwrap(),
+            2.0.mul_fallible(&im).unwrap(),
+            6.0.mul_fallible(&im).unwrap(),
+            8.0.mul_fallible(&im).unwrap()
         ]
     );
 }
@@ -1069,7 +1069,7 @@ fn simple_multi_contract_sym() {
     let structb = VecStructure::new(vec![(2, 4).into(), (4, 3).into(), (3, 4).into()]);
     // let structb = structb.to_named("b");
 
-    let a = DenseTensor::from_data(
+    let _a = DenseTensor::from_data(
         &[
             1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 12, 13, 14, 15, 16, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11,
             12, 13, 14, 15, 16, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 12, 13, 14, 15, 16,
@@ -1078,7 +1078,7 @@ fn simple_multi_contract_sym() {
     )
     .unwrap();
 
-    let b = DenseTensor::from_data(
+    let _b = DenseTensor::from_data(
         &[
             3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 3, 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0,
             3, 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 3, 2, 1,
@@ -1090,7 +1090,7 @@ fn simple_multi_contract_sym() {
     let a: DataTensor<Atom> = structa.shadow_with("a".into_id()).into();
     let b: DataTensor<Atom> = structb.shadow_with("b".into_id()).into();
 
-    let f = a.contract(&b).unwrap();
+    let _f = a.contract(&b).unwrap();
 }
 
 #[test]
@@ -1126,9 +1126,9 @@ fn symbolic_contract() {
     let j = Slot::from((AbstractIndex(2), bis));
     let k = Slot::from((9.into(), bis));
 
-    let structure = NamedStructure::from_slots(vec![mu, i, j], "γ");
-    let p_struct = NamedStructure::from_slots(vec![mu], "p");
-    let t_struct = NamedStructure::from_slots(vec![i, j, k], "T");
+    let _structure = NamedStructure::from_slots(vec![mu, i, j], "γ");
+    let _p_struct = NamedStructure::from_slots(vec![mu], "p");
+    let _t_struct = NamedStructure::from_slots(vec![i, j, k], "T");
 
     let a = SymbolicTensor::from_named(&structura).unwrap();
     let b = SymbolicTensor::from_named(&structurb).unwrap();
@@ -1170,7 +1170,7 @@ fn test_fallible_mul() {
 
         let b = &Atom::parse("b(1)").unwrap();
         let i = Atom::new_var(State::I);
-        let mut f = a.mul_fallible(4.).unwrap();
+        let mut f = a.mul_fallible(&4.).unwrap();
         f.add_assign_fallible(b);
         f.add_assign_fallible(&i);
 

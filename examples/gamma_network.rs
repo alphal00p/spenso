@@ -47,16 +47,16 @@ fn main() {
     let one = Complex::<f64>::new(1.0, 0.0);
 
     let vbar = [
-        one.mul_fallible(3.0).unwrap(),
-        one.mul_fallible(3.1).unwrap(),
-        one.mul_fallible(3.2).unwrap(),
-        one.mul_fallible(3.3).unwrap(),
+        one.mul_fallible(&3.0).unwrap(),
+        one.mul_fallible(&3.1).unwrap(),
+        one.mul_fallible(&3.2).unwrap(),
+        one.mul_fallible(&3.3).unwrap(),
     ];
     let u = [
-        one.mul_fallible(4.0).unwrap(),
-        one.mul_fallible(4.1).unwrap(),
-        one.mul_fallible(4.2).unwrap(),
-        one.mul_fallible(4.3).unwrap(),
+        one.mul_fallible(&4.0).unwrap(),
+        one.mul_fallible(&4.1).unwrap(),
+        one.mul_fallible(&4.2).unwrap(),
+        one.mul_fallible(&4.3).unwrap(),
     ];
 
     let spacings: [i32; 2] = [2, 4];

@@ -6,7 +6,8 @@
     "iterators",
     "test",
     "CI",
-    "network"
+    "network",
+    "contraction"
   ],
   "github.copilot.enable": {
     "quarto": false,

@@ -21,7 +21,7 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v27
       - name: Magic Nix Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v6
+        uses: DeterminateSystems/magic-nix-cache-action@v7
       - name: Build
         run: nix build
       - name: Run tests
@@ -29,7 +29,7 @@ jobs:
       - name: Run tarpaulin
         run: nix build .#spenso-tarpaulin-coverage
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v4
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:

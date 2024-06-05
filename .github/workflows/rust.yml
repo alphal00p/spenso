@@ -21,7 +21,7 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v27
       - name: Magic Nix Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v6
+        uses: DeterminateSystems/magic-nix-cache-action@v7
       - name: Build
         run: nix build
       - name: Run tests

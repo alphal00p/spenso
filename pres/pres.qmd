@@ -16,6 +16,7 @@ format:
     code-overflow: wrap
     highlight-style: breeze
     embed-resources: true
+    height: 1000
     footnotes-hover: true
 ---
 

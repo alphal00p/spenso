@@ -67,7 +67,6 @@
             # Additional darwin specific inputs can be set here
             pkgs.libiconv
           ];
-        ***REMOVED***
 
         # Additional environment variables can be set directly
         # MY_CUSTOM_VAR = "some value";
@@ -141,13 +140,6 @@
             partitions = 1;
             partitionType = "count";
             cargoNextestExtraArgs = "--all-features";
-            ***REMOVED***
-          });
-
-        myCrateCoverage = craneLib.cargoTarpaulin (commonArgs
-          // {
-            inherit cargoArtifacts;
-            cargoTarpaulinExtraArgs = "--all-features";
           });
       };
 
@@ -160,6 +152,12 @@
             // {
               inherit cargoArtifacts;
               cargoExtraArgs = "";
+            });
+
+          spenso-tarpaulin-coverage = craneLib.cargoTarpaulin (commonArgs
+            // {
+              inherit cargoArtifacts;
+              cargoTarpaulinExtraArgs = "--skip-clean --out xml --output-dir $out --all-features";
             });
         };
 

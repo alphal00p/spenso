@@ -26,8 +26,10 @@ jobs:
         run: nix build
       - name: Run tests
         run: nix flake check -v --print-build-logs
+      - name: Run tarpaulin
+        run: nix build .#spenso-tarpaulin-coverage
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
         with:
-          working-directory: $out
+          file: ./result/cobertura.xml
           fail_ci_if_error: true

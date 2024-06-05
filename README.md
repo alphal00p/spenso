@@ -5,6 +5,7 @@
 [![Documentation](https://img.shields.io/docsrs/spenso/latest)](https://docs.rs/spenso/latest/spenso/)
 [![crates.io](https://img.shields.io/crates/v/spenso.svg)](https://crates.io/crates/spenso)
 [![Build Status](https://github.com/alphal00p/spenso/actions/workflows/rust.yml/badge.svg)](https://github.com/alphal00p/spenso/actions/workflows/rust.yml)
+[![codecov](https://codecov.io/github/alphal00p/spenso/graph/badge.svg?token=ST0XA54QSF)](https://codecov.io/github/alphal00p/spenso)
 
 </div>
 

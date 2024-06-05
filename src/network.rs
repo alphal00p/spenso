@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
 
+use crate::Complex;
 #[cfg(feature = "shadowing")]
 use crate::{DataTensor, HistoryStructure, MixedTensor, MixedTensors, Shadowable};
 
@@ -14,7 +15,10 @@ use symbolica::{
 #[cfg(feature = "shadowing")]
 use ahash::AHashMap;
 
-use super::{arithmetic::ScalarMul, structure, Contract, HasName, HasStructure, Slot, TracksCount};
+use super::{
+    arithmetic::ScalarMul, structure, Contract, HasName, HasStructure, Slot, TracksCount,
+    TrySmallestUpgrade,
+};
 use smartstring::alias::String;
 use std::fmt::{Debug, Display};
 
@@ -588,6 +592,32 @@ where
         for (_, n) in &mut self.graph.nodes {
             n.evaluate_complex(const_map);
         }
+    }
+
+    pub fn to_fully_parametric(mut self) -> TensorNetwork<DataTensor<Atom, N>>
+    where
+        N: HasStructure + Clone,
+    {
+        // let largest = self.graph.nodes.values().reduce(|a, b| a.max(b)).unwrap();
+        let mut tensors = vec![];
+
+        for n in self.graph.nodes.values() {
+            tensors.push(match n {
+                MixedTensor::Float(t) => {
+                    <DataTensor<f64, N> as TrySmallestUpgrade<DataTensor<Atom, N>>>::try_upgrade(t)
+                        .unwrap()
+                        .into_owned()
+                }
+                MixedTensor::Complex(t) => <DataTensor<Complex<f64>, N> as TrySmallestUpgrade<
+                    DataTensor<Atom, _>,
+                >>::try_upgrade(t)
+                .unwrap()
+                .into_owned(),
+                MixedTensor::Symbolic(t) => t.clone(),
+            });
+        }
+
+        TensorNetwork::from(tensors)
     }
 }
 

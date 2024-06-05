@@ -815,12 +815,13 @@ where
     }
 }
 
-impl<T, U> TrySmallestUpgrade<DataTensor<T>> for DataTensor<U>
+impl<T, U, I> TrySmallestUpgrade<DataTensor<T, I>> for DataTensor<U, I>
 where
     U: TrySmallestUpgrade<T>,
     U::LCM: Clone,
+    I: HasStructure + Clone,
 {
-    type LCM = DataTensor<U::LCM>;
+    type LCM = DataTensor<U::LCM, I>;
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
     where
         Self::LCM: Clone,

@@ -621,6 +621,25 @@ where
     }
 }
 
+impl<T: HasStructure + Clone> TensorNetwork<DataTensor<Atom, T>> {
+    pub fn evaluate<'a, D>(
+        &'a self,
+        const_map: &AHashMap<AtomView<'a>, D>,
+    ) -> TensorNetwork<DataTensor<D, T>>
+    where
+        D: Clone
+            + symbolica::domains::float::Real
+            + for<'c> std::convert::From<&'c symbolica::domains::rational::Rational>,
+    {
+        let mut evaluated_net = TensorNetwork::new();
+        for (_, t) in &self.graph.nodes {
+            let evaluated_tensor = t.evaluate(const_map);
+            evaluated_net.push(evaluated_tensor);
+        }
+
+        evaluated_net
+    }
+}
 impl<T> From<Vec<T>> for TensorNetwork<T>
 where
     T: HasStructure,

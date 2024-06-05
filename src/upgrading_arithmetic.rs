@@ -1007,8 +1007,9 @@ impl<'b> TrySmallestUpgrade<larger> for &'b smaller {
 
 pub trait FallibleMul<T> {
     type Output;
-    fn mul_fallible(self, rhs: T) -> Option<Self::Output>;
+    fn mul_fallible(&self, rhs: &T) -> Option<Self::Output>;
 }
+
 impl<T, U> FallibleMul<T> for U
 where
     U: TrySmallestUpgrade<T>,
@@ -1018,7 +1019,7 @@ where
 {
     type Output = U::LCM;
 
-    fn mul_fallible(self, rhs: T) -> Option<Self::Output> {
+    fn mul_fallible(&self, rhs: &T) -> Option<Self::Output> {
         let lhs = self.try_upgrade()?;
         let rhs = rhs.try_upgrade()?;
         Some(lhs.as_ref().mul(rhs.as_ref()))
@@ -1121,7 +1122,7 @@ mod test {
     fn i32_arithmetic() {
         let a: i32 = 4;
         let b: i32 = 4;
-        let mut c = a.mul_fallible(b).unwrap();
+        let mut c = a.mul_fallible(&b).unwrap();
         c.add_assign_fallible(&a);
         c.sub_assign_fallible(&b);
         let d = b.sub_fallible(a);
@@ -1148,7 +1149,7 @@ mod test {
         let a = &Atom::parse("a(2)").unwrap();
         let b = &Atom::parse("b(1)").unwrap();
 
-        let mut f = a.mul_fallible(4.).unwrap();
+        let mut f = a.mul_fallible(&4.).unwrap();
         f.add_assign_fallible(b);
 
         let i = Atom::new_var(State::I);

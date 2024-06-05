@@ -373,7 +373,7 @@ pub trait ScalarMul<T> {
 
 impl<'a, T, U, I, Out> ScalarMul<&T> for &'a DenseTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleMul<&'c T, Output = Out>,
+    U: FallibleMul<T, Output = Out>,
     I: HasStructure + Clone,
 {
     type Output = DenseTensor<Out, I>;
@@ -389,7 +389,7 @@ where
 
 impl<'a, T, U, I, Out> ScalarMul<&T> for &'a SparseTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleMul<&'c T, Output = Out>,
+    U: FallibleMul<T, Output = Out>,
     I: HasStructure + Clone,
 {
     type Output = SparseTensor<Out, I>;
@@ -404,7 +404,7 @@ where
 
 impl<'a, T, U, I, Out> ScalarMul<&T> for &'a DataTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleMul<&'c T, Output = Out>,
+    U: FallibleMul<T, Output = Out>,
     I: HasStructure + Clone,
 {
     type Output = DataTensor<Out, I>;

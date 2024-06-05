@@ -3,13 +3,12 @@ use ahash::AHashMap;
 use super::{
     DataIterator, DataTensor, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSubAssign,
     HasStructure, HasTensorData, NumTensor, Representation, SetTensorData, SparseTensor,
-    StructureContract, TrySmallestUpgrade,
+    StructureContract,
 };
 
 use std::iter::Iterator;
 
 use std::{
-    fmt::Debug,
     // intrinsics::needs_drop,
     ops::Neg,
 };
@@ -17,119 +16,94 @@ use std::{
 pub trait LeastCommonStorage<Other: HasTensorData + SetTensorData>:
     HasTensorData + SetTensorData
 {
-    type OutStorage<LCMData>: SetTensorData<SetData = LCMData>;
-    fn least_common_storage<LCMData>(&self, other: &Other) -> Self::OutStorage<LCMData>
-    where
-        for<'a, 'b> &'a Self::Data: TrySmallestUpgrade<&'b Other::Data, LCM = LCMData>,
-        LCMData: Default + Clone;
+    type LCMData;
+    type OutStorage: SetTensorData<SetData = Self::LCMData>;
+    fn least_common_storage(&self, other: &Other) -> Self::OutStorage;
 
-    fn empty<LCMData>(structure: Self::Structure) -> Self::OutStorage<LCMData>
-    where
-        for<'a, 'b> &'a Self::Data: TrySmallestUpgrade<&'b Other::Data, LCM = LCMData>,
-        LCMData: Default + Clone;
+    fn empty(structure: Self::Structure) -> Self::OutStorage;
 }
 
-impl<T, U, I> LeastCommonStorage<DenseTensor<T, I>> for DenseTensor<U, I>
+impl<T, U, I, LCMData> LeastCommonStorage<DenseTensor<T, I>> for DenseTensor<U, I>
 where
-    T: Clone,
-    U: Clone,
+    T: ContractableWith<U, Out = LCMData> + Clone,
+    U: ContractableWith<T, Out = LCMData> + Clone,
+    LCMData: Default + Clone,
     I: HasStructure + StructureContract + Clone,
 {
-    type OutStorage<LCMData> = DenseTensor<LCMData, I>;
-    fn least_common_storage<LCMData>(&self, other: &DenseTensor<T, I>) -> Self::OutStorage<LCMData>
-    where
-        for<'a, 'b> &'a Self::Data: TrySmallestUpgrade<&'b T, LCM = LCMData>,
-        LCMData: Default + Clone,
-    {
+    type OutStorage = DenseTensor<LCMData, I>;
+    type LCMData = LCMData;
+
+    fn empty(structure: Self::Structure) -> Self::OutStorage {
+        DenseTensor::default(structure)
+    }
+
+    fn least_common_storage(&self, other: &DenseTensor<T, I>) -> Self::OutStorage {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
         DenseTensor::default(final_structure)
     }
-
-    fn empty<LCMData>(structure: Self::Structure) -> Self::OutStorage<LCMData>
-    where
-        for<'a, 'b> &'a Self::Data: TrySmallestUpgrade<&'b T, LCM = LCMData>,
-        LCMData: Default + Clone,
-    {
-        DenseTensor::default(structure)
-    }
 }
 
-impl<T, U, I> LeastCommonStorage<DenseTensor<T, I>> for SparseTensor<U, I>
+impl<T, U, I, LCMData> LeastCommonStorage<DenseTensor<T, I>> for SparseTensor<U, I>
 where
-    T: Clone,
-    U: Clone,
+    T: ContractableWith<U, Out = LCMData> + Clone,
+    U: ContractableWith<T, Out = LCMData> + Clone,
+    LCMData: Default + Clone,
     I: HasStructure + StructureContract + Clone,
 {
-    type OutStorage<LCMData> = DenseTensor<LCMData, I>;
-    fn least_common_storage<LCMData>(&self, other: &DenseTensor<T, I>) -> Self::OutStorage<LCMData>
-    where
-        for<'a, 'b> &'a Self::Data: TrySmallestUpgrade<&'b T, LCM = LCMData>,
-        LCMData: Default + Clone,
-    {
+    type OutStorage = DenseTensor<LCMData, I>;
+    type LCMData = LCMData;
+
+    fn empty(structure: Self::Structure) -> Self::OutStorage {
+        DenseTensor::default(structure)
+    }
+
+    fn least_common_storage(&self, other: &DenseTensor<T, I>) -> Self::OutStorage {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
         DenseTensor::default(final_structure)
     }
-
-    fn empty<LCMData>(structure: Self::Structure) -> Self::OutStorage<LCMData>
-    where
-        for<'a, 'b> &'a Self::Data: TrySmallestUpgrade<&'b T, LCM = LCMData>,
-        LCMData: Default + Clone,
-    {
-        DenseTensor::default(structure)
-    }
 }
 
-impl<T, U, I> LeastCommonStorage<SparseTensor<T, I>> for DenseTensor<U, I>
+impl<T, U, I, LCMData> LeastCommonStorage<SparseTensor<T, I>> for DenseTensor<U, I>
 where
-    T: Clone,
-    U: Clone,
+    T: ContractableWith<U, Out = LCMData> + Clone,
+    U: ContractableWith<T, Out = LCMData> + Clone,
+    LCMData: Default + Clone,
     I: HasStructure + StructureContract + Clone,
 {
-    type OutStorage<LCMData> = DenseTensor<LCMData, I>;
-    fn least_common_storage<LCMData>(&self, other: &SparseTensor<T, I>) -> Self::OutStorage<LCMData>
-    where
-        for<'a, 'b> &'a Self::Data: TrySmallestUpgrade<&'b T, LCM = LCMData>,
-        LCMData: Default + Clone,
-    {
+    type OutStorage = DenseTensor<LCMData, I>;
+    type LCMData = LCMData;
+
+    fn empty(structure: Self::Structure) -> Self::OutStorage {
+        DenseTensor::default(structure)
+    }
+
+    fn least_common_storage(&self, other: &SparseTensor<T, I>) -> Self::OutStorage {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
         DenseTensor::default(final_structure)
     }
-
-    fn empty<LCMData>(structure: Self::Structure) -> Self::OutStorage<LCMData>
-    where
-        for<'a, 'b> &'a Self::Data: TrySmallestUpgrade<&'b T, LCM = LCMData>,
-        LCMData: Default + Clone,
-    {
-        DenseTensor::default(structure)
-    }
 }
 
-impl<T, U, I> LeastCommonStorage<SparseTensor<T, I>> for SparseTensor<U, I>
+impl<T, U, I, LCMData> LeastCommonStorage<SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    T: Clone,
-    U: Clone,
+    T: ContractableWith<U, Out = LCMData> + Clone,
+    U: ContractableWith<T, Out = LCMData> + Clone,
+    LCMData: Default + Clone,
     I: HasStructure + StructureContract + Clone,
 {
-    type OutStorage<LCMData> = SparseTensor<LCMData, I>;
-    fn least_common_storage<LCMData>(&self, other: &SparseTensor<T, I>) -> Self::OutStorage<LCMData>
-    where
-        for<'a, 'b> &'a Self::Data: TrySmallestUpgrade<&'b T, LCM = LCMData>,
-        LCMData: Default + Clone,
-    {
+    type OutStorage = SparseTensor<LCMData, I>;
+    type LCMData = LCMData;
+
+    fn empty(structure: Self::Structure) -> Self::OutStorage {
+        SparseTensor::empty(structure)
+    }
+
+    fn least_common_storage(&self, other: &SparseTensor<T, I>) -> Self::OutStorage {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
         SparseTensor::empty(final_structure)
-    }
-
-    fn empty<LCMData>(structure: Self::Structure) -> Self::OutStorage<LCMData>
-    where
-        for<'a, 'b> &'a Self::Data: TrySmallestUpgrade<&'b T, LCM = LCMData>,
-        LCMData: Default + Clone,
-    {
-        SparseTensor::empty(structure)
     }
 }
 
@@ -140,16 +114,16 @@ pub trait ExteriorProduct<T> {
 
 impl<T, U, LCMData> ExteriorProduct<T> for U
 where
-    U: LeastCommonStorage<T> + DataIterator<U::Data>,
-    for<'a, 'b> &'a U::Data:
-        TrySmallestUpgrade<&'b T::Data, LCM = LCMData> + FallibleMul<&'b T::Data, Output = LCMData>,
-    T: LeastCommonStorage<U, OutStorage<LCMData> = U::OutStorage<LCMData>> + DataIterator<T::Data>,
+    U: LeastCommonStorage<T, LCMData = LCMData> + DataIterator<U::Data>,
+    U::Data: ContractableWith<T::Data, Out = LCMData>,
+    T::Data: ContractableWith<U::Data, Out = LCMData>,
+    T: LeastCommonStorage<U, OutStorage = U::OutStorage> + DataIterator<T::Data>,
     LCMData: Default + Clone,
 {
-    type Out = U::OutStorage<LCMData>;
+    type Out = U::OutStorage;
 
     fn exterior_product(&self, other: &T) -> Self::Out {
-        let mut out = self.least_common_storage::<LCMData>(other);
+        let mut out = self.least_common_storage(other);
 
         let stride = other.size();
 
@@ -237,24 +211,27 @@ pub trait MultiContract<T> {
     type LCM;
     fn multi_contract(&self, other: &T) -> Option<Self::LCM>;
 }
-pub trait DotProduct<T> {
+pub trait ContractableWith<T>
+where
+    Self: FallibleMul<T, Output = Self::Out> + Sized,
+    T: FallibleMul<Self, Output = Self::Out>,
+{
     type Out: FallibleAddAssign<Self::Out> + FallibleSubAssign<Self::Out> + Clone + Default;
 }
 
-impl<T, U, O> DotProduct<T> for U
+impl<T, U, Out> ContractableWith<T> for U
 where
-    for<'a, 'b> &'a U: FallibleMul<&'b T, Output = O>,
-    for<'a, 'b> &'a T: FallibleMul<&'b U, Output = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + Default,
+    U: FallibleMul<T, Output = Out>,
+    T: FallibleMul<U, Output = Out>,
+    Out: FallibleAddAssign<Out> + FallibleSubAssign<Out> + Clone + Default,
 {
-    type Out = O;
+    type Out = Out;
 }
 
 impl<T, U, I> SingleContract<DenseTensor<T, I>> for DenseTensor<U, I>
 where
-    for<'a, 'b> &'a U: FallibleMul<&'b T, Output = U::Out>,
-    for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
-    U: DotProduct<T>,
+    U: ContractableWith<T>,
+    T: ContractableWith<U, Out = U::Out>,
     I: HasStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -274,7 +251,7 @@ where
             for fiber_b in other_iter.by_ref() {
                 for (k, ((a, _), (b, _))) in (fiber_a.by_ref()).zip(fiber_b).enumerate() {
                     if fiber_representation.is_neg(k) {
-                        result_data[result_index].sub_assign_fallible(a.mul_fallible(b).unwrap());
+                        result_data[result_index].sub_assign_fallible(a.mul_fallible(&b).unwrap());
                     } else {
                         result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
                     }
@@ -295,9 +272,8 @@ where
 
 impl<T, U, I> MultiContract<DenseTensor<T, I>> for DenseTensor<U, I>
 where
-    for<'a, 'b> &'a U: FallibleMul<&'b T, Output = U::Out>,
-    for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
-    U: DotProduct<T>,
+    U: ContractableWith<T>,
+    T: ContractableWith<U, Out = U::Out>,
     I: HasStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -379,9 +355,8 @@ where
 
 impl<T, U, I> SingleContract<DenseTensor<T, I>> for SparseTensor<U, I>
 where
-    for<'a, 'b> &'a U: FallibleMul<&'b T, Output = U::Out>,
-    for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
-    U: DotProduct<T>,
+    U: ContractableWith<T>,
+    T: ContractableWith<U, Out = U::Out>,
     I: HasStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -427,9 +402,8 @@ where
 
 impl<T, U, I> SingleContract<SparseTensor<T, I>> for DenseTensor<U, I>
 where
-    for<'a, 'b> &'a U: FallibleMul<&'b T, Output = U::Out>,
-    for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
-    U: DotProduct<T>,
+    U: ContractableWith<T>,
+    T: ContractableWith<U, Out = U::Out>,
     I: HasStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -475,9 +449,9 @@ where
 
 impl<T, U, I> MultiContract<DenseTensor<T, I>> for SparseTensor<U, I>
 where
-    for<'a, 'b> &'a U: FallibleMul<&'b T, Output = U::Out>,
-    for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
-    U: DotProduct<T>,
+    U: ContractableWith<T>,
+    T: ContractableWith<U, Out = U::Out>,
+
     I: HasStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -527,9 +501,8 @@ where
 
 impl<T, U, I> MultiContract<SparseTensor<T, I>> for DenseTensor<U, I>
 where
-    for<'a, 'b> &'a U: FallibleMul<&'b T, Output = U::Out>,
-    for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
-    U: DotProduct<T>,
+    U: ContractableWith<T>,
+    T: ContractableWith<U, Out = U::Out>,
     I: HasStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -580,9 +553,8 @@ where
 
 impl<T, U, I> SingleContract<SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    for<'a, 'b> &'a U: FallibleMul<&'b T, Output = U::Out>,
-    for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
-    U: DotProduct<T>,
+    U: ContractableWith<T>,
+    T: ContractableWith<U, Out = U::Out>,
     I: HasStructure + Clone + StructureContract,
     U::Out: PartialEq,
 {
@@ -660,9 +632,8 @@ where
 
 impl<T, U, I> MultiContract<SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    for<'a, 'b> &'a U: FallibleMul<&'b T, Output = U::Out>,
-    for<'a, 'b> &'a T: FallibleMul<&'b U, Output = U::Out>,
-    U: DotProduct<T>,
+    U: ContractableWith<T>,
+    T: ContractableWith<U, Out = U::Out>,
     I: HasStructure + Clone + StructureContract,
     U::Out: PartialEq,
 {
@@ -745,11 +716,8 @@ where
 
 impl<T, U, I> Contract<DataTensor<T, I>> for DataTensor<U, I>
 where
-    for<'a, 'b> &'a U:
-        FallibleMul<&'b T, Output = U::Out> + TrySmallestUpgrade<&'b T, LCM = U::Out>,
-    for<'a, 'b> &'a T:
-        FallibleMul<&'b U, Output = U::Out> + TrySmallestUpgrade<&'b U, LCM = U::Out>,
-    U: DotProduct<T>,
+    U: ContractableWith<T>,
+    T: ContractableWith<U, Out = U::Out>,
     I: HasStructure + Clone + StructureContract,
     U::Out: PartialEq,
     I: Clone + HasStructure + StructureContract,

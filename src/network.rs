@@ -16,8 +16,7 @@ use symbolica::{
 use ahash::AHashMap;
 
 use super::{
-    arithmetic::ScalarMul, structure, Contract, HasName, HasStructure, Slot, TracksCount,
-    TrySmallestUpgrade,
+    arithmetic::ScalarMul, Contract, HasName, HasStructure, Slot, TracksCount, TrySmallestUpgrade,
 };
 use smartstring::alias::String;
 use std::fmt::{Debug, Display};
@@ -594,7 +593,7 @@ where
         }
     }
 
-    pub fn to_fully_parametric(mut self) -> TensorNetwork<DataTensor<Atom, N>>
+    pub fn to_fully_parametric(self) -> TensorNetwork<DataTensor<Atom, N>>
     where
         N: HasStructure + Clone,
     {

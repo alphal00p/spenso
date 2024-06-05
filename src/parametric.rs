@@ -23,6 +23,43 @@ pub enum MixedTensor<T: HasStructure = VecStructure> {
     Symbolic(DataTensor<Atom, T>),
 }
 
+impl<T: HasStructure> PartialEq<MixedTensor<T>> for MixedTensor<T> {
+    fn eq(&self, other: &MixedTensor<T>) -> bool {
+        match (self, other) {
+            (MixedTensor::Float(_), MixedTensor::Float(_)) => true,
+            (MixedTensor::Complex(_), MixedTensor::Complex(_)) => true,
+            (MixedTensor::Symbolic(_), MixedTensor::Symbolic(_)) => true,
+            _ => false,
+        }
+    }
+}
+
+impl<T: HasStructure> Eq for MixedTensor<T> {}
+
+impl<T: HasStructure> PartialOrd<MixedTensor<T>> for MixedTensor<T> {
+    fn partial_cmp(&self, other: &MixedTensor<T>) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (MixedTensor::Float(_), MixedTensor::Float(_)) => Some(std::cmp::Ordering::Equal),
+            (MixedTensor::Float(_), MixedTensor::Complex(_)) => Some(std::cmp::Ordering::Less),
+            (MixedTensor::Float(_), MixedTensor::Symbolic(_)) => Some(std::cmp::Ordering::Less),
+            (MixedTensor::Complex(_), MixedTensor::Float(_)) => Some(std::cmp::Ordering::Greater),
+            (MixedTensor::Complex(_), MixedTensor::Complex(_)) => Some(std::cmp::Ordering::Equal),
+            (MixedTensor::Complex(_), MixedTensor::Symbolic(_)) => Some(std::cmp::Ordering::Less),
+            (MixedTensor::Symbolic(_), MixedTensor::Float(_)) => Some(std::cmp::Ordering::Greater),
+            (MixedTensor::Symbolic(_), MixedTensor::Complex(_)) => {
+                Some(std::cmp::Ordering::Greater)
+            }
+            (MixedTensor::Symbolic(_), MixedTensor::Symbolic(_)) => Some(std::cmp::Ordering::Equal),
+        }
+    }
+}
+
+impl<T: HasStructure> Ord for MixedTensor<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
 impl<'a, I: HasStructure + Clone + 'a> MixedTensor<I> {
     pub fn evaluate_float<'b>(&mut self, const_map: &'b HashMap<AtomView<'a>, f64>)
     where

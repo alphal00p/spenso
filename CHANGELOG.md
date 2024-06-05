@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/alphal00p/spenso/compare/v0.2.0...v0.2.1) - 2024-06-05
+
+### Added
+- *(CI)* :sparkles: Codecov
+
+### Fixed
+- *(CI)* :bug: removed result dir
+- *(CI)* :bug: added codecov token
+- *(CI)* :bug: moved coverage to its own derivation
+- *(CI)* :bug: let tarpaulin test with symbolica, and removed the pres test
+- *(CI)* test new codecov
+- *(test)* :rewind: revert failingr
+- *(CI)* :pencil2: typo again
+- *(CI)* :bug: typo
+
+### Other
+- upgrade actions
+- added codecov badge
+- Update rust.yml
+- Update rust.yml
+- modify linguist classification
+- *(CI)* try to upload coverage
+- :memo: added presentation for FORM and Symbolica dev conf
+- *(CI)* :zap: remove benchmarks from test action
+- test(test):
+- *(CI)* :sparkles: use nix
+
 ## [0.2.0](https://github.com/alphal00p/spenso/compare/v0.1.1...v0.2.0) - 2024-05-24
 
 ### Added

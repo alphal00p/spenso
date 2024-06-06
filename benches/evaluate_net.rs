@@ -146,7 +146,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             |mut net| {
                 const_map_gen(&params, &mut const_map);
 
-                net.evaluate_complex(&const_map);
+                net.evaluate_complex(|r| r.into(), &const_map);
 
                 net.contract();
             },

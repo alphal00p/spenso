@@ -1167,7 +1167,8 @@ mod test {
         const_map.insert(b.as_view(), Complex::<f64>::new(3., 1.).into());
 
         let ev: symbolica::domains::float::Complex<f64> =
-            f.as_view().evaluate(&const_map, &function_map, &mut cache);
+            f.as_view()
+                .evaluate(|r| r.into(), &const_map, &function_map, &mut cache);
 
         println!("{}", ev);
         // print!("{}", f.unwrap());

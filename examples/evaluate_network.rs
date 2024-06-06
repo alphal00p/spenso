@@ -162,7 +162,7 @@ fn main() {
     //         );
     //     }
     // }
-    net.evaluate_complex(&const_map);
+    net.evaluate_complex(|r| r.into(), &const_map);
     net.contract();
     println!("{:?}", net.result().try_as_complex().unwrap().data()[0]);
 }

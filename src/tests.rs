@@ -1203,3 +1203,11 @@ fn test_fallible_mul() {
         println!("{}", h);
     }
 }
+
+#[test]
+#[cfg(feature = "shadowing")]
+fn get_license_key() {
+    use symbolica::LicenseManager;
+
+    LicenseManager::new();
+}

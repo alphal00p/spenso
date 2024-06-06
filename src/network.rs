@@ -12,6 +12,8 @@ use symbolica::{
     state::State,
 };
 
+use symbolica::domains::rational::Rational;
+
 #[cfg(feature = "shadowing")]
 use ahash::AHashMap;
 
@@ -574,22 +576,28 @@ where
     // }
 
     #[cfg(feature = "shadowing")]
-    pub fn evaluate_float<'a>(&'a mut self, const_map: &AHashMap<AtomView<'a>, f64>)
-    where
+    pub fn evaluate_float<'a, F: Fn(&Rational) -> f64 + Copy>(
+        &'a mut self,
+        coeff_map: F,
+        const_map: &AHashMap<AtomView<'a>, f64>,
+    ) where
         N: Clone,
     {
         for (_, n) in &mut self.graph.nodes {
-            n.evaluate_float(const_map);
+            n.evaluate_float(coeff_map, const_map);
         }
     }
 
     #[cfg(feature = "shadowing")]
-    pub fn evaluate_complex<'a>(&'a mut self, const_map: &AHashMap<AtomView<'a>, SymComplex<f64>>)
-    where
+    pub fn evaluate_complex<'a, F: Fn(&Rational) -> SymComplex<f64> + Copy>(
+        &'a mut self,
+        coeff_map: F,
+        const_map: &AHashMap<AtomView<'a>, SymComplex<f64>>,
+    ) where
         N: Clone,
     {
         for (_, n) in &mut self.graph.nodes {
-            n.evaluate_complex(const_map);
+            n.evaluate_complex(coeff_map, const_map);
         }
     }
 
@@ -621,8 +629,9 @@ where
 }
 
 impl<T: HasStructure + Clone> TensorNetwork<DataTensor<Atom, T>> {
-    pub fn evaluate<'a, D>(
+    pub fn evaluate<'a, D, F: Fn(&Rational) -> D + Copy>(
         &'a self,
+        coeff_map: F,
         const_map: &AHashMap<AtomView<'a>, D>,
     ) -> TensorNetwork<DataTensor<D, T>>
     where
@@ -632,7 +641,7 @@ impl<T: HasStructure + Clone> TensorNetwork<DataTensor<Atom, T>> {
     {
         let mut evaluated_net = TensorNetwork::new();
         for (_, t) in &self.graph.nodes {
-            let evaluated_tensor = t.evaluate(const_map);
+            let evaluated_tensor = t.evaluate(coeff_map, const_map);
             evaluated_net.push(evaluated_tensor);
         }
 

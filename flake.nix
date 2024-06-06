@@ -112,6 +112,8 @@
         my-crate-doc = craneLib.cargoDoc (commonArgs
           // {
             inherit cargoArtifacts;
+
+            cargoExtraArgs = "--all-features";
           });
 
         # Check formatting

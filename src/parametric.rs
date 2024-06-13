@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use ahash::{AHashMap, HashMap};
 use enum_try_as_inner::EnumTryAsInner;
 
-use crate::Complex;
+use crate::{Complex, RefZero};
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
     domains::rational::Rational,
@@ -15,6 +15,12 @@ use super::{
     SparseTensor, StructureContract, TracksCount, VecStructure,
 };
 use symbolica::domains::float::Complex as SymComplex;
+
+impl RefZero for Atom {
+    fn zero(&self) -> Self {
+        Atom::new_num(0)
+    }
+}
 
 #[derive(Clone, Debug, EnumTryAsInner)]
 #[derive_err(Debug)]

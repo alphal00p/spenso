@@ -7,10 +7,18 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::Real;
 
+use crate::RefZero;
+
 #[derive(Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Complex<T> {
     pub re: T,
     pub im: T,
+}
+
+impl<T: RefZero> RefZero for Complex<T> {
+    fn zero(&self) -> Self {
+        Complex::new(self.re.zero(), self.im.zero())
+    }
 }
 
 impl<T> From<T> for Complex<T>
@@ -49,6 +57,40 @@ impl<T> Complex<T> {
     #[inline]
     pub fn new(re: T, im: T) -> Complex<T> {
         Complex { re, im }
+    }
+
+    pub fn zero() -> Complex<T>
+    where
+        T: num::Zero,
+    {
+        Complex {
+            re: T::zero(),
+            im: T::zero(),
+        }
+    }
+
+    pub fn one() -> Complex<T>
+    where
+        T: num::One + num::Zero,
+    {
+        Complex {
+            re: T::one(),
+            im: T::zero(),
+        }
+    }
+
+    pub fn conj(&self) -> Complex<T>
+    where
+        T: Clone + Neg<Output = T>,
+    {
+        Complex::new(self.re.clone(), -self.im.clone())
+    }
+
+    pub fn norm(&self) -> T
+    where
+        T: num::Float,
+    {
+        self.norm_squared().sqrt()
     }
 
     #[inline]

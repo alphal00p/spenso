@@ -9,10 +9,13 @@
 
 use std::{
     fmt::{Debug, Display},
-    ops::{AddAssign, Index, Neg, SubAssign},
+    ops::Index,
 };
 
-use crate::{ExpandedIndex, FlatIndex, VecStructure};
+use crate::{
+    ContractableWith, ExpandedIndex, FallibleAddAssign, FallibleSubAssign, FlatIndex, RefZero,
+    VecStructure,
+};
 
 use super::{
     ConcreteIndex, DenseTensor, Dimension, GetTensorData, HasStructure, Representation, Slot,
@@ -1746,10 +1749,7 @@ where
 
 impl<'a, T, I> Iterator for SparseTensorTraceIterator<'a, T, I>
 where
-    T: for<'c> std::ops::AddAssign<&'c T>
-        + for<'b> std::ops::SubAssign<&'b T>
-        + std::ops::Neg<Output = T>
-        + Clone,
+    T: ContractableWith<T> + FallibleAddAssign<T> + FallibleSubAssign<T> + Clone + RefZero,
     I: HasStructure + Clone,
 {
     type Item = (Vec<ConcreteIndex>, T);
@@ -1781,16 +1781,24 @@ where
         }
 
         let value = (*self.tensor.get(&indices).unwrap()).clone(); //Should now be safe to unwrap
-        let mut trace = if *sign { value.neg() } else { value };
+        let zero = value.zero();
+
+        let mut trace = if *sign {
+            let mut zero = zero.clone();
+            zero.sub_assign_fallible(value);
+            zero
+        } else {
+            value
+        };
 
         for (i, sign) in iter {
             indices[self.trace_indices[0]] = i;
             indices[self.trace_indices[1]] = i;
             if let Ok(value) = self.tensor.get(&indices) {
                 if *sign {
-                    trace -= value;
+                    trace.sub_assign_fallible(value.clone());
                 } else {
-                    trace += value;
+                    trace.add_assign_fallible(value.clone());
                 }
             }
         }
@@ -2035,11 +2043,7 @@ where
 
 impl<'a, T, I> Iterator for DenseTensorTraceIterator<'a, T, I>
 where
-    T: for<'c> AddAssign<&'c T>
-        + for<'b> SubAssign<&'b T>
-        + Neg<Output = T>
-        + Clone
-        + std::fmt::Debug,
+    T: ContractableWith<T, Out = T> + FallibleAddAssign<T> + FallibleSubAssign<T> + Clone + RefZero,
     I: HasStructure,
 {
     type Item = (Vec<ConcreteIndex>, T);
@@ -2061,8 +2065,15 @@ where
         }
 
         let value = self.tensor.get(&indices).unwrap().clone();
+        let zero = value.zero();
 
-        let mut trace = if *sign { value.neg() } else { value };
+        let mut trace = if *sign {
+            let mut zero = zero.clone();
+            zero.sub_assign_fallible(value);
+            zero
+        } else {
+            value
+        };
 
         for (i, sign) in iter {
             for pos in self.trace_indices {
@@ -2071,9 +2082,9 @@ where
 
             if let Ok(value) = self.tensor.get(&indices) {
                 if *sign {
-                    trace -= value;
+                    trace.sub_assign_fallible(value.clone());
                 } else {
-                    trace += value;
+                    trace.add_assign_fallible(value.clone());
                 }
             }
         }

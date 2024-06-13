@@ -827,6 +827,7 @@ impl<'b> TrySmallestUpgrade<smaller> for &'b larger {
 
 duplicate! {
     [smaller larger;
+    [i8] [i8];
     [i16] [i16];
     [i32] [i32];
     [f64] [f64];
@@ -1068,7 +1069,7 @@ where
     }
 }
 
-pub trait FallibleAddAssign<T> {
+pub trait FallibleAddAssign<T = Self> {
     fn add_assign_fallible(&mut self, rhs: T);
 }
 

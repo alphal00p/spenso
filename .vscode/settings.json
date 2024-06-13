@@ -13,5 +13,6 @@
   "github.copilot.enable": {
     "quarto": false,
     "*": true
-  }
+  },
+  "rust-analyzer.showUnlinkedFileNotification": false
 }

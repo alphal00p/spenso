@@ -120,7 +120,7 @@ where
     fn exterior_product(&self, other: &DenseTensor<T, I>) -> Self::LCM {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
-        let zero = self.data[0].try_upgrade().unwrap().into_owned().zero();
+        let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let mut out = DenseTensor {
             data: vec![zero.clone(); final_structure.size()],
             structure: final_structure,
@@ -150,7 +150,7 @@ where
     fn exterior_product(&self, other: &DenseTensor<T, I>) -> Self::LCM {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
-        let zero = other.data[0].try_upgrade().unwrap().into_owned().zero();
+        let zero = other.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let mut out = DenseTensor {
             data: vec![zero.clone(); final_structure.size()],
             structure: final_structure,
@@ -180,7 +180,7 @@ where
     fn exterior_product(&self, other: &SparseTensor<T, I>) -> Self::LCM {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
-        let zero = self.data[0].try_upgrade().unwrap().into_owned().zero();
+        let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let mut out = DenseTensor {
             data: vec![zero.clone(); final_structure.size()],
             structure: final_structure,
@@ -258,12 +258,12 @@ pub trait IsZero {
 
 impl<T: RefZero + PartialEq> IsZero for T {
     fn is_zero(&self) -> bool {
-        self.zero() == *self
+        self.ref_zero() == *self
     }
 }
 
 pub trait RefZero {
-    fn zero(&self) -> Self;
+    fn ref_zero(&self) -> Self;
 }
 
 // impl<T: num::Zero> RefZero for T { future impls Grrr
@@ -273,73 +273,73 @@ pub trait RefZero {
 // }
 
 impl RefZero for f64 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0.0
     }
 }
 
 impl RefZero for f32 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0.0
     }
 }
 
 impl RefZero for i8 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0
     }
 }
 
 impl RefZero for i16 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0
     }
 }
 
 impl RefZero for i32 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0
     }
 }
 
 impl RefZero for i64 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0
     }
 }
 
 impl RefZero for i128 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0
     }
 }
 
 impl RefZero for u8 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0
     }
 }
 
 impl RefZero for u16 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0
     }
 }
 
 impl RefZero for u32 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0
     }
 }
 
 impl RefZero for u64 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0
     }
 }
 
 impl RefZero for u128 {
-    fn zero(&self) -> Self {
+    fn ref_zero(&self) -> Self {
         0
     }
 }
@@ -417,7 +417,7 @@ where
 
     fn single_contract(&self, other: &DenseTensor<T, I>, i: usize, j: usize) -> Option<Self::LCM> {
         // println!("single contract dense dense");
-        let zero = self.data[0].try_upgrade().unwrap().into_owned().zero();
+        let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = vec![zero.clone(); final_structure.size()];
         let mut result_index = 0;
@@ -460,7 +460,7 @@ where
     type LCM = DenseTensor<U::Out, I>;
     fn multi_contract(&self, other: &DenseTensor<T, I>) -> Option<Self::LCM> {
         // println!("multi contract dense dense");
-        let zero = self.data[0].try_upgrade().unwrap().into_owned().zero();
+        let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let (permutation, self_matches, other_matches) =
             self.structure().match_indices(other.structure()).unwrap();
 
@@ -546,7 +546,7 @@ where
 
     fn single_contract(&self, other: &DenseTensor<T, I>, i: usize, j: usize) -> Option<Self::LCM> {
         // println!("single contract sparse dense");
-        let zero = other.data[0].try_upgrade().unwrap().into_owned().zero();
+        let zero = other.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = vec![zero.clone(); final_structure.size()];
         let mut result_index = 0;
@@ -595,7 +595,7 @@ where
 
     fn single_contract(&self, other: &SparseTensor<T, I>, i: usize, j: usize) -> Option<Self::LCM> {
         // println!("single contract dense sparse");
-        let zero = self.data[0].try_upgrade().unwrap().into_owned().zero();
+        let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = vec![zero.clone(); final_structure.size()];
         let mut result_index = 0;
@@ -643,7 +643,7 @@ where
     type LCM = DenseTensor<U::Out, I>;
     fn multi_contract(&self, other: &DenseTensor<T, I>) -> Option<Self::LCM> {
         // println!("multi contract sparse dense");
-        let zero = other.data[0].try_upgrade().unwrap().as_ref().zero();
+        let zero = other.data[0].try_upgrade().unwrap().as_ref().ref_zero();
         let (permutation, self_matches, other_matches) =
             self.structure().match_indices(other.structure()).unwrap();
 
@@ -697,7 +697,7 @@ where
 
     fn multi_contract(&self, other: &SparseTensor<T, I>) -> Option<Self::LCM> {
         // println!("multi contract dense sparse");
-        let zero = self.data[0].try_upgrade().unwrap().as_ref().zero();
+        let zero = self.data[0].try_upgrade().unwrap().as_ref().ref_zero();
         let (permutation, self_matches, other_matches) =
             self.structure().match_indices(other.structure()).unwrap();
 
@@ -755,7 +755,7 @@ where
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = AHashMap::default();
         if let Some((_, s)) = self.flat_iter().next() {
-            let zero = s.try_upgrade().unwrap().as_ref().zero();
+            let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
             let mut result_index = 0;
 
             let self_iter = self.fiber_class(i.into()).iter();
@@ -841,7 +841,7 @@ where
         let mut result_data = AHashMap::default();
 
         if let Some((_, s)) = self.flat_iter().next() {
-            let zero = s.try_upgrade().unwrap().as_ref().zero();
+            let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
             let mut result_index = 0;
 
             let self_iter = self

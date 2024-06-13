@@ -1781,7 +1781,7 @@ where
         }
 
         let value = (*self.tensor.get(&indices).unwrap()).clone(); //Should now be safe to unwrap
-        let zero = value.zero();
+        let zero = value.ref_zero();
 
         let mut trace = if *sign {
             let mut zero = zero.clone();
@@ -2065,7 +2065,7 @@ where
         }
 
         let value = self.tensor.get(&indices).unwrap().clone();
-        let zero = value.zero();
+        let zero = value.ref_zero();
 
         let mut trace = if *sign {
             let mut zero = zero.clone();

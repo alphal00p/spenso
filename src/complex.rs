@@ -16,8 +16,8 @@ pub struct Complex<T> {
 }
 
 impl<T: RefZero> RefZero for Complex<T> {
-    fn zero(&self) -> Self {
-        Complex::new(self.re.zero(), self.im.zero())
+    fn ref_zero(&self) -> Self {
+        Complex::new(self.re.ref_zero(), self.im.ref_zero())
     }
 }
 

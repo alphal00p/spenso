@@ -66,4 +66,4 @@ thiserror = "1.0.60"
 shadowing = ["dep:symbolica"]
 
 [patch.crates-io]
-symbolica = { git = "https://github.com/benruijl/symbolica" }
+# symbolica = { git = "https://github.com/benruijl/symbolica" }

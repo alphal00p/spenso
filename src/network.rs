@@ -1,7 +1,8 @@
+use ahash::HashMap;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
 
-use crate::Complex;
+use crate::{Complex, FallibleMul, HasTensorData};
 #[cfg(feature = "shadowing")]
 use crate::{DataTensor, HistoryStructure, MixedTensor, MixedTensors, Shadowable};
 
@@ -12,14 +13,12 @@ use symbolica::{
     state::State,
 };
 
-use symbolica::domains::rational::Rational;
+use symbolica::{domains::rational::Rational, evaluate::EvaluationFn};
 
 #[cfg(feature = "shadowing")]
 use ahash::AHashMap;
 
-use super::{
-    arithmetic::ScalarMul, Contract, HasName, HasStructure, Slot, TracksCount, TrySmallestUpgrade,
-};
+use super::{Contract, HasName, HasStructure, Slot, TracksCount, TrySmallestUpgrade};
 use smartstring::alias::String;
 use std::fmt::{Debug, Display};
 
@@ -502,12 +501,24 @@ fn merge() {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TensorNetwork<T> {
+pub struct TensorNetwork<T, S> {
     pub graph: HalfEdgeGraph<T, Slot>,
     pub params: Vec<T>,
+    pub scalar: Option<S>,
 }
 
-impl<T> TensorNetwork<T> {
+impl<T, S> TensorNetwork<T, S> {
+    pub fn scalar_mul(&mut self, scalar: S)
+    where
+        S: FallibleMul<S, Output = S>,
+    {
+        if let Some(ref mut s) = self.scalar {
+            *s = scalar.mul_fallible(s).unwrap();
+        } else {
+            self.scalar = Some(scalar);
+        }
+    }
+
     fn edge_to_min_degree_node(&self) -> Option<HedgeId> {
         let mut neighs = self.graph.reverse_nodemap.clone();
         if neighs.is_empty() {
@@ -539,7 +550,7 @@ impl<T> TensorNetwork<T> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<N> TensorNetwork<MixedTensor<N>>
+impl<N> TensorNetwork<MixedTensor<N>, Atom>
 where
     N: Debug + HasStructure,
 {
@@ -601,7 +612,7 @@ where
         }
     }
 
-    pub fn to_fully_parametric(self) -> TensorNetwork<DataTensor<Atom, N>>
+    pub fn to_fully_parametric(self) -> TensorNetwork<DataTensor<Atom, N>, Atom>
     where
         N: HasStructure + Clone,
     {
@@ -624,16 +635,20 @@ where
             });
         }
 
-        TensorNetwork::from(tensors)
+        TensorNetwork {
+            graph: TensorNetwork::<DataTensor<Atom, N>, Atom>::generate_network_graph(tensors),
+            params: Vec::new(),
+            scalar: self.scalar,
+        }
     }
 }
 
-impl<T: HasStructure + Clone> TensorNetwork<DataTensor<Atom, T>> {
+impl<T: HasStructure + Clone> TensorNetwork<DataTensor<Atom, T>, Atom> {
     pub fn evaluate<'a, D, F: Fn(&Rational) -> D + Copy>(
         &'a self,
         coeff_map: F,
         const_map: &AHashMap<AtomView<'a>, D>,
-    ) -> TensorNetwork<DataTensor<D, T>>
+    ) -> TensorNetwork<DataTensor<D, T>, D>
     where
         D: Clone
             + symbolica::domains::float::Real
@@ -644,11 +659,18 @@ impl<T: HasStructure + Clone> TensorNetwork<DataTensor<Atom, T>> {
             let evaluated_tensor = t.evaluate(coeff_map, const_map);
             evaluated_net.push(evaluated_tensor);
         }
+        let fn_map: HashMap<_, EvaluationFn<_>> = HashMap::default();
+        let mut cache = HashMap::default();
 
+        evaluated_net.scalar = self
+            .scalar
+            .as_ref()
+            .map(|x| x.evaluate(coeff_map, const_map, &fn_map, &mut cache));
+        println!("{:?}", evaluated_net.scalar);
         evaluated_net
     }
 }
-impl<T> From<Vec<T>> for TensorNetwork<T>
+impl<T> From<Vec<T>> for TensorNetwork<T, T::Scalar>
 where
     T: HasStructure,
 {
@@ -656,11 +678,12 @@ where
         TensorNetwork {
             graph: Self::generate_network_graph(tensors),
             params: Vec::new(),
+            scalar: None,
         }
     }
 }
 
-impl<T> Default for TensorNetwork<T>
+impl<T> Default for TensorNetwork<T, T::Scalar>
 where
     T: HasStructure,
 {
@@ -669,7 +692,7 @@ where
     }
 }
 
-impl<T> TensorNetwork<T>
+impl<T, S> TensorNetwork<T, S>
 where
     T: HasStructure,
 {
@@ -677,15 +700,7 @@ where
         TensorNetwork {
             graph: HalfEdgeGraph::new(),
             params: Vec::new(),
-        }
-    }
-
-    pub fn scalar_mul<U>(&mut self, scalar: U)
-    where
-        for<'a> &'a T: ScalarMul<U, Output = T>,
-    {
-        if let Some((id, tensor)) = self.graph.nodes.iter().next() {
-            self.graph.nodes[id] = tensor.scalar_mul(scalar).unwrap();
+            scalar: None,
         }
     }
 
@@ -743,23 +758,40 @@ where
         }
     }
 }
-impl<T> TensorNetwork<T>
+impl<T: HasTensorData> TensorNetwork<T, T::Data>
 where
     T: Clone,
 {
-    pub fn result(&self) -> T {
-        self.graph.nodes.iter().next().unwrap().1.clone()
+    pub fn result(&self) -> T::Data {
+        match self.graph.nodes.len() {
+            0 => self.scalar.clone().unwrap(),
+            1 => self.graph.nodes.iter().next().unwrap().1.clone().data()[0].clone(),
+            _ => panic!("More than one node in the graph"),
+        }
     }
 }
 
-impl<T> TensorNetwork<T> {
+impl<T, S> TensorNetwork<T, S>
+where
+    T: Clone,
+{
+    pub fn result_tensor(&self) -> T {
+        match self.graph.nodes.len() {
+            0 => panic!("No nodes in the graph"),
+            1 => self.graph.nodes.iter().next().unwrap().1.clone(),
+            _ => panic!("More than one node in the graph"),
+        }
+    }
+}
+
+impl<T, S> TensorNetwork<T, S> {
     pub fn dot(&self) -> std::string::String {
         self.graph.dot()
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl<I> TensorNetwork<MixedTensor<I>>
+impl<I> TensorNetwork<MixedTensor<I>, Atom>
 where
     I: HasStructure + Clone,
 {
@@ -773,11 +805,11 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<T> TensorNetwork<T>
+impl<T, S> TensorNetwork<T, S>
 where
     T: HasStructure<Structure = HistoryStructure<Symbol>> + Clone,
 {
-    pub fn symbolic_shadow(&mut self, name: &str) -> TensorNetwork<MixedTensors> {
+    pub fn symbolic_shadow(&mut self, name: &str) -> TensorNetwork<MixedTensors, S> {
         {
             for (i, n) in &mut self.graph.nodes {
                 n.mut_structure().set_name(&State::get_symbol(format!(
@@ -822,11 +854,17 @@ where
             nodemap,
         };
 
-        TensorNetwork { graph: g, params }
+        let scalar = self.scalar.take();
+
+        TensorNetwork {
+            graph: g,
+            params,
+            scalar,
+        }
     }
 }
 
-impl<T> TensorNetwork<T>
+impl<T, S> TensorNetwork<T, S>
 where
     T: HasName,
 {
@@ -841,7 +879,7 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<T> TensorNetwork<T>
+impl<T, S> TensorNetwork<T, S>
 where
     T: HasName<Name = Symbol>,
 {
@@ -856,11 +894,11 @@ where
     }
 }
 
-impl<T> TensorNetwork<T>
+impl<T, S> TensorNetwork<T, S>
 where
     T: Contract<T, LCM = T> + HasStructure,
 {
-    pub fn contract_algo(&mut self, edge_choice: fn(&TensorNetwork<T>) -> Option<HedgeId>) {
+    pub fn contract_algo(&mut self, edge_choice: fn(&Self) -> Option<HedgeId>) {
         if let Some(e) = edge_choice(self) {
             self.contract_edge(e);
             // println!("{}", self.dot());

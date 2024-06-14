@@ -19,6 +19,7 @@ pub struct SymbolicTensor {
 
 impl HasStructure for SymbolicTensor {
     type Structure = VecStructure;
+    type Scalar = Atom;
 
     fn structure(&self) -> &Self::Structure {
         self.structure.structure()
@@ -87,7 +88,7 @@ impl SymbolicTensor {
                 AtomView::Mul(m) => {
                     let mut term_net = Self::mul_to_network(m)?;
                     term_net.contract();
-                    terms.push(term_net.result());
+                    terms.push(term_net.result_tensor());
                 }
                 AtomView::Add(a) => {
                     terms.push(Self::add_view_to_tensor(a)?);
@@ -114,7 +115,7 @@ impl SymbolicTensor {
                 AtomView::Mul(m) => {
                     let mut term_net = Self::mul_to_tracking_network(m)?;
                     term_net.contract();
-                    terms.push(term_net.result());
+                    terms.push(term_net.result_tensor());
                 }
                 AtomView::Add(a) => {
                     terms.push(Self::add_view_to_tracking_tensor(a)?);
@@ -144,8 +145,8 @@ impl SymbolicTensor {
 
     pub fn mul_to_tracking_network(
         mul: MulView,
-    ) -> Result<TensorNetwork<MixedTensor<SymbolicTensor>>, &'static str> {
-        let mut network: TensorNetwork<MixedTensor<SymbolicTensor>> = TensorNetwork::new();
+    ) -> Result<TensorNetwork<MixedTensor<SymbolicTensor>, Atom>, &'static str> {
+        let mut network: TensorNetwork<MixedTensor<SymbolicTensor>, Atom> = TensorNetwork::new();
         for atom in mul.iter() {
             match atom {
                 AtomView::Fun(f) => {
@@ -158,12 +159,12 @@ impl SymbolicTensor {
                 AtomView::Var(v) => {
                     let mut a = Atom::new();
                     a.set_from_view(&v.as_view());
-                    network.scalar_mul(&a);
+                    network.scalar_mul(a);
                 }
                 AtomView::Num(n) => {
                     let mut a = Atom::new();
                     a.set_from_view(&n.as_view());
-                    network.scalar_mul(&a);
+                    network.scalar_mul(a);
                 }
                 AtomView::Add(a) => {
                     let sum = Self::add_view_to_tracking_tensor(a)?;
@@ -178,8 +179,9 @@ impl SymbolicTensor {
 
     pub fn mul_to_network(
         mul: MulView,
-    ) -> Result<TensorNetwork<MixedTensor<VecStructure>>, &'static str> {
-        let mut network: TensorNetwork<MixedTensor<VecStructure>> = TensorNetwork::new();
+    ) -> Result<TensorNetwork<MixedTensor<VecStructure>, Atom>, &'static str> {
+        let mut network: TensorNetwork<MixedTensor<VecStructure>, Atom> = TensorNetwork::new();
+        let mut scalars = Atom::new_num(1);
         for atom in mul.iter() {
             match atom {
                 AtomView::Fun(f) => {
@@ -195,12 +197,11 @@ impl SymbolicTensor {
                 AtomView::Var(v) => {
                     let mut a = Atom::new();
                     a.set_from_view(&v.as_view());
-                    network.scalar_mul(&a);
+                    scalars = &scalars * &a;
                 }
                 AtomView::Num(n) => {
                     let mut a = Atom::new();
                     a.set_from_view(&n.as_view());
-                    network.scalar_mul(&a);
                 }
                 AtomView::Add(a) => {
                     let mut terms = vec![];
@@ -208,7 +209,7 @@ impl SymbolicTensor {
                         if let AtomView::Mul(m) = t {
                             let mut term_net = Self::mul_to_network(m)?;
                             term_net.contract();
-                            terms.push(term_net.result());
+                            terms.push(term_net.result_tensor());
                         }
                     }
                     let sum = terms
@@ -218,13 +219,22 @@ impl SymbolicTensor {
 
                     network.push(sum);
                 }
+                AtomView::Pow(p) => {
+                    // handle squared tensors
+                    let mut a = Atom::new();
+                    a.set_from_view(&p.as_view());
+                    scalars = &scalars * &a;
+                }
                 _ => return Err("Not a valid expression"),
             }
         }
+        network.scalar_mul(scalars);
         Ok(network)
     }
 
-    pub fn to_network(self) -> Result<TensorNetwork<MixedTensor<VecStructure>>, &'static str> {
+    pub fn to_network(
+        self,
+    ) -> Result<TensorNetwork<MixedTensor<VecStructure>, Atom>, &'static str> {
         if let AtomView::Mul(mul) = self.expression.as_view() {
             Self::mul_to_network(mul)
         } else {

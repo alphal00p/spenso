@@ -16,7 +16,7 @@ fn gamma_net_sym(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
-) -> TensorNetwork<NumTensor<HistoryStructure<Symbol>>> {
+) -> TensorNetwork<NumTensor<HistoryStructure<Symbol>>, Complex<f64>> {
     let mut i = 0;
     let mut contracting_index = 0.into();
     let mut result: Vec<NumTensor<HistoryStructure<Symbol>>> =
@@ -53,7 +53,7 @@ fn gamma_net(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
-) -> TensorNetwork<NumTensor> {
+) -> TensorNetwork<NumTensor, Complex<f64>> {
     let mut i = 0;
     let mut contracting_index = 0.into();
     let mut result: Vec<NumTensor> = vec![euclidean_four_vector(contracting_index, &vbar).into()];

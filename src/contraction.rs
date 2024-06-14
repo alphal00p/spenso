@@ -1,4 +1,5 @@
 use ahash::AHashMap;
+use symbolica::domains::float::Real;
 
 use crate::TrySmallestUpgrade;
 
@@ -264,6 +265,12 @@ impl<T: RefZero + PartialEq> IsZero for T {
 
 pub trait RefZero {
     fn ref_zero(&self) -> Self;
+}
+
+impl<T: RefZero + Real> RefZero for symbolica::domains::float::Complex<T> {
+    fn ref_zero(&self) -> Self {
+        Self::new(self.re.ref_zero(), self.im.ref_zero())
+    }
 }
 
 // impl<T: num::Zero> RefZero for T { future impls Grrr

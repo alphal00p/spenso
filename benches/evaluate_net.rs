@@ -34,7 +34,7 @@ fn gamma_net_param(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
-) -> TensorNetwork<MixedTensor<ContractionCountStructure>> {
+) -> TensorNetwork<MixedTensor<ContractionCountStructure>, Atom> {
     let mut i: i32 = 0;
     let mut contracting_index = 0.into();
     let mut result: Vec<MixedTensor<ContractionCountStructure>> =

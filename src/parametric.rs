@@ -214,6 +214,7 @@ impl<T> HasStructure for MixedTensor<T>
 where
     T: HasStructure,
 {
+    type Scalar = Atom;
     type Structure = T;
 
     fn structure(&self) -> &Self::Structure {

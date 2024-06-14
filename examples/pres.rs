@@ -14,7 +14,7 @@ fn gamma_net_sym(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
-) -> TensorNetwork<NumTensor<HistoryStructure<Symbol>>> {
+) -> TensorNetwork<NumTensor<HistoryStructure<Symbol>>, Complex<f64>> {
     let mut i = 0;
     let mut contracting_index = 0.into();
     let mut result: Vec<NumTensor<HistoryStructure<Symbol>>> =
@@ -111,7 +111,7 @@ fn main() {
 
     println!("{}", *f.get_atom());
 
-    let _a: TensorNetwork<MixedTensor> = f.to_network().unwrap();
+    let _a: TensorNetwork<MixedTensor, _> = f.to_network().unwrap();
 
     // println!("{}", a.dot());
 

@@ -1,5 +1,4 @@
 use ahash::AHashMap;
-use ambassador::delegatable_trait;
 use derive_more::Add;
 use derive_more::AddAssign;
 use derive_more::Display;
@@ -620,9 +619,10 @@ impl std::fmt::Display for Slot {
 /// The associated type `Structure` is the type of the structure. This is usefull for containers of structures, like a datatensor.
 /// The two methods `structure` and `mut_structure` are used to get a reference to the structure, and a mutable reference to the structure.
 ///
-#[delegatable_trait]
+
 pub trait HasStructure {
     type Structure;
+    type Scalar;
     /// returns the list of slots that are the external indices of the tensor
     fn external_structure(&self) -> &[Slot];
 
@@ -944,6 +944,7 @@ pub trait HasStructure {
 
 impl<'a> HasStructure for &'a [Slot] {
     type Structure = &'a [Slot];
+    type Scalar = ();
 
     fn external_structure(&self) -> &[Slot] {
         self
@@ -960,6 +961,7 @@ impl<'a> HasStructure for &'a [Slot] {
 
 impl HasStructure for Vec<Slot> {
     type Structure = Self;
+    type Scalar = ();
 
     fn structure(&self) -> &Self::Structure {
         self
@@ -1223,6 +1225,7 @@ impl std::fmt::Display for VecStructure {
 
 impl HasStructure for VecStructure {
     type Structure = VecStructure;
+    type Scalar = ();
     fn structure(&self) -> &Self::Structure {
         self
     }
@@ -1314,6 +1317,7 @@ impl HasName for NamedStructure {
 
 impl HasStructure for NamedStructure {
     type Structure = Self;
+    type Scalar = <NamedStructure as HasName>::Name;
     fn structure(&self) -> &Self::Structure {
         self
     }
@@ -1413,6 +1417,7 @@ impl TracksCount for ContractionCountStructure {
 
 impl HasStructure for ContractionCountStructure {
     type Structure = ContractionCountStructure;
+    type Scalar = ();
     fn structure(&self) -> &Self::Structure {
         self
     }
@@ -1498,6 +1503,8 @@ impl TracksCount for SmartShadowStructure {
 
 impl HasStructure for SmartShadowStructure {
     type Structure = SmartShadowStructure;
+
+    type Scalar = <NamedStructure as HasName>::Name;
     fn structure(&self) -> &Self::Structure {
         self
     }
@@ -1629,6 +1636,8 @@ impl<N> TracksCount for HistoryStructure<N> {
 
 impl<N> HasStructure for HistoryStructure<N> {
     type Structure = HistoryStructure<N>;
+
+    type Scalar = <NamedStructure as HasName>::Name;
 
     fn structure(&self) -> &Self::Structure {
         self

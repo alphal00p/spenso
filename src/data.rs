@@ -218,6 +218,7 @@ impl<T, I> HasStructure for SparseTensor<T, I>
 where
     I: HasStructure,
 {
+    type Scalar = T;
     type Structure = I;
     fn structure(&self) -> &Self::Structure {
         &self.structure
@@ -408,6 +409,7 @@ impl<T, I> HasStructure for DenseTensor<T, I>
 where
     I: HasStructure,
 {
+    type Scalar = T;
     type Structure = I;
     fn structure(&self) -> &Self::Structure {
         &self.structure
@@ -758,6 +760,7 @@ where
     I: HasStructure,
     T: Clone,
 {
+    type Scalar = T;
     type Structure = I;
     fn structure(&self) -> &Self::Structure {
         match self {
@@ -899,6 +902,7 @@ impl<T> HasStructure for NumTensor<T>
 where
     T: HasStructure,
 {
+    type Scalar = Complex<f64>;
     type Structure = T;
     fn structure(&self) -> &Self::Structure {
         match self {

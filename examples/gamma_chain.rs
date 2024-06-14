@@ -112,7 +112,7 @@ fn gamma_net(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
-) -> TensorNetwork<NumTensor<HistoryStructure<Symbol>>> {
+) -> TensorNetwork<NumTensor<HistoryStructure<Symbol>>, Complex<f64>> {
     let mut i = 0;
     let mut contracting_index: AbstractIndex = 0.into();
     let mut result: Vec<NumTensor<HistoryStructure<Symbol>>> =
@@ -177,7 +177,9 @@ fn defered_chain(
 
 #[allow(dead_code)]
 #[cfg(feature = "shadowing")]
-fn gamma_net_param(minkindices: &[i32]) -> TensorNetwork<MixedTensor<HistoryStructure<Symbol>>> {
+fn gamma_net_param(
+    minkindices: &[i32],
+) -> TensorNetwork<MixedTensor<HistoryStructure<Symbol>>, Atom> {
     let mut i = 0;
     let mut contracting_index: AbstractIndex = 0.into();
     let mut result: Vec<MixedTensor<HistoryStructure<Symbol>>> =

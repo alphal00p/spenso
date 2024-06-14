@@ -10,7 +10,7 @@ fn gamma_net_num(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
-) -> TensorNetwork<NumTensor<ContractionCountStructure>> {
+) -> TensorNetwork<NumTensor<ContractionCountStructure>, Complex<f64>> {
     let mut i: i32 = 0;
     let mut contracting_index = 0.into();
     let mut result: Vec<NumTensor<ContractionCountStructure>> =

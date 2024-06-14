@@ -6,6 +6,8 @@ use std::ops::Mul;
 #[cfg(feature = "shadowing")]
 use symbolica::{atom::Atom, state::State};
 
+use symbolica::domains::float::{Complex as SymbolicaComplex, Real};
+
 use crate::Complex;
 
 // #[derive(Copy, Clone, PartialEq)]
@@ -713,6 +715,26 @@ pub trait TrySmallestUpgrade<T> {
     type LCM: Clone;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>;
+}
+
+impl<O: Real, U: Real, T: Real> TrySmallestUpgrade<SymbolicaComplex<T>> for SymbolicaComplex<U>
+where
+    U: TrySmallestUpgrade<T, LCM = O>,
+    T: TrySmallestUpgrade<U, LCM = O>,
+{
+    type LCM = SymbolicaComplex<O>;
+
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    where
+        Self::LCM: Clone,
+    {
+        let re = self.re.try_upgrade()?;
+        let im = self.im.try_upgrade()?;
+        Some(Cow::Owned(SymbolicaComplex::new(
+            re.into_owned(),
+            im.into_owned(),
+        )))
+    }
 }
 
 impl<T, U> TryFromUpgrade<T> for U

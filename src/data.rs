@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use smartstring::alias::String;
 use std::{
     borrow::Cow,
+    fmt::Display,
     ops::{Index, IndexMut},
 };
 
@@ -387,6 +388,16 @@ where
 pub struct DenseTensor<T, I = VecStructure> {
     pub data: Vec<T>,
     pub structure: I,
+}
+
+impl<T: Display, I: HasStructure> std::fmt::Display for DenseTensor<T, I> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+        for (i, v) in self.iter() {
+            s.push_str(&format!("{}: {}\n", i, v));
+        }
+        write!(f, "{}", s)
+    }
 }
 
 impl<T, I> Index<FlatIndex> for DenseTensor<T, I> {

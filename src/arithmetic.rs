@@ -106,7 +106,7 @@ where
             let permuted_indices: Vec<ConcreteIndex> =
                 permutation.iter().map(|&index| indices[index]).collect();
             let t = rhs.smart_get(&permuted_indices).unwrap();
-            println!("{:?}", t);
+            // println!("{:?}", t);
             data.smart_set(&indices, u.add_fallible(&t)?).unwrap();
         }
 

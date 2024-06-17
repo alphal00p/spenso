@@ -882,7 +882,7 @@ fn tensor_net() {
     assert_eq!(0, n.graph.neighbors.len());
     assert_eq!(
         Complex::new(400., 0.),
-        n.result().try_as_complex().unwrap().data()[0]
+        n.result_tensor().try_as_complex().unwrap().data()[0]
     )
 }
 

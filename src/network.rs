@@ -666,7 +666,7 @@ impl<T: HasStructure + Clone> TensorNetwork<DataTensor<Atom, T>, Atom> {
             .scalar
             .as_ref()
             .map(|x| x.evaluate(coeff_map, const_map, &fn_map, &mut cache));
-        println!("{:?}", evaluated_net.scalar);
+        // println!("{:?}", evaluated_net.scalar);
         evaluated_net
     }
 }

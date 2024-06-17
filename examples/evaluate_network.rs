@@ -164,5 +164,8 @@ fn main() {
     // }
     net.evaluate_complex(|r| r.into(), &const_map);
     net.contract();
-    println!("{:?}", net.result().try_as_complex().unwrap().data()[0]);
+    println!(
+        "{:?}",
+        net.result_tensor().try_as_complex().unwrap().data()[0]
+    );
 }

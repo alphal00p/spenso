@@ -295,7 +295,7 @@ fn main() {
         // [Complex { re: 5.3418526123694e16, im: -136854212797684.0 }] for 20, 24
         println!(
             "Result: {:?}",
-            chain.result().try_as_complex().unwrap().data()
+            chain.result_tensor().try_as_complex().unwrap().data()
         );
     }
 

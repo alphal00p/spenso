@@ -44,7 +44,9 @@ required-features = ["shadowing"]
 [dependencies]
 ahash = { version = "0.8.11", features = ["serde"] }
 ambassador = "0.3.6"
+anyhow = { version = "1.0.86", features = ["backtrace"] }
 bitvec = { version = "1.0.1", features = ["serde"] }
+delegate = "0.12.0"
 derive_more = "0.99.17"
 duplicate = "1.0.0"
 enum-try-as-inner = "0.1.1"
@@ -53,7 +55,9 @@ indexmap = { version = "2.2.6", features = ["serde"] }
 num = { version = "0.4.3", features = ["serde"] }
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
+ref-ops = "0.2.5"
 serde = "1.0.201"
+serde_json = "1.0.117"
 serde_toml = "0.0.1"
 slotmap = { version = "1.0.7", features = ["serde"] }
 smartstring = { version = "1.0.1", features = ["serde"] }
@@ -66,4 +70,4 @@ thiserror = "1.0.60"
 shadowing = ["dep:symbolica"]
 
 [patch.crates-io]
-# symbolica = { git = "https://github.com/benruijl/symbolica" }
+symbolica = { git = "https://github.com/benruijl/symbolica", branch = "nested_evaluate" }

@@ -4,7 +4,7 @@ use crate::{
 };
 use crate::{
     AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, ExpandedIndex, Fiber,
-    FiberClass, FlatIndex, IteratesAlongFibers,
+    FiberClass, FlatIndex, IteratesAlongFibers, TensorStructure,
 };
 use ahash::{HashMap, HashMapExt};
 
@@ -18,7 +18,7 @@ use rand_xoshiro::Xoroshiro64Star;
 use smartstring::alias::String;
 
 #[cfg(feature = "shadowing")]
-use super::{symbolic::SymbolicTensor, IntoId, MixedTensor, Shadowable};
+use super::{symbolic::SymbolicTensor, IntoSymbol, MixedTensor, Shadowable};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView},
@@ -33,7 +33,7 @@ use super::{
 
 fn test_tensor<D, S>(structure: S, seed: u64, range: Option<(D, D)>) -> SparseTensor<D, S>
 where
-    S: HasStructure,
+    S: TensorStructure,
     D: rand::distributions::uniform::SampleUniform,
     Uniform<D>: Copy,
 
@@ -260,8 +260,8 @@ fn permutation() {
 
 #[test]
 fn trace() {
-    let structura =
-        HistoryStructure::from_integers(&[(1, 5), (1, 5)].map(|(a, d)| (a.into(), d.into())), "a");
+    let structura: HistoryStructure<&str, ()> =
+        HistoryStructure::from(NamedStructure::from_iter([(1, 5), (1, 5)], "a", None));
     let a = test_tensor::<i8, _>(structura, 3, None);
     let f = a.internal_contract();
 
@@ -540,9 +540,10 @@ fn all_single_contractions() {
 
         let dense_dense = densor_b.contract(&densor_a).unwrap();
         // println!("{}", dense_dense.structure());
+        let zeros: DenseTensor<i32> = DenseTensor::zero(dense_dense.structure.clone());
         let sparse_sparse = spensor_b.contract(&spensor_a).unwrap().to_dense();
-        let dense_sparse = densor_b.contract(&spensor_a).unwrap();
-        let sparse_dense = spensor_b.contract(&densor_a).unwrap();
+        let dense_sparse = densor_b.contract(&spensor_a).unwrap_or(zeros.clone());
+        let sparse_dense = spensor_b.contract(&densor_a).unwrap_or(zeros.clone());
 
         if dense_dense.data() != sparse_sparse.data() {
             sseq.push(s);
@@ -737,9 +738,10 @@ fn all_multi_contractions() {
 
         let dense_dense = densor_b.contract(&densor_a).unwrap();
         // println!("{}", dense_dense.structure());
+        let zeros: DenseTensor<i32> = DenseTensor::zero(dense_dense.structure.clone());
         let sparse_sparse = spensor_b.contract(&spensor_a).unwrap().to_dense();
-        let dense_sparse = densor_b.contract(&spensor_a).unwrap();
-        let sparse_dense = spensor_b.contract(&densor_a).unwrap();
+        let dense_sparse = densor_b.contract(&spensor_a).unwrap_or(zeros.clone());
+        let sparse_dense = spensor_b.contract(&densor_a).unwrap_or(zeros.clone());
 
         if dense_dense.data() != sparse_sparse.data() {
             sseq.push(s);
@@ -777,24 +779,26 @@ fn gamma() {
 
 #[test]
 fn matches() {
-    let structur_a = HistoryStructure::new(
-        &[
+    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
+        [
             (3.into(), Representation::Lorentz(2.into())),
             (2.into(), Representation::Lorentz(3.into())),
             (2.into(), Representation::Euclidean(2.into())),
             (1.into(), Representation::Lorentz(2.into())),
         ],
         "a",
-    );
-    let structur_b = HistoryStructure::new(
-        &[
+        None,
+    ));
+    let structur_b = HistoryStructure::from(NamedStructure::from_iter(
+        [
             (1.into(), Representation::Lorentz(2.into())),
             (3.into(), Representation::Lorentz(2.into())),
             (2.into(), Representation::Lorentz(2.into())),
             (1.into(), Representation::Euclidean(2.into())),
         ],
         "b",
-    );
+        None,
+    ));
 
     let a = structur_a.match_index(&structur_b);
 
@@ -806,13 +810,12 @@ fn mixed_tensor_contraction() {
     let im = Complex::new(1.5, 1.25);
     let data_a = [(vec![0, 0], 1.0), (vec![1, 1], 2.0)];
 
-    let structur_a =
-        HistoryStructure::from_integers(&[(2, 2), (1, 2)].map(|(a, d)| (a.into(), d.into())), "a");
+    let structur_a: HistoryStructure<&str, ()> =
+        HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
 
     let a = SparseTensor::from_data(&data_a, structur_a.clone()).unwrap();
 
-    let structur_b =
-        HistoryStructure::from_integers(&[(2, 2), (4, 2)].map(|(a, d)| (a.into(), d.into())), "b");
+    let structur_b = HistoryStructure::from(NamedStructure::from_iter([(2, 2), (4, 2)], "b", None));
 
     let b = DenseTensor::from_data(
         &[
@@ -869,6 +872,13 @@ fn tensor_net() {
     let r: NumTensor = mink_four_vector(3.into(), &[2., 3., 2., 1.]).into();
     let s: NumTensor = mink_four_vector(4.into(), &[2., 3., 2., 1.]).into();
 
+    a.contract(&b)
+        .unwrap()
+        .contract(&c)
+        .unwrap()
+        .contract(&d)
+        .unwrap();
+
     let mut n = TensorNetwork::from(vec![a, b, c, p, q, d, r, s]);
 
     assert!(n.graph.validate_neighbors());
@@ -882,21 +892,20 @@ fn tensor_net() {
     assert_eq!(0, n.graph.neighbors.len());
     assert_eq!(
         Complex::new(400., 0.),
-        n.result_tensor().try_as_complex().unwrap().data()[0]
+        n.result_tensor().unwrap().try_as_complex().unwrap().data()[0]
     )
 }
 
 #[test]
 fn contract_spensor() {
     let data_a = [(vec![0, 0], 1.0), (vec![1, 1], 2.0)];
-    let structur_a =
-        HistoryStructure::from_integers(&[(2, 2), (1, 2)].map(|(a, d)| (a.into(), d.into())), "a");
+    let structur_a: HistoryStructure<&str, ()> =
+        HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
     let data_b = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
-    let structur_b =
-        HistoryStructure::from_integers(&[(1, 2), (3, 2)].map(|(a, d)| (a.into(), d.into())), "b");
+    let structur_b = HistoryStructure::from(NamedStructure::from_iter([(1, 2), (3, 2)], "b", None));
 
     let b = SparseTensor::from_data(&data_b, structur_b).unwrap();
 
@@ -910,14 +919,13 @@ fn contract_spensor() {
 #[test]
 fn sparse_addition() {
     let data_a = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
-    let structur_a =
-        HistoryStructure::from_integers(&[(2, 2), (1, 2)].map(|(a, d)| (a.into(), d.into())), "a");
+    let structur_a: HistoryStructure<&str, ()> =
+        HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
     let data_b = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
-    let structur_b =
-        HistoryStructure::from_integers(&[(1, 2), (2, 2)].map(|(a, d)| (a.into(), d.into())), "b");
+    let structur_b = HistoryStructure::from(NamedStructure::from_iter([(1, 2), (2, 2)], "b", None));
 
     let b = SparseTensor::from_data(&data_b, structur_b).unwrap();
 
@@ -931,15 +939,14 @@ fn sparse_addition() {
 #[test]
 fn sparse_sub() {
     let data_a = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
-    let structur_a =
-        HistoryStructure::from_integers(&[(2, 2), (1, 2)].map(|(a, d)| (a.into(), d.into())), "a");
+    let structur_a: HistoryStructure<&str, ()> =
+        HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
     let data_b = [(vec![1, 0], 1.0), (vec![0, 1], 3.0)];
 
-    let structur_b =
-        HistoryStructure::from_integers(&[(2, 2), (1, 2)].map(|(a, d)| (a.into(), d.into())), "a");
+    let structur_b = HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
 
     let b = SparseTensor::from_data(&data_b, structur_b).unwrap();
 
@@ -979,14 +986,13 @@ fn arithmetic_data() {
 fn contract_densor_with_spensor() {
     let data_a = [(vec![0, 0], 1.0), (vec![1, 1], 2.0)];
 
-    let structur_a =
-        HistoryStructure::from_integers(&[(2, 2), (1, 2)].map(|(a, d)| (a.into(), d.into())), "a");
+    let structur_a: HistoryStructure<&str, ()> =
+        HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
     let data_b = [1.0, 2.0, 3.0, 4.0];
-    let structur_b =
-        HistoryStructure::from_integers(&[(1, 2), (4, 2)].map(|(a, d)| (a.into(), d.into())), "b");
+    let structur_b = HistoryStructure::from(NamedStructure::from_iter([(1, 2), (4, 2)], "b", None));
 
     let b = DenseTensor::from_data(&data_b, structur_b).unwrap();
 
@@ -999,9 +1005,7 @@ fn contract_densor_with_spensor() {
 // fn symbolic_zeros() {
 //     let mut state = State::get_global_state().write().unwrap();
 //     let ws = Workspace::new();
-//     let structure = TensorSkeleton::from_integers(&[(1, 2), (3, 2)], "a");
-
-//     let sym_zeros = DenseTensor::symbolic_zeros(structure.clone());
+//     let structure = TensorSkeleton::from(NamedStructure::from_iter([(1, 2), (3, 2)]seTen,None)sor::symbolic_zeros(structure.clone());
 
 //     let zeros: DenseTensor<f64> = DenseTensor::default(structure);
 
@@ -1011,9 +1015,13 @@ fn contract_densor_with_spensor() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn evaluate() {
-    let structure = test_structure(3, 1).to_named("a");
+    use crate::TensorShell;
 
-    let a = structure.clone().shadow().unwrap();
+    let structure: NamedStructure<&str, ()> = test_structure(3, 1).to_named("a", None);
+
+    let a: TensorShell<_> = structure.clone().into();
+
+    let a = a.shadow().unwrap();
 
     let adata = test_tensor(structure, 1, Some((-100., 100.))).to_dense();
 
@@ -1021,7 +1029,7 @@ fn evaluate() {
 
     a.append_const_map(&adata, &mut const_map);
 
-    let aev: DenseTensor<f64, NamedStructure> = a.evaluate(|r| r.into(), &const_map);
+    let aev: DenseTensor<f64, _> = a.evaluate(|r| r.into(), &const_map);
 
     assert_eq!(aev.data(), adata.data());
 }
@@ -1037,8 +1045,8 @@ fn convert_sym() {
             .map(|x| Complex::from(*x))
             .collect::<Vec<_>>(),
     );
-    let structur_b =
-        HistoryStructure::from_integers(&[(1, 2), (4, 3)].map(|(a, d)| (a.into(), d.into())), "b");
+    let structur_b: HistoryStructure<&str, ()> =
+        HistoryStructure::from(NamedStructure::from_iter([(1, 2), (4, 3)], "b", None));
     let b = DenseTensor::from_data(&data_b, structur_b).unwrap();
 
     let symb: DenseTensor<Atom, _> = b.try_into_upgrade().unwrap();
@@ -1087,8 +1095,8 @@ fn simple_multi_contract_sym() {
     )
     .unwrap();
 
-    let a: DataTensor<Atom> = structa.shadow_with("a".into_id()).into();
-    let b: DataTensor<Atom> = structb.shadow_with("b".into_id()).into();
+    let a: DataTensor<Atom> = structa.shadow_with("a".into_symbol(), &[]).into();
+    let b: DataTensor<Atom> = structb.shadow_with("b".into_symbol(), &[]).into();
 
     let _f = a.contract(&b).unwrap();
 }
@@ -1113,11 +1121,11 @@ fn complex() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn symbolic_contract() {
-    let structura =
-        NamedStructure::from_integers(&[(1, 2), (4, 3)].map(|(a, d)| (a.into(), d.into())), "T");
+    let structura: NamedStructure<&str, ()> =
+        NamedStructure::from(NamedStructure::from_iter([(1, 2), (4, 3)], "T", None));
 
-    let structurb =
-        NamedStructure::from_integers(&[(3, 2), (2, 3)].map(|(a, d)| (a.into(), d.into())), "P");
+    let structurb: NamedStructure<&str, ()> =
+        NamedStructure::from_iter([(3, 2), (2, 3)], "P", None);
 
     let mink = Representation::Lorentz(Dimension(4));
     let mu = Slot::from((AbstractIndex(0), mink));
@@ -1126,17 +1134,19 @@ fn symbolic_contract() {
     let j = Slot::from((AbstractIndex(2), bis));
     let k = Slot::from((9.into(), bis));
 
-    let _structure = NamedStructure::from_slots(vec![mu, i, j], "γ");
-    let _p_struct = NamedStructure::from_slots(vec![mu], "p");
-    let _t_struct = NamedStructure::from_slots(vec![i, j, k], "T");
+    let _structure: NamedStructure<&str, ()> = NamedStructure::from_iter([mu, i, j], "γ", None);
+    let _p_struct: NamedStructure<&str, ()> = NamedStructure::from_iter([mu], "p", None);
+    let _t_struct: NamedStructure<&str, ()> = NamedStructure::from_iter([i, j, k], "T", None);
 
-    let a = SymbolicTensor::from_named(&structura).unwrap();
-    let b = SymbolicTensor::from_named(&structurb).unwrap();
+    let a = SymbolicTensor::from_named(&structura.to_shell()).unwrap();
+    let b = SymbolicTensor::from_named(&structurb.to_shell()).unwrap();
     let f = a.contract(&b).unwrap();
+
+    println!("{}", f);
 
     assert_eq!(
         *f.get_atom(),
-        Atom::parse("T(euc(2,1),euc(3,4))*P(euc(2,3),euc(3,2))").unwrap()
+        Atom::parse("T(aind(euc(2,1),euc(3,4)))*P(aind(euc(2,3),euc(3,2)))").unwrap()
     );
 
     let a = f.to_network().unwrap();
@@ -1193,7 +1203,7 @@ fn test_fallible_mul() {
 
         let g = Complex::new(0.1, 3.);
 
-        let mut h = a.sub_fallible(g).unwrap();
+        let mut h = a.sub_fallible(&g).unwrap();
 
         h.add_assign_fallible(a);
         let _f = a.mul_fallible(a);

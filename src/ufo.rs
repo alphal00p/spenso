@@ -1,23 +1,25 @@
 use std::ops::Neg;
 
 use super::{
-    AbstractIndex, DenseTensor, HasStructure, HistoryStructure,
+    AbstractIndex, DenseTensor, HistoryStructure,
     Representation::{self, Euclidean, Lorentz},
     SetTensorData, Slot, SparseTensor,
 };
-
+use crate::IntoArgs;
+use crate::NamedStructure;
 use num::{NumCast, One, Zero};
 
-use crate::Complex;
+use crate::{Complex, Dimension, TensorStructure};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, Symbol},
+    id::Pattern,
     state::State,
 };
 
 #[cfg(feature = "shadowing")]
-use super::{IntoId, Shadowable};
+use super::{IntoSymbol, Shadowable};
 
 // pub fn init_state() {
 //     assert!(EUC == State::get_symbol("euc", None).unwrap());
@@ -45,7 +47,7 @@ pub fn identity<T, I>(
 ) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero,
-    I: HasStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot>,
 {
     //TODO: make it just swap indices
     let structure = [(indices.0, signature), (indices.1, signature)]
@@ -75,12 +77,14 @@ where
 pub fn identity_data<T, N>(structure: N) -> SparseTensor<T, N>
 where
     T: One,
-    N: HasStructure,
+    N: TensorStructure,
 {
     assert!(structure.order() == 2, "Identity tensor must be rank 2");
 
+    println!("{:?}", structure.reps());
+
     assert!(
-        structure.reps()[0] == structure.reps()[1],
+        Dimension::from(structure.reps()[0]) == Dimension::from(structure.reps()[1]),
         "Identity tensor must have equal indices"
     );
 
@@ -94,6 +98,132 @@ where
     identity
 }
 
+pub fn preprocess_ufo_spin(atom: Atom) -> Atom {
+    let replacements = [
+        ("Identity(i_,j_)", "id(bis(4,i_),bis(4,j_))"),
+        ("IdentityL(mu_,nu_)", "id(lor(4,mu_),lor(4,nu_))"),
+        ("Gamma(mu_,i_,j_)", "γ(lor(4,mu_),bis(4,i_),bis(4,j_))"),
+        ("Gamma5(i_,j_)", "γ5(bis(4,i_),bis(4,j_))"),
+        ("ProjM(i_,j_)", "ProjM(bis(4,i_),bis(4,j_))"),
+        ("ProjP(i_,j_)", "ProjP(bis(4,i_),bis(4,j_))"),
+        (
+            "Sigma(mu_,nu_,i_,j_)",
+            "σ(lor(4,mu_),lor(4,nu_),bis(4,i_),bis(4,j_))",
+        ),
+        ("C(i_,j_)", "C(bis(4,i_),bis(4,j_))"),
+        ("Metric(mu_,nu_)", "Metric(lor(4,mu_),lor(4,nu_))"),
+    ];
+
+    batch_replace(&replacements, atom)
+}
+
+pub fn preprocess_ufo_color(atom: Atom) -> Atom {
+    let replacements = [
+        ("T(a_,i_,ia_)", "T(coad(a_),cof(i_),coaf(ia_))"),
+        ("f(a1_,a2_,a3_)", "f(coad(a1_),coad(a2_),coad(a3_))"),
+        ("d(a1_,a2_,a3_)", "d(coad(a1_),coad(a2_),coad(a3_))"),
+        (
+            "Epsilon(i1_,i2_,i3_)",
+            "EpsilonBar(cof(i1_),cof(i2_),cof(i3_))",
+        ),
+        (
+            "EpsilonBar(ia1_,ia2_,ia3_)",
+            "Epsilon(coaf(ia1)),coaf(ia2)),coaf(ia3)))",
+        ),
+        ("T6(a_,s_,as_)", "T6(coad(a_),cos(s_),coas(as_))"),
+        ("K6(ia1_,ia2_,s_)", "K6(coaf(ia1)),coaf(ia2)),cos(s_))"),
+        ("K6Bar(as_,i1_,i2_)", "K6Bar(coas(as_),cof(i1_),cof(i2_))"),
+    ];
+
+    batch_replace(&replacements, atom)
+}
+
+pub fn batch_replace(replacements: &[(&str, &str)], mut atom: Atom) -> Atom {
+    for (pattern, replacement) in replacements {
+        let pattern = Pattern::parse(pattern).unwrap();
+        let replacement = Pattern::parse(replacement).unwrap();
+        atom = pattern.replace_all(atom.as_view(), &replacement, None, None);
+    }
+
+    atom
+}
+
+pub fn preprocess_ufo_color_wrapped(atom: Atom) -> Atom {
+    let replacements = [
+        (
+            "T(a_,i_,ia_)",
+            "T(coad(8,indexid(a_)),cof(3,indexid(i_)),coaf(3,indexid(ia_)))",
+        ),
+        (
+            "f(a1_,a2_,a3_)",
+            "f(coad(8,indexid(a1_)),coad(8,indexid(a2_)),coad(8,indexid(a3_)))",
+        ),
+        (
+            "d(a1_,a2_,a3_)",
+            "d(coad(8,indexid(a1_)),coad(8,indexid(a2_)),coad(8,indexid(a3_)))",
+        ),
+        (
+            "Epsilon(i1_,i2_,i3_)",
+            "EpsilonBar(cof(3,indexid(i1_)),cof(3,indexid(i2_)),cof(3,indexid(i3_)))",
+        ),
+        (
+            "EpsilonBar(ia1_,ia2_,ia3_)",
+            "Epsilon(coaf(3,indexid(ia1_)),coaf(3,indexid(ia2_)),coaf(3,indexid(ia3_)))",
+        ),
+        (
+            "T6(a_,s_,as_)",
+            "T6(coad(8,indexid(a_)),cos(6,indexid(s_)),coas(6,indexid(as_)))",
+        ),
+        (
+            "K6(ia1_,ia2_,s_)",
+            "K6(coaf(3,indexid(ia1_)),coaf(3,indexid(ia2_)),cos(6,indexid(s_)))",
+        ),
+        (
+            "K6Bar(as_,i1_,i2_)",
+            "K6Bar(coas(6,indexid(as_)),cof(3,indexid(i1_)),cof(3,indexid(i2_)))",
+        ),
+    ];
+
+    batch_replace(&replacements, atom)
+}
+
+pub fn preprocess_ufo_spin_wrapped(atom: Atom) -> Atom {
+    let replacements = [
+        (
+            "Identity(i_,j_)",
+            "id(bis(4,indexid(i_)),bis(4,indexid(j_)))",
+        ),
+        (
+            "IdentityL(mu_,nu_)",
+            "id(lor(4,indexid(mu_)),lor(4,indexid(nu_)))",
+        ),
+        (
+            "Gamma(mu_,i_,j_)",
+            "γ(lor(4,indexid(mu_)),bis(4,indexid(i_)),bis(4,indexid(j_)))",
+        ),
+        ("Gamma5(i_,j_)", "γ5(bis(4,indexid(i_)),bis(4,indexid(j_)))"),
+        (
+            "ProjM(i_,j_)",
+            "ProjM(bis(4,indexid(i_)),bis(4,indexid(j_)))",
+        ),
+        (
+            "ProjP(i_,j_)",
+            "ProjP(bis(4,indexid(i_)),bis(4,indexid(j_)))",
+        ),
+        (
+            "Sigma(mu_,nu_,i_,j_)",
+            "σ(lor(4,indexid(mu_)),lor(4,indexid(nu_)),bis(4,indexid(i_)),bis(4,indexid(j_)))",
+        ),
+        ("C(i_,j_)", "C(bis(4,indexid(i_)),bis(4,indexid(j_)))"),
+        (
+            "Metric(mu_,nu_)",
+            "Metric(lor(4,indexid(mu_)),lor(4,indexid(nu_)))",
+        ),
+    ];
+
+    batch_replace(&replacements, atom)
+}
+
 #[allow(dead_code)]
 #[must_use]
 pub fn lorentz_identity<T, I>(
@@ -101,7 +231,7 @@ pub fn lorentz_identity<T, I>(
 ) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero,
-    I: HasStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot>,
 {
     // IdentityL(1,2) (Lorentz) Kronecker delta δ^μ1_μ1
     let signature = Lorentz(4.into());
@@ -111,7 +241,7 @@ where
 pub fn mink_four_vector<T, I>(index: AbstractIndex, p: &[T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
-    I: HasStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot>,
 {
     DenseTensor::from_data(
         p,
@@ -126,13 +256,19 @@ where
 pub fn mink_four_vector_sym<T>(
     index: AbstractIndex,
     p: &[T; 4],
-) -> DenseTensor<T, HistoryStructure<Symbol>>
+) -> DenseTensor<T, HistoryStructure<Symbol, ()>>
 where
     T: Clone,
 {
+    use crate::NamedStructure;
+
     DenseTensor::from_data(
         p,
-        HistoryStructure::new(&[(index, Lorentz(4.into()))], State::get_symbol("p")),
+        HistoryStructure::from(NamedStructure::from_iter(
+            [(index, Lorentz(4.into()))],
+            State::get_symbol("p"),
+            None,
+        )),
     )
     .unwrap_or_else(|_| unreachable!())
 }
@@ -140,7 +276,7 @@ where
 pub fn euclidean_four_vector<T, I>(index: AbstractIndex, p: &[T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
-    I: HasStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot>,
 {
     DenseTensor::from_data(
         p,
@@ -155,41 +291,60 @@ where
 pub fn euclidean_four_vector_sym<T>(
     index: AbstractIndex,
     p: &[T; 4],
-) -> DenseTensor<T, HistoryStructure<Symbol>>
+) -> DenseTensor<T, HistoryStructure<Symbol, ()>>
 where
     T: Clone,
 {
+    use crate::NamedStructure;
+
     DenseTensor::from_data(
         p,
-        HistoryStructure::new(&[(index, Euclidean(4.into()))], State::get_symbol("p")),
+        HistoryStructure::from(NamedStructure::from_iter(
+            [(index, Euclidean(4.into()))],
+            State::get_symbol("p"),
+            None,
+        )),
     )
     .unwrap_or_else(|_| unreachable!())
 }
 
 #[cfg(feature = "shadowing")]
-pub fn param_mink_four_vector<N>(
+pub fn param_mink_four_vector<N, A>(
     index: AbstractIndex,
     name: N,
-) -> DenseTensor<Atom, HistoryStructure<N>>
+    args: Option<A>,
+) -> DenseTensor<Atom, HistoryStructure<N, A>>
 where
-    N: Clone + IntoId,
+    N: Clone + IntoSymbol,
+    A: Clone + IntoArgs,
 {
-    HistoryStructure::new(&[(index, Lorentz(4.into()))], name)
-        .shadow()
-        .unwrap_or_else(|| unreachable!())
+    HistoryStructure::from(NamedStructure::from_iter(
+        [(index, Lorentz(4.into()))],
+        name,
+        args,
+    ))
+    .to_shell()
+    .shadow()
+    .unwrap_or_else(|| unreachable!())
 }
 
 #[cfg(feature = "shadowing")]
-pub fn param_euclidean_four_vector<N>(
+pub fn param_euclidean_four_vector<N, A>(
     index: AbstractIndex,
     name: N,
-) -> DenseTensor<Atom, HistoryStructure<N>>
+) -> DenseTensor<Atom, HistoryStructure<N, A>>
 where
-    N: Clone + IntoId,
+    N: Clone + IntoSymbol,
+    A: Clone + IntoArgs,
 {
-    HistoryStructure::new(&[(index, Euclidean(4.into()))], name)
-        .shadow()
-        .unwrap_or_else(|| unreachable!())
+    HistoryStructure::from(NamedStructure::from_iter(
+        [(index, Euclidean(4.into()))],
+        name,
+        None,
+    ))
+    .to_shell()
+    .shadow()
+    .unwrap_or_else(|| unreachable!())
 }
 
 #[allow(dead_code)]
@@ -199,7 +354,7 @@ pub fn euclidean_identity<T, I>(
 ) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero,
-    I: HasStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot>,
 {
     // Identity(1,2) (Spinorial) Kronecker delta δ_s1_s2
     let signature = Euclidean(4.into());
@@ -213,7 +368,7 @@ pub fn gamma<T, I>(
 ) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero + Copy + std::ops::Neg<Output = T>,
-    I: HasStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot>,
 {
     // Gamma(1,2,3) Dirac matrix (γ^μ1)_s2_s3
     let structure = [
@@ -231,18 +386,21 @@ where
 pub fn gammasym<T>(
     minkindex: AbstractIndex,
     indices: (AbstractIndex, AbstractIndex),
-) -> SparseTensor<Complex<T>, HistoryStructure<Symbol>>
+) -> SparseTensor<Complex<T>, HistoryStructure<Symbol, ()>>
 where
     T: One + Zero + Copy + std::ops::Neg<Output = T>,
 {
-    let structure = HistoryStructure::new(
-        &[
+    use crate::NamedStructure;
+
+    let structure = HistoryStructure::from(NamedStructure::from_iter(
+        [
             (indices.0, Euclidean(4.into())),
             (indices.1, Euclidean(4.into())),
             (minkindex, Lorentz(4.into())),
         ],
         State::get_symbol("γ"),
-    );
+        None,
+    ));
 
     gamma_data(structure)
 }
@@ -251,7 +409,7 @@ where
 pub fn gamma_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Zero + One + Neg<Output = T> + Clone,
-    N: HasStructure,
+    N: TensorStructure,
 {
     let c1 = Complex::<T>::new(T::one(), T::zero());
     let cn1 = Complex::<T>::new(-T::one(), T::zero());
@@ -287,7 +445,7 @@ where
 pub fn gamma5<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero + Copy,
-    I: HasStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot>,
 {
     let structure = [
         (indices.0, Euclidean(4.into())),
@@ -303,17 +461,18 @@ where
 #[cfg(feature = "shadowing")]
 pub fn gamma5sym<T>(
     indices: (AbstractIndex, AbstractIndex),
-) -> SparseTensor<Complex<T>, HistoryStructure<Symbol>>
+) -> SparseTensor<Complex<T>, HistoryStructure<Symbol, ()>>
 where
     T: One + Zero + Copy,
 {
-    let structure = HistoryStructure::new(
-        &[
+    let structure = HistoryStructure::from(NamedStructure::from_iter(
+        [
             (indices.0, Euclidean(4.into())),
             (indices.1, Euclidean(4.into())),
         ],
         State::get_symbol("γ5"),
-    );
+        None,
+    ));
 
     gamma5_data(structure)
 }
@@ -321,7 +480,7 @@ where
 pub fn gamma5_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Zero + One + Clone,
-    N: HasStructure,
+    N: TensorStructure,
 {
     let c1 = Complex::<T>::new(T::one(), T::zero());
 
@@ -338,7 +497,7 @@ where
 pub fn proj_m<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
 where
     T: Zero + One + NumCast + Clone,
-    I: HasStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot>,
 {
     // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
     let structure = [
@@ -355,17 +514,18 @@ where
 #[cfg(feature = "shadowing")]
 pub fn proj_msym<T>(
     indices: (AbstractIndex, AbstractIndex),
-) -> SparseTensor<Complex<T>, HistoryStructure<Symbol>>
+) -> SparseTensor<Complex<T>, HistoryStructure<Symbol, ()>>
 where
     T: Zero + One + NumCast + Clone,
 {
-    let structure = HistoryStructure::new(
-        &[
+    let structure = HistoryStructure::from(NamedStructure::from_iter(
+        [
             (indices.0, Euclidean(4.into())),
             (indices.1, Euclidean(4.into())),
         ],
         State::get_symbol("ProjM"),
-    );
+        None,
+    ));
 
     proj_m_data(structure)
 }
@@ -374,7 +534,7 @@ where
 pub fn proj_m_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Zero + One + NumCast + Clone,
-    N: HasStructure,
+    N: TensorStructure,
 {
     // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
     let chalf = Complex::<T>::new(T::from(0.5).unwrap(), T::zero());
@@ -398,7 +558,7 @@ where
 pub fn proj_p<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
 where
     T: NumCast + Zero + Clone,
-    I: HasStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot>,
 {
     // ProjP(1,2) Right chirality projector (( 1+γ5)/ 2 )_s1_s2
     let structure = [
@@ -415,17 +575,18 @@ where
 #[cfg(feature = "shadowing")]
 pub fn proj_psym<T>(
     indices: (AbstractIndex, AbstractIndex),
-) -> SparseTensor<Complex<T>, HistoryStructure<Symbol>>
+) -> SparseTensor<Complex<T>, HistoryStructure<Symbol, ()>>
 where
     T: Zero + Clone + NumCast,
 {
-    let structure = HistoryStructure::new(
-        &[
+    let structure = HistoryStructure::from(NamedStructure::from_iter(
+        [
             (indices.0, Euclidean(4.into())),
             (indices.1, Euclidean(4.into())),
         ],
         State::get_symbol("ProjP"),
-    );
+        None,
+    ));
 
     proj_p_data(structure)
 }
@@ -433,7 +594,7 @@ where
 pub fn proj_p_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: NumCast + Zero + Clone,
-    N: HasStructure,
+    N: TensorStructure,
 {
     // ProjP(1,2) Right chirality projector (( 1+γ5)/ 2 )_s1_s2
     let chalf = Complex::<T>::new(T::from(0.5).unwrap_or_else(|| unreachable!()), T::zero());
@@ -475,7 +636,7 @@ pub fn sigma<T, I>(
 ) -> SparseTensor<Complex<T>, I>
 where
     T: Copy + Zero + One + Neg<Output = T>,
-    I: HasStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot>,
 {
     let structure = [
         (indices.0, Euclidean(4.into())),
@@ -494,19 +655,20 @@ where
 pub fn sigmasym<T>(
     indices: (AbstractIndex, AbstractIndex),
     minkdices: (AbstractIndex, AbstractIndex),
-) -> SparseTensor<Complex<T>, HistoryStructure<Symbol>>
+) -> SparseTensor<Complex<T>, HistoryStructure<Symbol, ()>>
 where
     T: Copy + Zero + Clone + One + Neg<Output = T>,
 {
-    let structure = HistoryStructure::new(
-        &[
+    let structure = HistoryStructure::from(NamedStructure::from_iter(
+        [
             (indices.0, Euclidean(4.into())),
             (indices.1, Euclidean(4.into())),
             (minkdices.0, Lorentz(4.into())),
             (minkdices.1, Lorentz(4.into())),
         ],
         State::get_symbol("σ"),
-    );
+        None,
+    ));
 
     sigma_data(structure)
 }
@@ -515,7 +677,7 @@ where
 pub fn sigma_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Copy + Zero + One + Neg<Output = T>,
-    N: HasStructure,
+    N: TensorStructure,
 {
     let c1 = Complex::<T>::new(T::one(), T::zero());
     let cn1 = Complex::<T>::new(-T::one(), T::zero());
@@ -573,4 +735,35 @@ where
     sigma.set(&[3, 3, 2, 1], cni).unwrap();
 
     sigma
+}
+
+pub fn metric_data<T, N>(structure: N) -> SparseTensor<T, N>
+where
+    T: One + Clone + Neg<Output = T>,
+    N: TensorStructure,
+{
+    let reps = structure.reps();
+
+    if reps[0] == reps[1] && reps.len() == 2 {
+        match reps[0] {
+            Lorentz(d) => {
+                let mut metric = SparseTensor::empty(structure);
+
+                for i in 1..d.into() {
+                    metric
+                        .set(&[i, i], -T::one())
+                        .unwrap_or_else(|_| unreachable!());
+                }
+
+                metric
+                    .set(&[0, 0], T::one())
+                    .unwrap_or_else(|_| unreachable!());
+
+                metric
+            }
+            _ => panic!("Metric tensor must have Lorentz indices"),
+        }
+    } else {
+        panic!("Metric tensor must have equal indices")
+    }
 }

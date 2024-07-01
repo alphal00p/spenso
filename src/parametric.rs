@@ -1,17 +1,22 @@
-use std::fmt::Debug;
+extern crate derive_more;
+use derive_more::From;
+use std::{fmt::Debug, process::Output};
 
 use ahash::{AHashMap, HashMap};
 use enum_try_as_inner::EnumTryAsInner;
 
-use crate::{Complex, RefZero};
+use crate::{
+    Complex, ContractableWith, ContractionError, FallibleAddAssign, FallibleMul, FallibleSubAssign,
+    FlatIndex, IsZero, RefZero, TensorStructure, TrySmallestUpgrade,
+};
 use symbolica::{
-    atom::{Atom, AtomView, Symbol},
+    atom::{representation::FunView, Atom, AtomOrView, AtomView, Symbol},
     domains::rational::Rational,
-    evaluate::EvaluationFn,
+    evaluate::{ConstOrExpr, EvaluationFn, ExpressionEvaluator},
 };
 
 use super::{
-    Contract, DataIterator, DataTensor, DenseTensor, HasName, HasStructure, HistoryStructure, Slot,
+    Contract, DataIterator, DataTensor, DenseTensor, HasStructure, HistoryStructure, Slot,
     SparseTensor, StructureContract, TracksCount, VecStructure,
 };
 use symbolica::domains::float::Complex as SymComplex;
@@ -22,15 +27,71 @@ impl RefZero for Atom {
     }
 }
 
+impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom> {
+    type Error = String;
+
+    fn try_from(f: FunView<'a>) -> Result<Self, Self::Error> {
+        let mut structure: Vec<Slot> = vec![];
+        let f_id = f.get_symbol();
+        let mut args = vec![];
+
+        for arg in f.iter() {
+            if let Ok(arg) = arg.try_into() {
+                structure.push(arg);
+            } else {
+                args.push(arg.to_owned());
+            }
+        }
+        let s: VecStructure = structure.into();
+        Ok(s.shadow_with(f_id, &args))
+    }
+}
+
 #[derive(Clone, Debug, EnumTryAsInner)]
 #[derive_err(Debug)]
-pub enum MixedTensor<T: HasStructure = VecStructure> {
+pub enum ParamTensor<S: TensorStructure> {
+    Param(DataTensor<Atom, S>),
+    // Concrete(DataTensor<T, S>),
+    Composite(DataTensor<Atom, S>),
+}
+
+#[derive(Clone, Debug, EnumTryAsInner)]
+#[derive_err(Debug)]
+pub enum ParamOrConcrete<S: TensorStructure, T: ContractableWith<Atom>> {
+    Concrete(DataTensor<T, S>),
+    Param(DataTensor<Atom, S>),
+    Composite(DataTensor<Atom, S>),
+}
+
+#[derive(Clone, Debug, EnumTryAsInner)]
+#[derive_err(Debug)]
+pub enum MixedTensor<T: TensorStructure = VecStructure> {
     Float(DataTensor<f64, T>),
     Complex(DataTensor<Complex<f64>, T>),
     Symbolic(DataTensor<Atom, T>),
 }
 
-impl<T: HasStructure> PartialEq<MixedTensor<T>> for MixedTensor<T> {
+impl<'a> TryFrom<FunView<'a>> for MixedTensor {
+    type Error = String;
+
+    fn try_from(f: FunView<'a>) -> Result<Self, Self::Error> {
+        let mut structure: Vec<Slot> = vec![];
+        let f_id = f.get_symbol();
+        let mut args = vec![];
+
+        for arg in f.iter() {
+            if let Ok(arg) = arg.try_into() {
+                structure.push(arg);
+            } else {
+                args.push(arg.to_owned());
+            }
+        }
+        let s: VecStructure = structure.into();
+        Ok(s.to_explicit_rep(f_id, &args))
+    }
+}
+
+impl<T: TensorStructure> PartialEq<MixedTensor<T>> for MixedTensor<T> {
     fn eq(&self, other: &MixedTensor<T>) -> bool {
         match (self, other) {
             (MixedTensor::Float(_), MixedTensor::Float(_)) => true,
@@ -41,9 +102,9 @@ impl<T: HasStructure> PartialEq<MixedTensor<T>> for MixedTensor<T> {
     }
 }
 
-impl<T: HasStructure> Eq for MixedTensor<T> {}
+impl<T: TensorStructure> Eq for MixedTensor<T> {}
 
-impl<T: HasStructure> PartialOrd<MixedTensor<T>> for MixedTensor<T> {
+impl<T: TensorStructure> PartialOrd<MixedTensor<T>> for MixedTensor<T> {
     fn partial_cmp(&self, other: &MixedTensor<T>) -> Option<std::cmp::Ordering> {
         match (self, other) {
             (MixedTensor::Float(_), MixedTensor::Float(_)) => Some(std::cmp::Ordering::Equal),
@@ -61,13 +122,13 @@ impl<T: HasStructure> PartialOrd<MixedTensor<T>> for MixedTensor<T> {
     }
 }
 
-impl<T: HasStructure> Ord for MixedTensor<T> {
+impl<T: TensorStructure> Ord for MixedTensor<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
 
-impl<'a, I: HasStructure + Clone + 'a> MixedTensor<I> {
+impl<'a, I: TensorStructure + Clone + 'a> MixedTensor<I> {
     pub fn evaluate_float<'b, F: Fn(&Rational) -> f64 + Copy>(
         &mut self,
         coeff_map: F,
@@ -105,8 +166,20 @@ impl<'a, I: HasStructure + Clone + 'a> MixedTensor<I> {
 
 impl<I> DataTensor<Atom, I>
 where
-    I: Clone + HasStructure,
+    I: Clone + TensorStructure,
 {
+    pub fn evaluator<'a, T: Clone + Default, F: Fn(&Rational) -> T + Copy>(
+        &'a self,
+        coeff_map: F,
+        const_map: &HashMap<AtomOrView, ConstOrExpr<'a, T>>,
+        params: &[Atom],
+    ) -> DataTensor<ExpressionEvaluator<T>, I> {
+        match self {
+            DataTensor::Dense(x) => DataTensor::Dense(x.evaluator(coeff_map, const_map, params)),
+            DataTensor::Sparse(x) => DataTensor::Sparse(x.evaluator(coeff_map, const_map, params)),
+        }
+    }
+
     pub fn evaluate<'a, 'b, T, F: Fn(&Rational) -> T + Copy, U>(
         &self,
         coeff_map: F,
@@ -128,8 +201,25 @@ where
 
 impl<I> SparseTensor<Atom, I>
 where
-    I: Clone,
+    I: Clone + TensorStructure,
 {
+    pub fn evaluator<'a, T: Clone + Default, F: Fn(&Rational) -> T + Copy>(
+        &'a self,
+        coeff_map: F,
+        const_map: &HashMap<AtomOrView, ConstOrExpr<'a, T>>,
+        params: &[Atom],
+    ) -> SparseTensor<ExpressionEvaluator<T>, I> {
+        let eval_data: AHashMap<FlatIndex, ExpressionEvaluator<_>> = AHashMap::from_iter(
+            self.elements
+                .iter()
+                .map(|(&i, a)| (i, a.as_view().evaluator(coeff_map, const_map, params))),
+        );
+        SparseTensor {
+            elements: eval_data,
+            structure: self.structure.clone(),
+        }
+    }
+
     pub fn evaluate<'a, T, F: Fn(&Rational) -> T + Copy, U>(
         &self,
         coeff_map: F,
@@ -165,8 +255,25 @@ where
 
 impl<I> DenseTensor<Atom, I>
 where
-    I: Clone,
+    I: Clone + TensorStructure,
 {
+    pub fn evaluator<'a, T: Clone + Default, F: Fn(&Rational) -> T + Copy>(
+        &'a self,
+        coeff_map: F,
+        const_map: &HashMap<AtomOrView, ConstOrExpr<'a, T>>,
+        params: &[Atom],
+    ) -> DenseTensor<ExpressionEvaluator<T>, I> {
+        let eval_data: Vec<ExpressionEvaluator<_>> = self
+            .data
+            .iter()
+            .map(|x| x.as_view().evaluator(coeff_map, const_map, params))
+            .collect();
+        DenseTensor {
+            data: eval_data,
+            structure: self.structure.clone(),
+        }
+    }
+
     pub fn evaluate<'a, T, F: Fn(&Rational) -> T + Copy, U>(
         &'a self,
         coeff_map: F,
@@ -198,7 +305,7 @@ where
         data: &DenseTensor<T, I>,
         const_map: &mut HashMap<AtomView<'b>, U>,
     ) where
-        I: HasStructure,
+        I: TensorStructure,
         T: Copy,
         U: From<T>,
         'a: 'b,
@@ -210,9 +317,30 @@ where
     }
 }
 
+impl<S> HasStructure for ParamTensor<S>
+where
+    S: TensorStructure,
+{
+    type Structure = S;
+    type Scalar = Atom;
+    fn structure(&self) -> &Self::Structure {
+        match self {
+            ParamTensor::Param(t) => t.structure(),
+            ParamTensor::Composite(t) => t.structure(),
+        }
+    }
+
+    fn mut_structure(&mut self) -> &mut Self::Structure {
+        match self {
+            ParamTensor::Param(t) => t.mut_structure(),
+            ParamTensor::Composite(t) => t.mut_structure(),
+        }
+    }
+}
+
 impl<T> HasStructure for MixedTensor<T>
 where
-    T: HasStructure,
+    T: TensorStructure,
 {
     type Scalar = Atom;
     type Structure = T;
@@ -232,41 +360,23 @@ where
             MixedTensor::Symbolic(t) => t.mut_structure(),
         }
     }
-    fn external_structure(&self) -> &[Slot] {
-        match self {
-            MixedTensor::Float(t) => t.external_structure(),
-            MixedTensor::Complex(t) => t.external_structure(),
-            MixedTensor::Symbolic(t) => t.external_structure(),
-        }
-    }
 }
 
-impl<T> HasName for MixedTensor<T>
+impl<S> TracksCount for ParamTensor<S>
 where
-    T: HasName + HasStructure,
+    S: TensorStructure + TracksCount,
 {
-    type Name = T::Name;
-
-    fn name(&self) -> Option<std::borrow::Cow<'_, <T as HasName>::Name>> {
+    fn contractions_num(&self) -> usize {
         match self {
-            MixedTensor::Float(t) => t.name(),
-            MixedTensor::Complex(t) => t.name(),
-            MixedTensor::Symbolic(t) => t.name(),
-        }
-    }
-
-    fn set_name(&mut self, name: &Self::Name) {
-        match self {
-            MixedTensor::Float(t) => t.set_name(name),
-            MixedTensor::Complex(t) => t.set_name(name),
-            MixedTensor::Symbolic(t) => t.set_name(name),
+            ParamTensor::Param(t) => t.contractions_num(),
+            ParamTensor::Composite(t) => t.contractions_num(),
         }
     }
 }
 
 impl<T> TracksCount for MixedTensor<T>
 where
-    T: TracksCount + HasStructure,
+    T: TracksCount + TensorStructure,
 {
     fn contractions_num(&self) -> usize {
         match self {
@@ -277,11 +387,11 @@ where
     }
 }
 
-pub type MixedTensors = MixedTensor<HistoryStructure<Symbol>>;
+// pub type MixedTensors = MixedTensor<HistoryStructure<Symbol>>;
 
 impl<I> From<DenseTensor<f64, I>> for MixedTensor<I>
 where
-    I: HasStructure,
+    I: TensorStructure,
 {
     fn from(other: DenseTensor<f64, I>) -> Self {
         MixedTensor::<I>::Float(DataTensor::Dense(other))
@@ -290,7 +400,7 @@ where
 
 impl<I> From<SparseTensor<f64, I>> for MixedTensor<I>
 where
-    I: HasStructure,
+    I: TensorStructure,
 {
     fn from(other: SparseTensor<f64, I>) -> Self {
         MixedTensor::<I>::Float(DataTensor::Sparse(other))
@@ -299,7 +409,7 @@ where
 
 impl<I> From<DenseTensor<Complex<f64>, I>> for MixedTensor<I>
 where
-    I: HasStructure,
+    I: TensorStructure,
 {
     fn from(other: DenseTensor<Complex<f64>, I>) -> Self {
         MixedTensor::<I>::Complex(DataTensor::Dense(other))
@@ -308,7 +418,7 @@ where
 
 impl<I> From<SparseTensor<Complex<f64>, I>> for MixedTensor<I>
 where
-    I: HasStructure,
+    I: TensorStructure,
 {
     fn from(other: SparseTensor<Complex<f64>, I>) -> Self {
         MixedTensor::<I>::Complex(DataTensor::Sparse(other))
@@ -317,7 +427,7 @@ where
 
 impl<I> From<DenseTensor<Atom, I>> for MixedTensor<I>
 where
-    I: HasStructure,
+    I: TensorStructure,
 {
     fn from(other: DenseTensor<Atom, I>) -> Self {
         MixedTensor::<I>::Symbolic(DataTensor::Dense(other))
@@ -326,46 +436,116 @@ where
 
 impl<I> From<SparseTensor<Atom, I>> for MixedTensor<I>
 where
-    I: HasStructure,
+    I: TensorStructure,
 {
     fn from(other: SparseTensor<Atom, I>) -> Self {
         MixedTensor::<I>::Symbolic(DataTensor::Sparse(other))
     }
 }
 
+impl<I> Contract<ParamTensor<I>> for ParamTensor<I>
+where
+    I: TensorStructure + Clone + StructureContract,
+{
+    type LCM = ParamTensor<I>;
+    fn contract(&self, other: &ParamTensor<I>) -> Result<Self::LCM, ContractionError> {
+        match (self, other) {
+            (ParamTensor::<I>::Param(s), ParamTensor::<I>::Param(o)) => {
+                Ok(ParamTensor::<I>::Composite(s.contract(o)?))
+            }
+            (ParamTensor::<I>::Param(s), ParamTensor::<I>::Composite(o)) => {
+                Ok(ParamTensor::<I>::Composite(s.contract(o)?))
+            }
+            (ParamTensor::<I>::Composite(s), ParamTensor::<I>::Param(o)) => {
+                Ok(ParamTensor::<I>::Composite(s.contract(o)?))
+            }
+            (ParamTensor::<I>::Composite(s), ParamTensor::<I>::Composite(o)) => {
+                Ok(ParamTensor::<I>::Composite(s.contract(o)?))
+            }
+        }
+    }
+}
+
+impl<I, T> Contract<ParamOrConcrete<I, T>> for ParamOrConcrete<I, T>
+where
+    I: TensorStructure + Clone + StructureContract,
+    T: ContractableWith<Atom, Out = Atom>
+        + ContractableWith<T, Out = T>
+        + Clone
+        + FallibleMul<Output = T>
+        + FallibleAddAssign<T>
+        + FallibleSubAssign<T>
+        + RefZero
+        + IsZero,
+    Atom: ContractableWith<T, Out = Atom> + ContractableWith<Atom, Out = Atom>,
+{
+    type LCM = ParamOrConcrete<I, T>;
+    fn contract(&self, other: &ParamOrConcrete<I, T>) -> Result<Self::LCM, ContractionError> {
+        match (self, other) {
+            (ParamOrConcrete::<I, T>::Param(s), ParamOrConcrete::<I, T>::Param(o)) => {
+                Ok(ParamOrConcrete::<I, T>::Param(s.contract(o)?))
+            }
+            (ParamOrConcrete::<I, T>::Param(s), ParamOrConcrete::<I, T>::Concrete(o)) => {
+                Ok(ParamOrConcrete::<I, T>::Composite(s.contract(o)?))
+            }
+            (ParamOrConcrete::<I, T>::Param(s), ParamOrConcrete::<I, T>::Composite(o)) => {
+                Ok(ParamOrConcrete::<I, T>::Composite(s.contract(o)?))
+            }
+            (ParamOrConcrete::<I, T>::Composite(s), ParamOrConcrete::<I, T>::Param(o)) => {
+                Ok(ParamOrConcrete::<I, T>::Composite(s.contract(o)?))
+            }
+            (ParamOrConcrete::<I, T>::Composite(s), ParamOrConcrete::<I, T>::Composite(o)) => {
+                Ok(ParamOrConcrete::<I, T>::Composite(s.contract(o)?))
+            }
+            (ParamOrConcrete::<I, T>::Composite(s), ParamOrConcrete::<I, T>::Concrete(o)) => {
+                Ok(ParamOrConcrete::<I, T>::Composite(o.contract(s)?))
+            }
+            (ParamOrConcrete::<I, T>::Concrete(s), ParamOrConcrete::<I, T>::Param(o)) => {
+                Ok(ParamOrConcrete::<I, T>::Param(s.contract(o)?))
+            }
+            (ParamOrConcrete::<I, T>::Concrete(s), ParamOrConcrete::<I, T>::Concrete(o)) => {
+                Ok(ParamOrConcrete::<I, T>::Concrete(s.contract(o)?))
+            }
+            (ParamOrConcrete::<I, T>::Concrete(s), ParamOrConcrete::<I, T>::Composite(o)) => {
+                Ok(ParamOrConcrete::<I, T>::Composite(s.contract(o)?))
+            }
+        }
+    }
+}
+
 impl<I> Contract<MixedTensor<I>> for MixedTensor<I>
 where
-    I: HasStructure + Clone + StructureContract + Debug,
+    I: TensorStructure + Clone + StructureContract + Debug,
 {
     type LCM = MixedTensor<I>;
-    fn contract(&self, other: &MixedTensor<I>) -> Option<Self::LCM> {
+    fn contract(&self, other: &MixedTensor<I>) -> Result<Self::LCM, ContractionError> {
         match (self, other) {
             (MixedTensor::<I>::Float(s), MixedTensor::<I>::Float(o)) => {
-                Some(MixedTensor::<I>::Float(s.contract(o)?))
+                Ok(MixedTensor::<I>::Float(s.contract(o)?))
             }
             (MixedTensor::<I>::Float(s), MixedTensor::<I>::Complex(o)) => {
-                Some(MixedTensor::<I>::Complex(s.contract(o)?))
+                Ok(MixedTensor::<I>::Complex(s.contract(o)?))
             }
             (MixedTensor::<I>::Float(s), MixedTensor::<I>::Symbolic(o)) => {
-                Some(MixedTensor::<I>::Symbolic(s.contract(o)?))
+                Ok(MixedTensor::<I>::Symbolic(s.contract(o)?))
             }
             (MixedTensor::<I>::Complex(s), MixedTensor::<I>::Float(o)) => {
-                Some(MixedTensor::<I>::Complex(s.contract(o)?))
+                Ok(MixedTensor::<I>::Complex(s.contract(o)?))
             }
             (MixedTensor::<I>::Complex(s), MixedTensor::<I>::Complex(o)) => {
-                Some(MixedTensor::<I>::Complex(s.contract(o)?))
+                Ok(MixedTensor::<I>::Complex(s.contract(o)?))
             }
             (MixedTensor::<I>::Complex(s), MixedTensor::<I>::Symbolic(o)) => {
-                Some(MixedTensor::<I>::Symbolic(s.contract(o)?))
+                Ok(MixedTensor::<I>::Symbolic(s.contract(o)?))
             }
             (MixedTensor::<I>::Symbolic(s), MixedTensor::<I>::Float(o)) => {
-                Some(MixedTensor::<I>::Symbolic(s.contract(o)?))
+                Ok(MixedTensor::<I>::Symbolic(s.contract(o)?))
             }
             (MixedTensor::<I>::Symbolic(s), MixedTensor::<I>::Complex(o)) => {
-                Some(MixedTensor::<I>::Symbolic(s.contract(o)?))
+                Ok(MixedTensor::<I>::Symbolic(s.contract(o)?))
             }
             (MixedTensor::<I>::Symbolic(s), MixedTensor::<I>::Symbolic(o)) => {
-                Some(MixedTensor::<I>::Symbolic(s.contract(o)?))
+                Ok(MixedTensor::<I>::Symbolic(s.contract(o)?))
             }
         }
     }

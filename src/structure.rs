@@ -1,4 +1,5 @@
 use ahash::AHashMap;
+use delegate::delegate;
 use derive_more::Add;
 use derive_more::AddAssign;
 use derive_more::Display;
@@ -20,8 +21,13 @@ use serde::Serialize;
 use smartstring::LazyCompact;
 use smartstring::SmartString;
 use std::borrow::Cow;
+use std::env::Args;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::ops::Deref;
+
+use symbolica::atom::representation::FunView;
+use symbolica::atom::MulView;
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -220,6 +226,8 @@ pub const COLORFUND: &str = "cof";
 pub const COLORANTIFUND: &str = "coaf";
 pub const COLORSEXT: &str = "cos";
 pub const COLORANTISEXT: &str = "coas";
+pub const CONCRETEIND: &str = "cind";
+pub const ABSTRACTIND: &str = "aind";
 
 /// A Representation/Dimension of the index.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -619,16 +627,89 @@ impl std::fmt::Display for Slot {
 /// The associated type `Structure` is the type of the structure. This is usefull for containers of structures, like a datatensor.
 /// The two methods `structure` and `mut_structure` are used to get a reference to the structure, and a mutable reference to the structure.
 ///
-
+///
+///
+///
 pub trait HasStructure {
-    type Structure;
+    type Structure: TensorStructure;
     type Scalar;
-    /// returns the list of slots that are the external indices of the tensor
-    fn external_structure(&self) -> &[Slot];
-
     fn structure(&self) -> &Self::Structure;
-
     fn mut_structure(&mut self) -> &mut Self::Structure;
+    // fn cast_structure<O, S>(self) -> O
+    // where
+    //     O: HasStructure<Structure = S, Scalar = Self::Scalar>,
+    //     S: TensorStructure + From<Self::Structure>;
+}
+
+pub struct Tensor<Store, Structure> {
+    pub store: Store,
+    pub structure: Structure,
+}
+
+impl<Store, Structure> Tensor<Store, Structure> {
+    fn cast<NewStructure>(self) -> Tensor<Store, NewStructure>
+    where
+        NewStructure: TensorStructure + From<Structure>,
+    {
+        Tensor {
+            store: self.store,
+            structure: self.structure.into(),
+        }
+    }
+}
+
+impl<T> TensorStructure for T
+where
+    T: HasStructure,
+{
+    delegate! {
+        to self.structure() {
+            fn external_reps_iter(&self)-> impl Iterator<Item = &Representation>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = &AbstractIndex>;
+            fn get_slot(&self, i: usize)-> Option<Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation>;
+            fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn order(&self)-> usize;
+        }
+    }
+}
+
+pub trait TensorStructure {
+    fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
+    fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
+    fn get_slot(&self, i: usize) -> Option<Slot>;
+    fn get_rep(&self, i: usize) -> Option<Representation>;
+    fn get_dim(&self, i: usize) -> Option<Dimension>;
+    fn order(&self) -> usize;
+    /// returns the list of slots that are the external indices of the tensor
+    fn external_structure_iter(&self) -> impl Iterator<Item = Slot> {
+        self.external_indices_iter()
+            .zip(self.external_reps_iter())
+            .map(|(i, r)| Slot::from((*i, *r)))
+    }
+
+    fn external_structure(&self) -> Vec<Slot> {
+        self.external_structure_iter().collect()
+    }
+
+    fn to_shell(self) -> TensorShell<Self>
+    where
+        Self: Sized,
+    {
+        TensorShell::new(self)
+    }
+
+    fn contains(&self, slot: &Slot) -> bool {
+        self.external_structure_iter().any(|s| s == *slot)
+    }
+
+    fn external_reps(&self) -> Vec<Representation> {
+        self.external_reps_iter().cloned().collect()
+    }
+
+    fn external_indices(&self) -> Vec<AbstractIndex> {
+        self.external_indices_iter().cloned().collect()
+    }
 
     // fn iter_index_along_fiber(&self,fiber_position: &[bool]  )-> TensorStructureMultiFiberIterator where Self: Sized{
     //     TensorStructureMultiFiberIterator::new(self, fiber_position)
@@ -649,16 +730,15 @@ pub trait HasStructure {
     /// Given two [`TensorStructure`]s, returns the index of the first matching slot in each external index list, along with a boolean indicating if there is a single match
     fn match_index(&self, other: &Self) -> Option<(bool, usize, usize)> {
         let posmap = self
-            .external_structure()
-            .iter()
+            .external_structure_iter()
             .enumerate()
             .map(|(i, slot)| (slot, i))
             .collect::<AHashMap<_, _>>();
 
         let mut first_pair: Option<(usize, usize)> = None;
 
-        for (j, slot) in other.external_structure().iter().enumerate() {
-            if let Some(&i) = posmap.get(slot) {
+        for (j, slot) in other.external_structure_iter().enumerate() {
+            if let Some(&i) = posmap.get(&slot) {
                 if let Some((i, j)) = first_pair {
                     // Found a second match, return early with false indicating non-unique match
                     return Some((false, i, j));
@@ -677,14 +757,13 @@ pub trait HasStructure {
         let mut other_matches = vec![false; other.order()];
 
         let posmap = self
-            .external_structure()
-            .iter()
+            .external_structure_iter()
             .enumerate()
             .map(|(i, slot)| (slot, i))
             .collect::<AHashMap<_, _>>();
 
-        for (j, slot_other) in other.external_structure().iter().enumerate() {
-            if let Some(&i) = posmap.get(slot_other) {
+        for (j, slot_other) in other.external_structure_iter().enumerate() {
+            if let Some(&i) = posmap.get(&slot_other) {
                 self_matches[i] = true;
                 other_matches[j] = true;
                 perm.push(i);
@@ -703,7 +782,7 @@ pub trait HasStructure {
         let mut positions = HashMap::new();
 
         // Track the positions of each element
-        for (index, &value) in self.external_structure().iter().enumerate() {
+        for (index, value) in self.external_structure_iter().enumerate() {
             positions.entry(value).or_insert_with(Vec::new).push(index);
         }
 
@@ -722,48 +801,47 @@ pub trait HasStructure {
 
     /// yields the (outwards facing) shape of the tensor as a list of dimensions
     fn shape(&self) -> Vec<Dimension> {
-        self.external_structure()
-            .iter()
-            .map(|slot| &slot.representation)
-            .collect()
+        self.external_reps_iter().collect()
     }
 
     fn reps(&self) -> Vec<Representation> {
-        self.external_structure()
-            .iter()
-            .map(|slot| slot.representation)
-            .collect()
+        self.external_reps_iter().map(|r| r.clone()).collect()
+    }
+
+    fn concrete_atom(&self, id: FlatIndex) -> Atom {
+        let exp = self.expanded_index(id).unwrap();
+        let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
+        for i in exp.iter() {
+            cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
+        }
+        cind.finish()
     }
 
     /// yields the order/total valence of the tensor, i.e. the number of indices
     /// (or misnamed : rank)
-    fn order(&self) -> usize {
-        //total valence (or misnamed : rank)
-        self.external_structure().len()
-    }
 
     /// checks if externally, the two tensors are the same
     fn same_external(&self, other: &Self) -> bool {
-        let set1: HashSet<_> = self.external_structure().iter().collect();
-        let set2: HashSet<_> = other.external_structure().iter().collect();
+        let set1: HashSet<_> = self.external_structure_iter().collect();
+        let set2: HashSet<_> = other.external_structure_iter().collect();
         set1 == set2
     }
 
     /// find the permutation of the external indices that would make the two tensors the same. Applying the permutation to other should make it the same as self
     fn find_permutation(&self, other: &Self) -> Option<Vec<ConcreteIndex>> {
-        if self.external_structure().len() != other.external_structure().len() {
+        if self.order() != other.order() {
             return None;
         }
 
         let mut index_map = HashMap::new();
-        for (i, item) in other.external_structure().iter().enumerate() {
+        for (i, item) in other.external_structure_iter().enumerate() {
             index_map.entry(item).or_insert_with(Vec::new).push(i);
         }
 
-        let mut permutation = Vec::with_capacity(self.external_structure().len());
+        let mut permutation = Vec::with_capacity(self.order());
         let mut used_indices = HashSet::new();
-        for item in self.external_structure() {
-            if let Some(indices) = index_map.get_mut(item) {
+        for item in self.external_structure_iter() {
+            if let Some(indices) = index_map.get_mut(&item) {
                 // Find an index that hasn't been used yet
                 if let Some(&index) = indices.iter().find(|&&i| !used_indices.contains(&i)) {
                     permutation.push(index);
@@ -790,7 +868,7 @@ pub trait HasStructure {
         }
 
         for i in 0..self.order() - 1 {
-            strides[i + 1] = strides[i] * usize::from(self.external_structure()[i].representation);
+            strides[i + 1] = strides[i] * usize::from((self.shape()[i]).0);
         }
 
         strides
@@ -804,8 +882,7 @@ pub trait HasStructure {
         }
 
         for i in (0..self.order() - 1).rev() {
-            strides[i] =
-                strides[i + 1] * usize::from(self.external_structure()[i + 1].representation);
+            strides[i] = strides[i + 1] * usize::from(self.shape()[i + 1].0);
         }
 
         strides
@@ -829,10 +906,9 @@ pub trait HasStructure {
             return Err("Mismatched order".into());
         }
 
-        for (i, &dim_len) in self
-            .external_structure()
-            .iter()
-            .map(|slot| &slot.representation)
+        for (i, dim_len) in self
+            .external_structure_iter()
+            .map(|slot| slot.representation)
             .enumerate()
         {
             if indices[i] >= usize::from(dim_len) {
@@ -884,8 +960,11 @@ pub trait HasStructure {
     }
 
     /// yields an iterator over the indices of the tensor
-    fn index_iter(&self) -> TensorStructureIndexIterator {
-        TensorStructureIndexIterator::new(self.external_structure())
+    fn index_iter(&self) -> TensorStructureIndexIterator<Self>
+    where
+        Self: Sized,
+    {
+        TensorStructureIndexIterator::new(self)
     }
 
     /// if the tensor has no (external) indices, it is a scalar
@@ -895,7 +974,7 @@ pub trait HasStructure {
 
     /// get the metric along the i-th index
     fn get_ith_metric(&self, i: usize) -> Option<Vec<bool>> {
-        Some(self.external_structure().get(i)?.representation.negative())
+        Some(self.get_rep(i)?.negative())
     }
 
     /// yields the size of the tensor, i.e. the product of the dimensions. This is the length of the vector of the data in a dense tensor
@@ -903,13 +982,13 @@ pub trait HasStructure {
         self.shape().iter().map(|x| usize::from(*x)).product()
     }
     #[cfg(feature = "shadowing")]
-    fn shadow_with(self, f_id: Symbol) -> DenseTensor<Atom, Self>
+    fn shadow_with(self, name: Symbol, args: &[Atom]) -> DenseTensor<Atom, Self>
     where
         Self: std::marker::Sized + Clone,
     {
         let mut data = vec![];
         for index in self.index_iter() {
-            data.push(atomic_expanded_label_id(&index, f_id));
+            data.push(atomic_expanded_label_id(&index, name, args));
         }
 
         DenseTensor {
@@ -918,59 +997,81 @@ pub trait HasStructure {
         }
     }
     #[cfg(feature = "shadowing")]
-    fn to_explicit_rep(self, f_id: Symbol) -> MixedTensor<Self>
+    fn to_explicit_rep(self, name: Symbol, args: &[Atom]) -> MixedTensor<Self>
     where
-        Self: std::marker::Sized + Clone + HasStructure,
+        Self: std::marker::Sized + Clone,
     {
-        let id = State::get_symbol("id");
+        let identity = State::get_symbol("id");
         let gamma = State::get_symbol("γ");
         let gamma5 = State::get_symbol("γ5");
         let proj_m = State::get_symbol("ProjM");
         let proj_p = State::get_symbol("ProjP");
         let sigma = State::get_symbol("σ");
+        let metric = State::get_symbol("Metric");
 
-        match f_id {
-            _ if f_id == id => ufo::identity_data::<f64, Self>(self).into(),
+        match name {
+            _ if name == identity => ufo::identity_data::<f64, Self>(self).into(),
 
-            _ if f_id == gamma => ufo::gamma_data(self).into(),
-            _ if f_id == gamma5 => ufo::gamma5_data(self).into(),
-            _ if f_id == proj_m => ufo::proj_m_data(self).into(),
-            _ if f_id == proj_p => ufo::proj_p_data(self).into(),
-            _ if f_id == sigma => ufo::sigma_data(self).into(),
-            name => self.shadow_with(name).into(),
+            _ if name == gamma => ufo::gamma_data(self).into(),
+            _ if name == gamma5 => ufo::gamma5_data(self).into(),
+            _ if name == proj_m => ufo::proj_m_data(self).into(),
+            _ if name == proj_p => ufo::proj_p_data(self).into(),
+            _ if name == sigma => ufo::sigma_data(self).into(),
+            _ if name == metric => ufo::metric_data::<f64, Self>(self).into(),
+            name => self.shadow_with(name, args).into(),
         }
     }
 }
 
-impl<'a> HasStructure for &'a [Slot] {
-    type Structure = &'a [Slot];
-    type Scalar = ();
+// impl<'a> HasStructure for &'a [Slot] {
+//     type Structure = &'a [Slot];
+//     type Scalar = ();
 
-    fn external_structure(&self) -> &[Slot] {
-        self
+//     fn order(&self) -> usize {
+//         self.len()
+//     }
+
+//     fn structure(&self) -> &Self::Structure {
+//         self
+//     }
+
+//     fn mut_structure(&mut self) -> &mut Self::Structure {
+//         self
+//     }
+// }
+
+impl TensorStructure for Vec<Slot> {
+    fn concrete_atom(&self, id: FlatIndex) -> Atom {
+        let exp = self.expanded_index(id).unwrap();
+        let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
+        for i in exp.iter() {
+            cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
+        }
+        cind.finish()
     }
 
-    fn structure(&self) -> &Self::Structure {
-        self
+    fn external_reps_iter(&self) -> impl Iterator<Item = &Representation> {
+        self.iter().map(|s| &s.representation)
     }
 
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        self
+    fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex> {
+        self.iter().map(|s| &s.index)
     }
-}
 
-impl HasStructure for Vec<Slot> {
-    type Structure = Self;
-    type Scalar = ();
+    fn order(&self) -> usize {
+        self.len()
+    }
 
-    fn structure(&self) -> &Self::Structure {
-        self
+    fn get_slot(&self, i: usize) -> Option<Slot> {
+        self.get(i).cloned()
     }
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        self
+
+    fn get_rep(&self, i: usize) -> Option<Representation> {
+        self.get(i).map(|s| s.representation)
     }
-    fn external_structure(&self) -> &[Slot] {
-        self
+
+    fn get_dim(&self, i: usize) -> Option<Dimension> {
+        self.get(i).map(|s| s.representation.into())
     }
 }
 
@@ -1133,21 +1234,146 @@ where
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct IndexLess {
+    pub structure: Vec<Representation>,
+}
+
+impl IndexLess {
+    pub fn new(structure: Vec<Representation>) -> Self {
+        Self { structure }
+    }
+
+    pub fn empty() -> Self {
+        Self { structure: vec![] }
+    }
+
+    pub fn to_indexed(self, indices: &[AbstractIndex]) -> VecStructure {
+        indices
+            .iter()
+            .cloned()
+            .zip(self.structure.iter().cloned())
+            .map(Slot::from)
+            .collect()
+    }
+}
+
+impl TensorStructure for IndexLess {
+    fn external_reps_iter(&self) -> impl Iterator<Item = &Representation> {
+        self.structure.iter()
+    }
+
+    fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex> {
+        [].iter()
+    }
+
+    fn order(&self) -> usize {
+        self.structure.len()
+    }
+
+    fn get_slot(&self, _: usize) -> Option<Slot> {
+        None
+    }
+
+    fn find_permutation(&self, other: &Self) -> Option<Vec<ConcreteIndex>> {
+        if self.order() != other.order() {
+            return None;
+        }
+
+        let mut index_map = HashMap::new();
+        for (i, item) in other.structure.iter().enumerate() {
+            index_map.entry(item).or_insert_with(Vec::new).push(i);
+        }
+
+        let mut permutation = Vec::with_capacity(self.order());
+        let mut used_indices = HashSet::new();
+        for item in self.structure.iter() {
+            if let Some(indices) = index_map.get_mut(&item) {
+                // Find an index that hasn't been used yet
+                if let Some(&index) = indices.iter().find(|&&i| !used_indices.contains(&i)) {
+                    permutation.push(index);
+                    used_indices.insert(index);
+                } else {
+                    // No available index for this item
+                    return None;
+                }
+            } else {
+                // Item not found in other
+                return None;
+            }
+        }
+
+        Some(permutation)
+    }
+
+    fn get_rep(&self, i: usize) -> Option<Representation> {
+        self.structure.get(i).cloned()
+    }
+
+    fn get_dim(&self, i: usize) -> Option<Dimension> {
+        self.structure.get(i).clone().map(|r| r.into())
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
 pub struct VecStructure {
     pub structure: Vec<Slot>,
 }
 
 #[cfg(feature = "shadowing")]
 impl TryFrom<AtomView<'_>> for VecStructure {
-    type Error = &'static str;
+    type Error = String;
     fn try_from(value: AtomView) -> Result<Self, Self::Error> {
-        let mut structure: Vec<Slot> = vec![];
-        if let AtomView::Fun(f) = value {
-            for arg in f.iter() {
+        match value {
+            AtomView::Mul(mul) => return mul.try_into(),
+            AtomView::Fun(fun) => return fun.try_into(),
+            AtomView::Pow(_) => {
+                return Ok(VecStructure::default()); // powers do not have a structure
+            }
+            _ => return Err(format!("Not a structure: {value}").into()), // could check if it
+        }
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn test_from_atom() {
+    let a = Atom::parse("f(lor(4,1))").unwrap();
+
+    let b = VecStructure::try_from(a.as_atom_view()).unwrap();
+
+    print!("{}", b);
+}
+
+#[cfg(feature = "shadowing")]
+impl TryFrom<FunView<'_>> for VecStructure {
+    type Error = String;
+    fn try_from(value: FunView) -> Result<Self, Self::Error> {
+        if value.get_symbol() == State::get_symbol(ABSTRACTIND) {
+            let mut structure: Vec<Slot> = vec![];
+
+            for arg in value.iter() {
                 structure.push(arg.try_into()?);
             }
+
+            Ok(structure.into())
         } else {
-            return Err("Not a valid expression");
+            let mut structure: Self = vec![].into();
+            for arg in value.iter() {
+                structure.extend(arg.try_into()?); // append all the structures found
+            }
+            Ok(structure)
+        }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl TryFrom<MulView<'_>> for VecStructure {
+    type Error = String;
+    fn try_from(value: MulView) -> Result<Self, Self::Error> {
+        let mut structure: Self = vec![].into();
+
+        for arg in value.iter() {
+            structure.extend(arg.try_into()?);
         }
         Ok(structure.into())
     }
@@ -1161,28 +1387,80 @@ impl FromIterator<Slot> for VecStructure {
     }
 }
 
+impl IntoIterator for VecStructure {
+    type Item = Slot;
+    type IntoIter = std::vec::IntoIter<Slot>;
+    fn into_iter(self) -> std::vec::IntoIter<Slot> {
+        self.structure.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a VecStructure {
+    type Item = &'a Slot;
+    type IntoIter = std::slice::Iter<'a, Slot>;
+    fn into_iter(self) -> std::slice::Iter<'a, Slot> {
+        self.structure.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut VecStructure {
+    type Item = &'a mut Slot;
+    type IntoIter = std::slice::IterMut<'a, Slot>;
+    fn into_iter(self) -> std::slice::IterMut<'a, Slot> {
+        self.structure.iter_mut()
+    }
+}
+
 impl VecStructure {
     pub fn new(structure: Vec<Slot>) -> Self {
         Self { structure }
     }
 
-    pub fn to_named(self, name: &str) -> NamedStructure {
-        NamedStructure::from_slots(self.structure, name)
+    fn extend(&mut self, other: Self) {
+        self.structure.extend(other.structure.into_iter())
+    }
+
+    pub fn to_named<N, A>(self, name: N, args: Option<A>) -> NamedStructure<N, A> {
+        NamedStructure::from_iter(self.into_iter(), name, args)
+    }
+
+    pub fn empty() -> Self {
+        Self { structure: vec![] }
     }
 }
 
 impl From<ContractionCountStructure> for VecStructure {
     fn from(structure: ContractionCountStructure) -> Self {
-        Self {
-            structure: structure.structure,
-        }
+        structure.structure
+    }
+}
+
+impl<N, A> From<NamedStructure<N, A>> for VecStructure {
+    fn from(structure: NamedStructure<N, A>) -> Self {
+        structure.structure
+    }
+}
+
+impl<N, A> From<SmartShadowStructure<N, A>> for VecStructure {
+    fn from(structure: SmartShadowStructure<N, A>) -> Self {
+        structure.structure
+    }
+}
+
+impl<N, A> From<HistoryStructure<N, A>> for VecStructure
+where
+    N: IntoSymbol,
+    A: IntoArgs,
+{
+    fn from(structure: HistoryStructure<N, A>) -> Self {
+        structure.external.into()
     }
 }
 
 impl From<VecStructure> for ContractionCountStructure {
     fn from(structure: VecStructure) -> Self {
         Self {
-            structure: structure.structure,
+            structure,
             contractions: 0,
         }
     }
@@ -1223,17 +1501,16 @@ impl std::fmt::Display for VecStructure {
     }
 }
 
-impl HasStructure for VecStructure {
-    type Structure = VecStructure;
-    type Scalar = ();
-    fn structure(&self) -> &Self::Structure {
-        self
-    }
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        self
-    }
-    fn external_structure(&self) -> &[Slot] {
-        &self.structure
+impl TensorStructure for VecStructure {
+    delegate! {
+        to self.structure{
+            fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
+            fn order(&self) -> usize;
+            fn get_slot(&self, i: usize) -> Option<Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation>;
+            fn get_dim(&self, i: usize) -> Option<Dimension>;
+        }
     }
 }
 
@@ -1260,40 +1537,85 @@ impl StructureContract for VecStructure {
 /// A named structure is a structure with a global name, and a list of slots
 ///
 /// It is useful when you want to shadow tensors, to nest tensor network contraction operations.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub struct NamedStructure {
-    pub structure: Vec<Slot>,
-    pub global_name: Option<SmartString<LazyCompact>>,
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
+pub struct NamedStructure<Name = SmartString<LazyCompact>, Args = usize> {
+    pub structure: VecStructure,
+    pub global_name: Option<Name>,
+    pub additional_args: Option<Args>,
 }
 
-impl NamedStructure {
-    /// Constructs a new [`NamedStructure`] from a list of tuples of indices and dimension (assumes they are all euclidean), along with a name
+impl<Name, Args> NamedStructure<Name, Args> {
     #[must_use]
-    pub fn from_integers(slots: &[(AbstractIndex, Dimension)], name: &str) -> Self {
-        let slots: Vec<(AbstractIndex, Representation)> = slots
-            .iter()
-            .map(|(index, dim)| (*index, Representation::Euclidean(*dim)))
-            .collect();
-        Self::new(&slots, name)
-    }
-    /// Constructs a new [`NamedStructure`] from a list of tuples of indices and representations, along with a name
-    #[must_use]
-    pub fn new(slots: &[(AbstractIndex, Representation)], name: &str) -> Self {
-        let structure: Vec<Slot> = slots
-            .iter()
-            .map(|(index, representation)| Slot::from((*index, *representation)))
-            .collect();
-
+    pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> Self
+    where
+        I: Into<Slot>,
+        T: IntoIterator<Item = I>,
+    {
         Self {
-            structure,
-            global_name: Some(name.into()),
+            structure: iter.into_iter().map(I::into).collect(),
+            global_name: Some(name),
+            additional_args: args,
         }
     }
+}
 
-    pub fn from_slots(slots: Vec<Slot>, name: &str) -> Self {
+impl<'a> TryFrom<FunView<'a>> for NamedStructure<Symbol, Vec<Atom>> {
+    type Error = String;
+    fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
+        match value.get_symbol() {
+            s if s == State::get_symbol(ABSTRACTIND) => {
+                let mut structure: Vec<Slot> = vec![];
+
+                for arg in value.iter() {
+                    structure.push(arg.try_into()?);
+                }
+
+                Ok(VecStructure::from(structure).into())
+            }
+            name => {
+                let mut structure: NamedStructure<Symbol, Vec<Atom>> =
+                    VecStructure::default().into();
+                structure.set_name(name);
+                let mut args = vec![];
+
+                for arg in value.iter() {
+                    if let AtomView::Fun(fun) = arg {
+                        structure.structure.extend(fun.try_into()?);
+                    } else {
+                        args.push(arg.to_owned());
+                    }
+                }
+
+                structure.additional_args = Some(args);
+
+                Ok(structure)
+            }
+        }
+    }
+}
+
+impl<N, A> NamedStructure<N, Vec<A>> {
+    pub fn extend(&mut self, other: Self) {
+        let result = match (self.additional_args.take(), other.additional_args) {
+            (Some(mut v1), Some(v2)) => {
+                v1.extend(v2);
+                Some(v1)
+            }
+            (None, Some(v2)) => Some(v2),
+            (Some(v1), None) => Some(v1),
+            (None, None) => None,
+        };
+        self.additional_args = result;
+        self.structure.extend(other.structure);
+    }
+}
+
+impl<N, A> From<VecStructure> for NamedStructure<N, A> {
+    fn from(value: VecStructure) -> Self {
         Self {
-            structure: slots,
-            global_name: Some(name.into()),
+            structure: value,
+            global_name: None,
+            additional_args: None,
         }
     }
 }
@@ -1301,41 +1623,72 @@ impl NamedStructure {
 /// A trait for a structure that has a name
 pub trait HasName {
     type Name: Clone;
+    type Args: Clone;
     fn name(&self) -> Option<Cow<Self::Name>>;
-    fn set_name(&mut self, name: &Self::Name);
+    fn id(&self) -> Option<Cow<Self::Args>>;
+    fn set_name(&mut self, name: Self::Name);
 }
 
-impl HasName for NamedStructure {
-    type Name = SmartString<LazyCompact>;
+impl<N, A> HasName for NamedStructure<N, A>
+where
+    N: Clone,
+    A: Clone,
+{
+    type Name = N;
+    type Args = A;
+
     fn name(&self) -> Option<Cow<Self::Name>> {
         self.global_name.as_ref().map(Cow::Borrowed)
     }
-    fn set_name(&mut self, name: &Self::Name) {
-        self.global_name = Some(name.clone());
+    fn set_name(&mut self, name: Self::Name) {
+        self.global_name = Some(name);
+    }
+    fn id(&self) -> Option<Cow<Self::Args>> {
+        self.additional_args.as_ref().map(Cow::Borrowed)
     }
 }
 
-impl HasStructure for NamedStructure {
-    type Structure = Self;
-    type Scalar = <NamedStructure as HasName>::Name;
-    fn structure(&self) -> &Self::Structure {
-        self
+impl<N, A> TensorStructure for NamedStructure<N, A>
+where
+    N: IntoSymbol,
+    A: IntoArgs,
+{
+    delegate! {
+        to self.structure {
+            fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
+            fn order(&self) -> usize;
+            fn get_slot(&self, i: usize) -> Option<Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation>;
+            fn get_dim(&self, i: usize) -> Option<Dimension>;
+        }
     }
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        self
-    }
-    fn external_structure(&self) -> &[Slot] {
-        &self.structure
+    fn concrete_atom(&self, id: FlatIndex) -> Atom {
+        let exp_atom = self.structure.concrete_atom(id);
+        if let Some(ref f) = self.global_name {
+            let mut fun = FunctionBuilder::new(f.into_symbol());
+            if let Some(ref args) = self.additional_args {
+                for arg in args.into_args() {
+                    fun = fun.add_arg(arg.as_atom_view());
+                }
+            }
+            fun.add_arg(exp_atom.as_atom_view()).finish()
+        } else {
+            exp_atom
+        }
     }
 }
 
-impl StructureContract for NamedStructure {
+impl<N, A> StructureContract for NamedStructure<N, A> {
+    delegate! {
+        to self.structure{
+            fn trace_out(&mut self);
+            fn trace(&mut self, i: usize, j: usize);
+        }
+    }
+
     fn merge(&mut self, other: &Self) -> Option<usize> {
         self.structure.merge(&other.structure)
-    }
-
-    fn trace_out(&mut self) {
-        self.structure.trace_out();
     }
 
     /// when merging two named structures, the global name is lost
@@ -1343,11 +1696,8 @@ impl StructureContract for NamedStructure {
         Self {
             structure: self.structure.merge_at(&other.structure, positions),
             global_name: None,
+            additional_args: None,
         }
-    }
-
-    fn trace(&mut self, i: usize, j: usize) {
-        self.structure.trace(i, j);
     }
 }
 
@@ -1356,46 +1706,14 @@ impl StructureContract for NamedStructure {
 /// Useful for tensor network contraction algorithm.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct ContractionCountStructure {
-    pub structure: Vec<Slot>,
+    pub structure: VecStructure,
     pub contractions: usize,
 }
 
-impl FromIterator<Slot> for ContractionCountStructure {
-    fn from_iter<T: IntoIterator<Item = Slot>>(iter: T) -> Self {
+impl<I: Into<Slot>> FromIterator<I> for ContractionCountStructure {
+    fn from_iter<T: IntoIterator<Item = I>>(iter: T) -> Self {
         Self {
-            structure: iter.into_iter().collect(),
-            contractions: 0,
-        }
-    }
-}
-
-impl ContractionCountStructure {
-    /// Constructs a new [`ContractionCountStructure`] from a list of tuples of indices and dimension (assumes they are all euclidean), along with a name
-    #[must_use]
-    pub fn from_integers(slots: &[(AbstractIndex, Dimension)]) -> Self {
-        let slots: Vec<(AbstractIndex, Representation)> = slots
-            .iter()
-            .map(|(index, dim)| (*index, Representation::Euclidean(*dim)))
-            .collect();
-        Self::new(&slots)
-    }
-    /// Constructs a new [`ContractionCountStructure`] from a list of tuples of indices and representations, along with a name
-    #[must_use]
-    pub fn new(slots: &[(AbstractIndex, Representation)]) -> Self {
-        let structure: Vec<Slot> = slots
-            .iter()
-            .map(|(index, representation)| Slot::from((*index, *representation)))
-            .collect();
-
-        Self {
-            structure,
-            contractions: 0,
-        }
-    }
-
-    pub fn from_slots(slots: Vec<Slot>) -> Self {
-        Self {
-            structure: slots,
+            structure: iter.into_iter().map(I::into).collect(),
             contractions: 0,
         }
     }
@@ -1415,28 +1733,29 @@ impl TracksCount for ContractionCountStructure {
     }
 }
 
-impl HasStructure for ContractionCountStructure {
-    type Structure = ContractionCountStructure;
-    type Scalar = ();
-    fn structure(&self) -> &Self::Structure {
-        self
-    }
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        self
-    }
-    fn external_structure(&self) -> &[Slot] {
-        &self.structure
+impl TensorStructure for ContractionCountStructure {
+    delegate! {
+        to self.structure {
+            fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
+            fn order(&self) -> usize;
+            fn get_slot(&self, i: usize) -> Option<Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation>;
+            fn get_dim(&self, i: usize) -> Option<Dimension>;
+        }
     }
 }
 
 impl StructureContract for ContractionCountStructure {
+    delegate! {
+        to self.structure{
+            fn trace_out(&mut self);
+            fn trace(&mut self, i: usize, j: usize);
+        }
+    }
     fn merge(&mut self, other: &Self) -> Option<usize> {
         self.contractions += other.contractions + 1;
         self.structure.merge(&other.structure)
-    }
-
-    fn trace_out(&mut self) {
-        self.structure.trace_out();
     }
 
     fn merge_at(&self, other: &Self, positions: (usize, usize)) -> Self {
@@ -1445,85 +1764,101 @@ impl StructureContract for ContractionCountStructure {
             contractions: self.contractions + other.contractions + 1,
         }
     }
-
-    fn trace(&mut self, i: usize, j: usize) {
-        self.structure.trace(i, j);
-    }
 }
 
 /// A structure to enable smart shadowing of tensors in a tensor network contraction algorithm.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub struct SmartShadowStructure {
-    pub structure: Vec<Slot>,
+pub struct SmartShadowStructure<Name = SmartString<LazyCompact>, Args = usize> {
+    pub structure: VecStructure,
     pub contractions: usize,
-    pub global_name: Option<SmartString<LazyCompact>>,
+    pub global_name: Option<Name>,
+    additional_args: Option<Args>,
 }
 
-impl SmartShadowStructure {
+impl<Name, Args> SmartShadowStructure<Name, Args> {
     /// Constructs a new [`SmartShadow`] from a list of tuples of indices and dimension (assumes they are all euclidean), along with a name
     #[must_use]
-    pub fn from_integers(slots: &[(AbstractIndex, Dimension)], name: &str) -> Self {
-        let slots: Vec<(AbstractIndex, Representation)> = slots
-            .iter()
-            .map(|(index, dim)| (*index, Representation::Euclidean(*dim)))
-            .collect();
-        Self::new(&slots, name)
-    }
-    /// Constructs a new [`SmartShadow`] from a list of tuples of indices and representations, along with a name
-    #[must_use]
-    pub fn new(slots: &[(AbstractIndex, Representation)], name: &str) -> Self {
-        let structure: Vec<Slot> = slots
-            .iter()
-            .map(|(index, representation)| Slot::from((*index, *representation)))
-            .collect();
-
-        SmartShadowStructure {
-            structure,
+    pub fn from_iter<I, T>(iter: T, name: Option<Name>, args: Option<Args>) -> Self
+    where
+        I: Into<Slot>,
+        T: IntoIterator<Item = I>,
+    {
+        Self {
+            structure: iter.into_iter().map(I::into).collect(),
+            global_name: name,
+            additional_args: args,
             contractions: 0,
-            global_name: Some(name.into()),
         }
     }
 }
 
-impl HasName for SmartShadowStructure {
-    type Name = SmartString<LazyCompact>;
-    fn name(&self) -> Option<Cow<SmartString<LazyCompact>>> {
+impl<N, A> HasName for SmartShadowStructure<N, A>
+where
+    N: Clone,
+    A: Clone,
+{
+    type Name = N;
+    type Args = A;
+
+    fn name(&self) -> Option<Cow<Self::Name>> {
         self.global_name.as_ref().map(Cow::Borrowed)
     }
-    fn set_name(&mut self, name: &SmartString<LazyCompact>) {
-        self.global_name = Some(name.clone());
+    fn set_name(&mut self, name: Self::Name) {
+        self.global_name = Some(name);
+    }
+    fn id(&self) -> Option<Cow<Self::Args>> {
+        self.additional_args.as_ref().map(Cow::Borrowed)
     }
 }
 
-impl TracksCount for SmartShadowStructure {
+impl<N, A> TensorStructure for SmartShadowStructure<N, A>
+where
+    N: IntoSymbol,
+    A: IntoArgs,
+{
+    delegate! {
+        to self.structure {
+            fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
+            fn order(&self) -> usize;
+            fn get_slot(&self, i: usize) -> Option<Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation>;
+            fn get_dim(&self, i: usize) -> Option<Dimension>;
+        }
+    }
+
+    fn concrete_atom(&self, id: FlatIndex) -> Atom {
+        let exp_atom = self.structure.concrete_atom(id);
+        if let Some(ref f) = self.global_name {
+            let mut fun = FunctionBuilder::new(f.into_symbol());
+            if let Some(ref args) = self.additional_args {
+                for arg in args.into_args() {
+                    fun = fun.add_arg(arg.as_atom_view());
+                }
+            }
+            fun.add_arg(exp_atom.as_atom_view()).finish()
+        } else {
+            exp_atom
+        }
+    }
+}
+impl<N, A> TracksCount for SmartShadowStructure<N, A> {
     fn contractions_num(&self) -> usize {
         self.contractions
     }
 }
 
-impl HasStructure for SmartShadowStructure {
-    type Structure = SmartShadowStructure;
-
-    type Scalar = <NamedStructure as HasName>::Name;
-    fn structure(&self) -> &Self::Structure {
-        self
-    }
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        self
-    }
-    fn external_structure(&self) -> &[Slot] {
-        &self.structure
-    }
-}
-
-impl StructureContract for SmartShadowStructure {
+impl<N, A> StructureContract for SmartShadowStructure<N, A> {
     fn merge(&mut self, other: &Self) -> Option<usize> {
         self.contractions += other.contractions;
         self.structure.merge(&other.structure)
     }
 
-    fn trace_out(&mut self) {
-        self.structure.trace_out();
+    delegate! {
+        to self.structure{
+            fn trace_out(&mut self);
+            fn trace(&mut self, i: usize, j: usize);
+        }
     }
 
     fn merge_at(&self, other: &Self, positions: (usize, usize)) -> Self {
@@ -1531,11 +1866,8 @@ impl StructureContract for SmartShadowStructure {
             structure: self.structure.merge_at(&other.structure, positions),
             contractions: self.contractions + other.contractions,
             global_name: None,
+            additional_args: None,
         }
-    }
-
-    fn trace(&mut self, i: usize, j: usize) {
-        self.structure.trace(i, j);
     }
 }
 
@@ -1546,45 +1878,31 @@ impl StructureContract for SmartShadowStructure {
 /// It enables keeping track of the contraction history of the tensor, mostly for debugging and display purposes.
 /// A [`SymbolicTensor`] can also be used in this way, however it needs a symbolica state and workspace during contraction.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct HistoryStructure<N> {
-    internal: Vec<Slot>,
-    pub external: Vec<Slot>,
-    pub names: AHashMap<Range<usize>, N>, //ideally this is a named partion.. maybe a btreemap<usize, N>, and the range is from previous to next
-    pub global_name: Option<N>,
+pub struct HistoryStructure<Name: IntoSymbol, Args: IntoArgs> {
+    internal: VecStructure,
+    pub names: AHashMap<Range<usize>, Name>, //ideally this is a named partion.. maybe a btreemap<usize, N>, and the range is from previous to next
+    external: NamedStructure<Name, Args>,
 }
 
-impl<N> HistoryStructure<N> {
-    /// Constructs a new [`HistoryStructure`] from a list of tuples of indices and dimension (assumes they are all euclidean), along with a name
-    pub fn from_integers(slots: &[(AbstractIndex, Dimension)], name: N) -> Self
-    where
-        N: Clone,
-    {
-        let slots: Vec<(AbstractIndex, Representation)> = slots
-            .iter()
-            .map(|(index, dim)| (*index, Representation::Euclidean(*dim)))
-            .collect();
-        Self::new(&slots, name)
-    }
-    /// Constructs a new [`HistoryStructure`] from a list of tuples of indices and representations, along with a name
-    pub fn new(slots: &[(AbstractIndex, Representation)], name: N) -> Self
-    where
-        N: Clone,
-    {
-        let structure: Vec<Slot> = slots
-            .iter()
-            .map(|(index, representation)| Slot::from((*index, *representation)))
-            .collect();
-
-        let name_map = AHashMap::from([(0..structure.len(), name.clone())]);
-
-        HistoryStructure {
-            internal: structure.clone(),
-            external: structure,
-            names: name_map,
-            global_name: Some(name),
+impl<N, A> From<NamedStructure<N, A>> for HistoryStructure<N, A>
+where
+    N: Clone + IntoSymbol,
+    A: IntoArgs,
+{
+    fn from(external: NamedStructure<N, A>) -> Self {
+        Self {
+            internal: external.structure.clone(),
+            names: AHashMap::from([(0..external.order(), external.global_name.clone().unwrap())]),
+            external,
         }
     }
+}
 
+impl<N, A> HistoryStructure<N, A>
+where
+    N: IntoSymbol,
+    A: IntoArgs,
+{
     /// make the indices in the internal index list of self independent from the indices in the internal index list of other
     /// This is done by shifting the indices in the internal index list of self by the the maximum index present.
     pub fn independentize_internal(&mut self, other: &Self) {
@@ -1613,20 +1931,23 @@ impl<N> HistoryStructure<N> {
     }
 }
 
-impl<N> HasName for HistoryStructure<N>
+impl<N, A> HasName for HistoryStructure<N, A>
 where
-    N: Clone,
+    N: Clone + IntoSymbol,
+    A: Clone + IntoArgs,
 {
     type Name = N;
-    fn name(&self) -> Option<Cow<N>> {
-        self.global_name.as_ref().map(|name| Cow::Borrowed(name))
-    }
-    fn set_name(&mut self, name: &N) {
-        self.global_name = Some(name.clone());
+    type Args = A;
+    delegate! {
+        to self.external {
+            fn name(&self) -> Option<Cow<Self::Name>>;
+            fn set_name(&mut self, name: Self::Name);
+            fn id(&self) -> Option<Cow<Self::Args>>;
+        }
     }
 }
 
-impl<N> TracksCount for HistoryStructure<N> {
+impl<N: IntoSymbol, A: IntoArgs> TracksCount for HistoryStructure<N, A> {
     /// Since each time we contract, we merge the name maps, the amount of contractions, is the size of the name map
     /// This function returns the number of contractions thus computed
     fn contractions_num(&self) -> usize {
@@ -1634,25 +1955,26 @@ impl<N> TracksCount for HistoryStructure<N> {
     }
 }
 
-impl<N> HasStructure for HistoryStructure<N> {
-    type Structure = HistoryStructure<N>;
-
-    type Scalar = <NamedStructure as HasName>::Name;
-
-    fn structure(&self) -> &Self::Structure {
-        self
-    }
-
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        self
-    }
-    fn external_structure(&self) -> &[Slot] {
-        &self.external
+impl<N, A> TensorStructure for HistoryStructure<N, A>
+where
+    N: IntoSymbol,
+    A: IntoArgs,
+{
+    delegate! {
+        to self.external {
+            fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
+            fn order(&self) -> usize;
+            fn get_slot(&self, i: usize) -> Option<Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation>;
+            fn get_dim(&self, i: usize) -> Option<Dimension>;
+            fn concrete_atom(&self, id: FlatIndex) -> Atom;
+        }
     }
     /// checks if internally, the two tensors are the same. This implies that the external indices are the same
     fn same_content(&self, other: &Self) -> bool {
-        let set1: HashSet<_> = self.internal.iter().collect();
-        let set2: HashSet<_> = other.internal.iter().collect();
+        let set1: HashSet<_> = (&self.internal).into_iter().collect();
+        let set2: HashSet<_> = (&other.internal).into_iter().collect();
         set1 == set2
         // TODO: check names
     }
@@ -1666,21 +1988,22 @@ impl<N> HasStructure for HistoryStructure<N> {
 //     }
 // }
 
-impl<N> StructureContract for HistoryStructure<N>
+impl<N, A> StructureContract for HistoryStructure<N, A>
 where
-    N: Clone,
+    N: Clone + IntoSymbol,
+    A: Clone + IntoArgs,
 {
     /// remove the repeated indices in the external index list
     fn trace_out(&mut self) {
         let mut positions = IndexMap::new();
 
         // Track the positions of each element
-        for (index, &value) in self.external.iter().enumerate() {
+        for (index, value) in (&self.external).external_structure_iter().enumerate() {
             positions.entry(value).or_insert_with(Vec::new).push(index);
         }
         // Collect only the positions of non- repeated elements
 
-        self.external = positions
+        self.external.structure = positions
             .into_iter()
             .filter_map(|(value, indices)| {
                 if indices.len() == 1 {
@@ -1698,21 +2021,23 @@ where
             self.trace(j, i);
             return;
         }
-        let a = self.external.remove(i);
-        let b = self.external.remove(j);
+        let a = self.external.structure.structure.remove(i);
+        let b = self.external.structure.structure.remove(j);
         assert_eq!(a, b);
     }
 
     /// essentially contract.
     fn merge(&mut self, other: &Self) -> Option<usize> {
-        let shift = self.internal.len();
+        let shift = self.internal.order();
         for (range, name) in &other.names {
             self.names
                 .insert((range.start + shift)..(range.end + shift), name.clone());
         }
         self.trace_out();
         self.independentize_internal(other);
-        self.internal.append(&mut other.internal.clone());
+        self.internal
+            .structure
+            .append(&mut other.internal.structure.clone());
         self.external.merge(&other.external)
     }
 
@@ -1720,43 +2045,32 @@ where
     /// This is essentially a contraction of only one index. The name maps are merged, and shifted accordingly. The global name is lost, since the resulting tensor is composite
     /// The global name can be set again with the [`Self::set_global_name`] function
     fn merge_at(&self, other: &Self, positions: (usize, usize)) -> Self {
-        let mut slots_other = other.external.clone();
-        let mut slots_self: Vec<Slot> = self.external.clone();
-
-        slots_self.remove(positions.0);
-        slots_other.remove(positions.1);
+        let external = self.external.merge_at(&other.external, positions);
 
         let mut slots_self_int = self.internal.clone();
         let mut slots_other_int = other.internal.clone();
-        slots_self_int.append(&mut slots_other_int);
+        slots_self_int.extend(slots_other_int);
 
         let mut names = self.names.clone();
-        let shift = self.internal.len();
+        let shift = self.internal.order();
         for (range, name) in &other.names {
             names.insert((range.start + shift)..(range.end + shift), name.clone());
         }
-        slots_self.append(&mut slots_other);
         HistoryStructure {
             internal: slots_self_int,
-            external: slots_self,
+            external,
             names,
-            global_name: None,
         }
     }
 }
 #[cfg(feature = "shadowing")]
-pub fn atomic_expanded_label<I: IntoId>(
-    indices: &[ConcreteIndex],
-    name: I,
-    _state: &mut State,
-    _ws: &Workspace,
-) -> Atom {
-    let id = name.into_id();
-    atomic_expanded_label_id(indices, id)
+pub fn atomic_expanded_label<I: IntoSymbol>(indices: &[ConcreteIndex], name: I) -> Atom {
+    let id = name.into_symbol();
+    atomic_expanded_label_id(indices, id, &[])
 }
 #[cfg(feature = "shadowing")]
-pub fn atomic_flat_label<I: IntoId>(index: usize, name: I) -> Atom {
-    let id = name.into_id();
+pub fn atomic_flat_label<I: IntoSymbol>(index: usize, name: I) -> Atom {
+    let id = name.into_symbol();
     atomic_flat_label_id(index, id)
 }
 
@@ -1769,43 +2083,80 @@ pub fn atomic_flat_label_id(index: usize, id: Symbol) -> Atom {
 }
 #[cfg(feature = "shadowing")]
 #[allow(clippy::cast_possible_wrap)]
-pub fn atomic_expanded_label_id(indices: &[ConcreteIndex], id: Symbol) -> Atom {
-    let mut value_builder = FunctionBuilder::new(id);
+pub fn atomic_expanded_label_id(indices: &[ConcreteIndex], name: Symbol, args: &[Atom]) -> Atom {
+    let mut value_builder = FunctionBuilder::new(name);
+    let mut index_func = FunctionBuilder::new(State::get_symbol("cind"));
+    for arg in args {
+        value_builder = value_builder.add_arg(arg);
+    }
     for &index in indices {
-        value_builder = value_builder.add_arg(Atom::new_num(index as i64).as_atom_view());
+        index_func = index_func.add_arg(Atom::new_num(index as i64).as_atom_view());
     }
-    value_builder.finish()
+
+    let indices = index_func.finish();
+    value_builder.add_arg(&indices).finish()
 }
 
 #[cfg(feature = "shadowing")]
-pub trait IntoId {
-    fn into_id(self) -> Symbol;
+pub trait IntoSymbol {
+    fn into_symbol(&self) -> Symbol;
+}
+
+pub trait IntoArgs {
+    fn into_args<'a>(&self) -> impl Iterator<Item = Atom>;
+    fn args(&self) -> Vec<Atom> {
+        self.into_args().collect()
+    }
+}
+
+impl IntoArgs for usize {
+    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+        std::iter::once(Atom::new_num(*self as i64))
+    }
+}
+
+impl IntoArgs for () {
+    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+        std::iter::empty()
+    }
+}
+
+impl IntoArgs for Atom {
+    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+        std::iter::once(self.clone())
+    }
+}
+
+impl IntoArgs for Vec<Atom> {
+    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+        self.iter().cloned()
+    }
 }
 
 #[cfg(feature = "shadowing")]
-impl IntoId for SmartString<LazyCompact> {
-    fn into_id(self) -> Symbol {
+impl IntoSymbol for SmartString<LazyCompact> {
+    fn into_symbol(&self) -> Symbol {
         State::get_symbol(self)
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl IntoId for Symbol {
-    fn into_id(self) -> Symbol {
-        self
+impl IntoSymbol for Symbol {
+    fn into_symbol(&self) -> Symbol {
+        self.clone()
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl IntoId for &str {
-    fn into_id(self) -> Symbol {
+impl IntoSymbol for &str {
+    fn into_symbol(&self) -> Symbol {
         State::get_symbol(self)
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl IntoId for std::string::String {
-    fn into_id(self) -> Symbol {
+impl IntoSymbol for std::string::String {
+    fn into_symbol(&self) -> Symbol {
         State::get_symbol(self)
     }
 }
@@ -1814,64 +2165,138 @@ impl IntoId for std::string::String {
 ///
 /// This creates a dense tensor of atoms, where the atoms are the expanded indices of the tensor, with the global name as the name of the labels.
 #[cfg(feature = "shadowing")]
-pub trait Shadowable: HasStructure {
-    type Name: IntoId + Clone;
-    fn shadow(self) -> Option<DenseTensor<Atom, Self::Structure>>
+pub trait Shadowable: HasStructure + TensorStructure + HasName {
+    fn shadow(&self) -> Option<DenseTensor<Atom, Self::Structure>>
     where
-        Self: std::marker::Sized + HasName<Name = <Self as Shadowable>::Name>,
-        Self::Structure: Clone + HasStructure,
+        Self: std::marker::Sized,
+        Self::Name: IntoSymbol + Clone,
+        Self::Args: IntoArgs,
+        Self::Structure: Clone + TensorStructure,
     {
-        let name = self.name()?.into_owned();
+        let name = self.name()?;
+        let args = self.id().map(|s| s.args()).unwrap_or(vec![]);
 
-        Some(self.structure().clone().shadow_with(name.into_id()))
+        Some(
+            self.structure()
+                .clone()
+                .shadow_with(name.into_symbol(), &args),
+        )
     }
 
-    fn smart_shadow(self) -> Option<MixedTensor<Self::Structure>>
+    fn smart_shadow(&self) -> Option<MixedTensor<Self::Structure>>
     where
-        Self: std::marker::Sized + HasName<Name = <Self as Shadowable>::Name>,
-        Self::Structure: Clone + HasStructure,
+        Self: std::marker::Sized,
+        Self::Args: IntoArgs,
+        Self::Structure: Clone + TensorStructure,
+        Self::Name: IntoSymbol + Clone,
     {
-        let name = self.name()?.into_owned();
-        Some(self.structure().clone().to_explicit_rep(name.into_id()))
+        let name = self.name()?;
+        let args = self.id()?.args();
+        Some(
+            self.structure()
+                .clone()
+                .to_explicit_rep(name.into_symbol(), &args),
+        )
     }
 
     fn to_symbolic(&self) -> Option<Atom>
     where
-        Self: HasName<Name = <Self as Shadowable>::Name>,
+        Self::Name: IntoSymbol + Clone,
+        Self::Args: IntoArgs,
     {
-        Some(self.to_symbolic_with(self.name()?.into_owned()))
+        let args = self.id().map(|s| s.args()).unwrap_or(vec![]);
+
+        Some(self.to_symbolic_with(self.name()?.into_symbol(), &args))
     }
 
-    fn to_symbolic_with(&self, name: Self::Name) -> Atom {
-        let atoms = self
-            .external_structure()
-            .iter()
+    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
+        let slots = self
+            .external_structure_iter()
             .map(|slot| slot.to_symbolic())
             .collect::<Vec<_>>();
 
-        let mut value_builder = FunctionBuilder::new(name.into_id());
-        for atom in atoms {
-            value_builder = value_builder.add_arg(atom.as_atom_view());
+        let mut value_builder = FunctionBuilder::new(name.into_symbol());
+
+        let mut index_func = FunctionBuilder::new(State::get_symbol("aind"));
+        for arg in args {
+            value_builder = value_builder.add_arg(arg);
         }
-        value_builder.finish()
+
+        for s in slots {
+            index_func = index_func.add_arg(&s);
+        }
+        let indices = index_func.finish();
+        value_builder.add_arg(&indices).finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct TensorShell<S: TensorStructure> {
+    structure: S,
+}
+
+impl<S: TensorStructure> HasStructure for TensorShell<S> {
+    type Structure = S;
+    type Scalar = ();
+    fn structure(&self) -> &S {
+        &self.structure
+    }
+    fn mut_structure(&mut self) -> &mut S {
+        &mut self.structure
+    }
+}
+
+// impl<I> HasName for I
+// where
+//     I: HasStructure,
+//     I::Structure: HasName,
+// {
+//     type Name = <I::Structure as HasName>::Name;
+//     fn name(&self) -> Option<Cow<Self::Name>> {
+//         self.structure().name()
+//     }
+//     fn set_name(&mut self, name: &Self::Name) {
+//         self.mut_structure().set_name(name);
+//     }
+// }
+
+impl<S: TensorStructure + HasName> HasName for TensorShell<S> {
+    type Name = S::Name;
+    type Args = S::Args;
+    delegate! {
+        to self.structure {
+            fn name(&self) -> Option<Cow<Self::Name>>;
+            fn set_name(&mut self, name: Self::Name);
+            fn id(&self) -> Option<Cow<Self::Args>>;
+        }
+    }
+}
+
+impl<S: TensorStructure> TensorShell<S> {
+    pub fn new(structure: S) -> Self {
+        Self { structure }
+    }
+}
+
+impl<S: TensorStructure> From<S> for TensorShell<S> {
+    fn from(structure: S) -> Self {
+        Self::new(structure)
     }
 }
 
 #[cfg(feature = "shadowing")]
 impl<N> Shadowable for N
 where
-    N: HasStructure + HasName,
-    N::Name: IntoId + Clone,
+    N: HasStructure + HasName + TensorStructure,
+    N::Name: IntoSymbol + Clone,
+    N::Structure: Clone + TensorStructure,
 {
-    type Name = N::Name;
 }
 
-duplicate! {[
-  N;
-[HistoryStructure<std::string::String>];
-[HistoryStructure<SmartString<LazyCompact>>];
-]
-impl std::fmt::Display for N
+impl<N, A> std::fmt::Display for HistoryStructure<N, A>
+where
+    N: Display + Clone + IntoSymbol,
+    A: Display + Clone + IntoArgs,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut string = String::new();
@@ -1881,39 +2306,15 @@ impl std::fmt::Display for N
         for (range, name) in self
             .names
             .iter()
-            .filter(|(r, _)| *r != &(0..self.internal.len()) || !self.is_composite())
+            .filter(|(r, _)| *r != &(0..self.internal.order()) || !self.is_composite())
         {
             string.push_str(&format!("{name}("));
-            for slot in &self.internal[range.clone()] {
+            for slot in &self.internal.structure[range.clone()] {
                 string.push_str(&format!("{slot},"));
             }
             string.pop();
             string.push(')');
         }
         write!(f, "{string}")
-    }
-}
-}
-#[cfg(feature = "shadowing")]
-impl HistoryStructure<Symbol> {
-    #[must_use]
-    pub fn to_string(&self, _state: &State) -> String {
-        let mut string = String::new();
-        if let Some(global_name) = self.name() {
-            string.push_str(&format!("{:?}:", global_name));
-        }
-        for (range, name) in self
-            .names
-            .iter()
-            .filter(|(r, _)| *r != &(0..self.internal.len()) || !self.is_composite())
-        {
-            string.push_str(&format!("{:?}(", name));
-            for slot in &self.internal[range.clone()] {
-                string.push_str(&format!("{slot},"));
-            }
-            string.pop();
-            string.push(')');
-        }
-        string
     }
 }

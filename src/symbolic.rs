@@ -1,9 +1,21 @@
-use super::{
-    Contract, FallibleAdd, HasName, HasStructure, IntoId, MixedTensor, Shadowable, Slot,
-    StructureContract, TensorNetwork, VecStructure,
+use std::borrow::Cow;
+
+use crate::{
+    ContractionError, DataIterator, HasStructure, IntoArgs, NamedStructure, TensorNetworkError,
+    TensorStructure, ABSTRACTIND,
 };
 
-use symbolica::atom::{AddView, Atom, AtomView, MulView, Symbol};
+use super::{
+    Contract, FallibleAdd, HasName, IntoSymbol, MixedTensor, Shadowable, Slot, StructureContract,
+    TensorNetwork, VecStructure,
+};
+
+use bitvec::vec;
+use symbolica::{
+    atom::{AddView, Atom, AtomView, MulView, Symbol},
+    coefficient::CoefficientView,
+    state::State,
+};
 
 /// A fully symbolic tensor, with no concrete values.
 ///
@@ -22,14 +34,11 @@ impl HasStructure for SymbolicTensor {
     type Scalar = Atom;
 
     fn structure(&self) -> &Self::Structure {
-        self.structure.structure()
+        &self.structure
     }
 
     fn mut_structure(&mut self) -> &mut Self::Structure {
-        self.structure.mut_structure()
-    }
-    fn external_structure(&self) -> &[Slot] {
-        self.structure.external_structure()
+        &mut self.structure
     }
 }
 
@@ -63,13 +72,29 @@ impl StructureContract for SymbolicTensor {
 impl SymbolicTensor {
     pub fn from_named<N>(structure: &N) -> Option<Self>
     where
-        N: HasStructure + HasName,
-        N::Name: IntoId + Clone,
+        N: Shadowable + HasName,
+        N::Name: IntoSymbol + Clone,
+        N::Args: IntoArgs,
     {
         Some(SymbolicTensor {
             expression: structure.to_symbolic()?,
-            structure: structure.external_structure().to_vec().into(),
+            structure: structure.external_structure().into(),
         })
+    }
+
+    pub fn to_named(&self) -> NamedStructure<Symbol, Vec<Atom>> {
+        NamedStructure {
+            structure: self.structure.clone(),
+            global_name: self.name().map(Cow::into_owned),
+            additional_args: self.id().map(Cow::into_owned),
+        }
+    }
+
+    pub fn empty(expression: Atom) -> Self {
+        SymbolicTensor {
+            structure: VecStructure::empty(),
+            expression,
+        }
     }
 
     #[must_use]
@@ -81,173 +106,23 @@ impl SymbolicTensor {
         self.smart_shadow().unwrap()
     }
 
-    fn add_view_to_tensor(add: AddView) -> Result<MixedTensor<VecStructure>, &'static str> {
-        let mut terms = vec![];
-        for t in add.iter() {
-            match t {
-                AtomView::Mul(m) => {
-                    let mut term_net = Self::mul_to_network(m)?;
-                    term_net.contract();
-                    terms.push(term_net.result_tensor());
-                }
-                AtomView::Add(a) => {
-                    terms.push(Self::add_view_to_tensor(a)?);
-                }
-                _ => {
-                    return Err("Not a valid expression");
-                }
-            }
-        }
-        let sum = terms
-            .into_iter()
-            .reduce(|a, b| a.add_fallible(&b).unwrap())
-            .unwrap();
-
-        Ok(sum)
-    }
-
-    fn add_view_to_tracking_tensor(
-        add: AddView,
-    ) -> Result<MixedTensor<SymbolicTensor>, &'static str> {
-        let mut terms = vec![];
-        for t in add.iter() {
-            match t {
-                AtomView::Mul(m) => {
-                    let mut term_net = Self::mul_to_tracking_network(m)?;
-                    term_net.contract();
-                    terms.push(term_net.result_tensor());
-                }
-                AtomView::Add(a) => {
-                    terms.push(Self::add_view_to_tracking_tensor(a)?);
-                }
-                AtomView::Fun(f) => {
-                    let mut a = Atom::new();
-                    a.set_from_view(&f.as_view());
-                    let structure: SymbolicTensor = a.try_into()?;
-
-                    terms.push(structure.to_explicit_rep(f.get_symbol()));
-                }
-                _ => {
-                    let mut a = Atom::new();
-                    a.set_from_view(&t);
-                    println!("Var: {}", a);
-                    return Err("Not a valid expression");
-                }
-            }
-        }
-        let sum = terms
-            .into_iter()
-            .reduce(|a, b| a.add_fallible(&b).unwrap())
-            .unwrap();
-
-        Ok(sum)
-    }
-
-    pub fn mul_to_tracking_network(
-        mul: MulView,
-    ) -> Result<TensorNetwork<MixedTensor<SymbolicTensor>, Atom>, &'static str> {
-        let mut network: TensorNetwork<MixedTensor<SymbolicTensor>, Atom> = TensorNetwork::new();
-        for atom in mul.iter() {
-            match atom {
-                AtomView::Fun(f) => {
-                    let mut a = Atom::new();
-                    a.set_from_view(&f.as_view());
-                    let structure: SymbolicTensor = a.try_into()?;
-
-                    network.push(structure.to_explicit_rep(f.get_symbol()));
-                }
-                AtomView::Var(v) => {
-                    let mut a = Atom::new();
-                    a.set_from_view(&v.as_view());
-                    network.scalar_mul(a);
-                }
-                AtomView::Num(n) => {
-                    let mut a = Atom::new();
-                    a.set_from_view(&n.as_view());
-                    network.scalar_mul(a);
-                }
-                AtomView::Add(a) => {
-                    let sum = Self::add_view_to_tracking_tensor(a)?;
-
-                    network.push(sum);
-                }
-                _ => return Err("Not a valid expression"),
-            }
-        }
-        Ok(network)
-    }
-
-    pub fn mul_to_network(
-        mul: MulView,
-    ) -> Result<TensorNetwork<MixedTensor<VecStructure>, Atom>, &'static str> {
-        let mut network: TensorNetwork<MixedTensor<VecStructure>, Atom> = TensorNetwork::new();
-        let mut scalars = Atom::new_num(1);
-        for atom in mul.iter() {
-            match atom {
-                AtomView::Fun(f) => {
-                    let mut structure: Vec<Slot> = vec![];
-                    let f_id = f.get_symbol();
-
-                    for arg in f.iter() {
-                        structure.push(arg.try_into()?);
-                    }
-                    let s: VecStructure = structure.into();
-                    network.push(s.to_explicit_rep(f_id));
-                }
-                AtomView::Var(v) => {
-                    let mut a = Atom::new();
-                    a.set_from_view(&v.as_view());
-                    scalars = &scalars * &a;
-                }
-                AtomView::Num(n) => {
-                    let mut a = Atom::new();
-                    a.set_from_view(&n.as_view());
-                }
-                AtomView::Add(a) => {
-                    let mut terms = vec![];
-                    for t in a.iter() {
-                        if let AtomView::Mul(m) = t {
-                            let mut term_net = Self::mul_to_network(m)?;
-                            term_net.contract();
-                            terms.push(term_net.result_tensor());
-                        }
-                    }
-                    let sum = terms
-                        .into_iter()
-                        .reduce(|a, b| a.add_fallible(&b).unwrap())
-                        .unwrap();
-
-                    network.push(sum);
-                }
-                AtomView::Pow(p) => {
-                    // handle squared tensors
-                    let mut a = Atom::new();
-                    a.set_from_view(&p.as_view());
-                    scalars = &scalars * &a;
-                }
-                _ => return Err("Not a valid expression"),
-            }
-        }
-        network.scalar_mul(scalars);
-        Ok(network)
-    }
-
     pub fn to_network(
-        self,
-    ) -> Result<TensorNetwork<MixedTensor<VecStructure>, Atom>, &'static str> {
-        if let AtomView::Mul(mul) = self.expression.as_view() {
-            Self::mul_to_network(mul)
-        } else {
-            Err("Not a valid expression")
-        }
+        &self,
+    ) -> Result<
+        TensorNetwork<MixedTensor<NamedStructure<Symbol, Vec<Atom>>>, Atom>,
+        TensorNetworkError,
+    > {
+        self.expression.as_view().try_into()
     }
 }
 
 impl TryFrom<Atom> for SymbolicTensor {
-    type Error = &'static str;
+    type Error = String;
     fn try_from(value: Atom) -> Result<Self, Self::Error> {
+        let structure = value.as_view().try_into().unwrap_or(VecStructure::empty());
+
         Ok(SymbolicTensor {
-            structure: value.as_view().try_into()?,
+            structure,
             expression: value,
         })
     }
@@ -255,7 +130,9 @@ impl TryFrom<Atom> for SymbolicTensor {
 
 impl HasName for SymbolicTensor {
     type Name = Symbol;
-    fn name(&self) -> Option<std::borrow::Cow<Self::Name>> {
+    type Args = Vec<Atom>;
+
+    fn name(&self) -> Option<Cow<Self::Name>> {
         if let AtomView::Fun(f) = self.expression.as_view() {
             Some(std::borrow::Cow::Owned(f.get_symbol()))
         } else {
@@ -263,8 +140,27 @@ impl HasName for SymbolicTensor {
         }
     }
 
-    fn set_name(&mut self, _name: &Self::Name) {
+    fn set_name(&mut self, _name: Self::Name) {
         unimplemented!("Cannot set name of a symbolic tensor")
+    }
+
+    fn id(&self) -> Option<Cow<Self::Args>> {
+        let mut args = vec![];
+        match self.expression.as_view() {
+            AtomView::Fun(f) => {
+                for arg in f.iter() {
+                    if let AtomView::Fun(f) = arg {
+                        if f.get_symbol() != State::get_symbol(ABSTRACTIND) {
+                            args.push(arg.to_owned());
+                        }
+                    } else {
+                        args.push(arg.to_owned());
+                    }
+                }
+                Some(Cow::Owned(args))
+            }
+            _ => None,
+        }
     }
 }
 
@@ -272,12 +168,12 @@ impl HasName for SymbolicTensor {
 ///
 impl Contract<SymbolicTensor> for SymbolicTensor {
     type LCM = SymbolicTensor;
-    fn contract(&self, other: &SymbolicTensor) -> Option<Self::LCM> {
+    fn contract(&self, other: &SymbolicTensor) -> Result<Self::LCM, ContractionError> {
         let mut new_structure = self.structure.clone();
 
         let expression = &other.expression * &self.expression;
         new_structure.merge(&other.structure);
-        Some(SymbolicTensor {
+        Ok(SymbolicTensor {
             expression,
             structure: new_structure,
         })

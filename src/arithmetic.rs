@@ -1,4 +1,4 @@
-use crate::{ConcreteIndex, GetTensorData, SetTensorData};
+use crate::{ConcreteIndex, GetTensorData, RefZero, SetTensorData, TensorStructure};
 use std::fmt::Debug;
 
 use super::{
@@ -11,13 +11,41 @@ use super::{Complex, MixedTensor};
 #[cfg(feature = "shadowing")]
 use symbolica::atom::Atom;
 
-impl<'a, T, U, I, Out> FallibleAdd<&DenseTensor<T, I>> for &'a DenseTensor<U, I>
+impl<T, S> RefZero for DenseTensor<T, S>
 where
-    for<'b, 'c> &'b U: FallibleAdd<&'c T, Output = Out>,
-    I: HasStructure + Clone,
+    T: RefZero + Clone,
+    S: TensorStructure + Clone,
+{
+    fn ref_zero(&self) -> Self {
+        let zero = self.data[0].ref_zero();
+        DenseTensor {
+            structure: self.structure.clone(),
+            data: vec![zero; self.data.len()],
+        }
+    }
+}
+
+impl<T, U, S> std::ops::Neg for DenseTensor<T, S>
+where
+    T: std::ops::Neg<Output = U>,
+    S: TensorStructure + Clone,
+{
+    type Output = DenseTensor<U, S>;
+    fn neg(self) -> Self::Output {
+        DenseTensor {
+            structure: self.structure.clone(),
+            data: self.data.into_iter().map(|x| x.neg()).collect(),
+        }
+    }
+}
+
+impl<T, U, I, Out> FallibleAdd<DenseTensor<T, I>> for DenseTensor<U, I>
+where
+    U: FallibleAdd<T, Output = Out>,
+    I: TensorStructure + Clone,
 {
     type Output = DenseTensor<Out, I>;
-    fn add_fallible(self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
+    fn add_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
         // Makes rhs into self ,when applied.
         let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
@@ -37,14 +65,14 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> FallibleAdd<&SparseTensor<T, I>> for &'a DenseTensor<U, I>
+impl<'a, T, U, I, Out> FallibleAdd<SparseTensor<T, I>> for DenseTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleAdd<&'c T, Output = Out>,
-    I: HasStructure + Clone,
+    U: FallibleAdd<T, Output = Out>,
+    I: TensorStructure + Clone,
     T: Default + Clone,
 {
     type Output = DenseTensor<Out, I>;
-    fn add_fallible(self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
+    fn add_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
         let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = self.structure().clone();
@@ -63,14 +91,14 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> FallibleAdd<&DenseTensor<T, I>> for &'a SparseTensor<U, I>
+impl<'a, T, U, I, Out> FallibleAdd<DenseTensor<T, I>> for SparseTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleAdd<&'c T, Output = Out>,
-    I: HasStructure + Clone,
+    U: FallibleAdd<T, Output = Out>,
+    I: TensorStructure + Clone,
     U: Default + Clone,
 {
     type Output = DenseTensor<Out, I>;
-    fn add_fallible(self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
+    fn add_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
         let permutation = rhs.structure().find_permutation(self.structure()).unwrap();
         let structure = rhs.structure().clone();
@@ -89,15 +117,15 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> FallibleAdd<&SparseTensor<T, I>> for &'a SparseTensor<U, I>
+impl<'a, T, U, I, Out> FallibleAdd<SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleAdd<&'c T, Output = Out>,
-    I: HasStructure + Clone,
+    U: FallibleAdd<T, Output = Out>,
+    I: TensorStructure + Clone,
     T: Default + Clone + Debug,
     Out: Default + PartialEq + TryFromUpgrade<T>,
 {
     type Output = SparseTensor<Out, I>;
-    fn add_fallible(self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
+    fn add_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
         let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = self.structure().clone();
@@ -124,16 +152,16 @@ where
     }
 }
 
-impl<'a, T, U, Out, I> FallibleAdd<&DataTensor<T, I>> for &'a DataTensor<U, I>
+impl<'a, T, U, Out, I> FallibleAdd<DataTensor<T, I>> for DataTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleAdd<&'c T, Output = Out>,
+    U: FallibleAdd<T, Output = Out>,
     U: Default + Clone,
     T: Default + Clone + Debug,
     Out: Default + PartialEq + TryFromUpgrade<T>,
-    I: HasStructure + Clone,
+    I: TensorStructure + Clone,
 {
     type Output = DataTensor<Out, I>;
-    fn add_fallible(self, rhs: &DataTensor<T, I>) -> Option<Self::Output> {
+    fn add_fallible(&self, rhs: &DataTensor<T, I>) -> Option<Self::Output> {
         match (self, rhs) {
             (DataTensor::Dense(a), DataTensor::Dense(b)) => {
                 Some(DataTensor::Dense(a.add_fallible(b)?))
@@ -152,12 +180,12 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a, I> FallibleAdd<&MixedTensor<I>> for &'a MixedTensor<I>
+impl<'a, I> FallibleAdd<MixedTensor<I>> for MixedTensor<I>
 where
-    I: HasStructure + Clone,
+    I: TensorStructure + Clone,
 {
     type Output = MixedTensor<I>;
-    fn add_fallible(self, rhs: &MixedTensor<I>) -> Option<Self::Output> {
+    fn add_fallible(&self, rhs: &MixedTensor<I>) -> Option<Self::Output> {
         match (self, rhs) {
             (MixedTensor::Float(a), MixedTensor::Float(b)) => {
                 Some(MixedTensor::Float(a.add_fallible(b)?))
@@ -190,13 +218,13 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> FallibleSub<&DenseTensor<T, I>> for &'a DenseTensor<U, I>
+impl<T, U, I, Out> FallibleSub<DenseTensor<T, I>> for DenseTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleSub<&'c T, Output = Out>,
-    I: HasStructure + Clone,
+    U: FallibleSub<T, Output = Out>,
+    I: TensorStructure + Clone,
 {
     type Output = DenseTensor<Out, I>;
-    fn sub_fallible(self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
+    fn sub_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
         let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = self.structure().clone();
@@ -215,13 +243,13 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> FallibleSub<&DenseTensor<T, I>> for &'a SparseTensor<U, I>
+impl<T, U, I, Out> FallibleSub<DenseTensor<T, I>> for SparseTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleSub<&'c T, Output = Out>,
-    I: HasStructure + Clone,
+    U: FallibleSub<T, Output = Out>,
+    I: TensorStructure + Clone,
 {
     type Output = DenseTensor<Out, I>;
-    fn sub_fallible(self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
+    fn sub_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
         let permutation = rhs.structure().find_permutation(self.structure()).unwrap();
         let structure = rhs.structure().clone();
@@ -240,14 +268,14 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> FallibleSub<&SparseTensor<T, I>> for &'a DenseTensor<U, I>
+impl<T, U, I, Out> FallibleSub<SparseTensor<T, I>> for DenseTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleSub<&'c T, Output = Out>,
-    I: HasStructure + Clone,
+    U: FallibleSub<T, Output = Out>,
+    I: TensorStructure + Clone,
     T: Default + Clone,
 {
     type Output = DenseTensor<Out, I>;
-    fn sub_fallible(self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
+    fn sub_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
         let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = self.structure().clone();
@@ -266,16 +294,16 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> FallibleSub<&SparseTensor<T, I>> for &'a SparseTensor<U, I>
+impl<T, U, I, Out> FallibleSub<SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleSub<&'c T, Output = Out>,
-    I: HasStructure + Clone,
+    U: FallibleSub<T, Output = Out>,
+    I: TensorStructure + Clone,
     T: Default + Clone,
     U: Default,
     Out: Default + PartialEq,
 {
     type Output = SparseTensor<Out, I>;
-    fn sub_fallible(self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
+    fn sub_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
         let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = self.structure().clone();
@@ -300,16 +328,16 @@ where
     }
 }
 
-impl<'a, T, U, Out, I> FallibleSub<&DataTensor<T, I>> for &'a DataTensor<U, I>
+impl<T, U, Out, I> FallibleSub<DataTensor<T, I>> for DataTensor<U, I>
 where
-    for<'b, 'c> &'b U: FallibleSub<&'c T, Output = Out>,
+    U: FallibleSub<T, Output = Out>,
     U: Default + Clone,
     T: Default + Clone,
     Out: Default + PartialEq,
-    I: HasStructure + Clone,
+    I: TensorStructure + Clone,
 {
     type Output = DataTensor<Out, I>;
-    fn sub_fallible(self, rhs: &DataTensor<T, I>) -> Option<Self::Output> {
+    fn sub_fallible(&self, rhs: &DataTensor<T, I>) -> Option<Self::Output> {
         match (self, rhs) {
             (DataTensor::Dense(a), DataTensor::Dense(b)) => {
                 Some(DataTensor::Dense(a.sub_fallible(b)?))
@@ -328,12 +356,12 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a, I> FallibleSub<&MixedTensor<I>> for &'a MixedTensor<I>
+impl<I> FallibleSub<MixedTensor<I>> for MixedTensor<I>
 where
-    I: HasStructure + Clone,
+    I: TensorStructure + Clone,
 {
     type Output = MixedTensor<I>;
-    fn sub_fallible(self, rhs: &MixedTensor<I>) -> Option<Self::Output> {
+    fn sub_fallible(&self, rhs: &MixedTensor<I>) -> Option<Self::Output> {
         match (self, rhs) {
             (MixedTensor::Float(a), MixedTensor::Float(b)) => {
                 Some(MixedTensor::Float(a.sub_fallible(b)?))
@@ -368,16 +396,16 @@ where
 
 pub trait ScalarMul<T> {
     type Output;
-    fn scalar_mul(self, rhs: T) -> Option<Self::Output>;
+    fn scalar_mul(&self, rhs: &T) -> Option<Self::Output>;
 }
 
-impl<'a, T, U, I, Out> ScalarMul<&T> for &'a DenseTensor<U, I>
+impl<T, U, I, Out> ScalarMul<T> for DenseTensor<U, I>
 where
     U: FallibleMul<T, Output = Out>,
-    I: HasStructure + Clone,
+    I: TensorStructure + Clone,
 {
     type Output = DenseTensor<Out, I>;
-    fn scalar_mul(self, rhs: &T) -> Option<Self::Output> {
+    fn scalar_mul(&self, rhs: &T) -> Option<Self::Output> {
         let data: Option<Vec<Out>> = self.iter_flat().map(|(_, u)| u.mul_fallible(rhs)).collect();
 
         data.map(|data| DenseTensor {
@@ -387,13 +415,13 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> ScalarMul<&T> for &'a SparseTensor<U, I>
+impl<T, U, I, Out> ScalarMul<T> for SparseTensor<U, I>
 where
     U: FallibleMul<T, Output = Out>,
-    I: HasStructure + Clone,
+    I: TensorStructure + Clone,
 {
     type Output = SparseTensor<Out, I>;
-    fn scalar_mul(self, rhs: &T) -> Option<Self::Output> {
+    fn scalar_mul(&self, rhs: &T) -> Option<Self::Output> {
         let mut data = SparseTensor::empty(self.structure().clone());
         for (indices, u) in self.iter_flat() {
             data.set_flat(indices, u.mul_fallible(rhs)?).unwrap();
@@ -402,13 +430,13 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> ScalarMul<&T> for &'a DataTensor<U, I>
+impl<T, U, I, Out> ScalarMul<T> for DataTensor<U, I>
 where
     U: FallibleMul<T, Output = Out>,
-    I: HasStructure + Clone,
+    I: TensorStructure + Clone,
 {
     type Output = DataTensor<Out, I>;
-    fn scalar_mul(self, rhs: &T) -> Option<Self::Output> {
+    fn scalar_mul(&self, rhs: &T) -> Option<Self::Output> {
         match self {
             DataTensor::Dense(a) => Some(DataTensor::Dense(a.scalar_mul(rhs)?)),
             DataTensor::Sparse(a) => Some(DataTensor::Sparse(a.scalar_mul(rhs)?)),
@@ -417,12 +445,12 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a, I> ScalarMul<&f64> for &'a MixedTensor<I>
+impl<I> ScalarMul<f64> for MixedTensor<I>
 where
-    I: HasStructure + Clone,
+    I: TensorStructure + Clone,
 {
     type Output = MixedTensor<I>;
-    fn scalar_mul(self, rhs: &f64) -> Option<Self::Output> {
+    fn scalar_mul(&self, rhs: &f64) -> Option<Self::Output> {
         match self {
             MixedTensor::Float(a) => Some(MixedTensor::Float(a.scalar_mul(rhs)?)),
             MixedTensor::Complex(a) => Some(MixedTensor::Complex(a.scalar_mul(rhs)?)),
@@ -432,12 +460,12 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a, I> ScalarMul<&Complex<f64>> for &'a MixedTensor<I>
+impl<I> ScalarMul<Complex<f64>> for MixedTensor<I>
 where
-    I: HasStructure + Clone,
+    I: TensorStructure + Clone,
 {
     type Output = MixedTensor<I>;
-    fn scalar_mul(self, rhs: &Complex<f64>) -> Option<Self::Output> {
+    fn scalar_mul(&self, rhs: &Complex<f64>) -> Option<Self::Output> {
         match self {
             MixedTensor::Float(a) => Some(MixedTensor::Complex(a.scalar_mul(rhs)?)),
             MixedTensor::Complex(a) => Some(MixedTensor::Complex(a.scalar_mul(rhs)?)),
@@ -447,12 +475,12 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a, I> ScalarMul<&Atom> for &'a MixedTensor<I>
+impl<I> ScalarMul<Atom> for MixedTensor<I>
 where
-    I: HasStructure + Clone,
+    I: TensorStructure + Clone,
 {
     type Output = MixedTensor<I>;
-    fn scalar_mul(self, rhs: &Atom) -> Option<Self::Output> {
+    fn scalar_mul(&self, rhs: &Atom) -> Option<Self::Output> {
         match self {
             MixedTensor::Float(a) => Some(MixedTensor::Symbolic(a.scalar_mul(rhs)?)),
             MixedTensor::Complex(a) => Some(MixedTensor::Symbolic(a.scalar_mul(rhs)?)),

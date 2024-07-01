@@ -1,7 +1,7 @@
 use ahash::AHashMap;
 use symbolica::domains::float::Real;
 
-use crate::TrySmallestUpgrade;
+use crate::{TensorStructure, TrySmallestUpgrade};
 
 use super::{
     DataIterator, DataTensor, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSubAssign,
@@ -9,6 +9,7 @@ use super::{
 };
 
 use std::iter::Iterator;
+use thiserror::Error;
 
 // pub trait LeastCommonStorage<Other: HasTensorData + SetTensorData>:
 //     HasTensorData + SetTensorData
@@ -25,7 +26,7 @@ use std::iter::Iterator;
 //     T: ContractableWith<U, Out = LCMData> + Clone,
 //     U: ContractableWith<T, Out = LCMData> + Clone,
 //     LCMData: Default + Clone,
-//     I: HasStructure + StructureContract + Clone,
+//     I: TensorStructure + StructureContract + Clone,
 // {
 //     type OutStorage = DenseTensor<LCMData, I>;
 //     type LCMData = LCMData;
@@ -46,7 +47,7 @@ use std::iter::Iterator;
 //     T: ContractableWith<U, Out = LCMData> + Clone,
 //     U: ContractableWith<T, Out = LCMData> + Clone,
 //     LCMData: Default + Clone,
-//     I: HasStructure + StructureContract + Clone,
+//     I: TensorStructure + StructureContract + Clone,
 // {
 //     type OutStorage = DenseTensor<LCMData, I>;
 //     type LCMData = LCMData;
@@ -67,7 +68,7 @@ use std::iter::Iterator;
 //     T: ContractableWith<U, Out = LCMData> + Clone,
 //     U: ContractableWith<T, Out = LCMData> + Clone,
 //     LCMData: Default + Clone,
-//     I: HasStructure + StructureContract + Clone,
+//     I: TensorStructure + StructureContract + Clone,
 // {
 //     type OutStorage = DenseTensor<LCMData, I>;
 //     type LCMData = LCMData;
@@ -88,7 +89,7 @@ use std::iter::Iterator;
 //     T: ContractableWith<U, Out = LCMData> + Clone,
 //     U: ContractableWith<T, Out = LCMData> + Clone,
 //     LCMData: Default + Clone,
-//     I: HasStructure + StructureContract + Clone,
+//     I: TensorStructure + StructureContract + Clone,
 // {
 //     type OutStorage = SparseTensor<LCMData, I>;
 //     type LCMData = LCMData;
@@ -106,19 +107,19 @@ use std::iter::Iterator;
 
 pub trait ExteriorProduct<T> {
     type LCM;
-    fn exterior_product(&self, other: &T) -> Self::LCM;
+    fn exterior_product(&self, other: &T) -> Result<Self::LCM, ContractionError>;
 }
 
 impl<T, U, I, O> ExteriorProduct<DenseTensor<T, I>> for DenseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
 
-    fn exterior_product(&self, other: &DenseTensor<T, I>) -> Self::LCM {
+    fn exterior_product(&self, other: &DenseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
@@ -135,50 +136,84 @@ where
             }
         }
 
-        out
+        Ok(out)
     }
 }
+
+// impl<T, U, I, O> ExteriorProduct<DenseTensor<U, I>> for DenseTensor<T, I>
+// where
+//     U: ContractableWith<T, Out = O>,
+//     // T: ContractableWith<U, Out = O>,
+//     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+//     I: TensorStructure + Clone + StructureContract,
+// {
+//     type LCM = DenseTensor<U::Out, I>;
+
+//     fn exterior_product(&self, other: &DenseTensor<T, I>) -> Option<Self::LCM> {
+//         let mut final_structure = self.structure().clone();
+//         final_structure.merge(other.structure());
+//         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
+//         let mut out = DenseTensor {
+//             data: vec![zero.clone(); final_structure.size()],
+//             structure: final_structure,
+//         };
+
+//         let stride = other.size();
+
+//         for (i, u) in self.flat_iter() {
+//             for (j, t) in other.flat_iter() {
+//                 let _ = out.set_flat(i * stride + j, u.mul_fallible(t).unwrap());
+//             }
+//         }
+
+//         Ok(out)
+//     }
+// }
 
 impl<T, U, I, O> ExteriorProduct<DenseTensor<T, I>> for SparseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
 
-    fn exterior_product(&self, other: &DenseTensor<T, I>) -> Self::LCM {
+    fn exterior_product(&self, other: &DenseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
-        let zero = other.data[0].try_upgrade().unwrap().into_owned().ref_zero();
-        let mut out = DenseTensor {
-            data: vec![zero.clone(); final_structure.size()],
-            structure: final_structure,
-        };
+        if let Some((_, s)) = self.flat_iter().next() {
+            let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
+            let mut out = DenseTensor {
+                data: vec![zero.clone(); final_structure.size()],
+                structure: final_structure,
+            };
 
-        let stride = other.size();
+            let stride = other.size();
 
-        for (i, u) in self.flat_iter() {
-            for (j, t) in other.flat_iter() {
-                let _ = out.set_flat(i * stride + j, u.mul_fallible(t).unwrap());
+            for (i, u) in self.flat_iter() {
+                for (j, t) in other.flat_iter() {
+                    let _ = out.set_flat(i * stride + j, u.mul_fallible(t).unwrap());
+                }
             }
-        }
 
-        out
+            Ok(out)
+        } else {
+            Err(ContractionError::EmptySparse)
+        }
     }
 }
 
 impl<T, U, I, O> ExteriorProduct<SparseTensor<T, I>> for DenseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
 
-    fn exterior_product(&self, other: &SparseTensor<T, I>) -> Self::LCM {
+    fn exterior_product(&self, other: &SparseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
@@ -194,20 +229,20 @@ where
             }
         }
 
-        out
+        Ok(out)
     }
 }
 
 impl<T, U, I, O> ExteriorProduct<SparseTensor<T, I>> for SparseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = SparseTensor<U::Out, I>;
 
-    fn exterior_product(&self, other: &SparseTensor<T, I>) -> Self::LCM {
+    fn exterior_product(&self, other: &SparseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
 
@@ -220,14 +255,14 @@ where
             }
         }
 
-        out
+        Ok(out)
     }
 }
 
 impl<T, I> DenseTensor<T, I>
 where
     T: ContractableWith<T, Out = T> + Clone + RefZero + FallibleAddAssign<T> + FallibleSubAssign<T>,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     #[must_use]
 
@@ -359,7 +394,7 @@ where
         + IsZero
         + FallibleAddAssign<T>
         + FallibleSubAssign<T>,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     #[must_use]
     /// Contract the tensor with itself, i.e. trace over all matching indices.
@@ -384,22 +419,30 @@ where
 }
 pub trait Contract<T> {
     type LCM;
-    fn contract(&self, other: &T) -> Option<Self::LCM>;
+    fn contract(&self, other: &T) -> Result<Self::LCM, ContractionError>;
+}
+
+#[derive(Error, Debug)]
+pub enum ContractionError {
+    #[error("Sparse tensor is empty")]
+    EmptySparse,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 pub trait SingleContract<T> {
     type LCM;
-    fn single_contract(&self, other: &T, i: usize, j: usize) -> Option<Self::LCM>;
+    fn single_contract(&self, other: &T, i: usize, j: usize)
+        -> Result<Self::LCM, ContractionError>;
 }
 
 pub trait MultiContract<T> {
     type LCM;
-    fn multi_contract(&self, other: &T) -> Option<Self::LCM>;
+    fn multi_contract(&self, other: &T) -> Result<Self::LCM, ContractionError>;
 }
 pub trait ContractableWith<T>
 where
     Self: FallibleMul<T, Output = Self::Out> + Sized + TrySmallestUpgrade<T, LCM = Self::Out>,
-    T: FallibleMul<Self, Output = Self::Out>,
 {
     type Out: FallibleAddAssign<Self::Out> + FallibleSubAssign<Self::Out> + Clone + RefZero;
 }
@@ -407,7 +450,7 @@ where
 impl<T, U, Out> ContractableWith<T> for U
 where
     U: FallibleMul<T, Output = Out> + TrySmallestUpgrade<T, LCM = Out>,
-    T: FallibleMul<U, Output = Out>,
+    // T: FallibleMul<U, Output = Out>,
     Out: FallibleAddAssign<Out> + FallibleSubAssign<Out> + Clone + RefZero,
 {
     type Out = Out;
@@ -416,13 +459,18 @@ where
 impl<T, U, I, O> SingleContract<DenseTensor<T, I>> for DenseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
 
-    fn single_contract(&self, other: &DenseTensor<T, I>, i: usize, j: usize) -> Option<Self::LCM> {
+    fn single_contract(
+        &self,
+        other: &DenseTensor<T, I>,
+        i: usize,
+        j: usize,
+    ) -> Result<Self::LCM, ContractionError> {
         // println!("single contract dense dense");
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
@@ -438,9 +486,10 @@ where
             for fiber_b in other_iter.by_ref() {
                 for (k, ((a, _), (b, _))) in (fiber_a.by_ref()).zip(fiber_b).enumerate() {
                     if fiber_representation.is_neg(k) {
-                        result_data[result_index].sub_assign_fallible(a.mul_fallible(&b).unwrap());
+                        result_data[result_index]
+                            .sub_assign_fallible(&(a.mul_fallible(&b).unwrap()));
                     } else {
-                        result_data[result_index].add_assign_fallible(a.mul_fallible(b).unwrap());
+                        result_data[result_index].add_assign_fallible(&a.mul_fallible(b).unwrap());
                     }
                 }
                 result_index += 1;
@@ -453,19 +502,19 @@ where
             structure: final_structure,
         };
 
-        Some(result)
+        Ok(result)
     }
 }
 
 impl<T, U, I, O> MultiContract<DenseTensor<T, I>> for DenseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
-    fn multi_contract(&self, other: &DenseTensor<T, I>) -> Option<Self::LCM> {
+    fn multi_contract(&self, other: &DenseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         // println!("multi contract dense dense");
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let (permutation, self_matches, other_matches) =
@@ -489,10 +538,10 @@ where
                     if let Some((b, _)) = fiber_b.next() {
                         if neg {
                             result_data[result_index]
-                                .sub_assign_fallible(a.mul_fallible(b).unwrap());
+                                .sub_assign_fallible(&a.mul_fallible(b).unwrap());
                         } else {
                             result_data[result_index]
-                                .add_assign_fallible(a.mul_fallible(b).unwrap());
+                                .add_assign_fallible(&a.mul_fallible(b).unwrap());
                         }
                     }
                 }
@@ -506,7 +555,7 @@ where
             structure: final_structure,
         };
 
-        Some(result)
+        Ok(result)
     }
 }
 
@@ -516,14 +565,15 @@ where
         + MultiContract<T, LCM = O>
         + ExteriorProduct<T, LCM = O>
         + HasStructure,
-    U::Structure: HasStructure,
+    // U::Structure: TensorStructure,
+    T: HasStructure<Structure = U::Structure>,
     T: SingleContract<U, LCM = O>
         + MultiContract<U, LCM = O>
         + ExteriorProduct<U, LCM = O>
         + HasStructure<Structure = U::Structure>,
 {
     type LCM = O;
-    fn contract(&self, other: &T) -> Option<Self::LCM> {
+    fn contract(&self, other: &T) -> Result<Self::LCM, ContractionError> {
         if let Some((single, i, j)) = self.structure().match_index(other.structure()) {
             if i >= j {
                 if single {
@@ -537,70 +587,83 @@ where
             return other.contract(self);
         }
         // println!("exterior");
-        let result = self.exterior_product(other);
-        Some(result)
+        self.exterior_product(other)
     }
 }
 
 impl<T, U, I, O> SingleContract<DenseTensor<T, I>> for SparseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
 
-    fn single_contract(&self, other: &DenseTensor<T, I>, i: usize, j: usize) -> Option<Self::LCM> {
+    fn single_contract(
+        &self,
+        other: &DenseTensor<T, I>,
+        i: usize,
+        j: usize,
+    ) -> Result<Self::LCM, ContractionError> {
         // println!("single contract sparse dense");
-        let zero = other.data[0].try_upgrade().unwrap().into_owned().ref_zero();
-        let final_structure = self.structure.merge_at(&other.structure, (i, j));
-        let mut result_data = vec![zero.clone(); final_structure.size()];
-        let mut result_index = 0;
+        if let Some((_, s)) = self.flat_iter().next() {
+            let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
+            let final_structure = self.structure.merge_at(&other.structure, (i, j));
+            let mut result_data = vec![zero.clone(); final_structure.size()];
+            let mut result_index = 0;
 
-        let mut self_iter = self.fiber_class(i.into()).iter();
-        let mut other_iter = other.fiber_class(j.into()).iter();
+            let mut self_iter = self.fiber_class(i.into()).iter();
+            let mut other_iter = other.fiber_class(j.into()).iter();
 
-        let fiber_representation: Representation = self.reps()[i];
+            let fiber_representation: Representation = self.reps()[i];
 
-        for mut fiber_a in self_iter.by_ref() {
-            for mut fiber_b in other_iter.by_ref() {
-                for (k, (a, skip, _)) in fiber_a.by_ref().enumerate() {
-                    if let Some((b, _)) = fiber_b.by_ref().nth(skip) {
-                        if fiber_representation.is_neg(k + skip) {
-                            result_data[result_index]
-                                .sub_assign_fallible(a.mul_fallible(b).unwrap());
-                        } else {
-                            result_data[result_index]
-                                .add_assign_fallible(a.mul_fallible(b).unwrap());
+            for mut fiber_a in self_iter.by_ref() {
+                for mut fiber_b in other_iter.by_ref() {
+                    for (k, (a, skip, _)) in fiber_a.by_ref().enumerate() {
+                        if let Some((b, _)) = fiber_b.by_ref().nth(skip) {
+                            if fiber_representation.is_neg(k + skip) {
+                                result_data[result_index]
+                                    .sub_assign_fallible(&a.mul_fallible(b).unwrap());
+                            } else {
+                                result_data[result_index]
+                                    .add_assign_fallible(&a.mul_fallible(b).unwrap());
+                            }
                         }
                     }
+                    result_index += 1;
+                    fiber_a.reset();
                 }
-                result_index += 1;
-                fiber_a.reset();
+                other_iter.reset();
             }
-            other_iter.reset();
+
+            let result = DenseTensor {
+                data: result_data,
+                structure: final_structure,
+            };
+
+            return Ok(result);
+        } else {
+            Err(ContractionError::EmptySparse)
         }
-
-        let result = DenseTensor {
-            data: result_data,
-            structure: final_structure,
-        };
-
-        Some(result)
     }
 }
 
 impl<T, U, I, O> SingleContract<SparseTensor<T, I>> for DenseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
 
-    fn single_contract(&self, other: &SparseTensor<T, I>, i: usize, j: usize) -> Option<Self::LCM> {
+    fn single_contract(
+        &self,
+        other: &SparseTensor<T, I>,
+        i: usize,
+        j: usize,
+    ) -> Result<Self::LCM, ContractionError> {
         // println!("single contract dense sparse");
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
@@ -618,10 +681,10 @@ where
                     if let Some((a, _)) = fiber_a.by_ref().nth(skip) {
                         if fiber_representation.is_neg(k + skip) {
                             result_data[result_index]
-                                .sub_assign_fallible(a.mul_fallible(b).unwrap());
+                                .sub_assign_fallible(&a.mul_fallible(b).unwrap());
                         } else {
                             result_data[result_index]
-                                .add_assign_fallible(a.mul_fallible(b).unwrap());
+                                .add_assign_fallible(&a.mul_fallible(b).unwrap());
                         }
                     }
                 }
@@ -636,73 +699,78 @@ where
             structure: final_structure,
         };
 
-        Some(result)
+        Ok(result)
     }
 }
 
 impl<T, U, I, O> MultiContract<DenseTensor<T, I>> for SparseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
-    fn multi_contract(&self, other: &DenseTensor<T, I>) -> Option<Self::LCM> {
+    fn multi_contract(&self, other: &DenseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         // println!("multi contract sparse dense");
-        let zero = other.data[0].try_upgrade().unwrap().as_ref().ref_zero();
-        let (permutation, self_matches, other_matches) =
-            self.structure().match_indices(other.structure()).unwrap();
+        if let Some((_, s)) = self.flat_iter().next() {
+            let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
+            // let zero = other.data[0].try_upgrade().unwrap().as_ref().ref_zero();
+            let (permutation, self_matches, other_matches) =
+                self.structure().match_indices(other.structure()).unwrap();
 
-        let mut final_structure = self.structure.clone();
-        let _ = final_structure.merge(&other.structure);
+            let mut final_structure = self.structure.clone();
+            let _ = final_structure.merge(&other.structure);
 
-        let mut result_data = vec![zero.clone(); final_structure.size()];
-        let mut result_index = 0;
+            let mut result_data = vec![zero.clone(); final_structure.size()];
+            let mut result_index = 0;
 
-        let selfiter = self
-            .fiber_class(self_matches.as_slice().into())
-            .iter_perm_metric(permutation);
-        let mut other_iter = other.fiber_class(other_matches.as_slice().into()).iter();
+            let selfiter = self
+                .fiber_class(self_matches.as_slice().into())
+                .iter_perm_metric(permutation);
+            let mut other_iter = other.fiber_class(other_matches.as_slice().into()).iter();
 
-        for mut fiber_a in selfiter {
-            for mut fiber_b in other_iter.by_ref() {
-                for (a, skip, (neg, _)) in fiber_a.by_ref() {
-                    if let Some((b, _)) = fiber_b.by_ref().nth(skip) {
-                        if neg {
-                            result_data[result_index]
-                                .sub_assign_fallible(a.mul_fallible(b).unwrap());
-                        } else {
-                            result_data[result_index]
-                                .add_assign_fallible(a.mul_fallible(b).unwrap());
+            for mut fiber_a in selfiter {
+                for mut fiber_b in other_iter.by_ref() {
+                    for (a, skip, (neg, _)) in fiber_a.by_ref() {
+                        if let Some((b, _)) = fiber_b.by_ref().nth(skip) {
+                            if neg {
+                                result_data[result_index]
+                                    .sub_assign_fallible(&a.mul_fallible(b).unwrap());
+                            } else {
+                                result_data[result_index]
+                                    .add_assign_fallible(&a.mul_fallible(b).unwrap());
+                            }
                         }
                     }
+                    result_index += 1;
+                    fiber_a.reset();
                 }
-                result_index += 1;
-                fiber_a.reset();
+                other_iter.reset();
             }
-            other_iter.reset();
+
+            let result = DenseTensor {
+                data: result_data,
+                structure: final_structure,
+            };
+
+            Ok(result)
+        } else {
+            Err(ContractionError::EmptySparse)
         }
-
-        let result = DenseTensor {
-            data: result_data,
-            structure: final_structure,
-        };
-
-        Some(result)
     }
 }
 
 impl<T, U, I, O> MultiContract<SparseTensor<T, I>> for DenseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
 
-    fn multi_contract(&self, other: &SparseTensor<T, I>) -> Option<Self::LCM> {
+    fn multi_contract(&self, other: &SparseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         // println!("multi contract dense sparse");
         let zero = self.data[0].try_upgrade().unwrap().as_ref().ref_zero();
         let (permutation, self_matches, other_matches) =
@@ -725,10 +793,10 @@ where
                     if let Some((a, (neg, _))) = fiber_a.by_ref().nth(skip) {
                         if neg {
                             result_data[result_index]
-                                .sub_assign_fallible(a.mul_fallible(b).unwrap());
+                                .sub_assign_fallible(&a.mul_fallible(b).unwrap());
                         } else {
                             result_data[result_index]
-                                .add_assign_fallible(a.mul_fallible(b).unwrap());
+                                .add_assign_fallible(&a.mul_fallible(b).unwrap());
                         }
                     }
                 }
@@ -743,20 +811,25 @@ where
             structure: final_structure,
         };
 
-        Some(result)
+        Ok(result)
     }
 }
 
 impl<T, U, I, O> SingleContract<SparseTensor<T, I>> for SparseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = SparseTensor<U::Out, I>;
 
-    fn single_contract(&self, other: &SparseTensor<T, I>, i: usize, j: usize) -> Option<Self::LCM> {
+    fn single_contract(
+        &self,
+        other: &SparseTensor<T, I>,
+        i: usize,
+        j: usize,
+    ) -> Result<Self::LCM, ContractionError> {
         // println!("single contract sparse sparse");
 
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
@@ -795,9 +868,9 @@ where
                             items = a.zip(Some((b, skip_b)));
                         } else {
                             if metric[skip_a] {
-                                value.sub_assign_fallible(a.mul_fallible(b).unwrap());
+                                value.sub_assign_fallible(&a.mul_fallible(b).unwrap());
                             } else {
-                                value.add_assign_fallible(a.mul_fallible(b).unwrap());
+                                value.add_assign_fallible(&a.mul_fallible(b).unwrap());
                             }
                             let b = fiber_b
                                 .by_ref()
@@ -825,20 +898,20 @@ where
             structure: final_structure,
         };
 
-        Some(result)
+        Ok(result)
     }
 }
 
 impl<T, U, I, O> MultiContract<SparseTensor<T, I>> for SparseTensor<U, I>
 where
     U: ContractableWith<T, Out = O>,
-    T: ContractableWith<U, Out = O>,
+    // T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = SparseTensor<U::Out, I>;
 
-    fn multi_contract(&self, other: &SparseTensor<T, I>) -> Option<Self::LCM> {
+    fn multi_contract(&self, other: &SparseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         // println!("multi contract sparse sparse");
         let (permutation, self_matches, other_matches) =
             self.structure().match_indices(other.structure()).unwrap();
@@ -882,9 +955,9 @@ where
                         } else {
                             // println!("v{:?}", value);
                             if neg {
-                                value.sub_assign_fallible(a.mul_fallible(b).unwrap());
+                                value.sub_assign_fallible(&a.mul_fallible(b).unwrap());
                             } else {
-                                value.add_assign_fallible(a.mul_fallible(b).unwrap());
+                                value.add_assign_fallible(&a.mul_fallible(b).unwrap());
                             }
                             let b = fiber_b
                                 .by_ref()
@@ -912,7 +985,7 @@ where
             structure: final_structure,
         };
 
-        Some(result)
+        Ok(result)
     }
 }
 
@@ -921,20 +994,16 @@ where
     U: ContractableWith<T, Out = O>,
     T: ContractableWith<U, Out = O>,
     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-    I: HasStructure + Clone + StructureContract,
+    I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DataTensor<U::Out, I>;
-    fn contract(&self, other: &DataTensor<T, I>) -> Option<DataTensor<U::Out, I>> {
+    fn contract(&self, other: &DataTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         match (self, other) {
-            (DataTensor::Dense(s), DataTensor::Dense(o)) => Some(DataTensor::Dense(s.contract(o)?)),
-            (DataTensor::Dense(s), DataTensor::Sparse(o)) => {
-                Some(DataTensor::Dense(s.contract(o)?))
-            }
-            (DataTensor::Sparse(s), DataTensor::Dense(o)) => {
-                Some(DataTensor::Dense(s.contract(o)?))
-            }
+            (DataTensor::Dense(s), DataTensor::Dense(o)) => Ok(DataTensor::Dense(s.contract(o)?)),
+            (DataTensor::Dense(s), DataTensor::Sparse(o)) => Ok(DataTensor::Dense(s.contract(o)?)),
+            (DataTensor::Sparse(s), DataTensor::Dense(o)) => Ok(DataTensor::Dense(s.contract(o)?)),
             (DataTensor::Sparse(s), DataTensor::Sparse(o)) => {
-                Some(DataTensor::Sparse(s.contract(o)?))
+                Ok(DataTensor::Sparse(s.contract(o)?))
             }
         }
     }
@@ -942,20 +1011,16 @@ where
 
 impl<I> Contract<NumTensor<I>> for NumTensor<I>
 where
-    I: Clone + HasStructure + StructureContract,
+    I: Clone + TensorStructure + StructureContract,
 {
     type LCM = NumTensor<I>;
-    fn contract(&self, other: &NumTensor<I>) -> Option<Self::LCM> {
+    fn contract(&self, other: &NumTensor<I>) -> Result<Self::LCM, ContractionError> {
         match (self, other) {
-            (NumTensor::Float(a), NumTensor::Float(b)) => Some(NumTensor::Float(a.contract(b)?)),
-            (NumTensor::Float(a), NumTensor::Complex(b)) => {
-                Some(NumTensor::Complex(a.contract(b)?))
-            }
-            (NumTensor::Complex(a), NumTensor::Float(b)) => {
-                Some(NumTensor::Complex(a.contract(b)?))
-            }
+            (NumTensor::Float(a), NumTensor::Float(b)) => Ok(NumTensor::Float(a.contract(b)?)),
+            (NumTensor::Float(a), NumTensor::Complex(b)) => Ok(NumTensor::Complex(a.contract(b)?)),
+            (NumTensor::Complex(a), NumTensor::Float(b)) => Ok(NumTensor::Complex(a.contract(b)?)),
             (NumTensor::Complex(a), NumTensor::Complex(b)) => {
-                Some(NumTensor::Complex(a.contract(b)?))
+                Ok(NumTensor::Complex(a.contract(b)?))
             }
         }
     }

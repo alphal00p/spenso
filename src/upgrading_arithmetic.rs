@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use duplicate::duplicate;
+use ref_ops::RefAdd;
 use std::ops::Mul;
 
 #[cfg(feature = "shadowing")]
@@ -702,8 +703,13 @@ use crate::Complex;
 
 pub trait SmallestUpgrade<T> {
     type LCM;
+    type Order;
     fn upgrade(self) -> Self::LCM;
 }
+
+pub struct LessThan;
+pub struct GreaterThan;
+pub struct Equal;
 
 pub trait TryFromUpgrade<T> {
     fn try_from_upgrade(value: T) -> Option<Self>
@@ -713,16 +719,47 @@ pub trait TryFromUpgrade<T> {
 
 pub trait TrySmallestUpgrade<T> {
     type LCM: Clone;
+    type Order;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>;
 }
 
+// pub trait SmallerThan<T> {}
+// pub trait LargerThan<T> {}
+
+// pub trait Incomparable<T> {}
+
+// impl<T, U> LargerThan<U> for T where U: SmallerThan<T> {}
+
+// impl<T, U> TrySmallestUpgrade<T> for U
+// where
+//     T: TrySmallestUpgrade<U, LCM = U, Order = LessThan>,
+//     U: Clone,
+// {
+//     type LCM = U;
+//     type Order = GreaterThan;
+
+//     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
+//         Some(Cow::Borrowed(self))
+//     }
+// }
+
+// impl<U> TrySmallestUpgrade<U> for U {
+//     type LCM = U;
+//     type Order = Equal;
+
+//     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
+//         Some(Cow::Borrowed(self))
+//     }
+// }
+
 impl<O: Real, U: Real, T: Real> TrySmallestUpgrade<SymbolicaComplex<T>> for SymbolicaComplex<U>
 where
-    U: TrySmallestUpgrade<T, LCM = O>,
-    T: TrySmallestUpgrade<U, LCM = O>,
+    U: TrySmallestUpgrade<T, LCM = O, Order = LessThan>,
+    T: TrySmallestUpgrade<U, LCM = O, Order = GreaterThan>,
 {
     type LCM = SymbolicaComplex<O>;
+    type Order = LessThan;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
     where
@@ -803,14 +840,69 @@ where
 // } can't do this because of future impls GRR.
 
 #[cfg(feature = "shadowing")]
+// duplicate! {
+//     [smaller larger;
+//     [f64] [Atom];
+//     [Atom] [Atom];
+//     [Complex<f64>] [Atom];
+//     [i32] [Atom];]
+// impl TrySmallestUpgrade<smaller> for larger {
+//     type LCM = larger;
+//     type Order = GreaterThan;
+//     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+//         where
+//             Self::LCM: Clone {
+//         Some(Cow::Borrowed(self))
+//     }
+// }
+
+// impl<'a> TrySmallestUpgrade<&'a smaller> for larger {
+//     type LCM = larger;
+//     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+//         where
+//             Self::LCM: Clone {
+//         Some(Cow::Borrowed(self))
+//     }
+// }
+
+// impl<'a,'b> TrySmallestUpgrade<&'a smaller> for &'b larger {
+//     type LCM = larger;
+//     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+//         where
+//             Self::LCM: Clone {
+//         Some(Cow::Borrowed(*self))
+//     }
+// }
+
+// impl<'b> TrySmallestUpgrade<smaller> for &'b larger {
+//     type LCM = larger;
+//     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+//         where
+//             Self::LCM: Clone {
+//         Some(Cow::Borrowed(*self))
+//     }
+// }
+
+// }
+
 duplicate! {
-    [smaller larger;
-[f64] [Atom];
-    [Atom] [Atom];
-    [Complex<f64>] [Atom];
-    [i32] [Atom];]
-impl TrySmallestUpgrade<smaller> for larger {
-    type LCM = larger;
+    [equal;
+    [i8];
+    [i16];
+    [i32];
+    [f64];
+    [Complex<f64>];
+    [Atom];
+    // [f64] [Complex<f64>];
+
+
+    // [f32] [f64];
+    // [i32] [f64];
+    ]
+
+impl TrySmallestUpgrade<equal> for equal {
+    type LCM = equal;
+    type Order = Equal;
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
         where
             Self::LCM: Clone {
@@ -818,83 +910,38 @@ impl TrySmallestUpgrade<smaller> for larger {
     }
 }
 
-impl<'a> TrySmallestUpgrade<&'a smaller> for larger {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-        Some(Cow::Borrowed(self))
-    }
-}
+// impl<'a> TrySmallestUpgrade<&'a equal> for equal {
+//     type LCM = equal;
 
-impl<'a,'b> TrySmallestUpgrade<&'a smaller> for &'b larger {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-        Some(Cow::Borrowed(*self))
-    }
-}
+//     type Order = Equal;
+//     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+//         where
+//             Self::LCM: Clone {
+//         Some(Cow::Borrowed(self))
+//     }
+// }
 
-impl<'b> TrySmallestUpgrade<smaller> for &'b larger {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-        Some(Cow::Borrowed(*self))
-    }
-}
+// impl<'a,'b> TrySmallestUpgrade<&'a equal> for &'b equal {
+//     type LCM = equal;
 
-}
+//     type Order = Equal;
+//     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+//         where
+//             Self::LCM: Clone {
+//         Some(Cow::Borrowed(*self))
+//     }
+// }
 
-duplicate! {
-    [smaller larger;
-    [i8] [i8];
-    [i16] [i16];
-    [i32] [i32];
-    [f64] [f64];
-    [Complex<f64>] [Complex<f64>];
-    [f64] [Complex<f64>];
+// impl<'b> TrySmallestUpgrade<equal> for &'b equal {
+//     type LCM = equal;
 
-
-    [f32] [f64];
-    [i32] [f64];]
-
-impl TrySmallestUpgrade<smaller> for larger {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-        Some(Cow::Borrowed(self))
-    }
-}
-
-impl<'a> TrySmallestUpgrade<&'a smaller> for larger {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-        Some(Cow::Borrowed(self))
-    }
-}
-
-impl<'a,'b> TrySmallestUpgrade<&'a smaller> for &'b larger {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-        Some(Cow::Borrowed(*self))
-    }
-}
-
-impl<'b> TrySmallestUpgrade<smaller> for &'b larger {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-        Some(Cow::Borrowed(*self))
-    }
-}
+//     type Order = Equal;
+//     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+//         where
+//             Self::LCM: Clone {
+//         Some(Cow::Borrowed(*self))
+//     }
+// }
 }
 
 duplicate! {
@@ -904,12 +951,25 @@ duplicate! {
 
 impl TrySmallestUpgrade<larger> for smaller {
     type LCM = larger;
+    type Order = LessThan;
 
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
         where
             Self::LCM: Clone {
         Some(Cow::Owned(larger::from(*self)))
+    }
+}
+
+impl TrySmallestUpgrade<smaller> for larger {
+    type LCM = larger;
+    type Order = GreaterThan;
+
+
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+        where
+            Self::LCM: Clone {
+        Some(Cow::Borrowed(self))
     }
 }
 
@@ -920,6 +980,7 @@ where
     T: num::Zero + Clone,
 {
     type LCM = Complex<T>;
+    type Order = LessThan;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
         let new = Complex::new(self.clone(), T::zero());
@@ -930,6 +991,7 @@ where
 #[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Atom> for f64 {
     type LCM = Atom;
+    type Order = LessThan;
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
         let natrat = symbolica::domains::rational::Rational::from_f64(*self);
         let symrat = Atom::new_num(symbolica::coefficient::Coefficient::from(natrat));
@@ -941,6 +1003,7 @@ impl TrySmallestUpgrade<Atom> for f64 {
 #[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Atom> for i32 {
     type LCM = Atom;
+    type Order = LessThan;
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
         let symnum = Atom::new_num(*self as i32);
 
@@ -951,6 +1014,7 @@ impl TrySmallestUpgrade<Atom> for i32 {
 #[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Atom> for Complex<f64> {
     type LCM = Atom;
+    type Order = LessThan;
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
         let real: Cow<'_, Atom> = <f64 as TrySmallestUpgrade<Atom>>::try_upgrade(&self.re)?;
         let imag: Cow<'_, Atom> = <f64 as TrySmallestUpgrade<Atom>>::try_upgrade(&self.im)?;
@@ -965,70 +1029,26 @@ impl TrySmallestUpgrade<Atom> for Complex<f64> {
 duplicate! {
 [smaller larger;
 [f64] [Atom];
+[f64] [Complex<f64>];
 [i32] [Atom];
 [Complex<f64>] [Atom];]
 
-impl<'a> TrySmallestUpgrade<&'a larger> for smaller {
+impl TrySmallestUpgrade<smaller> for larger {
     type LCM = larger;
+    type Order = GreaterThan;
+
+
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
         where
             Self::LCM: Clone {
-        <smaller as TrySmallestUpgrade<larger>>::try_upgrade(self)
+        Some(Cow::Borrowed(self))
     }
 }
 
-impl<'a,'b> TrySmallestUpgrade<&'a larger> for &'b smaller {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-       <smaller as TrySmallestUpgrade<larger>>::try_upgrade(*self)
-    }}
-
-impl<'b> TrySmallestUpgrade<larger> for &'b smaller {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-        <smaller as TrySmallestUpgrade<larger>>::try_upgrade(*self)
-    }
-}}
-
-duplicate! {
-    [smaller larger;
-
-    [f64][Complex<f64>];
-    [f32] [f64];
-    [i32] [f64];]
-impl<'a> TrySmallestUpgrade<&'a larger> for smaller {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-        <smaller as TrySmallestUpgrade<larger>>::try_upgrade(self)
-    }
-}
-
-impl<'a,'b> TrySmallestUpgrade<&'a larger> for &'b smaller {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-       <smaller as TrySmallestUpgrade<larger>>::try_upgrade(*self)
-    }}
-
-impl<'b> TrySmallestUpgrade<larger> for &'b smaller {
-    type LCM = larger;
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
-        where
-            Self::LCM: Clone {
-        <smaller as TrySmallestUpgrade<larger>>::try_upgrade(*self)
-    }
-}
 
 }
 
-pub trait FallibleMul<T> {
+pub trait FallibleMul<T = Self> {
     type Output;
     fn mul_fallible(&self, rhs: &T) -> Option<Self::Output>;
 }
@@ -1051,28 +1071,27 @@ where
 
 pub trait FallibleAdd<T> {
     type Output;
-    fn add_fallible(self, rhs: T) -> Option<Self::Output>;
+    fn add_fallible(&self, rhs: &T) -> Option<Self::Output>;
 }
 
-impl<T, U, Out> FallibleAdd<T> for U
+impl<T, U> FallibleAdd<T> for U
 where
-    U: TrySmallestUpgrade<T, LCM = Out>,
-    T: TrySmallestUpgrade<U, LCM = Out>,
-    Out: Clone,
-    for<'a, 'b> &'a Out: std::ops::Add<&'b Out, Output = Out>,
+    U: TrySmallestUpgrade<T>,
+    T: TrySmallestUpgrade<U, LCM = U::LCM>,
+    U::LCM: for<'a> RefAdd<&'a U::LCM, Output = U::LCM> + Clone,
 {
-    type Output = Out;
+    type Output = U::LCM;
 
-    fn add_fallible(self, rhs: T) -> Option<Self::Output> {
+    fn add_fallible(&self, rhs: &T) -> Option<Self::Output> {
         let lhs = self.try_upgrade()?;
         let rhs = rhs.try_upgrade()?;
-        Some(lhs.as_ref() + rhs.as_ref())
+        Some(lhs.as_ref().ref_add(rhs.as_ref()))
     }
 }
 
 pub trait FallibleSub<T> {
     type Output;
-    fn sub_fallible(self, rhs: T) -> Option<Self::Output>;
+    fn sub_fallible(&self, rhs: &T) -> Option<Self::Output>;
 }
 
 impl<T, U> FallibleSub<T> for U
@@ -1084,7 +1103,7 @@ where
 {
     type Output = U::LCM;
 
-    fn sub_fallible(self, rhs: T) -> Option<Self::Output> {
+    fn sub_fallible(&self, rhs: &T) -> Option<Self::Output> {
         let lhs = self.try_upgrade()?;
         let rhs = rhs.try_upgrade()?;
         Some(lhs.as_ref() - rhs.as_ref())
@@ -1092,7 +1111,7 @@ where
 }
 
 pub trait FallibleAddAssign<T = Self> {
-    fn add_assign_fallible(&mut self, rhs: T);
+    fn add_assign_fallible(&mut self, rhs: &T);
 }
 
 impl<T, U> FallibleAddAssign<T> for U
@@ -1102,7 +1121,7 @@ where
     U::LCM: Clone,
     for<'a, 'b> &'a U::LCM: std::ops::Add<&'b U::LCM, Output = U::LCM>,
 {
-    fn add_assign_fallible(&mut self, rhs: T) {
+    fn add_assign_fallible(&mut self, rhs: &T) {
         let lhs = self.try_upgrade().unwrap();
         let rhs = rhs.try_upgrade().unwrap();
         let out = lhs.as_ref() + rhs.as_ref();
@@ -1111,7 +1130,7 @@ where
 }
 
 pub trait FallibleSubAssign<T> {
-    fn sub_assign_fallible(&mut self, rhs: T);
+    fn sub_assign_fallible(&mut self, rhs: &T);
 }
 
 impl<T, U> FallibleSubAssign<T> for U
@@ -1121,7 +1140,7 @@ where
     U::LCM: Clone,
     for<'a, 'b> &'a U::LCM: std::ops::Sub<&'b U::LCM, Output = U::LCM>,
 {
-    fn sub_assign_fallible(&mut self, rhs: T) {
+    fn sub_assign_fallible(&mut self, rhs: &T) {
         let lhs = self.try_upgrade().unwrap();
         let rhs = rhs.try_upgrade().unwrap();
         let out = lhs.as_ref() - rhs.as_ref();
@@ -1148,8 +1167,8 @@ mod test {
         let mut c = a.mul_fallible(&b).unwrap();
         c.add_assign_fallible(&a);
         c.sub_assign_fallible(&b);
-        let d = b.sub_fallible(a);
-        let e = a.add_fallible(b);
+        let d = b.sub_fallible(&a);
+        let e = a.add_fallible(&b);
         assert_eq!(c, 16);
         assert_eq!(d, Some(0));
         assert_eq!(e, Some(8));
@@ -1169,7 +1188,7 @@ mod test {
         assert_eq!(d, Some(16.));
         assert_eq!(e, Some(16.));
 
-        let a = &Atom::parse("a(2)").unwrap();
+        let a = Atom::parse("a(2)").unwrap();
         let b = &Atom::parse("b(1)").unwrap();
 
         let mut f = a.mul_fallible(&4.).unwrap();
@@ -1198,10 +1217,10 @@ mod test {
 
         let g = Complex::new(0.1, 3.);
 
-        let mut h = a.sub_fallible(g).unwrap();
+        let mut h = a.sub_fallible(&g).unwrap();
 
-        h.add_assign_fallible(a);
-        let _f = a.mul_fallible(a);
+        h.add_assign_fallible(&a);
+        let _f = a.mul_fallible(&a);
 
         Atom::default();
 

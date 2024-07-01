@@ -2,12 +2,12 @@ use std::fmt::Debug;
 use std::ops::Neg;
 
 use ahash::{AHashMap, HashMap};
-use spenso::Complex;
 use spenso::{
     ufo::{euclidean_four_vector, gamma},
     AbstractIndex, ContractionCountStructure, FallibleMul, HasStructure, HasTensorData,
     MixedTensor, Representation, SetTensorData, Slot, SparseTensor, TensorNetwork,
 };
+use spenso::{Complex, TensorStructure};
 
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
@@ -25,21 +25,22 @@ fn gamma_net_param(
     let mut contracting_index = 0.into();
     let mut result: Vec<MixedTensor<ContractionCountStructure>> =
         vec![euclidean_four_vector(contracting_index, &vbar).into()];
+    let p = State::get_symbol(&"p");
     for m in minkindices {
         let ui = contracting_index;
         contracting_index += 1.into();
         let uj = contracting_index;
         if *m > 0 {
-            let p: ContractionCountStructure = vec![Slot::from((
+            let ps: ContractionCountStructure = vec![Slot::from((
                 usize::try_from(*m).unwrap().into(),
                 Representation::Lorentz(4.into()),
             ))]
             .into_iter()
             .collect();
             i += 1;
-            let pid = State::get_symbol(&format!("p{}", i));
+            let id = Atom::new_num(i);
 
-            result.push(p.shadow_with(pid).into());
+            result.push(ps.shadow_with(p, &[id]).into());
 
             result.push(gamma(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
         } else {

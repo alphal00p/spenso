@@ -1,10 +1,13 @@
-use ahash::HashMap;
+use ahash::{AHashSet, HashMap};
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
 
-use crate::{Complex, FallibleMul, HasTensorData};
+use crate::{
+    scalar, DataIterator, FallibleAdd, FallibleMul, GetTensorData, HasTensorData, IntoArgs,
+    NamedStructure, TensorStructure,
+};
 #[cfg(feature = "shadowing")]
-use crate::{DataTensor, HistoryStructure, MixedTensor, MixedTensors, Shadowable};
+use crate::{DataTensor, HistoryStructure, MixedTensor, Shadowable};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -13,14 +16,24 @@ use symbolica::{
     state::State,
 };
 
-use symbolica::{domains::rational::Rational, evaluate::EvaluationFn};
+use symbolica::{
+    atom::{self, representation::FunView, AddView, AtomOrView, MulView},
+    domains::rational::Rational,
+    evaluate::EvaluationFn,
+    tensors,
+};
 
 #[cfg(feature = "shadowing")]
 use ahash::AHashMap;
 
-use super::{Contract, HasName, HasStructure, Slot, TracksCount, TrySmallestUpgrade};
+use super::{Contract, HasName, HasStructure, Slot, TracksCount};
 use smartstring::alias::String;
-use std::fmt::{Debug, Display};
+use std::{
+    f32::consts::E,
+    fmt::{Debug, Display},
+};
+
+use anyhow::anyhow;
 
 new_key_type! {
     pub struct NodeId;
@@ -80,8 +93,11 @@ impl<N, E> HalfEdgeGraph<N, E> {
         }
     }
 
-    fn dot(&self) -> std::string::String {
-        let mut out = "graph {".to_string();
+    fn dot(&self) -> std::string::String
+    where
+        E: Display,
+    {
+        let mut out = "graph {\n".to_string();
         out.push_str("  node [shape=circle,height=0.1,label=\"\"];  overlap=\"scale\";");
 
         // for (i, n) in &self.nodes {
@@ -91,20 +107,22 @@ impl<N, E> HalfEdgeGraph<N, E> {
             match i.cmp(&self.involution[i]) {
                 std::cmp::Ordering::Greater => {
                     out.push_str(&format!(
-                        "\n {} -- {}",
+                        "\n {} -- {} [label=\" {} \"];",
                         self.nodemap[i].data().as_ffi(),
-                        self.nodemap[self.involution[i]].data().as_ffi()
+                        self.nodemap[self.involution[i]].data().as_ffi(),
+                        self.edges[i]
                     ));
                 }
                 std::cmp::Ordering::Equal => {
                     out.push_str(&format!(
-                        "ext{} [shape=none, label=\"\"];",
+                        " \n ext{} [shape=none, label=\"\"];",
                         i.data().as_ffi()
                     ));
                     out.push_str(&format!(
-                        "\n {} -- ext{};",
+                        "\n {} -- ext{} [label =\" {}\"];",
                         self.nodemap[i].data().as_ffi(),
-                        i.data().as_ffi()
+                        i.data().as_ffi(),
+                        self.edges[i]
                     ));
                 }
                 _ => {}
@@ -500,10 +518,10 @@ fn merge() {
     // println!("{}", graph.degree(b));
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct TensorNetwork<T, S> {
     pub graph: HalfEdgeGraph<T, Slot>,
-    pub params: Vec<T>,
+    pub params: AHashSet<Atom>,
     pub scalar: Option<S>,
 }
 
@@ -552,7 +570,7 @@ impl<T, S> TensorNetwork<T, S> {
 #[cfg(feature = "shadowing")]
 impl<N> TensorNetwork<MixedTensor<N>, Atom>
 where
-    N: Debug + HasStructure,
+    N: Debug + TensorStructure,
 {
     #[cfg(feature = "shadowing")]
     pub fn to_symbolic_tensor_vec(mut self) -> Vec<DataTensor<Atom, N>> {
@@ -614,36 +632,28 @@ where
 
     pub fn to_fully_parametric(self) -> TensorNetwork<DataTensor<Atom, N>, Atom>
     where
-        N: HasStructure + Clone,
+        N: TensorStructure + Clone,
     {
         // let largest = self.graph.nodes.values().reduce(|a, b| a.max(b)).unwrap();
         let mut tensors = vec![];
 
         for n in self.graph.nodes.values() {
             tensors.push(match n {
-                MixedTensor::Float(t) => {
-                    <DataTensor<f64, N> as TrySmallestUpgrade<DataTensor<Atom, N>>>::try_upgrade(t)
-                        .unwrap()
-                        .into_owned()
-                }
-                MixedTensor::Complex(t) => <DataTensor<Complex<f64>, N> as TrySmallestUpgrade<
-                    DataTensor<Atom, _>,
-                >>::try_upgrade(t)
-                .unwrap()
-                .into_owned(),
+                MixedTensor::Float(t) => t.try_upgrade::<Atom>().unwrap().into_owned(),
+                MixedTensor::Complex(t) => t.try_upgrade::<Atom>().unwrap().into_owned(),
                 MixedTensor::Symbolic(t) => t.clone(),
             });
         }
 
         TensorNetwork {
             graph: TensorNetwork::<DataTensor<Atom, N>, Atom>::generate_network_graph(tensors),
-            params: Vec::new(),
+            params: AHashSet::new(),
             scalar: self.scalar,
         }
     }
 }
 
-impl<T: HasStructure + Clone> TensorNetwork<DataTensor<Atom, T>, Atom> {
+impl<T: TensorStructure + Clone> TensorNetwork<DataTensor<Atom, T>, Atom> {
     pub fn evaluate<'a, D, F: Fn(&Rational) -> D + Copy>(
         &'a self,
         coeff_map: F,
@@ -677,7 +687,7 @@ where
     fn from(tensors: Vec<T>) -> Self {
         TensorNetwork {
             graph: Self::generate_network_graph(tensors),
-            params: Vec::new(),
+            params: AHashSet::new(),
             scalar: None,
         }
     }
@@ -699,7 +709,7 @@ where
     pub fn new() -> Self {
         TensorNetwork {
             graph: HalfEdgeGraph::new(),
-            params: Vec::new(),
+            params: AHashSet::new(),
             scalar: None,
         }
     }
@@ -758,28 +768,56 @@ where
         }
     }
 }
-impl<T: HasTensorData> TensorNetwork<T, T::Data>
+impl<T: HasTensorData + GetTensorData<GetData = T::Data>> TensorNetwork<T, T::Data>
 where
     T: Clone,
 {
-    pub fn result(&self) -> T::Data {
+    pub fn result(&self) -> Result<T::Data, TensorNetworkError> {
         match self.graph.nodes.len() {
-            0 => self.scalar.clone().unwrap(),
-            1 => self.graph.nodes.iter().next().unwrap().1.clone().data()[0].clone(),
-            _ => panic!("More than one node in the graph"),
+            0 => self
+                .scalar
+                .clone()
+                .ok_or(TensorNetworkError::ScalarFieldEmpty),
+            1 => {
+                let t = self.result_tensor()?;
+                if t.is_scalar() {
+                    Ok(t.get_linear(0.into()).unwrap().clone())
+                } else {
+                    Err(TensorNetworkError::NotScalarOutput)
+                }
+            }
+            _ => Err(TensorNetworkError::MoreThanOneNode),
         }
     }
+}
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum TensorNetworkError {
+    #[error("Cannot contract edge")]
+    CannotContractEdge,
+    #[error("no nodes in the graph")]
+    NoNodes,
+    #[error("more than one node in the graph")]
+    MoreThanOneNode,
+    #[error("is not scalar output")]
+    NotScalarOutput,
+    #[error("scalar field is empty")]
+    ScalarFieldEmpty,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 impl<T, S> TensorNetwork<T, S>
 where
     T: Clone,
 {
-    pub fn result_tensor(&self) -> T {
+    pub fn result_tensor(&self) -> Result<T, TensorNetworkError> {
         match self.graph.nodes.len() {
-            0 => panic!("No nodes in the graph"),
-            1 => self.graph.nodes.iter().next().unwrap().1.clone(),
-            _ => panic!("More than one node in the graph"),
+            0 => Err(TensorNetworkError::NoNodes),
+            1 => Ok(self.graph.nodes.iter().next().unwrap().1.clone()),
+            _ => Err(TensorNetworkError::MoreThanOneNode),
         }
     }
 }
@@ -793,30 +831,129 @@ impl<T, S> TensorNetwork<T, S> {
 #[cfg(feature = "shadowing")]
 impl<I> TensorNetwork<MixedTensor<I>, Atom>
 where
-    I: HasStructure + Clone,
+    I: TensorStructure + Clone + Debug,
 {
     pub fn generate_params(&mut self) {
         for (_i, n) in &self.graph.nodes {
             if n.is_symbolic() {
-                self.params.push(n.clone());
+                let n = n.try_as_symbolic().unwrap().try_as_dense().unwrap();
+                for (_, a) in n.iter_flat() {
+                    self.params.insert(a.clone());
+                }
             }
         }
     }
 }
 
-#[cfg(feature = "shadowing")]
-impl<T, S> TensorNetwork<T, S>
-where
-    T: HasStructure<Structure = HistoryStructure<Symbol>> + Clone,
+impl<'a> TryFrom<MulView<'a>>
+    for TensorNetwork<MixedTensor<NamedStructure<Symbol, Vec<Atom>>>, Atom>
 {
-    pub fn symbolic_shadow(&mut self, name: &str) -> TensorNetwork<MixedTensors, S> {
+    type Error = TensorNetworkError;
+    fn try_from(value: MulView<'a>) -> Result<Self, Self::Error> {
+        let mut network: Self = TensorNetwork::new();
+        let mut scalars = Atom::new_num(1);
+        for arg in value.iter() {
+            let mut net = Self::try_from(arg)?;
+            net.contract();
+            if let Some(ref s) = net.scalar {
+                scalars = &scalars * s;
+            }
+            match net.result_tensor() {
+                Ok(t) => {
+                    network.push(t);
+                }
+                Err(TensorNetworkError::NoNodes) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        network.scalar_mul(scalars);
+        Ok(network)
+    }
+}
+
+impl<'a> TryFrom<AtomView<'a>>
+    for TensorNetwork<MixedTensor<NamedStructure<Symbol, Vec<Atom>>>, Atom>
+{
+    type Error = TensorNetworkError;
+    fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
+        match value {
+            AtomView::Mul(m) => m.try_into(),
+            AtomView::Fun(f) => f.try_into(),
+            AtomView::Add(a) => a.try_into(),
+            a => {
+                let mut network: Self = TensorNetwork::new();
+                let a = a.to_owned();
+                network.scalar = Some(a);
+                Ok(network)
+            }
+        }
+    }
+}
+
+impl<'a> TryFrom<FunView<'a>>
+    for TensorNetwork<MixedTensor<NamedStructure<Symbol, Vec<Atom>>>, Atom>
+{
+    type Error = TensorNetworkError;
+    fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
+        let mut network: Self = TensorNetwork::new();
+        let s: Result<NamedStructure<_, _>, _> = value.try_into();
+
+        let mut scalar = None;
+        if let Ok(s) = s {
+            let t = s
+                .to_shell()
+                .smart_shadow()
+                .ok_or(anyhow!("Cannot shadow"))?;
+            network.push(t);
+        } else {
+            scalar = Some(value.as_view().to_owned());
+        }
+        network.scalar = scalar;
+        Ok(network)
+    }
+}
+
+impl<'a> TryFrom<AddView<'a>>
+    for TensorNetwork<MixedTensor<NamedStructure<Symbol, Vec<Atom>>>, Atom>
+{
+    type Error = TensorNetworkError;
+    fn try_from(value: AddView<'a>) -> Result<Self, Self::Error> {
+        let mut tensors = vec![];
+        let mut scalars = Atom::new_num(0);
+        for summand in value.iter() {
+            let mut net = Self::try_from(summand)?;
+            net.contract();
+            if let Some(ref s) = net.scalar {
+                scalars = &scalars + s;
+            }
+            match net.result_tensor() {
+                Ok(t) => {
+                    tensors.push(t);
+                }
+                Err(TensorNetworkError::NoNodes) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        let mut net = TensorNetwork::from(vec![tensors
+            .into_iter()
+            .reduce(|a, b| a.add_fallible(&b).unwrap())
+            .unwrap()]);
+        net.scalar = Some(scalars);
+        Ok(net)
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<T, S, I> TensorNetwork<T, S>
+where
+    T: HasStructure<Structure = I> + Clone + HasName<Name = Symbol>,
+    I: TensorStructure + Clone,
+    T::Args: IntoArgs,
+{
+    pub fn symbolic_shadow(&mut self, name: &str) -> TensorNetwork<MixedTensor<I>, S> {
         {
             for (i, n) in &mut self.graph.nodes {
-                n.mut_structure().set_name(&State::get_symbol(format!(
-                    "{}{}",
-                    name,
-                    i.data().as_ffi()
-                )));
+                n.set_name(State::get_symbol(format!("{}{}", name, i.data().as_ffi())));
             }
         }
 
@@ -827,14 +964,16 @@ where
         let mut nodes = DenseSlotMap::with_key();
         let mut nodemap = SecondaryMap::new();
         let mut reverse_nodemap = SecondaryMap::new();
-        let mut params = Vec::new();
+        let mut params = AHashSet::new();
 
         for (i, n) in &self.graph.nodes {
-            let node = n.structure().clone().shadow().unwrap();
+            let node = n.shadow().unwrap();
 
-            let nid = nodes.insert(MixedTensor::<HistoryStructure<Symbol>>::from(node.clone()));
+            let nid = nodes.insert(MixedTensor::<I>::from(node.clone()));
 
-            params.push(node.into());
+            for (_, a) in node.flat_iter() {
+                params.insert(a.clone());
+            }
             let mut first = true;
             for e in self.graph.edges_incident(i) {
                 if first {
@@ -873,7 +1012,7 @@ where
         T::Name: From<std::string::String> + Display,
     {
         for (id, n) in &mut self.graph.nodes {
-            n.set_name(&format!("{}{}", name, id.data().as_ffi()).into());
+            n.set_name(format!("{}{}", name, id.data().as_ffi()).into());
         }
     }
 }
@@ -885,11 +1024,7 @@ where
 {
     pub fn namesym(&mut self, name: &str) {
         for (id, n) in &mut self.graph.nodes {
-            n.set_name(&State::get_symbol(format!(
-                "{}{}",
-                name,
-                id.data().as_ffi()
-            )));
+            n.set_name(State::get_symbol(format!("{}{}", name, id.data().as_ffi())));
         }
     }
 }
@@ -919,5 +1054,26 @@ where
 
     pub fn contract(&mut self) {
         self.contract_algo(Self::edge_to_min_degree_node)
+    }
+}
+
+pub struct Levels<T, S: TensorStructure> {
+    pub levels: Vec<TensorNetwork<DataTensor<Atom, S>, Atom>>,
+    const_map: AHashMap<AtomOrView<'static>, T>,
+    params: Vec<Atom>,
+}
+
+
+impl<T, S> From<TensorNetwork<DataTensor<Atom, S>, Atom>> for Levels<T, S>
+where
+    T: Clone,
+    S: TensorStructure,
+{
+    fn from(t: TensorNetwork<DataTensor<Atom, S>, Atom>) -> Self {
+        Levels {
+            levels: vec![t],
+            const_map: AHashMap::new(),
+            params: vec![],
+        }
     }
 }

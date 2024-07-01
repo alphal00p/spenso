@@ -22,7 +22,7 @@ use spenso::{
         euclidean_four_vector_sym, gammasym, mink_four_vector_sym, param_euclidean_four_vector,
         param_mink_four_vector,
     },
-    AbstractIndex, HasTensorData, HistoryStructure, IntoId, NumTensor, TensorNetwork,
+    AbstractIndex, HasTensorData, HistoryStructure, IntoSymbol, NumTensor, TensorNetwork,
 };
 
 // #[allow(dead_code)]
@@ -183,13 +183,13 @@ fn gamma_net_param(
     let mut i = 0;
     let mut contracting_index: AbstractIndex = 0.into();
     let mut result: Vec<MixedTensor<HistoryStructure<Symbol>>> =
-        vec![param_euclidean_four_vector(contracting_index, "vbar".into_id()).into()];
+        vec![param_euclidean_four_vector(contracting_index, "vbar".into_symbol()).into()];
     for m in minkindices {
         let ui = contracting_index;
         contracting_index += 1.into();
         let uj = contracting_index;
         if *m > 0 {
-            let pname = format!("p{}", i).into_id();
+            let pname = format!("p{}", i).into_symbol();
             i += 1;
             result.push(param_mink_four_vector(usize::try_from(*m).unwrap().into(), pname).into());
             result.push(gammasym(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
@@ -203,7 +203,7 @@ fn gamma_net_param(
             );
         }
     }
-    result.push(param_euclidean_four_vector(contracting_index, "u".into_id()).into());
+    result.push(param_euclidean_four_vector(contracting_index, "u".into_symbol()).into());
     TensorNetwork::from(result)
 }
 

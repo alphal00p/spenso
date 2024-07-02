@@ -112,6 +112,8 @@ fn main() {
         network
             .result_tensor()
             .unwrap()
+            .try_into_concrete()
+            .unwrap()
             .try_into_complex()
             .unwrap()
             .try_into_dense()

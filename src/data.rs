@@ -1,5 +1,6 @@
 use crate::{
-    Complex, ExpandedIndex, FlatIndex, IsZero, IteratableTensor, TensorStructure, TryFromUpgrade,
+    Complex, ExpandedIndex, FlatIndex, HasName, IsZero, IteratableTensor, TensorStructure,
+    TryFromUpgrade,
 };
 
 use super::{
@@ -126,6 +127,25 @@ pub struct SparseTensor<T, I = VecStructure> {
     pub structure: I,
 }
 
+impl<T, S> HasName for SparseTensor<T, S>
+where
+    S: HasName,
+{
+    type Args = S::Args;
+    type Name = S::Name;
+    fn name(&self) -> Option<Self::Name> {
+        self.structure.name()
+    }
+
+    fn id(&self) -> Option<Self::Args> {
+        self.structure.id()
+    }
+
+    fn set_name(&mut self, name: Self::Name) {
+        self.structure.set_name(name);
+    }
+}
+
 impl<T, I> HasTensorData for SparseTensor<T, I>
 where
     T: Clone,
@@ -174,6 +194,20 @@ where
             elements,
             structure: self.structure.clone(),
         }
+    }
+}
+
+impl<T, S> Display for SparseTensor<T, S>
+where
+    T: Display,
+    S: TensorStructure,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+        for (i, v) in self.iter_expanded() {
+            s.push_str(&format!("{}: {}\n", i, v));
+        }
+        write!(f, "{}", s)
     }
 }
 
@@ -443,6 +477,25 @@ where
 {
     fn contractions_num(&self) -> usize {
         self.structure.contractions_num()
+    }
+}
+
+impl<T, S> HasName for DenseTensor<T, S>
+where
+    S: HasName,
+{
+    type Args = S::Args;
+    type Name = S::Name;
+    fn name(&self) -> Option<Self::Name> {
+        self.structure.name()
+    }
+
+    fn id(&self) -> Option<Self::Args> {
+        self.structure.id()
+    }
+
+    fn set_name(&mut self, name: Self::Name) {
+        self.structure.set_name(name);
     }
 }
 
@@ -813,6 +866,15 @@ where
     }
 }
 
+impl<T: Display, S: TensorStructure> Display for DataTensor<T, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataTensor::Dense(d) => write!(f, "{}", d),
+            DataTensor::Sparse(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 impl<T, I> TracksCount for DataTensor<T, I>
 where
     I: TracksCount,
@@ -827,6 +889,33 @@ where
     }
 }
 
+impl<T, S> HasName for DataTensor<T, S>
+where
+    S: HasName + TensorStructure,
+{
+    type Args = S::Args;
+    type Name = S::Name;
+    fn name(&self) -> Option<Self::Name> {
+        match self {
+            DataTensor::Dense(d) => d.name(),
+            DataTensor::Sparse(s) => s.name(),
+        }
+    }
+
+    fn id(&self) -> Option<Self::Args> {
+        match self {
+            DataTensor::Dense(d) => d.id(),
+            DataTensor::Sparse(s) => s.id(),
+        }
+    }
+
+    fn set_name(&mut self, name: Self::Name) {
+        match self {
+            DataTensor::Dense(d) => d.set_name(name),
+            DataTensor::Sparse(s) => s.set_name(name),
+        }
+    }
+}
 impl<U, I> DataTensor<U, I>
 where
     I: TensorStructure + Clone,

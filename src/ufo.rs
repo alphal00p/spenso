@@ -81,7 +81,7 @@ where
 {
     assert!(structure.order() == 2, "Identity tensor must be rank 2");
 
-    println!("{:?}", structure.reps());
+    // println!("{:?}", structure.reps());
 
     assert!(
         Dimension::from(structure.reps()[0]) == Dimension::from(structure.reps()[1]),

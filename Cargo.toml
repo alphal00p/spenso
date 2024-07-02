@@ -35,6 +35,11 @@ name = "evaluate_net"
 harness = false
 required-features = ["shadowing"]
 
+[[bench]]
+name = "3LphotonsPhysical"
+harness = false
+required-features = ["shadowing"]
+
 
 [[example]]
 name = "evaluate_network"
@@ -48,6 +53,7 @@ anyhow = { version = "1.0.86", features = ["backtrace"] }
 bitvec = { version = "1.0.1", features = ["serde"] }
 delegate = "0.12.0"
 derive_more = "0.99.17"
+disjoint_impls = "0.7.1"
 duplicate = "1.0.0"
 enum-try-as-inner = "0.1.1"
 gat-lending-iterator = "0.1.5"

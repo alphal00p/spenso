@@ -61,7 +61,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .map(|(k, &v)| (k.as_view(), v.into()))
         .collect();
 
-    group.bench_function("Evaluate_net", |b| {
+    group.bench_function("3LPhysical", |b| {
         b.iter_batched(
             || network.clone(),
             |mut network| {

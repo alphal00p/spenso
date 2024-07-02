@@ -179,11 +179,12 @@ fn defered_chain(
 #[cfg(feature = "shadowing")]
 fn gamma_net_param(
     minkindices: &[i32],
-) -> TensorNetwork<MixedTensor<HistoryStructure<Symbol>>, Atom> {
+) -> TensorNetwork<MixedTensor<f64, HistoryStructure<Symbol>>, Atom> {
     let mut i = 0;
     let mut contracting_index: AbstractIndex = 0.into();
-    let mut result: Vec<MixedTensor<HistoryStructure<Symbol>>> =
-        vec![param_euclidean_four_vector(contracting_index, "vbar".into_symbol()).into()];
+    let mut result: Vec<MixedTensor<f64, HistoryStructure<Symbol>>> = vec![MixedTensor::param(
+        param_euclidean_four_vector(contracting_index, "vbar".into_symbol()).into(),
+    )];
     for m in minkindices {
         let ui = contracting_index;
         contracting_index += 1.into();
@@ -191,7 +192,9 @@ fn gamma_net_param(
         if *m > 0 {
             let pname = format!("p{}", i).into_symbol();
             i += 1;
-            result.push(param_mink_four_vector(usize::try_from(*m).unwrap().into(), pname).into());
+            result.push(MixedTensor::param(
+                param_mink_four_vector(usize::try_from(*m).unwrap().into(), pname, None).into(),
+            ));
             result.push(gammasym(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
         } else {
             result.push(
@@ -203,7 +206,9 @@ fn gamma_net_param(
             );
         }
     }
-    result.push(param_euclidean_four_vector(contracting_index, "u".into_symbol()).into());
+    result.push(MixedTensor::param(
+        param_euclidean_four_vector(contracting_index, "u".into_symbol()).into(),
+    ));
     TensorNetwork::from(result)
 }
 
@@ -295,7 +300,14 @@ fn main() {
         // [Complex { re: 5.3418526123694e16, im: -136854212797684.0 }] for 20, 24
         println!(
             "Result: {:?}",
-            chain.result_tensor().try_as_complex().unwrap().data()
+            chain
+                .result_tensor()
+                .unwrap()
+                .try_into_concrete()
+                .unwrap()
+                .try_into_complex()
+                .unwrap()
+                .data()
         );
     }
 

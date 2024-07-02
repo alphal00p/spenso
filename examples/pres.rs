@@ -3,12 +3,13 @@ use std::ops::Neg;
 use spenso::{
     ufo::{euclidean_four_vector_sym, gammasym, mink_four_vector_sym, param_mink_four_vector},
     AbstractIndex, Complex, Contract, Dimension, FallibleMul, HistoryStructure, MixedTensor,
-    NamedStructure, NumTensor, Representation, Shadowable, Slot, SymbolicTensor, TensorNetwork,
+    NamedStructure, NumTensor, ParamOrConcrete, RealOrComplexTensor, Representation, Shadowable,
+    Slot, SymbolicTensor, TensorNetwork, TensorStructure,
 };
 
 use num::ToPrimitive;
 
-use symbolica::atom::Symbol;
+use symbolica::atom::{Atom, Symbol};
 
 fn gamma_net_sym(
     minkindices: &[i32],
@@ -95,13 +96,13 @@ fn main() {
     let j = Slot::from((AbstractIndex(2), spina));
     let k = Slot::from((9.into(), spin));
 
-    let structure = NamedStructure::from_slots(vec![mu, i, j], "γ");
-    let p_struct = NamedStructure::from_slots(vec![mu], "p");
-    let t_struct = NamedStructure::from_slots(vec![i, j, k], "T");
+    let structure: NamedStructure<&str, ()> = NamedStructure::from_iter(vec![mu, i, j], "γ", None);
+    let p_struct: NamedStructure<&str, ()> = NamedStructure::from_iter(vec![mu], "p", None);
+    let t_struct: NamedStructure<&str, ()> = NamedStructure::from_iter(vec![i, j, k], "T", None);
 
-    let gamma_sym = SymbolicTensor::from_named(&structure).unwrap();
-    let p_sym = SymbolicTensor::from_named(&p_struct).unwrap();
-    let t_sym = SymbolicTensor::from_named(&t_struct).unwrap();
+    let gamma_sym = SymbolicTensor::from_named(&structure.to_shell()).unwrap();
+    let p_sym = SymbolicTensor::from_named(&p_struct.to_shell()).unwrap();
+    let t_sym = SymbolicTensor::from_named(&t_struct.to_shell()).unwrap();
 
     let f = gamma_sym
         .contract(&p_sym)
@@ -111,7 +112,7 @@ fn main() {
 
     println!("{}", *f.get_atom());
 
-    let _a: TensorNetwork<MixedTensor, _> = f.to_network().unwrap();
+    let _a = f.to_network().unwrap();
 
     // println!("{}", a.dot());
 
@@ -119,15 +120,19 @@ fn main() {
 
     // let γ2: MixedTensor<_> = gamma(10.into(), (2.into(), 3.into())).into();
 
-    let _p1: MixedTensor<_> = param_mink_four_vector(1.into(), "p1").into();
+    // let _p1 = MixedTensor::param(param_mink_four_vector(1.into(), "p1", None).into());
 
-    let u: MixedTensor<_> = NamedStructure::new(
-        &[(1.into(), Representation::SpinFundamental(4.into()))],
-        "u",
-    )
-    .shadow()
-    .unwrap()
-    .into();
+    let u: MixedTensor<f64, NamedStructure<_, ()>> = MixedTensor::param(
+        NamedStructure::from_iter(
+            [(1.into(), Representation::SpinFundamental(4.into()))],
+            "u",
+            None,
+        )
+        .to_shell()
+        .shadow()
+        .unwrap()
+        .into(),
+    );
 
-    println!("{}", u.to_symbolic().unwrap());
+    println!("{}", u.try_into_parametric().unwrap());
 }

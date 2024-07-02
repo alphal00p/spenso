@@ -7,7 +7,7 @@ use spenso::{
 };
 use spenso::{Complex, TensorStructure};
 
-use ahash::{AHashMap, HashMap};
+use ahash::{AHashMap, AHashSet, HashMap};
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use rand::{distributions::Uniform, Rng, SeedableRng};
@@ -34,10 +34,10 @@ fn gamma_net_param(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
-) -> TensorNetwork<MixedTensor<ContractionCountStructure>, Atom> {
+) -> TensorNetwork<MixedTensor<f64, ContractionCountStructure>, Atom> {
     let mut i: i32 = 0;
     let mut contracting_index = 0.into();
-    let mut result: Vec<MixedTensor<ContractionCountStructure>> =
+    let mut result: Vec<MixedTensor<f64, ContractionCountStructure>> =
         vec![euclidean_four_vector(contracting_index, &vbar).into()];
     let p = State::get_symbol(&"p");
     for m in minkindices {
@@ -54,7 +54,7 @@ fn gamma_net_param(
             i += 1;
             let id = Atom::new_num(i);
 
-            result.push(ps.shadow_with(p, &[id]).into());
+            result.push(MixedTensor::param(ps.shadow_with(p, &[id]).into()));
 
             result.push(gamma(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
         } else {
@@ -95,21 +95,21 @@ where
     tensor
 }
 
-fn const_map_gen<'a, 'b, I>(
-    params: &'a [MixedTensor<I>],
+fn const_map_gen<'a, 'b>(
+    params: &'a AHashSet<Atom>,
     const_map: &mut HashMap<AtomView<'b>, symbolica::domains::float::Complex<f64>>,
 ) where
     'a: 'b,
-    I: HasStructure + Clone + Debug,
 {
-    #[allow(clippy::unused_enumerate_index)]
+    let mut rng: Xoroshiro64Star = Xoroshiro64Star::from_entropy();
+    let multipliable = Uniform::new(1., 10.);
+
     for (_i, p) in params.iter().enumerate() {
-        let pdata = test_tensor(p.structure().clone()).to_dense();
-        p.try_as_symbolic()
-            .unwrap()
-            .try_as_dense()
-            .unwrap()
-            .append_const_map(&pdata, const_map);
+        let p = p.as_view();
+        const_map.insert(
+            p,
+            Complex::<f64>::new(rng.sample(multipliable), rng.sample(multipliable)).into(),
+        );
     }
 }
 fn criterion_benchmark(c: &mut Criterion) {
@@ -132,6 +132,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut net = gamma_net_param(&minkindices, vbar, u);
     net.generate_params();
     let params = net.params.clone();
+
     println!("{:?}", params.len());
     net.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(2));
     let mut const_map = AHashMap::new();

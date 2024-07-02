@@ -1,15 +1,18 @@
 extern crate derive_more;
 use anyhow::anyhow;
 use derive_more::From;
-use std::{fmt::Debug, process::Output};
+use std::{
+    fmt::{Debug, Display},
+    process::Output,
+};
 
 use ahash::{AHashMap, HashMap};
 use enum_try_as_inner::EnumTryAsInner;
 
 use crate::{
     Complex, ContractableWith, ContractionError, FallibleAddAssign, FallibleMul, FallibleSubAssign,
-    Fiber, FiberClass, FiberClassMut, FiberData, FiberMut, FlatIndex, IsZero, IteratableTensor,
-    RefZero, TensorStructure, TrySmallestUpgrade,
+    Fiber, FiberClass, FiberClassMut, FiberData, FiberMut, FlatIndex, HasName, IsZero,
+    IteratableTensor, RefZero, TensorStructure, TrySmallestUpgrade,
 };
 use symbolica::{
     atom::{representation::FunView, Atom, AtomOrView, AtomView, Symbol},
@@ -113,6 +116,47 @@ impl<S: TensorStructure> IteratableTensor for ParamTensor<S> {
     }
 }
 
+impl<S> Display for ParamTensor<S>
+where
+    S: TensorStructure,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParamTensor::Composite(x) => write!(f, "{}", x),
+            ParamTensor::Param(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+impl<S: TensorStructure> HasName for ParamTensor<S>
+where
+    S: HasName,
+{
+    type Args = S::Args;
+    type Name = S::Name;
+
+    fn id(&self) -> Option<Self::Args> {
+        match self {
+            ParamTensor::Composite(x) => x.id(),
+            ParamTensor::Param(x) => x.id(),
+        }
+    }
+
+    fn name(&self) -> Option<Self::Name> {
+        match self {
+            ParamTensor::Composite(x) => x.name(),
+            ParamTensor::Param(x) => x.name(),
+        }
+    }
+
+    fn set_name(&mut self, name: Self::Name) {
+        match self {
+            ParamTensor::Composite(x) => x.set_name(name),
+            ParamTensor::Param(x) => x.set_name(name),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 // #[derive_err(Debug)]
 pub enum ParamOrConcrete<C: HasStructure + Clone, S: TensorStructure> {
@@ -167,6 +211,49 @@ where
         match self {
             ParamOrConcrete::Concrete(x) => x.mut_structure(),
             ParamOrConcrete::Param(x) => x.mut_structure(),
+        }
+    }
+}
+
+impl<C, S> TracksCount for ParamOrConcrete<C, S>
+where
+    C: TracksCount + HasStructure + Clone,
+    S: TensorStructure + TracksCount,
+{
+    fn contractions_num(&self) -> usize {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.contractions_num(),
+            ParamOrConcrete::Param(x) => x.contractions_num(),
+        }
+    }
+}
+
+impl<C, S> HasName for ParamOrConcrete<C, S>
+where
+    C: HasName + HasStructure + Clone,
+    S: TensorStructure + HasName<Name = C::Name, Args = C::Args>,
+{
+    type Args = C::Args;
+    type Name = C::Name;
+
+    fn id(&self) -> Option<Self::Args> {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.id(),
+            ParamOrConcrete::Param(x) => x.id(),
+        }
+    }
+
+    fn name(&self) -> Option<Self::Name> {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.name(),
+            ParamOrConcrete::Param(x) => x.name(),
+        }
+    }
+
+    fn set_name(&mut self, name: Self::Name) {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.set_name(name),
+            ParamOrConcrete::Param(x) => x.set_name(name),
         }
     }
 }
@@ -250,6 +337,49 @@ impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
         match self {
             RealOrComplexTensor::Real(r) => r.mut_structure(),
             RealOrComplexTensor::Complex(r) => r.mut_structure(),
+        }
+    }
+}
+
+impl<T, S> TracksCount for RealOrComplexTensor<T, S>
+where
+    S: TensorStructure + TracksCount,
+    T: Clone,
+{
+    fn contractions_num(&self) -> usize {
+        match self {
+            RealOrComplexTensor::Real(r) => r.contractions_num(),
+            RealOrComplexTensor::Complex(r) => r.contractions_num(),
+        }
+    }
+}
+
+impl<T, S> HasName for RealOrComplexTensor<T, S>
+where
+    S: TensorStructure + HasName,
+    T: Clone,
+{
+    type Args = S::Args;
+    type Name = S::Name;
+
+    fn name(&self) -> Option<S::Name> {
+        match self {
+            RealOrComplexTensor::Real(r) => r.name(),
+            RealOrComplexTensor::Complex(r) => r.name(),
+        }
+    }
+
+    fn set_name(&mut self, name: Self::Name) {
+        match self {
+            RealOrComplexTensor::Real(r) => r.set_name(name),
+            RealOrComplexTensor::Complex(r) => r.set_name(name),
+        }
+    }
+
+    fn id(&self) -> Option<S::Args> {
+        match self {
+            RealOrComplexTensor::Real(r) => r.id(),
+            RealOrComplexTensor::Complex(r) => r.id(),
         }
     }
 }

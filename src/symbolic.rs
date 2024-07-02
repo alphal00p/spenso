@@ -85,8 +85,8 @@ impl SymbolicTensor {
     pub fn to_named(&self) -> NamedStructure<Symbol, Vec<Atom>> {
         NamedStructure {
             structure: self.structure.clone(),
-            global_name: self.name().map(Cow::into_owned),
-            additional_args: self.id().map(Cow::into_owned),
+            global_name: self.name(),
+            additional_args: self.id(),
         }
     }
 
@@ -132,9 +132,9 @@ impl HasName for SymbolicTensor {
     type Name = Symbol;
     type Args = Vec<Atom>;
 
-    fn name(&self) -> Option<Cow<Self::Name>> {
+    fn name(&self) -> Option<Self::Name> {
         if let AtomView::Fun(f) = self.expression.as_view() {
-            Some(std::borrow::Cow::Owned(f.get_symbol()))
+            Some(f.get_symbol())
         } else {
             None
         }
@@ -144,7 +144,7 @@ impl HasName for SymbolicTensor {
         unimplemented!("Cannot set name of a symbolic tensor")
     }
 
-    fn id(&self) -> Option<Cow<Self::Args>> {
+    fn id(&self) -> Option<Self::Args> {
         let mut args = vec![];
         match self.expression.as_view() {
             AtomView::Fun(f) => {
@@ -157,7 +157,7 @@ impl HasName for SymbolicTensor {
                         args.push(arg.to_owned());
                     }
                 }
-                Some(Cow::Owned(args))
+                Some(args)
             }
             _ => None,
         }

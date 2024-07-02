@@ -633,8 +633,26 @@ impl std::fmt::Display for Slot {
 pub trait HasStructure {
     type Structure: TensorStructure;
     type Scalar;
-    fn structure(&self) -> &Self::Structure;
+    fn structure<'a>(&'a self) -> &'a Self::Structure;
     fn mut_structure(&mut self) -> &mut Self::Structure;
+    fn set_structure_name<N>(&mut self, name: N)
+    where
+        Self::Structure: HasName<Name = N>,
+    {
+        self.mut_structure().set_name(name);
+    }
+    fn structure_name(&self) -> Option<<Self::Structure as HasName>::Name>
+    where
+        Self::Structure: HasName,
+    {
+        self.structure().name()
+    }
+    fn structure_id(&self) -> Option<<Self::Structure as HasName>::Args>
+    where
+        Self::Structure: HasName,
+    {
+        self.structure().id()
+    }
     // fn cast_structure<O, S>(self) -> O
     // where
     //     O: HasStructure<Structure = S, Scalar = Self::Scalar>,
@@ -1621,13 +1639,6 @@ impl<N, A> From<VecStructure> for NamedStructure<N, A> {
 }
 
 /// A trait for a structure that has a name
-pub trait HasName {
-    type Name: Clone;
-    type Args: Clone;
-    fn name(&self) -> Option<Cow<Self::Name>>;
-    fn id(&self) -> Option<Cow<Self::Args>>;
-    fn set_name(&mut self, name: Self::Name);
-}
 
 impl<N, A> HasName for NamedStructure<N, A>
 where
@@ -1637,15 +1648,23 @@ where
     type Name = N;
     type Args = A;
 
-    fn name(&self) -> Option<Cow<Self::Name>> {
-        self.global_name.as_ref().map(Cow::Borrowed)
+    fn name(&self) -> Option<Self::Name> {
+        self.global_name.clone()
     }
     fn set_name(&mut self, name: Self::Name) {
         self.global_name = Some(name);
     }
-    fn id(&self) -> Option<Cow<Self::Args>> {
-        self.additional_args.as_ref().map(Cow::Borrowed)
+    fn id(&self) -> Option<Self::Args> {
+        self.additional_args.clone()
     }
+}
+
+pub trait HasName {
+    type Name: Clone;
+    type Args: Clone;
+    fn name(&self) -> Option<Self::Name>;
+    fn id(&self) -> Option<Self::Args>;
+    fn set_name(&mut self, name: Self::Name);
 }
 
 impl<N, A> TensorStructure for NamedStructure<N, A>
@@ -1800,14 +1819,14 @@ where
     type Name = N;
     type Args = A;
 
-    fn name(&self) -> Option<Cow<Self::Name>> {
-        self.global_name.as_ref().map(Cow::Borrowed)
+    fn name(&self) -> Option<Self::Name> {
+        self.global_name.clone()
     }
     fn set_name(&mut self, name: Self::Name) {
         self.global_name = Some(name);
     }
-    fn id(&self) -> Option<Cow<Self::Args>> {
-        self.additional_args.as_ref().map(Cow::Borrowed)
+    fn id(&self) -> Option<Self::Args> {
+        self.additional_args.clone()
     }
 }
 
@@ -1878,7 +1897,7 @@ impl<N, A> StructureContract for SmartShadowStructure<N, A> {
 /// It enables keeping track of the contraction history of the tensor, mostly for debugging and display purposes.
 /// A [`SymbolicTensor`] can also be used in this way, however it needs a symbolica state and workspace during contraction.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct HistoryStructure<Name: IntoSymbol, Args: IntoArgs> {
+pub struct HistoryStructure<Name: IntoSymbol, Args: IntoArgs = ()> {
     internal: VecStructure,
     pub names: AHashMap<Range<usize>, Name>, //ideally this is a named partion.. maybe a btreemap<usize, N>, and the range is from previous to next
     external: NamedStructure<Name, Args>,
@@ -1940,9 +1959,9 @@ where
     type Args = A;
     delegate! {
         to self.external {
-            fn name(&self) -> Option<Cow<Self::Name>>;
+            fn name(&self) -> Option<Self::Name>;
             fn set_name(&mut self, name: Self::Name);
-            fn id(&self) -> Option<Cow<Self::Args>>;
+            fn id(&self) -> Option<Self::Args>;
         }
     }
 }
@@ -2246,6 +2265,26 @@ impl<S: TensorStructure> HasStructure for TensorShell<S> {
     }
 }
 
+impl<S: TensorStructure> HasName for TensorShell<S>
+where
+    S: HasName,
+{
+    type Args = S::Args;
+    type Name = S::Name;
+
+    fn id(&self) -> Option<Self::Args> {
+        self.structure.id()
+    }
+
+    fn name(&self) -> Option<Self::Name> {
+        self.structure.name()
+    }
+
+    fn set_name(&mut self, name: Self::Name) {
+        self.structure.set_name(name);
+    }
+}
+
 // impl<I> HasName for I
 // where
 //     I: HasStructure,
@@ -2259,18 +2298,6 @@ impl<S: TensorStructure> HasStructure for TensorShell<S> {
 //         self.mut_structure().set_name(name);
 //     }
 // }
-
-impl<S: TensorStructure + HasName> HasName for TensorShell<S> {
-    type Name = S::Name;
-    type Args = S::Args;
-    delegate! {
-        to self.structure {
-            fn name(&self) -> Option<Cow<Self::Name>>;
-            fn set_name(&mut self, name: Self::Name);
-            fn id(&self) -> Option<Cow<Self::Args>>;
-        }
-    }
-}
 
 impl<S: TensorStructure> TensorShell<S> {
     pub fn new(structure: S) -> Self {

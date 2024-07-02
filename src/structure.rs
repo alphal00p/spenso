@@ -997,7 +997,7 @@ pub trait TensorStructure {
         }
     }
     #[cfg(feature = "shadowing")]
-    fn to_explicit_rep(self, name: Symbol, args: &[Atom]) -> MixedTensor<Self>
+    fn to_explicit_rep(self, name: Symbol, args: &[Atom]) -> MixedTensor<f64, Self>
     where
         Self: std::marker::Sized + Clone,
     {
@@ -1018,7 +1018,7 @@ pub trait TensorStructure {
             _ if name == proj_p => ufo::proj_p_data(self).into(),
             _ if name == sigma => ufo::sigma_data(self).into(),
             _ if name == metric => ufo::metric_data::<f64, Self>(self).into(),
-            name => self.shadow_with(name, args).into(),
+            name => MixedTensor::param(self.shadow_with(name, args).into()),
         }
     }
 }
@@ -2183,7 +2183,7 @@ pub trait Shadowable: HasStructure + TensorStructure + HasName {
         )
     }
 
-    fn smart_shadow(&self) -> Option<MixedTensor<Self::Structure>>
+    fn smart_shadow(&self) -> Option<MixedTensor<f64, Self::Structure>>
     where
         Self: std::marker::Sized,
         Self::Args: IntoArgs,

@@ -280,7 +280,15 @@ fn construct_dense_tensor() {
     #[cfg(feature = "shadowing")]
     {
         let mixed_tensor: MixedTensor<_> = tensor.clone().into();
-        assert_eq!(mixed_tensor.try_as_float().unwrap().data(), data);
+        assert_eq!(
+            mixed_tensor
+                .try_into_concrete()
+                .unwrap()
+                .try_as_real()
+                .unwrap()
+                .data(),
+            data
+        );
     }
 
     assert_eq!(data_tensor.data(), data);
@@ -304,7 +312,15 @@ fn construct_sparse_tensor() -> Result<(), String> {
     #[cfg(feature = "shadowing")]
     {
         let mixed_tensor: MixedTensor<_> = a.clone().into();
-        assert_eq!(mixed_tensor.try_as_float().unwrap().hashmap(), a.hashmap());
+        assert_eq!(
+            mixed_tensor
+                .try_into_concrete()
+                .unwrap()
+                .try_as_real()
+                .unwrap()
+                .hashmap(),
+            a.hashmap()
+        );
     }
     assert_eq!(
         num_tensor.try_as_float().unwrap().hashmap(),
@@ -1037,6 +1053,8 @@ fn evaluate() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn convert_sym() {
+    use crate::IteratableTensor;
+
     let i = Complex::new(0.0, 1.0);
     let mut data_b = vec![i * Complex::from(5.0), Complex::from(2.6) + i];
     data_b.append(
@@ -1064,7 +1082,9 @@ fn convert_sym() {
     .collect();
 
     assert_eq!(
-        symb.iter().map(|(_, x)| x.clone()).collect::<Vec<_>>(),
+        symb.iter_expanded()
+            .map(|(_, x)| x.clone())
+            .collect::<Vec<_>>(),
         expected_data
     );
 }

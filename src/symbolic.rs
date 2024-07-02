@@ -102,14 +102,14 @@ impl SymbolicTensor {
         &self.expression
     }
 
-    pub fn to_mixed(self) -> MixedTensor<VecStructure> {
+    pub fn to_mixed(self) -> MixedTensor {
         self.smart_shadow().unwrap()
     }
 
     pub fn to_network(
         &self,
     ) -> Result<
-        TensorNetwork<MixedTensor<NamedStructure<Symbol, Vec<Atom>>>, Atom>,
+        TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>,
         TensorNetworkError,
     > {
         self.expression.as_view().try_into()

@@ -1,5 +1,8 @@
-use crate::{ConcreteIndex, GetTensorData, RefZero, SetTensorData, TensorStructure};
-use std::fmt::Debug;
+use crate::{
+    ConcreteIndex, GetTensorData, IsZero, IteratableTensor, ParamTensor, RealOrComplexTensor,
+    RefZero, SetTensorData, SmallestUpgrade, TensorStructure, TrySmallestUpgrade,
+};
+use std::{fmt::Debug, ops::Neg};
 
 use super::{
     DataTensor, DenseTensor, FallibleAdd, FallibleMul, FallibleSub, HasStructure, SparseTensor,
@@ -52,7 +55,7 @@ where
         let structure = self.structure().clone();
 
         let data: Option<Vec<Out>> = self
-            .iter()
+            .iter_expanded()
             .map(|(indices, u)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
@@ -67,9 +70,10 @@ where
 
 impl<'a, T, U, I, Out> FallibleAdd<SparseTensor<T, I>> for DenseTensor<U, I>
 where
-    U: FallibleAdd<T, Output = Out>,
+    U: FallibleAdd<T, Output = Out> + TrySmallestUpgrade<T, LCM = Out>,
     I: TensorStructure + Clone,
-    T: Default + Clone,
+    T: Clone,
+    Out: Clone,
 {
     type Output = DenseTensor<Out, I>;
     fn add_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
@@ -78,12 +82,16 @@ where
         let structure = self.structure().clone();
 
         let data: Option<Vec<Out>> = self
-            .iter()
+            .iter_expanded()
             .map(|(indices, u)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
-                let t = rhs.smart_get(&permuted_indices).unwrap();
-                u.add_fallible(&t)
+                let t = rhs.get(&permuted_indices);
+                if let Ok(t) = t {
+                    u.add_fallible(&t)
+                } else {
+                    Some(u.try_upgrade().unwrap().into_owned())
+                }
             })
             .collect();
 
@@ -95,7 +103,9 @@ impl<'a, T, U, I, Out> FallibleAdd<DenseTensor<T, I>> for SparseTensor<U, I>
 where
     U: FallibleAdd<T, Output = Out>,
     I: TensorStructure + Clone,
-    U: Default + Clone,
+    T: TrySmallestUpgrade<U, LCM = Out>,
+
+    Out: Clone,
 {
     type Output = DenseTensor<Out, I>;
     fn add_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
@@ -104,12 +114,16 @@ where
         let structure = rhs.structure().clone();
 
         let data: Option<Vec<Out>> = rhs
-            .iter()
+            .iter_expanded()
             .map(|(indices, t)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
-                let u = self.smart_get(&permuted_indices).unwrap();
-                u.add_fallible(t)
+                let u = self.get(&permuted_indices);
+                if let Ok(u) = u {
+                    u.add_fallible(t)
+                } else {
+                    Some(t.try_upgrade().unwrap().into_owned())
+                }
             })
             .collect();
 
@@ -119,10 +133,10 @@ where
 
 impl<'a, T, U, I, Out> FallibleAdd<SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: FallibleAdd<T, Output = Out>,
     I: TensorStructure + Clone,
-    T: Default + Clone + Debug,
-    Out: Default + PartialEq + TryFromUpgrade<T>,
+    U: FallibleAdd<T, Output = Out> + TrySmallestUpgrade<T, LCM = Out>,
+    T: Clone + TrySmallestUpgrade<U, LCM = Out>,
+    Out: IsZero + Clone,
 {
     type Output = SparseTensor<Out, I>;
     fn add_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
@@ -130,21 +144,28 @@ where
         let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = self.structure().clone();
         let mut data = SparseTensor::empty(structure);
-        for (indices, u) in self.iter() {
+        for (indices, u) in self.iter_expanded() {
             let permuted_indices: Vec<ConcreteIndex> =
                 permutation.iter().map(|&index| indices[index]).collect();
-            let t = rhs.smart_get(&permuted_indices).unwrap();
+            let t = rhs.get(&permuted_indices);
+            if let Ok(t) = t {
+                data.smart_set(&indices, u.add_fallible(t)?).unwrap();
+            } else {
+                data.smart_set(&indices, u.try_upgrade().unwrap().into_owned())
+                    .unwrap();
+            }
             // println!("{:?}", t);
-            data.smart_set(&indices, u.add_fallible(&t)?).unwrap();
+            // data.smart_set(&indices, u.add_fallible(&t)?).unwrap();
         }
 
         let permutation: Vec<usize> = rhs.structure().find_permutation(self.structure()).unwrap();
-        for (i, t) in rhs.iter() {
+        for (i, t) in rhs.iter_expanded() {
             let permuted_indices: Vec<ConcreteIndex> =
                 permutation.iter().map(|&index| i[index]).collect();
 
             if self.get(&permuted_indices).is_err() {
-                data.smart_set(&i, t.clone().try_into_upgrade()?).unwrap();
+                data.smart_set(&i, t.try_upgrade().unwrap().into_owned())
+                    .unwrap();
             }
         }
 
@@ -152,12 +173,11 @@ where
     }
 }
 
-impl<'a, T, U, Out, I> FallibleAdd<DataTensor<T, I>> for DataTensor<U, I>
+impl<T, U, Out, I> FallibleAdd<DataTensor<T, I>> for DataTensor<U, I>
 where
-    U: FallibleAdd<T, Output = Out>,
-    U: Default + Clone,
-    T: Default + Clone + Debug,
-    Out: Default + PartialEq + TryFromUpgrade<T>,
+    U: FallibleAdd<T, Output = Out> + TrySmallestUpgrade<T, LCM = Out>,
+    T: Clone + TrySmallestUpgrade<U, LCM = Out>,
+    Out: IsZero + Clone,
     I: TensorStructure + Clone,
 {
     type Output = DataTensor<Out, I>;
@@ -179,40 +199,123 @@ where
     }
 }
 
+impl<T: Clone, S: TensorStructure + Clone> FallibleAdd<RealOrComplexTensor<T, S>>
+    for RealOrComplexTensor<T, S>
+where
+    T: FallibleAdd<T, Output = T>
+        + TrySmallestUpgrade<T, LCM = T>
+        + IsZero
+        + Clone
+        + FallibleAdd<Complex<T>, Output = Complex<T>>
+        + TrySmallestUpgrade<Complex<T>, LCM = Complex<T>>,
+    Complex<T>: FallibleAdd<T, Output = Complex<T>>
+        + FallibleAdd<Complex<T>, Output = Complex<T>>
+        + IsZero
+        + TrySmallestUpgrade<Complex<T>, LCM = Complex<T>>
+        + TrySmallestUpgrade<T, LCM = Complex<T>>
+        + Clone,
+{
+    type Output = RealOrComplexTensor<T, S>;
+
+    fn add_fallible(&self, rhs: &RealOrComplexTensor<T, S>) -> Option<Self::Output> {
+        match (self, rhs) {
+            (RealOrComplexTensor::Real(s), RealOrComplexTensor::Real(r)) => {
+                Some(RealOrComplexTensor::Real(s.add_fallible(r)?))
+            }
+            (RealOrComplexTensor::Real(s), RealOrComplexTensor::Complex(r)) => {
+                Some(RealOrComplexTensor::Complex(s.add_fallible(r)?))
+            }
+            (RealOrComplexTensor::Complex(s), RealOrComplexTensor::Real(r)) => {
+                Some(RealOrComplexTensor::Complex(s.add_fallible(r)?))
+            }
+            (RealOrComplexTensor::Complex(s), RealOrComplexTensor::Complex(r)) => {
+                Some(RealOrComplexTensor::Complex(s.add_fallible(r)?))
+            }
+        }
+    }
+}
+
+impl<S: TensorStructure + Clone> FallibleAdd<ParamTensor<S>> for ParamTensor<S> {
+    type Output = ParamTensor<S>;
+    fn add_fallible(&self, rhs: &ParamTensor<S>) -> Option<Self::Output> {
+        match (self, rhs) {
+            (ParamTensor::Composite(s), ParamTensor::Composite(r)) => {
+                Some(ParamTensor::Composite(s.add_fallible(r)?))
+            }
+            (ParamTensor::Composite(s), ParamTensor::Param(r)) => {
+                Some(ParamTensor::Composite(s.add_fallible(r)?))
+            }
+            (ParamTensor::Param(s), ParamTensor::Composite(r)) => {
+                Some(ParamTensor::Composite(s.add_fallible(r)?))
+            }
+            (ParamTensor::Param(s), ParamTensor::Param(r)) => {
+                Some(ParamTensor::Composite(s.add_fallible(r)?))
+            }
+        }
+    }
+}
+
 #[cfg(feature = "shadowing")]
-impl<'a, I> FallibleAdd<MixedTensor<I>> for MixedTensor<I>
+impl<I, T> FallibleAdd<MixedTensor<T, I>> for MixedTensor<T, I>
 where
     I: TensorStructure + Clone,
+    T: FallibleAdd<T, Output = T>
+        + FallibleAdd<Atom, Output = Atom>
+        + TrySmallestUpgrade<T, LCM = T>
+        + IsZero
+        + Clone
+        + FallibleAdd<Complex<T>, Output = Complex<T>>
+        + TrySmallestUpgrade<Complex<T>, LCM = Complex<T>>
+        + TrySmallestUpgrade<Atom, LCM = Atom>,
+    Complex<T>: FallibleAdd<T, Output = Complex<T>>
+        + FallibleAdd<Complex<T>, Output = Complex<T>>
+        + FallibleAdd<Atom, Output = Atom>
+        + IsZero
+        + TrySmallestUpgrade<Complex<T>, LCM = Complex<T>>
+        + TrySmallestUpgrade<T, LCM = Complex<T>>
+        + TrySmallestUpgrade<Atom, LCM = Atom>
+        + Clone,
+    Atom: TrySmallestUpgrade<T, LCM = Atom>
+        + TrySmallestUpgrade<Complex<T>, LCM = Atom>
+        + FallibleAdd<T, Output = Atom>
+        + FallibleAdd<Complex<T>, Output = Atom>,
 {
-    type Output = MixedTensor<I>;
-    fn add_fallible(&self, rhs: &MixedTensor<I>) -> Option<Self::Output> {
+    type Output = MixedTensor<T, I>;
+    fn add_fallible(&self, rhs: &MixedTensor<T, I>) -> Option<Self::Output> {
         match (self, rhs) {
-            (MixedTensor::Float(a), MixedTensor::Float(b)) => {
-                Some(MixedTensor::Float(a.add_fallible(b)?))
+            (MixedTensor::Param(a), MixedTensor::Param(b)) => {
+                Some(MixedTensor::Param(a.add_fallible(b)?))
             }
-            (MixedTensor::Complex(a), MixedTensor::Complex(b)) => {
-                Some(MixedTensor::Complex(a.add_fallible(b)?))
-            }
-            (MixedTensor::Float(a), MixedTensor::Complex(b)) => {
-                Some(MixedTensor::Complex(a.add_fallible(b)?))
-            }
-            (MixedTensor::Complex(a), MixedTensor::Float(b)) => {
-                Some(MixedTensor::Complex(a.add_fallible(b)?))
-            }
-            (MixedTensor::Symbolic(a), MixedTensor::Symbolic(b)) => {
-                Some(MixedTensor::Symbolic(a.add_fallible(b)?))
-            }
-            (MixedTensor::Symbolic(a), MixedTensor::Float(b)) => {
-                Some(MixedTensor::Symbolic(a.add_fallible(b)?))
-            }
-            (MixedTensor::Symbolic(a), MixedTensor::Complex(b)) => {
-                Some(MixedTensor::Symbolic(a.add_fallible(b)?))
-            }
-            (MixedTensor::Float(a), MixedTensor::Symbolic(b)) => {
-                Some(MixedTensor::Symbolic(a.add_fallible(b)?))
-            }
-            (MixedTensor::Complex(a), MixedTensor::Symbolic(b)) => {
-                Some(MixedTensor::Symbolic(a.add_fallible(b)?))
+            (MixedTensor::Param(s), MixedTensor::Concrete(o)) => match (s, o) {
+                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
+                ),
+                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
+                ),
+                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Some(MixedTensor::Param(
+                    ParamTensor::Composite(s.add_fallible(o)?),
+                )),
+                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
+                ),
+            },
+            (MixedTensor::Concrete(s), MixedTensor::Param(o)) => match (o, s) {
+                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
+                ),
+                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
+                ),
+                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Some(MixedTensor::Param(
+                    ParamTensor::Composite(s.add_fallible(o)?),
+                )),
+                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
+                ),
+            },
+            (MixedTensor::Concrete(s), MixedTensor::Concrete(o)) => {
+                Some(MixedTensor::Concrete(s.add_fallible(o)?))
             }
         }
     }
@@ -230,7 +333,7 @@ where
         let structure = self.structure().clone();
 
         let data: Option<Vec<Out>> = self
-            .iter()
+            .iter_expanded()
             .map(|(indices, u)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
@@ -247,6 +350,8 @@ impl<T, U, I, Out> FallibleSub<DenseTensor<T, I>> for SparseTensor<U, I>
 where
     U: FallibleSub<T, Output = Out>,
     I: TensorStructure + Clone,
+    T: TrySmallestUpgrade<U, LCM = Out>,
+    Out: Neg<Output = Out> + Clone,
 {
     type Output = DenseTensor<Out, I>;
     fn sub_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
@@ -255,12 +360,16 @@ where
         let structure = rhs.structure().clone();
 
         let data: Option<Vec<Out>> = rhs
-            .iter()
+            .iter_expanded()
             .map(|(indices, t)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
-                let u = self.get(&permuted_indices).unwrap();
-                u.sub_fallible(t)
+                let u = self.get(&permuted_indices);
+                if let Ok(u) = u {
+                    u.sub_fallible(t)
+                } else {
+                    Some(t.try_upgrade().unwrap().into_owned().neg())
+                }
             })
             .collect();
 
@@ -270,9 +379,10 @@ where
 
 impl<T, U, I, Out> FallibleSub<SparseTensor<T, I>> for DenseTensor<U, I>
 where
-    U: FallibleSub<T, Output = Out>,
+    U: FallibleSub<T, Output = Out> + TrySmallestUpgrade<T, LCM = Out>,
     I: TensorStructure + Clone,
-    T: Default + Clone,
+    T: Clone,
+    Out: Clone,
 {
     type Output = DenseTensor<Out, I>;
     fn sub_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
@@ -281,12 +391,16 @@ where
         let structure = self.structure().clone();
 
         let data: Option<Vec<Out>> = self
-            .iter()
+            .iter_expanded()
             .map(|(indices, u)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
-                let t = rhs.smart_get(&permuted_indices).unwrap();
-                u.sub_fallible(&t)
+                let t = rhs.get(&permuted_indices);
+                if let Ok(t) = t {
+                    u.sub_fallible(&t)
+                } else {
+                    Some(u.try_upgrade().unwrap().into_owned())
+                }
             })
             .collect();
 
@@ -296,11 +410,10 @@ where
 
 impl<T, U, I, Out> FallibleSub<SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: FallibleSub<T, Output = Out>,
+    U: FallibleSub<T, Output = Out> + TrySmallestUpgrade<T, LCM = Out>,
     I: TensorStructure + Clone,
-    T: Default + Clone,
-    U: Default,
-    Out: Default + PartialEq,
+    T: Clone + TrySmallestUpgrade<U, LCM = Out>,
+    Out: IsZero + Clone + Neg<Output = Out>,
 {
     type Output = SparseTensor<Out, I>;
     fn sub_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
@@ -308,19 +421,25 @@ where
         let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = self.structure().clone();
         let mut data = SparseTensor::empty(structure);
-        for (indices, u) in self.iter() {
+        for (indices, u) in self.iter_expanded() {
             let permuted_indices: Vec<ConcreteIndex> =
                 permutation.iter().map(|&index| indices[index]).collect();
-            let t = rhs.smart_get(&permuted_indices).unwrap();
-            data.smart_set(&indices, u.sub_fallible(&t)?).unwrap();
+            let t = rhs.get(&permuted_indices);
+            if let Ok(t) = t {
+                data.smart_set(&indices, u.sub_fallible(t)?).unwrap();
+            } else {
+                data.smart_set(&indices, u.try_upgrade().unwrap().into_owned())
+                    .unwrap();
+            }
         }
         let permutation: Vec<usize> = rhs.structure().find_permutation(self.structure()).unwrap();
-        for (i, t) in rhs.iter() {
+        for (i, t) in rhs.iter_expanded() {
             let permuted_indices: Vec<ConcreteIndex> =
                 permutation.iter().map(|&index| i[index]).collect();
 
             if self.get(&permuted_indices).is_err() {
-                data.smart_set(&i, U::default().sub_fallible(t)?).unwrap();
+                data.smart_set(&i, t.try_upgrade().unwrap().into_owned().neg())
+                    .unwrap();
             }
         }
 
@@ -330,10 +449,9 @@ where
 
 impl<T, U, Out, I> FallibleSub<DataTensor<T, I>> for DataTensor<U, I>
 where
-    U: FallibleSub<T, Output = Out>,
-    U: Default + Clone,
-    T: Default + Clone,
-    Out: Default + PartialEq,
+    U: FallibleSub<T, Output = Out> + TrySmallestUpgrade<T, LCM = Out>,
+    T: Clone + TrySmallestUpgrade<U, LCM = Out>,
+    Out: IsZero + Clone + Neg<Output = Out>,
     I: TensorStructure + Clone,
 {
     type Output = DataTensor<Out, I>;
@@ -355,40 +473,127 @@ where
     }
 }
 
+impl<T: Clone, S: TensorStructure + Clone> FallibleSub<RealOrComplexTensor<T, S>>
+    for RealOrComplexTensor<T, S>
+where
+    T: FallibleSub<T, Output = T>
+        + TrySmallestUpgrade<T, LCM = T>
+        + IsZero
+        + Neg<Output = T>
+        + Clone
+        + FallibleSub<Complex<T>, Output = Complex<T>>
+        + TrySmallestUpgrade<Complex<T>, LCM = Complex<T>>,
+    Complex<T>: FallibleSub<T, Output = Complex<T>>
+        + FallibleSub<Complex<T>, Output = Complex<T>>
+        + IsZero
+        + TrySmallestUpgrade<Complex<T>, LCM = Complex<T>>
+        + TrySmallestUpgrade<T, LCM = Complex<T>>
+        + Neg<Output = Complex<T>>
+        + Clone,
+{
+    type Output = RealOrComplexTensor<T, S>;
+
+    fn sub_fallible(&self, rhs: &RealOrComplexTensor<T, S>) -> Option<Self::Output> {
+        match (self, rhs) {
+            (RealOrComplexTensor::Real(s), RealOrComplexTensor::Real(r)) => {
+                Some(RealOrComplexTensor::Real(s.sub_fallible(r)?))
+            }
+            (RealOrComplexTensor::Real(s), RealOrComplexTensor::Complex(r)) => {
+                Some(RealOrComplexTensor::Complex(s.sub_fallible(r)?))
+            }
+            (RealOrComplexTensor::Complex(s), RealOrComplexTensor::Real(r)) => {
+                Some(RealOrComplexTensor::Complex(s.sub_fallible(r)?))
+            }
+            (RealOrComplexTensor::Complex(s), RealOrComplexTensor::Complex(r)) => {
+                Some(RealOrComplexTensor::Complex(s.sub_fallible(r)?))
+            }
+        }
+    }
+}
+
+impl<S: TensorStructure + Clone> FallibleSub<ParamTensor<S>> for ParamTensor<S> {
+    type Output = ParamTensor<S>;
+    fn sub_fallible(&self, rhs: &ParamTensor<S>) -> Option<Self::Output> {
+        match (self, rhs) {
+            (ParamTensor::Composite(s), ParamTensor::Composite(r)) => {
+                Some(ParamTensor::Composite(s.sub_fallible(r)?))
+            }
+            (ParamTensor::Composite(s), ParamTensor::Param(r)) => {
+                Some(ParamTensor::Composite(s.sub_fallible(r)?))
+            }
+            (ParamTensor::Param(s), ParamTensor::Composite(r)) => {
+                Some(ParamTensor::Composite(s.sub_fallible(r)?))
+            }
+            (ParamTensor::Param(s), ParamTensor::Param(r)) => {
+                Some(ParamTensor::Composite(s.sub_fallible(r)?))
+            }
+        }
+    }
+}
+
 #[cfg(feature = "shadowing")]
-impl<I> FallibleSub<MixedTensor<I>> for MixedTensor<I>
+impl<I, T> FallibleSub<MixedTensor<T, I>> for MixedTensor<T, I>
 where
     I: TensorStructure + Clone,
+    T: FallibleSub<T, Output = T>
+        + FallibleSub<Atom, Output = Atom>
+        + TrySmallestUpgrade<T, LCM = T>
+        + IsZero
+        + Clone
+        + Neg<Output = T>
+        + FallibleSub<Complex<T>, Output = Complex<T>>
+        + TrySmallestUpgrade<Complex<T>, LCM = Complex<T>>
+        + TrySmallestUpgrade<Atom, LCM = Atom>,
+    Complex<T>: FallibleSub<T, Output = Complex<T>>
+        + FallibleSub<Complex<T>, Output = Complex<T>>
+        + FallibleSub<Atom, Output = Atom>
+        + IsZero
+        + Neg<Output = Complex<T>>
+        + TrySmallestUpgrade<Complex<T>, LCM = Complex<T>>
+        + TrySmallestUpgrade<T, LCM = Complex<T>>
+        + TrySmallestUpgrade<Atom, LCM = Atom>
+        + Clone,
+    Atom: TrySmallestUpgrade<T, LCM = Atom>
+        + TrySmallestUpgrade<Complex<T>, LCM = Atom>
+        + FallibleSub<T, Output = Atom>
+        + FallibleSub<Complex<T>, Output = Atom>,
 {
-    type Output = MixedTensor<I>;
-    fn sub_fallible(&self, rhs: &MixedTensor<I>) -> Option<Self::Output> {
+    type Output = MixedTensor<T, I>;
+    fn sub_fallible(&self, rhs: &MixedTensor<T, I>) -> Option<Self::Output> {
         match (self, rhs) {
-            (MixedTensor::Float(a), MixedTensor::Float(b)) => {
-                Some(MixedTensor::Float(a.sub_fallible(b)?))
+            (MixedTensor::Param(a), MixedTensor::Param(b)) => {
+                Some(MixedTensor::Param(a.sub_fallible(b)?))
             }
-            (MixedTensor::Complex(a), MixedTensor::Complex(b)) => {
-                Some(MixedTensor::Complex(a.sub_fallible(b)?))
-            }
-            (MixedTensor::Float(a), MixedTensor::Complex(b)) => {
-                Some(MixedTensor::Complex(a.sub_fallible(b)?))
-            }
-            (MixedTensor::Complex(a), MixedTensor::Float(b)) => {
-                Some(MixedTensor::Complex(a.sub_fallible(b)?))
-            }
-            (MixedTensor::Symbolic(a), MixedTensor::Symbolic(b)) => {
-                Some(MixedTensor::Symbolic(a.sub_fallible(b)?))
-            }
-            (MixedTensor::Symbolic(a), MixedTensor::Float(b)) => {
-                Some(MixedTensor::Symbolic(a.sub_fallible(b)?))
-            }
-            (MixedTensor::Symbolic(a), MixedTensor::Complex(b)) => {
-                Some(MixedTensor::Symbolic(a.sub_fallible(b)?))
-            }
-            (MixedTensor::Float(a), MixedTensor::Symbolic(b)) => {
-                Some(MixedTensor::Symbolic(a.sub_fallible(b)?))
-            }
-            (MixedTensor::Complex(a), MixedTensor::Symbolic(b)) => {
-                Some(MixedTensor::Symbolic(a.sub_fallible(b)?))
+            (MixedTensor::Param(s), MixedTensor::Concrete(o)) => match (s, o) {
+                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
+                ),
+                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
+                ),
+                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Some(MixedTensor::Param(
+                    ParamTensor::Composite(s.sub_fallible(o)?),
+                )),
+                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
+                ),
+            },
+            (MixedTensor::Concrete(s), MixedTensor::Param(o)) => match (o, s) {
+                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
+                ),
+                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
+                ),
+                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Some(MixedTensor::Param(
+                    ParamTensor::Composite(s.sub_fallible(o)?),
+                )),
+                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Some(
+                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
+                ),
+            },
+            (MixedTensor::Concrete(s), MixedTensor::Concrete(o)) => {
+                Some(MixedTensor::Concrete(s.sub_fallible(o)?))
             }
         }
     }
@@ -445,46 +650,91 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<I> ScalarMul<f64> for MixedTensor<I>
+impl<I, T> ScalarMul<T> for MixedTensor<T, I>
 where
     I: TensorStructure + Clone,
+    T: FallibleMul<T, Output = T> + Clone,
+    Atom: FallibleMul<T, Output = Atom>,
+    Complex<T>: FallibleMul<T, Output = Complex<T>>,
 {
-    type Output = MixedTensor<I>;
-    fn scalar_mul(&self, rhs: &f64) -> Option<Self::Output> {
+    type Output = MixedTensor<T, I>;
+    fn scalar_mul(&self, rhs: &T) -> Option<Self::Output> {
         match self {
-            MixedTensor::Float(a) => Some(MixedTensor::Float(a.scalar_mul(rhs)?)),
-            MixedTensor::Complex(a) => Some(MixedTensor::Complex(a.scalar_mul(rhs)?)),
-            MixedTensor::Symbolic(a) => Some(MixedTensor::Symbolic(a.scalar_mul(rhs)?)),
+            MixedTensor::Param(ParamTensor::Composite(a)) => Some(MixedTensor::Param(
+                ParamTensor::Composite(a.scalar_mul(rhs)?),
+            )),
+            MixedTensor::Param(ParamTensor::Param(a)) => Some(MixedTensor::Param(
+                ParamTensor::Composite(a.scalar_mul(rhs)?),
+            )),
+            MixedTensor::Concrete(RealOrComplexTensor::Real(a)) => Some(MixedTensor::Concrete(
+                RealOrComplexTensor::Real(a.scalar_mul(rhs)?),
+            )),
+            MixedTensor::Concrete(RealOrComplexTensor::Complex(a)) => Some(MixedTensor::Concrete(
+                RealOrComplexTensor::Complex(a.scalar_mul(rhs)?),
+            )),
         }
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl<I> ScalarMul<Complex<f64>> for MixedTensor<I>
+impl<I, T> ScalarMul<Complex<T>> for MixedTensor<T, I>
 where
     I: TensorStructure + Clone,
+    T: FallibleMul<Complex<T>, Output = Complex<T>> + Clone,
+    Atom: FallibleMul<Complex<T>, Output = Atom>,
+    Complex<T>: FallibleMul<Complex<T>, Output = Complex<T>>,
 {
-    type Output = MixedTensor<I>;
-    fn scalar_mul(&self, rhs: &Complex<f64>) -> Option<Self::Output> {
+    type Output = MixedTensor<T, I>;
+    fn scalar_mul(&self, rhs: &Complex<T>) -> Option<Self::Output> {
         match self {
-            MixedTensor::Float(a) => Some(MixedTensor::Complex(a.scalar_mul(rhs)?)),
-            MixedTensor::Complex(a) => Some(MixedTensor::Complex(a.scalar_mul(rhs)?)),
-            MixedTensor::Symbolic(a) => Some(MixedTensor::Symbolic(a.scalar_mul(rhs)?)),
+            MixedTensor::Param(ParamTensor::Composite(a)) => Some(MixedTensor::Param(
+                ParamTensor::Composite(a.scalar_mul(rhs)?),
+            )),
+            MixedTensor::Param(ParamTensor::Param(a)) => Some(MixedTensor::Param(
+                ParamTensor::Composite(a.scalar_mul(rhs)?),
+            )),
+            MixedTensor::Concrete(RealOrComplexTensor::Real(a)) => Some(MixedTensor::Concrete(
+                RealOrComplexTensor::Complex(a.scalar_mul(rhs)?),
+            )),
+            MixedTensor::Concrete(RealOrComplexTensor::Complex(a)) => Some(MixedTensor::Concrete(
+                RealOrComplexTensor::Complex(a.scalar_mul(rhs)?),
+            )),
         }
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl<I> ScalarMul<Atom> for MixedTensor<I>
+impl<I> ScalarMul<Atom> for ParamTensor<I>
 where
     I: TensorStructure + Clone,
 {
-    type Output = MixedTensor<I>;
+    type Output = ParamTensor<I>;
     fn scalar_mul(&self, rhs: &Atom) -> Option<Self::Output> {
         match self {
-            MixedTensor::Float(a) => Some(MixedTensor::Symbolic(a.scalar_mul(rhs)?)),
-            MixedTensor::Complex(a) => Some(MixedTensor::Symbolic(a.scalar_mul(rhs)?)),
-            MixedTensor::Symbolic(a) => Some(MixedTensor::Symbolic(a.scalar_mul(rhs)?)),
+            ParamTensor::Composite(a) => Some(ParamTensor::Composite(a.scalar_mul(rhs)?)),
+            ParamTensor::Param(a) => Some(ParamTensor::Composite(a.scalar_mul(rhs)?)),
+        }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<T, I> ScalarMul<Atom> for MixedTensor<T, I>
+where
+    I: TensorStructure + Clone,
+    T: Clone + FallibleMul<Atom, Output = Atom>,
+    Complex<T>: FallibleMul<Atom, Output = Atom>,
+{
+    type Output = MixedTensor<T, I>;
+    fn scalar_mul(&self, rhs: &Atom) -> Option<Self::Output> {
+        match self {
+            MixedTensor::Param(a) => Some(MixedTensor::Param(a.scalar_mul(rhs)?)),
+
+            MixedTensor::Concrete(RealOrComplexTensor::Real(a)) => Some(MixedTensor::Param(
+                ParamTensor::Composite(a.scalar_mul(rhs)?),
+            )),
+            MixedTensor::Concrete(RealOrComplexTensor::Complex(a)) => Some(MixedTensor::Param(
+                ParamTensor::Composite(a.scalar_mul(rhs)?),
+            )),
         }
     }
 }

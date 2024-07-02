@@ -1,4 +1,6 @@
-use crate::{Complex, ExpandedIndex, FlatIndex, TensorStructure, TryFromUpgrade};
+use crate::{
+    Complex, ExpandedIndex, FlatIndex, IsZero, IteratableTensor, TensorStructure, TryFromUpgrade,
+};
 
 use super::{
     ConcreteIndex, DenseTensorLinearIterator, HasStructure, SparseTensorLinearIterator,
@@ -145,7 +147,7 @@ where
 
     fn hashmap(&self) -> IndexMap<ExpandedIndex, T> {
         let mut hashmap = IndexMap::new();
-        for (k, v) in self.iter() {
+        for (k, v) in self.iter_expanded() {
             hashmap.insert(k.clone(), v.clone());
         }
         hashmap
@@ -181,7 +183,7 @@ where
     S: TensorStructure + Clone,
     T: Clone,
 {
-    fn try_from_upgrade(data: SparseTensor<U, S>) -> Option<SparseTensor<T, S>> {
+    fn try_from_upgrade(data: &SparseTensor<U, S>) -> Option<SparseTensor<T, S>> {
         data.try_upgrade().map(Cow::into_owned)
     }
 }
@@ -333,10 +335,10 @@ where
     /// If the value is zero, it removes the element at the given indices.
     pub fn smart_set(&mut self, indices: &[ConcreteIndex], value: T) -> Result<(), String>
     where
-        T: Default + PartialEq,
+        T: IsZero,
     {
         self.verify_indices(indices)?;
-        if value == T::default() {
+        if value.is_zero() {
             _ = self.elements.remove(&self.flat_index(indices).unwrap());
             return Ok(());
         }
@@ -398,7 +400,7 @@ pub struct DenseTensor<T, I = VecStructure> {
 impl<T: Display, I: TensorStructure> std::fmt::Display for DenseTensor<T, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = String::new();
-        for (i, v) in self.iter() {
+        for (i, v) in self.iter_expanded() {
             s.push_str(&format!("{}: {}\n", i, v));
         }
         write!(f, "{}", s)
@@ -552,7 +554,7 @@ where
     S: TensorStructure + Clone,
     T: Clone,
 {
-    fn try_from_upgrade(data: DenseTensor<U, S>) -> Option<DenseTensor<T, S>> {
+    fn try_from_upgrade(data: &DenseTensor<U, S>) -> Option<DenseTensor<T, S>> {
         data.try_upgrade().map(Cow::into_owned)
     }
 }
@@ -567,7 +569,7 @@ where
         T: Clone + Default + PartialEq,
     {
         let mut sparse = SparseTensor::empty(self.structure.clone());
-        for (i, value) in self.iter() {
+        for (i, value) in self.iter_expanded() {
             if *value != T::default() {
                 let _ = sparse.set(&i, value.clone());
             }
@@ -641,7 +643,7 @@ where
 
     fn hashmap(&self) -> IndexMap<ExpandedIndex, T> {
         let mut hashmap = IndexMap::new();
-        for (k, v) in self.iter() {
+        for (k, v) in self.iter_expanded() {
             hashmap.insert(k.clone(), v.clone());
         }
         hashmap
@@ -650,7 +652,7 @@ where
     fn symhashmap(&self, name: Symbol, args: &[Atom]) -> HashMap<Atom, T> {
         let mut hashmap = HashMap::new();
 
-        for (k, v) in self.iter() {
+        for (k, v) in self.iter_expanded() {
             hashmap.insert(atomic_expanded_label_id(&k, name, args), v.clone());
         }
         hashmap
@@ -851,7 +853,7 @@ where
     S: TensorStructure + Clone,
     T: Clone,
 {
-    fn try_from_upgrade(data: DataTensor<U, S>) -> Option<DataTensor<T, S>> {
+    fn try_from_upgrade(data: &DataTensor<U, S>) -> Option<DataTensor<T, S>> {
         data.try_upgrade().map(Cow::into_owned)
     }
 }

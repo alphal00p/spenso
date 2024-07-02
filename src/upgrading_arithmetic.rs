@@ -9,7 +9,7 @@ use symbolica::{atom::Atom, state::State};
 
 use symbolica::domains::float::{Complex as SymbolicaComplex, Real};
 
-use crate::Complex;
+use crate::{Complex, RefZero};
 
 // #[derive(Copy, Clone, PartialEq)]
 // pub struct Complex<T: Scalar> {
@@ -712,7 +712,7 @@ pub struct GreaterThan;
 pub struct Equal;
 
 pub trait TryFromUpgrade<T> {
-    fn try_from_upgrade(value: T) -> Option<Self>
+    fn try_from_upgrade(value: &T) -> Option<Self>
     where
         Self: Sized;
 }
@@ -779,22 +779,22 @@ where
     T: TrySmallestUpgrade<U, LCM = U>,
     U: Clone,
 {
-    fn try_from_upgrade(value: T) -> Option<Self> {
+    fn try_from_upgrade(value: &T) -> Option<Self> {
         let cow = value.try_upgrade()?;
         Some(cow.into_owned())
     }
 }
 
 pub trait TryIntoUpgrade<T> {
-    fn try_into_upgrade(self) -> Option<T>;
+    fn try_into_upgrade(&self) -> Option<T>;
 }
 
 impl<T, U> TryIntoUpgrade<U> for T
 where
     U: TryFromUpgrade<T>,
 {
-    fn try_into_upgrade(self) -> Option<U> {
-        U::try_from_upgrade(self)
+    fn try_into_upgrade(&self) -> Option<U> {
+        U::try_from_upgrade(&self)
     }
 }
 
@@ -977,13 +977,13 @@ impl TrySmallestUpgrade<smaller> for larger {
 
 impl<T> TrySmallestUpgrade<Complex<T>> for T
 where
-    T: num::Zero + Clone,
+    T: RefZero + Clone,
 {
     type LCM = Complex<T>;
     type Order = LessThan;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
-        let new = Complex::new(self.clone(), T::zero());
+        let new = Complex::new(self.clone(), self.ref_zero());
         Some(Cow::Owned(new))
     }
 }

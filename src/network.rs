@@ -3,23 +3,24 @@ use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
 
 use crate::{
-    scalar, DataIterator, FallibleAdd, FallibleMul, GetTensorData, HasTensorData, IntoArgs,
-    NamedStructure, TensorStructure,
+    scalar, AtomViewOrConcrete, Complex, DataIterator, FallibleAdd, FallibleMul, GetTensorData,
+    HasTensorData, IntoArgs, IteratableTensor, NamedStructure, RealOrComplexTensor,
+    TensorStructure, TrySmallestUpgrade,
 };
+
+use crate::ParamTensor;
 #[cfg(feature = "shadowing")]
 use crate::{DataTensor, HistoryStructure, MixedTensor, Shadowable};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
+    atom::{self, representation::FunView, AddView, AtomOrView, MulView},
     atom::{Atom, AtomView, Symbol},
     domains::float::Complex as SymComplex,
-    state::State,
-};
-
-use symbolica::{
-    atom::{self, representation::FunView, AddView, AtomOrView, MulView},
+    domains::float::Real,
     domains::rational::Rational,
     evaluate::EvaluationFn,
+    state::State,
     tensors,
 };
 
@@ -568,17 +569,19 @@ impl<T, S> TensorNetwork<T, S> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<N> TensorNetwork<MixedTensor<N>, Atom>
+impl<T, S> TensorNetwork<MixedTensor<T, S>, Atom>
 where
-    N: Debug + TensorStructure,
+    S: Clone + TensorStructure + Debug,
+    T: Clone,
 {
     #[cfg(feature = "shadowing")]
-    pub fn to_symbolic_tensor_vec(mut self) -> Vec<DataTensor<Atom, N>> {
+    pub fn to_symbolic_tensor_vec(mut self) -> Vec<ParamTensor<S>> {
         self.graph
             .nodes
             .drain()
-            .filter(|(_, n)| n.is_symbolic())
-            .map(|(_, n)| n.try_into_symbolic().unwrap())
+            .into_iter()
+            .map(|(_, n)| n.try_into_parametric()) //filters out all parametric tensors
+            .flatten()
             .collect()
     }
 
@@ -605,60 +608,65 @@ where
     // }
 
     #[cfg(feature = "shadowing")]
-    pub fn evaluate_float<'a, F: Fn(&Rational) -> f64 + Copy>(
+    pub fn evaluate_real<'a, F: Fn(&Rational) -> T + Copy>(
         &'a mut self,
         coeff_map: F,
-        const_map: &AHashMap<AtomView<'a>, f64>,
+        const_map: &AHashMap<AtomView<'a>, T>,
     ) where
-        N: Clone,
+        T: Real + for<'c> From<&'c Rational>,
     {
         for (_, n) in &mut self.graph.nodes {
-            n.evaluate_float(coeff_map, const_map);
+            n.evaluate_real(coeff_map, const_map);
         }
     }
 
     #[cfg(feature = "shadowing")]
-    pub fn evaluate_complex<'a, F: Fn(&Rational) -> SymComplex<f64> + Copy>(
+    pub fn evaluate_complex<'a, F: Fn(&Rational) -> SymComplex<T> + Copy>(
         &'a mut self,
         coeff_map: F,
-        const_map: &AHashMap<AtomView<'a>, SymComplex<f64>>,
+        const_map: &AHashMap<AtomView<'a>, SymComplex<T>>,
     ) where
-        N: Clone,
+        T: Real + for<'c> From<&'c Rational>,
+        SymComplex<T>: Real + for<'c> From<&'c Rational>,
     {
         for (_, n) in &mut self.graph.nodes {
             n.evaluate_complex(coeff_map, const_map);
         }
     }
 
-    pub fn to_fully_parametric(self) -> TensorNetwork<DataTensor<Atom, N>, Atom>
+    pub fn to_fully_parametric(self) -> TensorNetwork<ParamTensor<S>, Atom>
     where
-        N: TensorStructure + Clone,
+        T: TrySmallestUpgrade<Atom, LCM = Atom>,
+        Complex<T>: TrySmallestUpgrade<Atom, LCM = Atom>,
     {
-        // let largest = self.graph.nodes.values().reduce(|a, b| a.max(b)).unwrap();
         let mut tensors = vec![];
 
         for n in self.graph.nodes.values() {
             tensors.push(match n {
-                MixedTensor::Float(t) => t.try_upgrade::<Atom>().unwrap().into_owned(),
-                MixedTensor::Complex(t) => t.try_upgrade::<Atom>().unwrap().into_owned(),
-                MixedTensor::Symbolic(t) => t.clone(),
+                MixedTensor::Concrete(RealOrComplexTensor::Real(t)) => {
+                    ParamTensor::Composite(t.try_upgrade::<Atom>().unwrap().into_owned())
+                }
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(t)) => {
+                    ParamTensor::Composite(t.try_upgrade::<Atom>().unwrap().into_owned())
+                }
+                MixedTensor::Param(t) => t.clone(),
             });
         }
 
         TensorNetwork {
-            graph: TensorNetwork::<DataTensor<Atom, N>, Atom>::generate_network_graph(tensors),
+            graph: TensorNetwork::<ParamTensor<S>, Atom>::generate_network_graph(tensors),
             params: AHashSet::new(),
             scalar: self.scalar,
         }
     }
 }
 
-impl<T: TensorStructure + Clone> TensorNetwork<DataTensor<Atom, T>, Atom> {
+impl<S: TensorStructure + Clone> TensorNetwork<ParamTensor<S>, Atom> {
     pub fn evaluate<'a, D, F: Fn(&Rational) -> D + Copy>(
         &'a self,
         coeff_map: F,
         const_map: &AHashMap<AtomView<'a>, D>,
-    ) -> TensorNetwork<DataTensor<D, T>, D>
+    ) -> TensorNetwork<DataTensor<D, S>, D>
     where
         D: Clone
             + symbolica::domains::float::Real
@@ -829,16 +837,16 @@ impl<T, S> TensorNetwork<T, S> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<I> TensorNetwork<MixedTensor<I>, Atom>
+impl<T, S> TensorNetwork<MixedTensor<T, S>, Atom>
 where
-    I: TensorStructure + Clone + Debug,
+    S: TensorStructure + Clone,
+    T: Clone,
 {
     pub fn generate_params(&mut self) {
-        for (_i, n) in &self.graph.nodes {
-            if n.is_symbolic() {
-                let n = n.try_as_symbolic().unwrap().try_as_dense().unwrap();
-                for (_, a) in n.iter_flat() {
-                    self.params.insert(a.clone());
+        for (_, n) in self.graph.nodes.iter().filter(|(_, n)| n.is_parametric()) {
+            for (_, a) in n.iter_flat() {
+                if let AtomViewOrConcrete::Atom(a) = a {
+                    self.params.insert(a.to_owned());
                 }
             }
         }
@@ -846,7 +854,7 @@ where
 }
 
 impl<'a> TryFrom<MulView<'a>>
-    for TensorNetwork<MixedTensor<NamedStructure<Symbol, Vec<Atom>>>, Atom>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
 {
     type Error = TensorNetworkError;
     fn try_from(value: MulView<'a>) -> Result<Self, Self::Error> {
@@ -872,7 +880,7 @@ impl<'a> TryFrom<MulView<'a>>
 }
 
 impl<'a> TryFrom<AtomView<'a>>
-    for TensorNetwork<MixedTensor<NamedStructure<Symbol, Vec<Atom>>>, Atom>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
 {
     type Error = TensorNetworkError;
     fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
@@ -891,7 +899,7 @@ impl<'a> TryFrom<AtomView<'a>>
 }
 
 impl<'a> TryFrom<FunView<'a>>
-    for TensorNetwork<MixedTensor<NamedStructure<Symbol, Vec<Atom>>>, Atom>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
 {
     type Error = TensorNetworkError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
@@ -914,7 +922,7 @@ impl<'a> TryFrom<FunView<'a>>
 }
 
 impl<'a> TryFrom<AddView<'a>>
-    for TensorNetwork<MixedTensor<NamedStructure<Symbol, Vec<Atom>>>, Atom>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
 {
     type Error = TensorNetworkError;
     fn try_from(value: AddView<'a>) -> Result<Self, Self::Error> {
@@ -950,7 +958,7 @@ where
     I: TensorStructure + Clone,
     T::Args: IntoArgs,
 {
-    pub fn symbolic_shadow(&mut self, name: &str) -> TensorNetwork<MixedTensor<I>, S> {
+    pub fn symbolic_shadow(&mut self, name: &str) -> TensorNetwork<MixedTensor<f64, I>, S> {
         {
             for (i, n) in &mut self.graph.nodes {
                 n.set_name(State::get_symbol(format!("{}{}", name, i.data().as_ffi())));
@@ -969,7 +977,7 @@ where
         for (i, n) in &self.graph.nodes {
             let node = n.shadow().unwrap();
 
-            let nid = nodes.insert(MixedTensor::<I>::from(node.clone()));
+            let nid = nodes.insert(MixedTensor::<f64, I>::param(node.clone().into()));
 
             for (_, a) in node.flat_iter() {
                 params.insert(a.clone());
@@ -1062,7 +1070,6 @@ pub struct Levels<T, S: TensorStructure> {
     const_map: AHashMap<AtomOrView<'static>, T>,
     params: Vec<Atom>,
 }
-
 
 impl<T, S> From<TensorNetwork<DataTensor<Atom, S>, Atom>> for Levels<T, S>
 where

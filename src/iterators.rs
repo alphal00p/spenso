@@ -13,8 +13,8 @@ use std::{
 };
 
 use crate::{
-    ContractableWith, ExpandedIndex, FallibleAddAssign, FallibleSubAssign, FlatIndex, RefZero,
-    TensorStructure, VecStructure,
+    ContractableWith, DataTensor, ExpandedIndex, FallibleAddAssign, FallibleSubAssign, FlatIndex,
+    HasStructure, RefZero, TensorStructure, VecStructure,
 };
 
 use super::{ConcreteIndex, DenseTensor, Dimension, GetTensorData, Representation, SparseTensor};
@@ -1820,28 +1820,40 @@ where
     }
 }
 
+impl<T, S: TensorStructure> IteratableTensor for SparseTensor<T, S> {
+    type Data<'a> = &'a T where Self:'a ;
+
+    fn fiber<'r>(&'r self, fiber_data: FiberData<'_>) -> Fiber<'r, Self> {
+        Fiber::from(fiber_data, self)
+    }
+
+    fn fiber_mut<'a>(&'a mut self, fiber_data: FiberData<'_>) -> FiberMut<'a, Self> {
+        FiberMut::from(fiber_data, self)
+    }
+
+    fn fiber_class<'r>(&'r self, fiber_data: FiberData<'_>) -> FiberClass<'r, Self> {
+        Fiber::from(fiber_data, self).into()
+    }
+
+    fn fiber_class_mut<'a>(&'a mut self, fiber_data: FiberData<'_>) -> FiberClassMut<'a, Self> {
+        FiberMut::from(fiber_data, self).into()
+    }
+
+    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'a>)> {
+        SparseTensorIterator::new(self)
+    }
+
+    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)> {
+        SparseTensorLinearIterator::new(self)
+    }
+}
+
 impl<T, I> SparseTensor<T, I>
 where
     I: TensorStructure,
 {
-    pub fn fiber<'r>(&'r self, fiber_data: FiberData<'_>) -> Fiber<'r, Self> {
-        Fiber::from(fiber_data, self)
-    }
-
-    pub fn fiber_class<'r>(&'r self, fiber_data: FiberData<'_>) -> FiberClass<'r, Self> {
-        Fiber::from(fiber_data, self).into()
-    }
-
     pub fn iter_trace(&self, trace_indices: [usize; 2]) -> SparseTensorTraceIterator<T, I> {
         SparseTensorTraceIterator::new(self, trace_indices)
-    }
-
-    pub fn iter(&self) -> SparseTensorIterator<T, I> {
-        SparseTensorIterator::new(self)
-    }
-
-    pub fn iter_flat(&self) -> SparseTensorLinearIterator<T> {
-        SparseTensorLinearIterator::new(self)
     }
 }
 
@@ -2106,34 +2118,133 @@ where
     }
 }
 
+pub trait IteratableTensor: HasStructure + Sized {
+    type Data<'a>
+    where
+        Self: 'a;
+
+    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'a>)>;
+
+    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)>;
+
+    fn fiber<'a>(&'a self, fiber_data: FiberData<'_>) -> Fiber<'a, Self> {
+        Fiber::from(fiber_data, self)
+    }
+
+    fn fiber_mut<'a>(&'a mut self, fiber_data: FiberData<'_>) -> FiberMut<'a, Self> {
+        FiberMut::from(fiber_data, self)
+    }
+
+    fn fiber_class<'a>(&'a self, fiber_data: FiberData<'_>) -> FiberClass<'a, Self> {
+        Fiber::from(fiber_data, self).into()
+    }
+
+    fn fiber_class_mut<'a>(&'a mut self, fiber_data: FiberData<'_>) -> FiberClassMut<'a, Self> {
+        FiberMut::from(fiber_data, self).into()
+    }
+}
+
+impl<T, S> IteratableTensor for DenseTensor<T, S>
+where
+    S: TensorStructure,
+{
+    type Data<'a> = &'a T where Self: 'a;
+
+    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (ExpandedIndex, &'a T)> {
+        DenseTensorIterator::new(self)
+    }
+
+    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, &'a T)> {
+        DenseTensorLinearIterator::new(self)
+    }
+}
+
+pub enum DataTensorLinearIterator<'a, T, S> {
+    Dense(DenseTensorLinearIterator<'a, T, S>),
+    Sparse(SparseTensorLinearIterator<'a, T>),
+}
+
+impl<'a, T, S> From<DenseTensorLinearIterator<'a, T, S>> for DataTensorLinearIterator<'a, T, S> {
+    fn from(value: DenseTensorLinearIterator<'a, T, S>) -> Self {
+        DataTensorLinearIterator::Dense(value)
+    }
+}
+
+impl<'a, T, S> From<SparseTensorLinearIterator<'a, T>> for DataTensorLinearIterator<'a, T, S> {
+    fn from(value: SparseTensorLinearIterator<'a, T>) -> Self {
+        DataTensorLinearIterator::Sparse(value)
+    }
+}
+
+impl<'a, T, S: TensorStructure> Iterator for DataTensorLinearIterator<'a, T, S> {
+    type Item = (FlatIndex, &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            DataTensorLinearIterator::Dense(iter) => iter.next(),
+            DataTensorLinearIterator::Sparse(iter) => iter.next(),
+        }
+    }
+}
+
+pub enum DataTensorExpandedIterator<'a, T, S> {
+    Dense(DenseTensorIterator<'a, T, S>),
+    Sparse(SparseTensorIterator<'a, T, S>),
+}
+
+impl<'a, T, S> From<DenseTensorIterator<'a, T, S>> for DataTensorExpandedIterator<'a, T, S> {
+    fn from(value: DenseTensorIterator<'a, T, S>) -> Self {
+        DataTensorExpandedIterator::Dense(value)
+    }
+}
+
+impl<'a, T, S> From<SparseTensorIterator<'a, T, S>> for DataTensorExpandedIterator<'a, T, S> {
+    fn from(value: SparseTensorIterator<'a, T, S>) -> Self {
+        DataTensorExpandedIterator::Sparse(value)
+    }
+}
+
+impl<'a, T, S: TensorStructure> Iterator for DataTensorExpandedIterator<'a, T, S> {
+    type Item = (ExpandedIndex, &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            DataTensorExpandedIterator::Dense(iter) => iter.next(),
+            DataTensorExpandedIterator::Sparse(iter) => iter.next(),
+        }
+    }
+}
+
+impl<T: Clone, S: TensorStructure> IteratableTensor for DataTensor<T, S> {
+    type Data<'a> = &'a T where Self: 'a;
+
+    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'a>)> {
+        match self {
+            DataTensor::Dense(tensor) => {
+                DataTensorExpandedIterator::Dense(DenseTensorIterator::new(tensor))
+            }
+            DataTensor::Sparse(tensor) => {
+                DataTensorExpandedIterator::Sparse(SparseTensorIterator::new(tensor))
+            }
+        }
+    }
+
+    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)> {
+        match self {
+            DataTensor::Dense(tensor) => {
+                DataTensorLinearIterator::Dense(DenseTensorLinearIterator::new(tensor))
+            }
+            DataTensor::Sparse(tensor) => {
+                DataTensorLinearIterator::Sparse(SparseTensorLinearIterator::new(tensor))
+            }
+        }
+    }
+}
+
 impl<T, I> DenseTensor<T, I>
 where
     I: TensorStructure,
 {
-    pub fn iter(&self) -> DenseTensorIterator<T, I> {
-        DenseTensorIterator::new(self)
-    }
-
-    pub fn fiber<'r>(&'r self, fiber_data: FiberData<'_>) -> Fiber<'r, Self> {
-        Fiber::from(fiber_data, self)
-    }
-
-    pub fn fiber_mut<'r>(&'r mut self, fiber_data: FiberData<'_>) -> FiberMut<'r, Self> {
-        FiberMut::from(fiber_data, self)
-    }
-
-    pub fn fiber_class<'r>(&'r self, fiber_data: FiberData<'_>) -> FiberClass<'r, Self> {
-        Fiber::from(fiber_data, self).into()
-    }
-
-    pub fn fiber_class_mut<'r>(&'r mut self, fiber_data: FiberData<'_>) -> FiberClassMut<'r, Self> {
-        FiberMut::from(fiber_data, self).into()
-    }
-
-    pub fn iter_flat(&self) -> DenseTensorLinearIterator<T, I> {
-        DenseTensorLinearIterator::new(self)
-    }
-
     pub fn iter_trace(&self, trace_indices: [usize; 2]) -> DenseTensorTraceIterator<T, I> {
         DenseTensorTraceIterator::new(self, trace_indices)
     }

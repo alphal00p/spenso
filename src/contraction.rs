@@ -1,7 +1,7 @@
 use ahash::AHashMap;
 use symbolica::domains::float::Real;
 
-use crate::{TensorStructure, TrySmallestUpgrade};
+use crate::{IteratableTensor, TensorStructure, TrySmallestUpgrade};
 
 use super::{
     DataIterator, DataTensor, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSubAssign,

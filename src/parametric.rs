@@ -1,4 +1,5 @@
 extern crate derive_more;
+use anyhow::anyhow;
 use derive_more::From;
 use std::{fmt::Debug, process::Output};
 
@@ -7,11 +8,12 @@ use enum_try_as_inner::EnumTryAsInner;
 
 use crate::{
     Complex, ContractableWith, ContractionError, FallibleAddAssign, FallibleMul, FallibleSubAssign,
-    FlatIndex, IsZero, RefZero, TensorStructure, TrySmallestUpgrade,
+    Fiber, FiberClass, FiberClassMut, FiberData, FiberMut, FlatIndex, IsZero, IteratableTensor,
+    RefZero, TensorStructure, TrySmallestUpgrade,
 };
 use symbolica::{
     atom::{representation::FunView, Atom, AtomOrView, AtomView, Symbol},
-    domains::rational::Rational,
+    domains::{float::Real, rational::Rational},
     evaluate::{ConstOrExpr, EvaluationFn, ExpressionEvaluator},
 };
 
@@ -55,21 +57,241 @@ pub enum ParamTensor<S: TensorStructure> {
     Composite(DataTensor<Atom, S>),
 }
 
-#[derive(Clone, Debug, EnumTryAsInner)]
-#[derive_err(Debug)]
-pub enum ParamOrConcrete<S: TensorStructure, T: ContractableWith<Atom>> {
-    Concrete(DataTensor<T, S>),
-    Param(DataTensor<Atom, S>),
-    Composite(DataTensor<Atom, S>),
+impl<S: TensorStructure + Clone> ParamTensor<S> {
+    pub fn evaluator<'a, T: Clone + Default, F: Fn(&Rational) -> T + Copy>(
+        &'a self,
+        coeff_map: F,
+        const_map: &HashMap<AtomOrView, ConstOrExpr<'a, T>>,
+        params: &[Atom],
+    ) -> DataTensor<ExpressionEvaluator<T>, S> {
+        match self {
+            ParamTensor::Composite(x) => x.evaluator(coeff_map, const_map, params),
+            ParamTensor::Param(x) => x.evaluator(coeff_map, const_map, params),
+        }
+    }
+
+    pub fn evaluate<'a, 'b, T, F: Fn(&Rational) -> T + Copy, U>(
+        &self,
+        coeff_map: F,
+        const_map: &'b HashMap<AtomView<'a>, T>,
+    ) -> DataTensor<U, S>
+    where
+        T: symbolica::domains::float::Real
+            + for<'c> std::convert::From<&'c symbolica::domains::rational::Rational>,
+        U: From<T>,
+
+        'a: 'b,
+    {
+        match self {
+            ParamTensor::Composite(x) => x.evaluate(coeff_map, const_map),
+            ParamTensor::Param(x) => x.evaluate(coeff_map, const_map),
+        }
+    }
+}
+
+impl<S: TensorStructure> IteratableTensor for ParamTensor<S> {
+    type Data<'a> =  AtomView<'a> where Self: 'a;
+
+    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'a>)> {
+        match self {
+            ParamTensor::Composite(x) => {
+                IteratorEnum::A(x.iter_expanded().map(|(i, x)| (i, x.as_view())))
+            }
+            ParamTensor::Param(x) => {
+                IteratorEnum::B(x.iter_expanded().map(|(i, x)| (i, x.as_view())))
+            }
+        }
+    }
+
+    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)> {
+        match self {
+            ParamTensor::Composite(x) => {
+                IteratorEnum::A(x.iter_flat().map(|(i, x)| (i, x.as_view())))
+            }
+            ParamTensor::Param(x) => IteratorEnum::B(x.iter_flat().map(|(i, x)| (i, x.as_view()))),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+// #[derive_err(Debug)]
+pub enum ParamOrConcrete<C: HasStructure + Clone, S: TensorStructure> {
+    Concrete(C),
+    Param(ParamTensor<S>),
+}
+
+pub enum AtomViewOrConcrete<'a, T> {
+    Atom(AtomView<'a>),
+    Concrete(T),
+}
+
+impl<C: HasStructure + Clone, S: TensorStructure> ParamOrConcrete<C, S> {
+    pub fn is_parametric(&self) -> bool {
+        match self {
+            ParamOrConcrete::Param(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn try_into_parametric(self) -> Result<ParamTensor<S>, Self> {
+        match self {
+            ParamOrConcrete::Param(x) => Ok(x),
+            _ => Err(self),
+        }
+    }
+
+    pub fn try_into_concrete(self) -> Result<C, Self> {
+        match self {
+            ParamOrConcrete::Concrete(x) => Ok(x),
+            _ => Err(self),
+        }
+    }
+}
+
+impl<C, S> HasStructure for ParamOrConcrete<C, S>
+where
+    C: HasStructure<Structure = S> + Clone,
+    S: TensorStructure,
+{
+    type Scalar = Atom;
+    type Structure = S;
+
+    fn structure(&self) -> &Self::Structure {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.structure(),
+            ParamOrConcrete::Param(x) => x.structure(),
+        }
+    }
+
+    fn mut_structure(&mut self) -> &mut Self::Structure {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.mut_structure(),
+            ParamOrConcrete::Param(x) => x.mut_structure(),
+        }
+    }
+}
+
+pub enum IteratorEnum<A, B> {
+    A(A),
+    B(B),
+}
+
+impl<A, B> Iterator for IteratorEnum<A, B>
+where
+    A: Iterator,
+    B: Iterator<Item = A::Item>,
+{
+    type Item = A::Item;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            IteratorEnum::A(a) => a.next(),
+            IteratorEnum::B(b) => b.next(),
+        }
+    }
+}
+
+impl<C: IteratableTensor + Clone, S: TensorStructure> IteratableTensor for ParamOrConcrete<C, S>
+where
+    C: HasStructure<Structure = S>,
+{
+    type Data<'a> = AtomViewOrConcrete<'a, C::Data<'a>> where Self:'a ;
+
+    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)> {
+        match self {
+            ParamOrConcrete::Concrete(x) => IteratorEnum::A(
+                x.iter_flat()
+                    .map(|(i, x)| (i, AtomViewOrConcrete::Concrete(x))),
+            ),
+            ParamOrConcrete::Param(x) => {
+                IteratorEnum::B(x.iter_flat().map(|(i, x)| (i, AtomViewOrConcrete::Atom(x))))
+            }
+        }
+    }
+
+    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'a>)> {
+        match self {
+            ParamOrConcrete::Concrete(x) => IteratorEnum::A(
+                x.iter_expanded()
+                    .map(|(i, x)| (i, AtomViewOrConcrete::Concrete(x))),
+            ),
+            ParamOrConcrete::Param(x) => IteratorEnum::B(
+                x.iter_expanded()
+                    .map(|(i, x)| (i, AtomViewOrConcrete::Atom(x))),
+            ),
+        }
+    }
 }
 
 #[derive(Clone, Debug, EnumTryAsInner)]
 #[derive_err(Debug)]
-pub enum MixedTensor<T: TensorStructure = VecStructure> {
-    Float(DataTensor<f64, T>),
-    Complex(DataTensor<Complex<f64>, T>),
-    Symbolic(DataTensor<Atom, T>),
+pub enum RealOrComplexTensor<T, S: TensorStructure> {
+    Real(DataTensor<T, S>),
+    Complex(DataTensor<Complex<T>, S>),
 }
+
+pub enum RealOrComplexRef<'a, T> {
+    Real(&'a T),
+    Complex(&'a Complex<T>),
+}
+
+pub type MixedTensor<T = f64, S = VecStructure> = ParamOrConcrete<RealOrComplexTensor<T, S>, S>;
+
+impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
+    type Scalar = Complex<T>;
+    type Structure = S;
+    fn structure(&self) -> &Self::Structure {
+        match self {
+            RealOrComplexTensor::Real(r) => r.structure(),
+            RealOrComplexTensor::Complex(r) => r.structure(),
+        }
+    }
+
+    fn mut_structure(&mut self) -> &mut Self::Structure {
+        match self {
+            RealOrComplexTensor::Real(r) => r.mut_structure(),
+            RealOrComplexTensor::Complex(r) => r.mut_structure(),
+        }
+    }
+}
+
+impl<T: Clone, S: TensorStructure> IteratableTensor for RealOrComplexTensor<T, S> {
+    type Data<'a>=  RealOrComplexRef<'a,T>
+        where
+            Self: 'a;
+
+    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'a>)> {
+        match self {
+            RealOrComplexTensor::Real(x) => IteratorEnum::A(
+                x.iter_expanded()
+                    .map(|(i, x)| (i, RealOrComplexRef::Real(x))),
+            ),
+            RealOrComplexTensor::Complex(x) => IteratorEnum::B(
+                x.iter_expanded()
+                    .map(|(i, x)| (i, RealOrComplexRef::Complex(x))),
+            ),
+        }
+    }
+
+    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)> {
+        match self {
+            RealOrComplexTensor::Real(x) => {
+                IteratorEnum::A(x.iter_flat().map(|(i, x)| (i, RealOrComplexRef::Real(x))))
+            }
+            RealOrComplexTensor::Complex(x) => IteratorEnum::B(
+                x.iter_flat()
+                    .map(|(i, x)| (i, RealOrComplexRef::Complex(x))),
+            ),
+        }
+    }
+}
+
+// #[derive(Clone, Debug, EnumTryAsInner)]
+// #[derive_err(Debug)]
+// pub enum MixedTensor<T: TensorStructure = VecStructure> {
+//     Float(DataTensor<f64, T>),
+//     Complex(DataTensor<Complex<f64>, T>),
+//     Symbolic(DataTensor<Atom, T>),
+// }
 
 impl<'a> TryFrom<FunView<'a>> for MixedTensor {
     type Error = String;
@@ -91,75 +313,105 @@ impl<'a> TryFrom<FunView<'a>> for MixedTensor {
     }
 }
 
-impl<T: TensorStructure> PartialEq<MixedTensor<T>> for MixedTensor<T> {
-    fn eq(&self, other: &MixedTensor<T>) -> bool {
+impl<T: Clone, S: TensorStructure + Clone> PartialEq<MixedTensor<T, S>> for MixedTensor<T, S> {
+    fn eq(&self, other: &MixedTensor<T, S>) -> bool {
         match (self, other) {
-            (MixedTensor::Float(_), MixedTensor::Float(_)) => true,
-            (MixedTensor::Complex(_), MixedTensor::Complex(_)) => true,
-            (MixedTensor::Symbolic(_), MixedTensor::Symbolic(_)) => true,
+            (
+                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
+                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
+            ) => true,
+            (
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
+            ) => true,
+            (MixedTensor::Param(_), MixedTensor::Param(_)) => true,
             _ => false,
         }
     }
 }
 
-impl<T: TensorStructure> Eq for MixedTensor<T> {}
+impl<T: Clone, S: TensorStructure + Clone> Eq for MixedTensor<T, S> {}
 
-impl<T: TensorStructure> PartialOrd<MixedTensor<T>> for MixedTensor<T> {
-    fn partial_cmp(&self, other: &MixedTensor<T>) -> Option<std::cmp::Ordering> {
+impl<T: Clone, S: TensorStructure + Clone> PartialOrd<MixedTensor<T, S>> for MixedTensor<T, S> {
+    fn partial_cmp(&self, other: &MixedTensor<T, S>) -> Option<std::cmp::Ordering> {
         match (self, other) {
-            (MixedTensor::Float(_), MixedTensor::Float(_)) => Some(std::cmp::Ordering::Equal),
-            (MixedTensor::Float(_), MixedTensor::Complex(_)) => Some(std::cmp::Ordering::Less),
-            (MixedTensor::Float(_), MixedTensor::Symbolic(_)) => Some(std::cmp::Ordering::Less),
-            (MixedTensor::Complex(_), MixedTensor::Float(_)) => Some(std::cmp::Ordering::Greater),
-            (MixedTensor::Complex(_), MixedTensor::Complex(_)) => Some(std::cmp::Ordering::Equal),
-            (MixedTensor::Complex(_), MixedTensor::Symbolic(_)) => Some(std::cmp::Ordering::Less),
-            (MixedTensor::Symbolic(_), MixedTensor::Float(_)) => Some(std::cmp::Ordering::Greater),
-            (MixedTensor::Symbolic(_), MixedTensor::Complex(_)) => {
+            (
+                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
+                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
+            ) => Some(std::cmp::Ordering::Equal),
+            (
+                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
+            ) => Some(std::cmp::Ordering::Less),
+            (MixedTensor::Concrete(RealOrComplexTensor::Real(_)), MixedTensor::Param(_)) => {
+                Some(std::cmp::Ordering::Less)
+            }
+            (
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
+                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
+            ) => Some(std::cmp::Ordering::Greater),
+            (
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
+            ) => Some(std::cmp::Ordering::Equal),
+            (MixedTensor::Concrete(RealOrComplexTensor::Complex(_)), MixedTensor::Param(_)) => {
+                Some(std::cmp::Ordering::Less)
+            }
+            (MixedTensor::Param(_), MixedTensor::Concrete(RealOrComplexTensor::Real(_))) => {
                 Some(std::cmp::Ordering::Greater)
             }
-            (MixedTensor::Symbolic(_), MixedTensor::Symbolic(_)) => Some(std::cmp::Ordering::Equal),
+            (MixedTensor::Param(_), MixedTensor::Concrete(RealOrComplexTensor::Complex(_))) => {
+                Some(std::cmp::Ordering::Greater)
+            }
+            (MixedTensor::Param(_), MixedTensor::Param(_)) => Some(std::cmp::Ordering::Equal),
         }
     }
 }
 
-impl<T: TensorStructure> Ord for MixedTensor<T> {
+impl<T: Clone, S: TensorStructure + Clone> Ord for MixedTensor<T, S> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
 
-impl<'a, I: TensorStructure + Clone + 'a> MixedTensor<I> {
-    pub fn evaluate_float<'b, F: Fn(&Rational) -> f64 + Copy>(
+impl<'a, I: TensorStructure + Clone + 'a, T: Clone> MixedTensor<T, I> {
+    pub fn evaluate_real<'b, F: Fn(&Rational) -> T + Copy>(
         &mut self,
         coeff_map: F,
-        const_map: &'b HashMap<AtomView<'a>, f64>,
+        const_map: &'b HashMap<AtomView<'a>, T>,
     ) where
         'b: 'a,
+        T: Real + for<'c> From<&'c Rational>,
     {
         let content = match self {
-            MixedTensor::Symbolic(x) => Some(x),
+            MixedTensor::Param(x) => Some(x),
             _ => None,
         };
 
         if let Some(x) = content {
-            *self = MixedTensor::Float(x.evaluate(coeff_map, const_map));
+            *self =
+                MixedTensor::Concrete(RealOrComplexTensor::Real(x.evaluate(coeff_map, const_map)));
         }
     }
 
-    pub fn evaluate_complex<'b, F: Fn(&Rational) -> SymComplex<f64> + Copy>(
+    pub fn evaluate_complex<'b, F: Fn(&Rational) -> SymComplex<T> + Copy>(
         &mut self,
         coeff_map: F,
-        const_map: &'b HashMap<AtomView<'a>, SymComplex<f64>>,
+        const_map: &'b HashMap<AtomView<'a>, SymComplex<T>>,
     ) where
         'b: 'a,
+        T: Real + for<'c> From<&'c Rational>,
+        SymComplex<T>: Real + for<'c> From<&'c Rational>,
     {
         let content = match self {
-            MixedTensor::Symbolic(x) => Some(x),
+            MixedTensor::Param(x) => Some(x),
             _ => None,
         };
 
         if let Some(x) = content {
-            *self = MixedTensor::Complex(x.evaluate(coeff_map, const_map));
+            *self = MixedTensor::Concrete(RealOrComplexTensor::Complex(
+                x.evaluate(coeff_map, const_map),
+            ));
         }
     }
 }
@@ -338,30 +590,6 @@ where
     }
 }
 
-impl<T> HasStructure for MixedTensor<T>
-where
-    T: TensorStructure,
-{
-    type Scalar = Atom;
-    type Structure = T;
-
-    fn structure(&self) -> &Self::Structure {
-        match self {
-            MixedTensor::Float(t) => t.structure(),
-            MixedTensor::Complex(t) => t.structure(),
-            MixedTensor::Symbolic(t) => t.structure(),
-        }
-    }
-
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        match self {
-            MixedTensor::Float(t) => t.mut_structure(),
-            MixedTensor::Complex(t) => t.mut_structure(),
-            MixedTensor::Symbolic(t) => t.mut_structure(),
-        }
-    }
-}
-
 impl<S> TracksCount for ParamTensor<S>
 where
     S: TensorStructure + TracksCount,
@@ -374,72 +602,54 @@ where
     }
 }
 
-impl<T> TracksCount for MixedTensor<T>
-where
-    T: TracksCount + TensorStructure,
-{
-    fn contractions_num(&self) -> usize {
-        match self {
-            MixedTensor::Float(t) => t.contractions_num(),
-            MixedTensor::Complex(t) => t.contractions_num(),
-            MixedTensor::Symbolic(t) => t.contractions_num(),
-        }
-    }
-}
-
 // pub type MixedTensors = MixedTensor<HistoryStructure<Symbol>>;
 
-impl<I> From<DenseTensor<f64, I>> for MixedTensor<I>
+impl<I, T: Clone> From<DenseTensor<T, I>> for MixedTensor<T, I>
 where
-    I: TensorStructure,
+    I: TensorStructure + Clone,
 {
-    fn from(other: DenseTensor<f64, I>) -> Self {
-        MixedTensor::<I>::Float(DataTensor::Dense(other))
+    fn from(other: DenseTensor<T, I>) -> Self {
+        MixedTensor::Concrete(RealOrComplexTensor::Real(DataTensor::Dense(other)))
     }
 }
 
-impl<I> From<SparseTensor<f64, I>> for MixedTensor<I>
+impl<I, T: Clone> From<SparseTensor<T, I>> for MixedTensor<T, I>
 where
-    I: TensorStructure,
+    I: TensorStructure + Clone,
 {
-    fn from(other: SparseTensor<f64, I>) -> Self {
-        MixedTensor::<I>::Float(DataTensor::Sparse(other))
+    fn from(other: SparseTensor<T, I>) -> Self {
+        MixedTensor::Concrete(RealOrComplexTensor::Real(DataTensor::Sparse(other)))
     }
 }
 
-impl<I> From<DenseTensor<Complex<f64>, I>> for MixedTensor<I>
+impl<I, T: Clone> From<DenseTensor<Complex<T>, I>> for MixedTensor<T, I>
 where
-    I: TensorStructure,
+    I: TensorStructure + Clone,
 {
-    fn from(other: DenseTensor<Complex<f64>, I>) -> Self {
-        MixedTensor::<I>::Complex(DataTensor::Dense(other))
+    fn from(other: DenseTensor<Complex<T>, I>) -> Self {
+        MixedTensor::Concrete(RealOrComplexTensor::Complex(DataTensor::Dense(other)))
     }
 }
 
-impl<I> From<SparseTensor<Complex<f64>, I>> for MixedTensor<I>
+impl<I, T: Clone> From<SparseTensor<Complex<T>, I>> for MixedTensor<T, I>
 where
-    I: TensorStructure,
+    I: TensorStructure + Clone,
 {
-    fn from(other: SparseTensor<Complex<f64>, I>) -> Self {
-        MixedTensor::<I>::Complex(DataTensor::Sparse(other))
+    fn from(other: SparseTensor<Complex<T>, I>) -> Self {
+        MixedTensor::Concrete(RealOrComplexTensor::Complex(DataTensor::Sparse(other)))
     }
 }
 
-impl<I> From<DenseTensor<Atom, I>> for MixedTensor<I>
+impl<I, T: Clone> MixedTensor<T, I>
 where
-    I: TensorStructure,
+    I: TensorStructure + Clone,
 {
-    fn from(other: DenseTensor<Atom, I>) -> Self {
-        MixedTensor::<I>::Symbolic(DataTensor::Dense(other))
+    pub fn param(other: DataTensor<Atom, I>) -> Self {
+        MixedTensor::Param(ParamTensor::Param(other))
     }
-}
 
-impl<I> From<SparseTensor<Atom, I>> for MixedTensor<I>
-where
-    I: TensorStructure,
-{
-    fn from(other: SparseTensor<Atom, I>) -> Self {
-        MixedTensor::<I>::Symbolic(DataTensor::Sparse(other))
+    pub fn composite(other: DataTensor<Atom, I>) -> Self {
+        MixedTensor::Param(ParamTensor::Composite(other))
     }
 }
 
@@ -466,7 +676,7 @@ where
     }
 }
 
-impl<I, T> Contract<ParamOrConcrete<I, T>> for ParamOrConcrete<I, T>
+impl<I, T> Contract<ParamOrConcrete<DataTensor<T, I>, I>> for ParamOrConcrete<DataTensor<T, I>, I>
 where
     I: TensorStructure + Clone + StructureContract,
     T: ContractableWith<Atom, Out = Atom>
@@ -479,73 +689,142 @@ where
         + IsZero,
     Atom: ContractableWith<T, Out = Atom> + ContractableWith<Atom, Out = Atom>,
 {
-    type LCM = ParamOrConcrete<I, T>;
-    fn contract(&self, other: &ParamOrConcrete<I, T>) -> Result<Self::LCM, ContractionError> {
+    type LCM = ParamOrConcrete<DataTensor<T, I>, I>;
+    fn contract(
+        &self,
+        other: &ParamOrConcrete<DataTensor<T, I>, I>,
+    ) -> Result<Self::LCM, ContractionError> {
         match (self, other) {
-            (ParamOrConcrete::<I, T>::Param(s), ParamOrConcrete::<I, T>::Param(o)) => {
-                Ok(ParamOrConcrete::<I, T>::Param(s.contract(o)?))
+            (ParamOrConcrete::Param(s), ParamOrConcrete::Param(o)) => {
+                Ok(ParamOrConcrete::Param(s.contract(o)?))
             }
-            (ParamOrConcrete::<I, T>::Param(s), ParamOrConcrete::<I, T>::Concrete(o)) => {
-                Ok(ParamOrConcrete::<I, T>::Composite(s.contract(o)?))
-            }
-            (ParamOrConcrete::<I, T>::Param(s), ParamOrConcrete::<I, T>::Composite(o)) => {
-                Ok(ParamOrConcrete::<I, T>::Composite(s.contract(o)?))
-            }
-            (ParamOrConcrete::<I, T>::Composite(s), ParamOrConcrete::<I, T>::Param(o)) => {
-                Ok(ParamOrConcrete::<I, T>::Composite(s.contract(o)?))
-            }
-            (ParamOrConcrete::<I, T>::Composite(s), ParamOrConcrete::<I, T>::Composite(o)) => {
-                Ok(ParamOrConcrete::<I, T>::Composite(s.contract(o)?))
-            }
-            (ParamOrConcrete::<I, T>::Composite(s), ParamOrConcrete::<I, T>::Concrete(o)) => {
-                Ok(ParamOrConcrete::<I, T>::Composite(o.contract(s)?))
-            }
-            (ParamOrConcrete::<I, T>::Concrete(s), ParamOrConcrete::<I, T>::Param(o)) => {
-                Ok(ParamOrConcrete::<I, T>::Param(s.contract(o)?))
-            }
-            (ParamOrConcrete::<I, T>::Concrete(s), ParamOrConcrete::<I, T>::Concrete(o)) => {
-                Ok(ParamOrConcrete::<I, T>::Concrete(s.contract(o)?))
-            }
-            (ParamOrConcrete::<I, T>::Concrete(s), ParamOrConcrete::<I, T>::Composite(o)) => {
-                Ok(ParamOrConcrete::<I, T>::Composite(s.contract(o)?))
+            (ParamOrConcrete::Param(s), ParamOrConcrete::Concrete(o)) => match s {
+                ParamTensor::Composite(s) => Ok(ParamOrConcrete::Param(ParamTensor::Composite(
+                    s.contract(o)?,
+                ))),
+                ParamTensor::Param(s) => Ok(ParamOrConcrete::Param(ParamTensor::Composite(
+                    s.contract(o)?,
+                ))),
+            },
+            (ParamOrConcrete::Concrete(s), ParamOrConcrete::Param(o)) => match o {
+                ParamTensor::Composite(o) => Ok(ParamOrConcrete::Param(ParamTensor::Composite(
+                    s.contract(o)?,
+                ))),
+                ParamTensor::Param(o) => Ok(ParamOrConcrete::Param(ParamTensor::Composite(
+                    s.contract(o)?,
+                ))),
+            },
+            (ParamOrConcrete::Concrete(s), ParamOrConcrete::Concrete(o)) => {
+                Ok(ParamOrConcrete::Concrete(s.contract(o)?))
             }
         }
     }
 }
 
-impl<I> Contract<MixedTensor<I>> for MixedTensor<I>
+impl<S, T> Contract<RealOrComplexTensor<T, S>> for RealOrComplexTensor<T, S>
 where
-    I: TensorStructure + Clone + StructureContract + Debug,
+    S: TensorStructure + Clone + StructureContract,
+    T: ContractableWith<T, Out = T>
+        + ContractableWith<Complex<T>, Out = Complex<T>>
+        + Clone
+        + FallibleMul<Output = T>
+        + FallibleAddAssign<T>
+        + FallibleSubAssign<T>
+        + RefZero
+        + IsZero,
+    Complex<T>: ContractableWith<T, Out = Complex<T>>
+        + ContractableWith<Complex<T>, Out = Complex<T>>
+        + Clone
+        + FallibleMul<Output = Complex<T>>
+        + FallibleAddAssign<Complex<T>>
+        + FallibleSubAssign<Complex<T>>
+        + RefZero
+        + IsZero,
 {
-    type LCM = MixedTensor<I>;
-    fn contract(&self, other: &MixedTensor<I>) -> Result<Self::LCM, ContractionError> {
+    type LCM = RealOrComplexTensor<T, S>;
+    fn contract(&self, other: &RealOrComplexTensor<T, S>) -> Result<Self::LCM, ContractionError> {
         match (self, other) {
-            (MixedTensor::<I>::Float(s), MixedTensor::<I>::Float(o)) => {
-                Ok(MixedTensor::<I>::Float(s.contract(o)?))
+            (RealOrComplexTensor::Real(s), RealOrComplexTensor::Real(o)) => {
+                Ok(RealOrComplexTensor::Real(s.contract(o)?))
             }
-            (MixedTensor::<I>::Float(s), MixedTensor::<I>::Complex(o)) => {
-                Ok(MixedTensor::<I>::Complex(s.contract(o)?))
+            (RealOrComplexTensor::Real(s), RealOrComplexTensor::Complex(o)) => {
+                Ok(RealOrComplexTensor::Complex(s.contract(o)?))
             }
-            (MixedTensor::<I>::Float(s), MixedTensor::<I>::Symbolic(o)) => {
-                Ok(MixedTensor::<I>::Symbolic(s.contract(o)?))
+            (RealOrComplexTensor::Complex(s), RealOrComplexTensor::Real(o)) => {
+                Ok(RealOrComplexTensor::Complex(s.contract(o)?))
             }
-            (MixedTensor::<I>::Complex(s), MixedTensor::<I>::Float(o)) => {
-                Ok(MixedTensor::<I>::Complex(s.contract(o)?))
+            (RealOrComplexTensor::Complex(s), RealOrComplexTensor::Complex(o)) => {
+                Ok(RealOrComplexTensor::Complex(s.contract(o)?))
             }
-            (MixedTensor::<I>::Complex(s), MixedTensor::<I>::Complex(o)) => {
-                Ok(MixedTensor::<I>::Complex(s.contract(o)?))
+        }
+    }
+}
+
+impl<I, T> Contract<ParamOrConcrete<RealOrComplexTensor<T, I>, I>>
+    for ParamOrConcrete<RealOrComplexTensor<T, I>, I>
+where
+    I: TensorStructure + Clone + StructureContract,
+    T: ContractableWith<Atom, Out = Atom>
+        + ContractableWith<T, Out = T>
+        + ContractableWith<Complex<T>, Out = Complex<T>>
+        + Clone
+        + FallibleMul<Output = T>
+        + FallibleAddAssign<T>
+        + FallibleSubAssign<T>
+        + RefZero
+        + IsZero,
+    Complex<T>: ContractableWith<Atom, Out = Atom>
+        + ContractableWith<T, Out = Complex<T>>
+        + ContractableWith<Complex<T>, Out = Complex<T>>
+        + Clone
+        + FallibleMul<Output = Complex<T>>
+        + FallibleAddAssign<Complex<T>>
+        + FallibleSubAssign<Complex<T>>
+        + RefZero
+        + IsZero,
+    Atom: ContractableWith<T, Out = Atom>
+        + ContractableWith<Atom, Out = Atom>
+        + ContractableWith<Complex<T>, Out = Atom>,
+{
+    type LCM = ParamOrConcrete<RealOrComplexTensor<T, I>, I>;
+    fn contract(
+        &self,
+        other: &ParamOrConcrete<RealOrComplexTensor<T, I>, I>,
+    ) -> Result<Self::LCM, ContractionError> {
+        match (self, other) {
+            (ParamOrConcrete::Param(s), ParamOrConcrete::Param(o)) => {
+                Ok(ParamOrConcrete::Param(s.contract(o)?))
             }
-            (MixedTensor::<I>::Complex(s), MixedTensor::<I>::Symbolic(o)) => {
-                Ok(MixedTensor::<I>::Symbolic(s.contract(o)?))
-            }
-            (MixedTensor::<I>::Symbolic(s), MixedTensor::<I>::Float(o)) => {
-                Ok(MixedTensor::<I>::Symbolic(s.contract(o)?))
-            }
-            (MixedTensor::<I>::Symbolic(s), MixedTensor::<I>::Complex(o)) => {
-                Ok(MixedTensor::<I>::Symbolic(s.contract(o)?))
-            }
-            (MixedTensor::<I>::Symbolic(s), MixedTensor::<I>::Symbolic(o)) => {
-                Ok(MixedTensor::<I>::Symbolic(s.contract(o)?))
+            (ParamOrConcrete::Param(s), ParamOrConcrete::Concrete(o)) => match (s, o) {
+                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                ),
+                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                ),
+                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                ),
+                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                ),
+            },
+            (ParamOrConcrete::Concrete(s), ParamOrConcrete::Param(o)) => match (o, s) {
+                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                ),
+                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                ),
+                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                ),
+                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                ),
+            },
+            (ParamOrConcrete::Concrete(s), ParamOrConcrete::Concrete(o)) => {
+                Ok(ParamOrConcrete::Concrete(s.contract(o)?))
             }
         }
     }

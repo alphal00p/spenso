@@ -1310,7 +1310,7 @@ impl TryFrom<AtomView<'_>> for VecStructure {
 #[test]
 #[cfg(feature = "shadowing")]
 fn test_from_atom() {
-    let a = Atom::parse("f(lor(4,1))").unwrap();
+    let a = Atom::parse("f(aind(lor(4,1)))").unwrap();
 
     let b = VecStructure::try_from(a.as_atom_view()).unwrap();
 

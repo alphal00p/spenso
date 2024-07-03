@@ -2,7 +2,7 @@ use std::{fs::File, io::BufReader};
 
 use ahash::AHashMap;
 use criterion::{criterion_group, criterion_main, Criterion};
-use spenso::{network, Complex, SymbolicTensor};
+use spenso::{Complex, SymbolicTensor};
 use symbolica::{
     atom::{Atom, AtomView},
     state::State,
@@ -39,7 +39,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     const_map.insert(params[1].as_view(), 0.32243234);
     const_map.insert(params[2].as_view(), 0.932);
 
-    let mut network = sym_tensor.to_network().unwrap();
+    let network = sym_tensor.to_network().unwrap();
 
     let mut group = c.benchmark_group("evaluate_net");
 

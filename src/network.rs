@@ -1,27 +1,27 @@
+#[cfg(feature = "shadowing")]
 use ahash::{AHashSet, HashMap};
+
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
 
-use crate::{
-    scalar, AtomViewOrConcrete, Complex, DataIterator, FallibleAdd, FallibleMul, GetTensorData,
-    HasTensorData, IntoArgs, IteratableTensor, NamedStructure, RealOrComplexTensor,
-    TensorStructure, TrySmallestUpgrade,
-};
+use crate::{FallibleMul, GetTensorData, HasTensorData, TensorStructure};
 
-use crate::ParamTensor;
 #[cfg(feature = "shadowing")]
-use crate::{DataTensor, HistoryStructure, MixedTensor, Shadowable};
+use crate::{
+    AtomViewOrConcrete, Complex, DataIterator, DataTensor, FallibleAdd, IntoArgs, IteratableTensor,
+    MixedTensor, NamedStructure, ParamTensor, RealOrComplexTensor, Shadowable, ToSymbolic,
+    TrySmallestUpgrade,
+};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{self, representation::FunView, AddView, AtomOrView, MulView},
+    atom::{representation::FunView, AddView, AtomOrView, MulView},
     atom::{Atom, AtomView, Symbol},
     domains::float::Complex as SymComplex,
     domains::float::Real,
     domains::rational::Rational,
     evaluate::EvaluationFn,
     state::State,
-    tensors,
 };
 
 #[cfg(feature = "shadowing")]
@@ -29,11 +29,9 @@ use ahash::AHashMap;
 
 use super::{Contract, HasName, HasStructure, Slot, TracksCount};
 use smartstring::alias::String;
-use std::{
-    f32::consts::E,
-    fmt::{Debug, Display},
-};
+use std::fmt::{Debug, Display};
 
+#[cfg(feature = "shadowing")]
 use anyhow::anyhow;
 
 new_key_type! {
@@ -522,7 +520,7 @@ fn merge() {
 #[derive(Debug, Clone)]
 pub struct TensorNetwork<T, S> {
     pub graph: HalfEdgeGraph<T, Slot>,
-    pub params: AHashSet<Atom>,
+    // pub params: AHashSet<Atom>,
     pub scalar: Option<S>,
 }
 
@@ -655,12 +653,13 @@ where
 
         TensorNetwork {
             graph: TensorNetwork::<ParamTensor<S>, Atom>::generate_network_graph(tensors),
-            params: AHashSet::new(),
+            // params: AHashSet::new(),
             scalar: self.scalar,
         }
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<S: TensorStructure + Clone> TensorNetwork<ParamTensor<S>, Atom> {
     pub fn evaluate<'a, D, F: Fn(&Rational) -> D + Copy>(
         &'a self,
@@ -695,7 +694,7 @@ where
     fn from(tensors: Vec<T>) -> Self {
         TensorNetwork {
             graph: Self::generate_network_graph(tensors),
-            params: AHashSet::new(),
+            // params: AHashSet::new(),
             scalar: None,
         }
     }
@@ -717,7 +716,7 @@ where
     pub fn new() -> Self {
         TensorNetwork {
             graph: HalfEdgeGraph::new(),
-            params: AHashSet::new(),
+            // params: AHashSet::new(),
             scalar: None,
         }
     }
@@ -842,17 +841,20 @@ where
     S: TensorStructure + Clone,
     T: Clone,
 {
-    pub fn generate_params(&mut self) {
+    pub fn generate_params(&mut self) -> AHashSet<Atom> {
+        let mut params = AHashSet::new();
         for (_, n) in self.graph.nodes.iter().filter(|(_, n)| n.is_parametric()) {
             for (_, a) in n.iter_flat() {
                 if let AtomViewOrConcrete::Atom(a) = a {
-                    self.params.insert(a.to_owned());
+                    params.insert(a.to_owned());
                 }
             }
         }
+        params
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> TryFrom<MulView<'a>>
     for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
 {
@@ -879,6 +881,7 @@ impl<'a> TryFrom<MulView<'a>>
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> TryFrom<AtomView<'a>>
     for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
 {
@@ -898,6 +901,7 @@ impl<'a> TryFrom<AtomView<'a>>
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> TryFrom<FunView<'a>>
     for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
 {
@@ -921,6 +925,7 @@ impl<'a> TryFrom<FunView<'a>>
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> TryFrom<AddView<'a>>
     for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
 {
@@ -955,7 +960,7 @@ impl<'a> TryFrom<AddView<'a>>
 impl<T, S, I> TensorNetwork<T, S>
 where
     T: HasStructure<Structure = I> + Clone + HasName<Name = Symbol>,
-    I: TensorStructure + Clone,
+    I: TensorStructure + Clone + ToSymbolic,
     T::Args: IntoArgs,
 {
     pub fn symbolic_shadow(&mut self, name: &str) -> TensorNetwork<MixedTensor<f64, I>, S> {
@@ -1005,7 +1010,7 @@ where
 
         TensorNetwork {
             graph: g,
-            params,
+            // params,
             scalar,
         }
     }
@@ -1065,12 +1070,15 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
+#[allow(dead_code)]
 pub struct Levels<T, S: TensorStructure> {
     pub levels: Vec<TensorNetwork<DataTensor<Atom, S>, Atom>>,
     const_map: AHashMap<AtomOrView<'static>, T>,
     params: Vec<Atom>,
 }
 
+#[cfg(feature = "shadowing")]
 impl<T, S> From<TensorNetwork<DataTensor<Atom, S>, Atom>> for Levels<T, S>
 where
     T: Clone,

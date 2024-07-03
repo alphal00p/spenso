@@ -1,14 +1,15 @@
 {
   "editor.formatOnSave": true,
   "editor.formatOnPaste": true,
-  "rust-analyzer.cargo.features": "all",
+  // "rust-analyzer.cargo.features": "all",
   "conventionalCommits.scopes": [
     "iterators",
     "test",
     "CI",
     "network",
     "contraction",
-    "symbolica"
+    "symbolica",
+    "clippy"
   ],
   "github.copilot.enable": {
     "quarto": false,

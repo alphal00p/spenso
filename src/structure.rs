@@ -13,27 +13,25 @@ use derive_more::Rem;
 use derive_more::RemAssign;
 use derive_more::Sub;
 use derive_more::SubAssign;
-use duplicate::duplicate;
 use indexmap::IndexMap;
 use serde::Deserialize;
 use serde::Serialize;
 
 use smartstring::LazyCompact;
 use smartstring::SmartString;
-use std::borrow::Cow;
-use std::env::Args;
 use std::fmt::Debug;
+#[cfg(feature = "shadowing")]
 use std::fmt::Display;
 use std::ops::Deref;
 
-use symbolica::atom::representation::FunView;
-use symbolica::atom::MulView;
-
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{AsAtomView, Atom, AtomView, FunctionBuilder, ListIterator, Symbol},
+    atom::{
+        representation::FunView, AsAtomView, Atom, AtomView, FunctionBuilder, ListIterator,
+        MulView, Symbol,
+    },
     coefficient::CoefficientView,
-    state::{State, Workspace},
+    state::State,
 };
 
 use std::ops::Range;
@@ -664,6 +662,7 @@ pub struct Tensor<Store, Structure> {
     pub structure: Structure,
 }
 
+#[allow(dead_code)]
 impl<Store, Structure> Tensor<Store, Structure> {
     fn cast<NewStructure>(self) -> Tensor<Store, NewStructure>
     where
@@ -688,6 +687,59 @@ where
             fn get_rep(&self, i: usize)-> Option<Representation>;
             fn get_dim(&self, i: usize)-> Option<Dimension>;
             fn order(&self)-> usize;
+        }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<T> ToSymbolic for T where T: HasStructure {}
+
+#[cfg(feature = "shadowing")]
+pub trait ToSymbolic: TensorStructure {
+    fn concrete_atom(&self, id: FlatIndex) -> Atom {
+        let exp = self.expanded_index(id).unwrap();
+        let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
+        for i in exp.iter() {
+            cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
+        }
+        cind.finish()
+    }
+    fn shadow_with(self, name: Symbol, args: &[Atom]) -> DenseTensor<Atom, Self>
+    where
+        Self: std::marker::Sized + Clone,
+    {
+        let mut data = vec![];
+        for index in self.index_iter() {
+            data.push(atomic_expanded_label_id(&index, name, args));
+        }
+
+        DenseTensor {
+            data,
+            structure: self,
+        }
+    }
+    fn to_explicit_rep(self, name: Symbol, args: &[Atom]) -> MixedTensor<f64, Self>
+    where
+        Self: std::marker::Sized + Clone,
+    {
+        let identity = State::get_symbol("id");
+        let gamma = State::get_symbol("γ");
+        let gamma5 = State::get_symbol("γ5");
+        let proj_m = State::get_symbol("ProjM");
+        let proj_p = State::get_symbol("ProjP");
+        let sigma = State::get_symbol("σ");
+        let metric = State::get_symbol("Metric");
+
+        match name {
+            _ if name == identity => ufo::identity_data::<f64, Self>(self).into(),
+
+            _ if name == gamma => ufo::gamma_data(self).into(),
+            _ if name == gamma5 => ufo::gamma5_data(self).into(),
+            _ if name == proj_m => ufo::proj_m_data(self).into(),
+            _ if name == proj_p => ufo::proj_p_data(self).into(),
+            _ if name == sigma => ufo::sigma_data(self).into(),
+            _ if name == metric => ufo::metric_data::<f64, Self>(self).into(),
+            name => MixedTensor::param(self.shadow_with(name, args).into()),
         }
     }
 }
@@ -824,15 +876,6 @@ pub trait TensorStructure {
 
     fn reps(&self) -> Vec<Representation> {
         self.external_reps_iter().map(|r| r.clone()).collect()
-    }
-
-    fn concrete_atom(&self, id: FlatIndex) -> Atom {
-        let exp = self.expanded_index(id).unwrap();
-        let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
-        for i in exp.iter() {
-            cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
-        }
-        cind.finish()
     }
 
     /// yields the order/total valence of the tensor, i.e. the number of indices
@@ -999,46 +1042,6 @@ pub trait TensorStructure {
     fn size(&self) -> usize {
         self.shape().iter().map(|x| usize::from(*x)).product()
     }
-    #[cfg(feature = "shadowing")]
-    fn shadow_with(self, name: Symbol, args: &[Atom]) -> DenseTensor<Atom, Self>
-    where
-        Self: std::marker::Sized + Clone,
-    {
-        let mut data = vec![];
-        for index in self.index_iter() {
-            data.push(atomic_expanded_label_id(&index, name, args));
-        }
-
-        DenseTensor {
-            data,
-            structure: self,
-        }
-    }
-    #[cfg(feature = "shadowing")]
-    fn to_explicit_rep(self, name: Symbol, args: &[Atom]) -> MixedTensor<f64, Self>
-    where
-        Self: std::marker::Sized + Clone,
-    {
-        let identity = State::get_symbol("id");
-        let gamma = State::get_symbol("γ");
-        let gamma5 = State::get_symbol("γ5");
-        let proj_m = State::get_symbol("ProjM");
-        let proj_p = State::get_symbol("ProjP");
-        let sigma = State::get_symbol("σ");
-        let metric = State::get_symbol("Metric");
-
-        match name {
-            _ if name == identity => ufo::identity_data::<f64, Self>(self).into(),
-
-            _ if name == gamma => ufo::gamma_data(self).into(),
-            _ if name == gamma5 => ufo::gamma5_data(self).into(),
-            _ if name == proj_m => ufo::proj_m_data(self).into(),
-            _ if name == proj_p => ufo::proj_p_data(self).into(),
-            _ if name == sigma => ufo::sigma_data(self).into(),
-            _ if name == metric => ufo::metric_data::<f64, Self>(self).into(),
-            name => MixedTensor::param(self.shadow_with(name, args).into()),
-        }
-    }
 }
 
 // impl<'a> HasStructure for &'a [Slot] {
@@ -1059,15 +1062,6 @@ pub trait TensorStructure {
 // }
 
 impl TensorStructure for Vec<Slot> {
-    fn concrete_atom(&self, id: FlatIndex) -> Atom {
-        let exp = self.expanded_index(id).unwrap();
-        let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
-        for i in exp.iter() {
-            cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
-        }
-        cind.finish()
-    }
-
     fn external_reps_iter(&self) -> impl Iterator<Item = &Representation> {
         self.iter().map(|s| &s.representation)
     }
@@ -1092,6 +1086,9 @@ impl TensorStructure for Vec<Slot> {
         self.get(i).map(|s| s.representation.into())
     }
 }
+
+#[cfg(feature = "shadowing")]
+impl ToSymbolic for Vec<Slot> {}
 
 /// A trait for a structure that can be traced and merged, during a contraction.
 pub trait StructureContract {
@@ -1205,52 +1202,6 @@ impl StructureContract for Vec<Slot> {
     }
 }
 
-/// A trait for a structure that can be traced and merged, during a contraction, maybe using symbolic state and workspace.
-#[cfg(feature = "shadowing")]
-pub trait SymbolicStructureContract {
-    fn trace_sym(&mut self, i: usize, j: usize, state: &State, ws: &Workspace);
-
-    fn trace_out_sym(&mut self, state: &State, ws: &Workspace);
-
-    fn merge_sym(&mut self, other: &Self, state: &State, ws: &Workspace);
-
-    #[must_use]
-    fn merge_at_sym(
-        &self,
-        other: &Self,
-        positions: (usize, usize),
-        state: &State,
-        ws: &Workspace,
-    ) -> Self;
-}
-#[cfg(feature = "shadowing")]
-impl<T> SymbolicStructureContract for T
-where
-    T: StructureContract,
-{
-    fn trace_sym(&mut self, i: usize, j: usize, _state: &State, _ws: &Workspace) {
-        self.trace(i, j);
-    }
-
-    fn trace_out_sym(&mut self, _state: &State, _ws: &Workspace) {
-        self.trace_out();
-    }
-
-    fn merge_sym(&mut self, other: &Self, _state: &State, _ws: &Workspace) {
-        self.merge(other);
-    }
-
-    fn merge_at_sym(
-        &self,
-        other: &Self,
-        positions: (usize, usize),
-        _state: &State,
-        _ws: &Workspace,
-    ) -> Self {
-        self.merge_at(other, positions)
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct IndexLess {
     pub structure: Vec<Representation>,
@@ -1332,6 +1283,9 @@ impl TensorStructure for IndexLess {
     }
 }
 
+#[cfg(feature = "shadowing")]
+impl ToSymbolic for IndexLess {}
+
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
 pub struct VecStructure {
     pub structure: Vec<Slot>,
@@ -1354,6 +1308,7 @@ impl TryFrom<AtomView<'_>> for VecStructure {
 
 #[cfg(test)]
 #[test]
+#[cfg(feature = "shadowing")]
 fn test_from_atom() {
     let a = Atom::parse("f(lor(4,1))").unwrap();
 
@@ -1465,11 +1420,7 @@ impl<N, A> From<SmartShadowStructure<N, A>> for VecStructure {
     }
 }
 
-impl<N, A> From<HistoryStructure<N, A>> for VecStructure
-where
-    N: IntoSymbol,
-    A: IntoArgs,
-{
+impl<N, A> From<HistoryStructure<N, A>> for VecStructure {
     fn from(structure: HistoryStructure<N, A>) -> Self {
         structure.external.into()
     }
@@ -1531,6 +1482,8 @@ impl TensorStructure for VecStructure {
         }
     }
 }
+#[cfg(feature = "shadowing")]
+impl ToSymbolic for VecStructure {}
 
 impl StructureContract for VecStructure {
     fn merge(&mut self, other: &Self) -> Option<usize> {
@@ -1577,6 +1530,7 @@ impl<Name, Args> NamedStructure<Name, Args> {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> TryFrom<FunView<'a>> for NamedStructure<Symbol, Vec<Atom>> {
     type Error = String;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
@@ -1667,11 +1621,7 @@ pub trait HasName {
     fn set_name(&mut self, name: Self::Name);
 }
 
-impl<N, A> TensorStructure for NamedStructure<N, A>
-where
-    N: IntoSymbol,
-    A: IntoArgs,
-{
+impl<N, A> TensorStructure for NamedStructure<N, A> {
     delegate! {
         to self.structure {
             fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
@@ -1682,6 +1632,10 @@ where
             fn get_dim(&self, i: usize) -> Option<Dimension>;
         }
     }
+}
+
+#[cfg(feature = "shadowing")]
+impl<N: IntoSymbol, A: IntoArgs> ToSymbolic for NamedStructure<N, A> {
     fn concrete_atom(&self, id: FlatIndex) -> Atom {
         let exp_atom = self.structure.concrete_atom(id);
         if let Some(ref f) = self.global_name {
@@ -1765,6 +1719,9 @@ impl TensorStructure for ContractionCountStructure {
     }
 }
 
+#[cfg(feature = "shadowing")]
+impl ToSymbolic for ContractionCountStructure {}
+
 impl StructureContract for ContractionCountStructure {
     delegate! {
         to self.structure{
@@ -1830,11 +1787,7 @@ where
     }
 }
 
-impl<N, A> TensorStructure for SmartShadowStructure<N, A>
-where
-    N: IntoSymbol,
-    A: IntoArgs,
-{
+impl<N, A> TensorStructure for SmartShadowStructure<N, A> {
     delegate! {
         to self.structure {
             fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
@@ -1845,7 +1798,10 @@ where
             fn get_dim(&self, i: usize) -> Option<Dimension>;
         }
     }
+}
 
+#[cfg(feature = "shadowing")]
+impl<N: IntoSymbol, A: IntoArgs> ToSymbolic for SmartShadowStructure<N, A> {
     fn concrete_atom(&self, id: FlatIndex) -> Atom {
         let exp_atom = self.structure.concrete_atom(id);
         if let Some(ref f) = self.global_name {
@@ -1897,7 +1853,7 @@ impl<N, A> StructureContract for SmartShadowStructure<N, A> {
 /// It enables keeping track of the contraction history of the tensor, mostly for debugging and display purposes.
 /// A [`SymbolicTensor`] can also be used in this way, however it needs a symbolica state and workspace during contraction.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct HistoryStructure<Name: IntoSymbol, Args: IntoArgs = ()> {
+pub struct HistoryStructure<Name, Args = ()> {
     internal: VecStructure,
     pub names: AHashMap<Range<usize>, Name>, //ideally this is a named partion.. maybe a btreemap<usize, N>, and the range is from previous to next
     external: NamedStructure<Name, Args>,
@@ -1905,8 +1861,7 @@ pub struct HistoryStructure<Name: IntoSymbol, Args: IntoArgs = ()> {
 
 impl<N, A> From<NamedStructure<N, A>> for HistoryStructure<N, A>
 where
-    N: Clone + IntoSymbol,
-    A: IntoArgs,
+    N: Clone,
 {
     fn from(external: NamedStructure<N, A>) -> Self {
         Self {
@@ -1917,11 +1872,7 @@ where
     }
 }
 
-impl<N, A> HistoryStructure<N, A>
-where
-    N: IntoSymbol,
-    A: IntoArgs,
-{
+impl<N, A> HistoryStructure<N, A> {
     /// make the indices in the internal index list of self independent from the indices in the internal index list of other
     /// This is done by shifting the indices in the internal index list of self by the the maximum index present.
     pub fn independentize_internal(&mut self, other: &Self) {
@@ -1952,8 +1903,8 @@ where
 
 impl<N, A> HasName for HistoryStructure<N, A>
 where
-    N: Clone + IntoSymbol,
-    A: Clone + IntoArgs,
+    N: Clone,
+    A: Clone,
 {
     type Name = N;
     type Args = A;
@@ -1966,7 +1917,7 @@ where
     }
 }
 
-impl<N: IntoSymbol, A: IntoArgs> TracksCount for HistoryStructure<N, A> {
+impl<N, A> TracksCount for HistoryStructure<N, A> {
     /// Since each time we contract, we merge the name maps, the amount of contractions, is the size of the name map
     /// This function returns the number of contractions thus computed
     fn contractions_num(&self) -> usize {
@@ -1974,11 +1925,7 @@ impl<N: IntoSymbol, A: IntoArgs> TracksCount for HistoryStructure<N, A> {
     }
 }
 
-impl<N, A> TensorStructure for HistoryStructure<N, A>
-where
-    N: IntoSymbol,
-    A: IntoArgs,
-{
+impl<N, A> TensorStructure for HistoryStructure<N, A> {
     delegate! {
         to self.external {
             fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
@@ -1987,7 +1934,7 @@ where
             fn get_slot(&self, i: usize) -> Option<Slot>;
             fn get_rep(&self, i: usize) -> Option<Representation>;
             fn get_dim(&self, i: usize) -> Option<Dimension>;
-            fn concrete_atom(&self, id: FlatIndex) -> Atom;
+
         }
     }
     /// checks if internally, the two tensors are the same. This implies that the external indices are the same
@@ -1996,6 +1943,15 @@ where
         let set2: HashSet<_> = (&other.internal).into_iter().collect();
         set1 == set2
         // TODO: check names
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<N: IntoSymbol, A: IntoArgs> ToSymbolic for HistoryStructure<N, A> {
+    delegate! {
+        to self.external{
+
+        }
     }
 }
 
@@ -2009,8 +1965,8 @@ where
 
 impl<N, A> StructureContract for HistoryStructure<N, A>
 where
-    N: Clone + IntoSymbol,
-    A: Clone + IntoArgs,
+    N: Clone,
+    A: Clone,
 {
     /// remove the repeated indices in the external index list
     fn trace_out(&mut self) {
@@ -2067,7 +2023,7 @@ where
         let external = self.external.merge_at(&other.external, positions);
 
         let mut slots_self_int = self.internal.clone();
-        let mut slots_other_int = other.internal.clone();
+        let slots_other_int = other.internal.clone();
         slots_self_int.extend(slots_other_int);
 
         let mut names = self.names.clone();
@@ -2121,6 +2077,7 @@ pub trait IntoSymbol {
     fn into_symbol(&self) -> Symbol;
 }
 
+#[cfg(feature = "shadowing")]
 pub trait IntoArgs {
     fn into_args<'a>(&self) -> impl Iterator<Item = Atom>;
     fn args(&self) -> Vec<Atom> {
@@ -2128,24 +2085,28 @@ pub trait IntoArgs {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl IntoArgs for usize {
     fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
         std::iter::once(Atom::new_num(*self as i64))
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl IntoArgs for () {
     fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
         std::iter::empty()
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl IntoArgs for Atom {
     fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
         std::iter::once(self.clone())
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl IntoArgs for Vec<Atom> {
     fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
         self.iter().cloned()
@@ -2190,7 +2151,7 @@ pub trait Shadowable: HasStructure + TensorStructure + HasName {
         Self: std::marker::Sized,
         Self::Name: IntoSymbol + Clone,
         Self::Args: IntoArgs,
-        Self::Structure: Clone + TensorStructure,
+        Self::Structure: Clone + TensorStructure + ToSymbolic,
     {
         let name = self.name()?;
         let args = self.id().map(|s| s.args()).unwrap_or(vec![]);
@@ -2206,7 +2167,7 @@ pub trait Shadowable: HasStructure + TensorStructure + HasName {
     where
         Self: std::marker::Sized,
         Self::Args: IntoArgs,
-        Self::Structure: Clone + TensorStructure,
+        Self::Structure: Clone + TensorStructure + ToSymbolic,
         Self::Name: IntoSymbol + Clone,
     {
         let name = self.name()?;
@@ -2320,6 +2281,7 @@ where
 {
 }
 
+#[cfg(feature = "shadowing")]
 impl<N, A> std::fmt::Display for HistoryStructure<N, A>
 where
     N: Display + Clone + IntoSymbol,

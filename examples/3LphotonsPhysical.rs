@@ -1,51 +1,12 @@
 use std::{fs::File, io::BufReader};
 
 use ahash::AHashMap;
-use rand::{distributions::Uniform, Rng, SeedableRng};
-use rand_xoshiro::Xoroshiro64Star;
-use spenso::{
-    Complex, DataIterator, DenseTensor, HasStructure, SetTensorData, SparseTensor, SymbolicTensor,
-    TensorStructure,
-};
+
+use spenso::{Complex, SymbolicTensor};
 use symbolica::{
     atom::{Atom, AtomView},
     state::State,
 };
-
-fn test_tensor<D, S>(structure: S, seed: u64, range: Option<(D, D)>) -> SparseTensor<D, S>
-where
-    S: TensorStructure,
-    D: rand::distributions::uniform::SampleUniform,
-    Uniform<D>: Copy,
-
-    rand::distributions::Standard: rand::distributions::Distribution<D>,
-{
-    let mut rng: Xoroshiro64Star = Xoroshiro64Star::seed_from_u64(seed);
-
-    let mut tensor = SparseTensor::empty(structure);
-
-    let density = tensor.size(); //rng.gen_range(0..tensor.size());
-
-    if let Some((low, high)) = range {
-        let multipliable = Uniform::new(low, high);
-        for _ in 0..density {
-            tensor
-                .set_flat(
-                    rng.gen_range(0..tensor.size()).into(),
-                    rng.sample(multipliable),
-                )
-                .unwrap();
-        }
-    } else {
-        for _ in 0..density {
-            tensor
-                .set_flat(rng.gen_range(0..tensor.size()).into(), rng.gen())
-                .unwrap();
-        }
-    }
-
-    tensor
-}
 
 fn main() {
     let expr = concat!("-64/729*G^4*ee^6",

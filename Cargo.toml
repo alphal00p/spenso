@@ -45,6 +45,14 @@ required-features = ["shadowing"]
 name = "evaluate_network"
 required-features = ["shadowing"]
 
+[[example]]
+name = "3LphotonsPhysical"
+required-features = ["shadowing"]
+
+[[example]]
+name = "pres"
+required-features = ["shadowing"]
+
 
 [dependencies]
 ahash = { version = "0.8.11", features = ["serde"] }

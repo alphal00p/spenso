@@ -1,11 +1,11 @@
-use std::{fmt::Debug, ops::Neg};
+use std::ops::Neg;
 
+use spenso::Complex;
 use spenso::{
     ufo::{euclidean_four_vector, gamma},
-    AbstractIndex, ContractionCountStructure, FallibleMul, HasStructure, MixedTensor,
-    Representation, SetTensorData, Slot, SparseTensor, TensorNetwork,
+    AbstractIndex, ContractionCountStructure, FallibleMul, MixedTensor, Representation, Slot,
+    TensorNetwork, ToSymbolic,
 };
-use spenso::{Complex, TensorStructure};
 
 use ahash::{AHashMap, AHashSet, HashMap};
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -71,30 +71,6 @@ fn gamma_net_param(
     TensorNetwork::from(result)
 }
 
-fn test_tensor<S>(structure: S) -> SparseTensor<Complex<f64>, S>
-where
-    S: HasStructure,
-{
-    let mut rng: Xoroshiro64Star = Xoroshiro64Star::from_entropy();
-
-    let mut tensor = SparseTensor::empty(structure);
-
-    let density = tensor.size();
-
-    let multipliable = Uniform::new(1., 10.);
-
-    for _ in 0..density {
-        tensor
-            .set_flat(
-                rng.gen_range(0..tensor.size()).into(),
-                Complex::<f64>::new(rng.sample(multipliable), rng.sample(multipliable)),
-            )
-            .unwrap();
-    }
-
-    tensor
-}
-
 fn const_map_gen<'a, 'b>(
     params: &'a AHashSet<Atom>,
     const_map: &mut HashMap<AtomView<'b>, symbolica::domains::float::Complex<f64>>,
@@ -130,8 +106,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     let minkindices = indices(20, 24);
 
     let mut net = gamma_net_param(&minkindices, vbar, u);
-    net.generate_params();
-    let params = net.params.clone();
+
+    let params = net.generate_params();
 
     println!("{:?}", params.len());
     net.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(2));

@@ -1,15 +1,15 @@
 use std::ops::Neg;
 
 use spenso::{
-    ufo::{euclidean_four_vector_sym, gammasym, mink_four_vector_sym, param_mink_four_vector},
+    ufo::{euclidean_four_vector_sym, gammasym, mink_four_vector_sym},
     AbstractIndex, Complex, Contract, Dimension, FallibleMul, HistoryStructure, MixedTensor,
-    NamedStructure, NumTensor, ParamOrConcrete, RealOrComplexTensor, Representation, Shadowable,
-    Slot, SymbolicTensor, TensorNetwork, TensorStructure,
+    NamedStructure, NumTensor, Representation, Shadowable, Slot, SymbolicTensor, TensorNetwork,
+    TensorStructure,
 };
 
 use num::ToPrimitive;
 
-use symbolica::atom::{Atom, Symbol};
+use symbolica::atom::Symbol;
 
 fn gamma_net_sym(
     minkindices: &[i32],

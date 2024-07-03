@@ -1,16 +1,15 @@
 use crate::{
-    ConcreteIndex, GetTensorData, IsZero, IteratableTensor, ParamTensor, RealOrComplexTensor,
-    RefZero, SetTensorData, SmallestUpgrade, TensorStructure, TrySmallestUpgrade,
+    ConcreteIndex, GetTensorData, IsZero, IteratableTensor, RefZero, SetTensorData,
+    TensorStructure, TrySmallestUpgrade,
 };
-use std::{fmt::Debug, ops::Neg};
+use std::ops::Neg;
 
 use super::{
     DataTensor, DenseTensor, FallibleAdd, FallibleMul, FallibleSub, HasStructure, SparseTensor,
-    TryFromUpgrade, TryIntoUpgrade,
 };
 
 #[cfg(feature = "shadowing")]
-use super::{Complex, MixedTensor};
+use super::{Complex, MixedTensor, ParamTensor, RealOrComplexTensor};
 #[cfg(feature = "shadowing")]
 use symbolica::atom::Atom;
 
@@ -199,6 +198,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: Clone, S: TensorStructure + Clone> FallibleAdd<RealOrComplexTensor<T, S>>
     for RealOrComplexTensor<T, S>
 where
@@ -235,6 +235,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<S: TensorStructure + Clone> FallibleAdd<ParamTensor<S>> for ParamTensor<S> {
     type Output = ParamTensor<S>;
     fn add_fallible(&self, rhs: &ParamTensor<S>) -> Option<Self::Output> {
@@ -472,7 +473,7 @@ where
         }
     }
 }
-
+#[cfg(feature = "shadowing")]
 impl<T: Clone, S: TensorStructure + Clone> FallibleSub<RealOrComplexTensor<T, S>>
     for RealOrComplexTensor<T, S>
 where
@@ -511,6 +512,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<S: TensorStructure + Clone> FallibleSub<ParamTensor<S>> for ParamTensor<S> {
     type Output = ParamTensor<S>;
     fn sub_fallible(&self, rhs: &ParamTensor<S>) -> Option<Self::Output> {

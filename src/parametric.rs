@@ -1,28 +1,23 @@
 extern crate derive_more;
-use anyhow::anyhow;
-use derive_more::From;
-use std::{
-    fmt::{Debug, Display},
-    process::Output,
-};
+
+use std::fmt::{Debug, Display};
 
 use ahash::{AHashMap, HashMap};
 use enum_try_as_inner::EnumTryAsInner;
 
 use crate::{
     Complex, ContractableWith, ContractionError, FallibleAddAssign, FallibleMul, FallibleSubAssign,
-    Fiber, FiberClass, FiberClassMut, FiberData, FiberMut, FlatIndex, HasName, IsZero,
-    IteratableTensor, RefZero, TensorStructure, TrySmallestUpgrade,
+    FlatIndex, HasName, IsZero, IteratableTensor, RefZero, TensorStructure, ToSymbolic,
 };
 use symbolica::{
-    atom::{representation::FunView, Atom, AtomOrView, AtomView, Symbol},
+    atom::{representation::FunView, Atom, AtomOrView, AtomView},
     domains::{float::Real, rational::Rational},
     evaluate::{ConstOrExpr, EvaluationFn, ExpressionEvaluator},
 };
 
 use super::{
-    Contract, DataIterator, DataTensor, DenseTensor, HasStructure, HistoryStructure, Slot,
-    SparseTensor, StructureContract, TracksCount, VecStructure,
+    Contract, DataIterator, DataTensor, DenseTensor, HasStructure, Slot, SparseTensor,
+    StructureContract, TracksCount, VecStructure,
 };
 use symbolica::domains::float::Complex as SymComplex;
 

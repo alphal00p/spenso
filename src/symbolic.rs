@@ -1,19 +1,14 @@
-use std::borrow::Cow;
-
 use crate::{
-    ContractionError, DataIterator, HasStructure, IntoArgs, NamedStructure, TensorNetworkError,
-    TensorStructure, ABSTRACTIND,
+    ContractionError, HasStructure, IntoArgs, NamedStructure, TensorNetworkError, ABSTRACTIND,
 };
 
 use super::{
-    Contract, FallibleAdd, HasName, IntoSymbol, MixedTensor, Shadowable, Slot, StructureContract,
-    TensorNetwork, VecStructure,
+    Contract, HasName, IntoSymbol, MixedTensor, Shadowable, StructureContract, TensorNetwork,
+    VecStructure,
 };
 
-use bitvec::vec;
 use symbolica::{
-    atom::{AddView, Atom, AtomView, MulView, Symbol},
-    coefficient::CoefficientView,
+    atom::{Atom, AtomView, Symbol},
     state::State,
 };
 

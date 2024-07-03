@@ -1,4 +1,5 @@
 use ahash::AHashMap;
+#[cfg(feature = "shadowing")]
 use symbolica::domains::float::Real;
 
 use crate::{IteratableTensor, TensorStructure, TrySmallestUpgrade};
@@ -302,6 +303,7 @@ pub trait RefZero {
     fn ref_zero(&self) -> Self;
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: RefZero + Real> RefZero for symbolica::domains::float::Complex<T> {
     fn ref_zero(&self) -> Self {
         Self::new(self.re.ref_zero(), self.im.ref_zero())

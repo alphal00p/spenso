@@ -1,11 +1,12 @@
 use crate::{
     ufo::mink_four_vector, Contract, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSub,
-    GetTensorData, HasStructure, HasTensorData, Representation, SparseTensor, StructureContract,
+    GetTensorData, HasTensorData, Representation, SparseTensor, StructureContract,
 };
 use crate::{
     AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, ExpandedIndex, Fiber,
     FiberClass, FlatIndex, IteratesAlongFibers, TensorStructure,
 };
+#[cfg(feature = "shadowing")]
 use ahash::{HashMap, HashMapExt};
 
 use indexmap::{IndexMap, IndexSet};
@@ -18,7 +19,7 @@ use rand_xoshiro::Xoroshiro64Star;
 use smartstring::alias::String;
 
 #[cfg(feature = "shadowing")]
-use super::{symbolic::SymbolicTensor, IntoSymbol, MixedTensor, Shadowable};
+use super::{symbolic::SymbolicTensor, IntoSymbol, MixedTensor, Shadowable, TryIntoUpgrade};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView},
@@ -28,7 +29,7 @@ use symbolica::{
 use super::FallibleAdd;
 use super::{
     ufo, AbstractIndex, DataTensor, Dimension, HistoryStructure, NamedStructure, NumTensor,
-    SetTensorData, Slot, TensorNetwork, TryIntoUpgrade, VecStructure,
+    SetTensorData, Slot, TensorNetwork, VecStructure,
 };
 
 fn test_tensor<D, S>(structure: S, seed: u64, range: Option<(D, D)>) -> SparseTensor<D, S>
@@ -1092,6 +1093,8 @@ fn convert_sym() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn simple_multi_contract_sym() {
+    use crate::ToSymbolic;
+
     let structa = VecStructure::new(vec![(1, 3).into(), (2, 4).into(), (3, 4).into()]);
     // let structa = structa.to_named("a");
     let structb = VecStructure::new(vec![(2, 4).into(), (4, 3).into(), (3, 4).into()]);

@@ -1,12 +1,13 @@
 use std::ops::Neg;
 
 use super::{
-    AbstractIndex, DenseTensor, HistoryStructure,
+    AbstractIndex, DenseTensor,
     Representation::{self, Euclidean, Lorentz},
     SetTensorData, Slot, SparseTensor,
 };
-use crate::IntoArgs;
-use crate::NamedStructure;
+
+#[cfg(feature = "shadowing")]
+use crate::{HistoryStructure, NamedStructure};
 use num::{NumCast, One, Zero};
 
 use crate::{Complex, Dimension, TensorStructure};
@@ -19,7 +20,7 @@ use symbolica::{
 };
 
 #[cfg(feature = "shadowing")]
-use super::{IntoSymbol, Shadowable};
+use super::{IntoArgs, IntoSymbol, Shadowable};
 
 // pub fn init_state() {
 //     assert!(EUC == State::get_symbol("euc", None).unwrap());
@@ -98,6 +99,7 @@ where
     identity
 }
 
+#[cfg(feature = "shadowing")]
 pub fn preprocess_ufo_spin(atom: Atom) -> Atom {
     let replacements = [
         ("Identity(i_,j_)", "id(bis(4,i_),bis(4,j_))"),
@@ -117,6 +119,7 @@ pub fn preprocess_ufo_spin(atom: Atom) -> Atom {
     batch_replace(&replacements, atom)
 }
 
+#[cfg(feature = "shadowing")]
 pub fn preprocess_ufo_color(atom: Atom) -> Atom {
     let replacements = [
         ("T(a_,i_,ia_)", "T(coad(a_),cof(i_),coaf(ia_))"),
@@ -138,6 +141,7 @@ pub fn preprocess_ufo_color(atom: Atom) -> Atom {
     batch_replace(&replacements, atom)
 }
 
+#[cfg(feature = "shadowing")]
 pub fn batch_replace(replacements: &[(&str, &str)], mut atom: Atom) -> Atom {
     for (pattern, replacement) in replacements {
         let pattern = Pattern::parse(pattern).unwrap();
@@ -148,6 +152,7 @@ pub fn batch_replace(replacements: &[(&str, &str)], mut atom: Atom) -> Atom {
     atom
 }
 
+#[cfg(feature = "shadowing")]
 pub fn preprocess_ufo_color_wrapped(atom: Atom) -> Atom {
     let replacements = [
         (
@@ -187,6 +192,7 @@ pub fn preprocess_ufo_color_wrapped(atom: Atom) -> Atom {
     batch_replace(&replacements, atom)
 }
 
+#[cfg(feature = "shadowing")]
 pub fn preprocess_ufo_spin_wrapped(atom: Atom) -> Atom {
     let replacements = [
         (

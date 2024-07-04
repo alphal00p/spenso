@@ -39,7 +39,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     const_map.insert(params[1].as_view(), 0.32243234);
     const_map.insert(params[2].as_view(), 0.932);
 
-    let network = sym_tensor.to_network().unwrap();
+    let mut network = sym_tensor.to_network().unwrap();
 
     let mut group = c.benchmark_group("evaluate_net");
 
@@ -67,6 +67,18 @@ fn criterion_benchmark(c: &mut Criterion) {
             |mut network| {
                 network.evaluate_complex(|i| i.into(), &const_map);
                 network.contract();
+            },
+            criterion::BatchSize::SmallInput,
+        )
+    });
+
+    network.contract();
+
+    group.bench_function("3LPhysical precontracted", |b| {
+        b.iter_batched(
+            || network.clone(),
+            |mut network| {
+                network.evaluate_complex(|i| i.into(), &const_map);
             },
             criterion::BatchSize::SmallInput,
         )

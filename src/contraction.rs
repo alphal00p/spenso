@@ -1,4 +1,5 @@
 use ahash::AHashMap;
+use duplicate::duplicate;
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::Real;
 
@@ -303,10 +304,21 @@ pub trait RefZero {
     fn ref_zero(&self) -> Self;
 }
 
+pub trait RefOne {
+    fn ref_one(&self) -> Self;
+}
+
 #[cfg(feature = "shadowing")]
 impl<T: RefZero + Real> RefZero for symbolica::domains::float::Complex<T> {
     fn ref_zero(&self) -> Self {
         Self::new(self.re.ref_zero(), self.im.ref_zero())
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<T: RefOne + Real + RefZero> RefOne for symbolica::domains::float::Complex<T> {
+    fn ref_one(&self) -> Self {
+        Self::new(self.re.ref_one(), self.im.ref_zero())
     }
 }
 
@@ -316,75 +328,32 @@ impl<T: RefZero + Real> RefZero for symbolica::domains::float::Complex<T> {
 //     }
 // }
 
-impl RefZero for f64 {
-    fn ref_zero(&self) -> Self {
-        0.0
-    }
-}
+duplicate! {
+    [types zero one;
+        [f32] [0.0] [1.];
+        [f64] [0.0] [1.];
+        [i8] [0] [1];
+        [i16] [0] [1] ;
+        [i32] [0] [1];
+        [i64] [0] [1];
+        [i128] [0] [1];
+        [u8] [0] [1];
+        [u16] [0] [1];
+        [u32] [0] [1];
+        [u64] [0] [1];
+        [u128] [0] [1];
+        ]
 
-impl RefZero for f32 {
-    fn ref_zero(&self) -> Self {
-        0.0
+    impl RefZero for types{
+        fn ref_zero(&self)-> Self{
+            zero
+        }
     }
-}
 
-impl RefZero for i8 {
-    fn ref_zero(&self) -> Self {
-        0
-    }
-}
-
-impl RefZero for i16 {
-    fn ref_zero(&self) -> Self {
-        0
-    }
-}
-
-impl RefZero for i32 {
-    fn ref_zero(&self) -> Self {
-        0
-    }
-}
-
-impl RefZero for i64 {
-    fn ref_zero(&self) -> Self {
-        0
-    }
-}
-
-impl RefZero for i128 {
-    fn ref_zero(&self) -> Self {
-        0
-    }
-}
-
-impl RefZero for u8 {
-    fn ref_zero(&self) -> Self {
-        0
-    }
-}
-
-impl RefZero for u16 {
-    fn ref_zero(&self) -> Self {
-        0
-    }
-}
-
-impl RefZero for u32 {
-    fn ref_zero(&self) -> Self {
-        0
-    }
-}
-
-impl RefZero for u64 {
-    fn ref_zero(&self) -> Self {
-        0
-    }
-}
-
-impl RefZero for u128 {
-    fn ref_zero(&self) -> Self {
-        0
+    impl RefOne for types{
+        fn ref_one(&self)-> Self{
+            one
+        }
     }
 }
 

@@ -3,11 +3,13 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
+use ref_ops::{RefAdd, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
+use symbolica::domains::float::ConstructibleFloat;
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::Real;
 
-use crate::RefZero;
+use crate::{RefOne, RefZero};
 
 #[derive(Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Complex<T> {
@@ -18,6 +20,12 @@ pub struct Complex<T> {
 impl<T: RefZero> RefZero for Complex<T> {
     fn ref_zero(&self) -> Self {
         Complex::new(self.re.ref_zero(), self.im.ref_zero())
+    }
+}
+
+impl<T: RefZero + RefOne> RefOne for Complex<T> {
+    fn ref_one(&self) -> Self {
+        Complex::new(self.re.ref_one(), self.im.ref_zero())
     }
 }
 
@@ -59,6 +67,27 @@ impl<T> Complex<T> {
         Complex { re, im }
     }
 
+    pub fn new_zero() -> Self
+    where
+        T: ConstructibleFloat,
+    {
+        Complex {
+            re: T::new_zero(),
+            im: T::new_zero(),
+        }
+    }
+
+    #[inline]
+    pub fn new_i() -> Self
+    where
+        T: ConstructibleFloat,
+    {
+        Complex {
+            re: T::new_zero(),
+            im: T::new_one(),
+        }
+    }
+
     pub fn zero() -> Complex<T>
     where
         T: num::Zero,
@@ -77,6 +106,22 @@ impl<T> Complex<T> {
             re: T::one(),
             im: T::zero(),
         }
+    }
+
+    pub fn pow<'a>(&'a self, e: u64) -> Self
+    where
+        T: RefOne
+            + RefZero
+            + for<'c> RefMul<&'c T, Output = T>
+            + for<'c> RefAdd<&'c T, Output = T>
+            + for<'c> RefSub<&'c T, Output = T>,
+    {
+        // TODO: use binary exponentiation
+        let mut r = self.ref_one();
+        for _ in 0..e {
+            r *= self;
+        }
+        r
     }
 
     pub fn conj(&self) -> Complex<T>
@@ -278,13 +323,18 @@ where
 
 impl<'a, 'b, T> Mul<&'a Complex<T>> for &'b Complex<T>
 where
-    T: Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Clone,
+    T: for<'c> RefMul<&'c T, Output = T>
+        + for<'c> RefAdd<&'c T, Output = T>
+        + for<'c> RefSub<&'c T, Output = T>,
 {
     type Output = Complex<T>;
 
     #[inline]
     fn mul(self, rhs: &'a Complex<T>) -> Self::Output {
-        self.clone() * rhs.clone()
+        Complex::new(
+            self.re.ref_mul(&rhs.re).ref_sub(&self.im.ref_mul(&rhs.im)),
+            self.re.ref_mul(&rhs.im).ref_add(&self.im.ref_mul(&rhs.re)),
+        )
     }
 }
 
@@ -333,18 +383,21 @@ where
 {
     #[inline]
     fn mul_assign(&mut self, rhs: Self) {
-        self.mul_assign(&rhs)
+        self.re = self.re.clone() * rhs.re.clone() - self.im.clone() * rhs.im.clone();
+        self.im = self.re.clone() * rhs.im.clone() + self.im.clone() * rhs.re.clone();
     }
 }
 
 impl<T> MulAssign<&Complex<T>> for Complex<T>
 where
-    T: Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Clone,
+    T: for<'c> RefMul<&'c T, Output = T>
+        + for<'c> RefAdd<&'c T, Output = T>
+        + for<'c> RefSub<&'c T, Output = T>,
 {
     #[inline]
     fn mul_assign(&mut self, rhs: &Self) {
-        let res = Mul::mul(&*self, rhs);
-        *self = res;
+        self.re = self.re.ref_mul(&rhs.re).ref_sub(&self.im.ref_mul(&rhs.im));
+        self.im = self.re.ref_mul(&rhs.im).ref_add(&self.im.ref_mul(&rhs.re));
     }
 }
 

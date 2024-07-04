@@ -138,10 +138,12 @@ fn main() {
     //         );
     //     }
     // }
-    net.evaluate_complex(|r| r.into(), &const_map);
     net.contract();
+    let now = std::time::Instant::now();
+    net.evaluate_complex(|r| r.into(), &const_map);
+    println!("Time: {:?}", now.elapsed());
     println!(
-        "{:?}",
+        "finished {:?}",
         net.result_tensor()
             .unwrap()
             .try_into_concrete()

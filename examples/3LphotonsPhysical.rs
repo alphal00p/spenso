@@ -65,12 +65,31 @@ fn main() {
         .map(|(k, &v)| (k.as_view(), v.into()))
         .collect();
 
-    network.evaluate_complex(|i| i.into(), &const_map);
-    network.contract();
+
+    let mut precontracted = network.clone();
+    precontracted.contract();
+    precontracted.evaluate_complex(|i| i.into(), &const_map);
 
     println!(
-        "{}",
-        network
+        "Pre contracted{}",
+        precontracted
+            .result_tensor()
+            .unwrap()
+            .try_into_concrete()
+            .unwrap()
+            .try_into_complex()
+            .unwrap()
+            .try_into_dense()
+            .unwrap()
+    );
+
+    let mut postcontracted = network.clone();
+    postcontracted.evaluate_complex(|i| i.into(), &const_map);
+    postcontracted.contract(); 
+
+    println!(
+        "Post contracted{}",
+        postcontracted
             .result_tensor()
             .unwrap()
             .try_into_concrete()

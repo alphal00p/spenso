@@ -50,6 +50,7 @@
         inherit src;
         strictDeps = true;
 
+        SYMBOLICA_LICENSE = builtins.getEnv "SYMBOLICA_LICENSE";
         RUST_BACKTRACE = 1;
         nativeBuildInputs = [
           pkgs.git
@@ -86,7 +87,7 @@
 
       # Build the actual crate itself, reusing the dependency
       # artifacts from above.
-      my-crate = craneLib.buildPackage (commonArgs
+      spenso = craneLib.buildPackage (commonArgs
         // {
           inherit cargoArtifacts;
           doCheck = true;
@@ -95,7 +96,7 @@
     in {
       checks = {
         # Build the crate as part of `nix flake check` for convenience
-        inherit my-crate;
+        inherit spenso;
 
         # Run clippy (and deny all warnings) on the crate source,
         # again, reusing the dependency artifacts from above.
@@ -103,13 +104,13 @@
         # Note that this is done as a separate derivation so that
         # we can block the CI if there are issues here, but not
         # prevent downstream consumers from building our crate by itself.
-        my-crate-clippy = craneLib.cargoClippy (commonArgs
+        spenso-clippy = craneLib.cargoClippy (commonArgs
           // {
             inherit cargoArtifacts;
             cargoClippyExtraArgs = "--all-features";
           });
 
-        my-crate-doc = craneLib.cargoDoc (commonArgs
+        spenso-doc = craneLib.cargoDoc (commonArgs
           // {
             inherit cargoArtifacts;
 
@@ -117,20 +118,20 @@
           });
 
         # Check formatting
-        my-crate-fmt = craneLib.cargoFmt {
+        spenso-fmt = craneLib.cargoFmt {
           inherit src;
         };
 
         # Audit dependencies
-        my-crate-audit = craneLib.cargoAudit {
+        spenso-audit = craneLib.cargoAudit {
           inherit src advisory-db;
           cargoExtraArgs = "-- --all-features";
         };
 
         # Run tests with cargo-nextest
-        # Consider setting `doCheck = false` on `my-crate` if you do not want
+        # Consider setting `doCheck = false` on `spenso` if you do not want
         # the tests to run twice
-        my-crate-nextest = craneLib.cargoNextest (commonArgs
+        spenso-nextest = craneLib.cargoNextest (commonArgs
           // {
             inherit cargoArtifacts;
             nativeBuildInputs =
@@ -147,7 +148,7 @@
 
       packages =
         {
-          default = my-crate;
+          default = spenso;
         }
         // lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
           spenso-llvm-coverage = craneLibLLvmTools.cargoLlvmCov (commonArgs

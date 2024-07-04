@@ -3,7 +3,7 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-use ref_ops::{RefAdd, RefMul, RefSub};
+use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
 use symbolica::domains::float::ConstructibleFloat;
 #[cfg(feature = "shadowing")]
@@ -31,10 +31,13 @@ impl<T: RefZero + RefOne> RefOne for Complex<T> {
 
 impl<T> From<T> for Complex<T>
 where
-    T: num::Zero,
+    T: RefZero,
 {
     fn from(re: T) -> Self {
-        Complex { re, im: T::zero() }
+        Complex {
+            im: re.ref_zero(),
+            re,
+        }
     }
 }
 
@@ -195,6 +198,21 @@ where
     }
 }
 
+impl<'a, 'b, T> Add<&'a T> for &'b Complex<T>
+where
+    T: for<'c> RefAdd<&'c T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn add(self, rhs: &'a T) -> Self::Output {
+        Complex {
+            re: self.re.ref_add(rhs),
+            im: self.im.clone(),
+        }
+    }
+}
+
 impl<'a, T> Add<&'a Complex<T>> for Complex<T>
 where
     T: Add<T, Output = T> + Clone,
@@ -204,6 +222,21 @@ where
     #[inline]
     fn add(self, rhs: &'a Complex<T>) -> Self::Output {
         self + rhs.clone()
+    }
+}
+
+impl<'a, T> Add<&'a T> for Complex<T>
+where
+    T: for<'c> RefAdd<&'c T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn add(self, rhs: &'a T) -> Self::Output {
+        Complex {
+            re: self.re.ref_add(rhs),
+            im: self.im.clone(),
+        }
     }
 }
 
@@ -219,6 +252,21 @@ where
     }
 }
 
+impl<'a, 'b, T> Add<T> for &'b Complex<T>
+where
+    T: RefAdd<T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn add(self, rhs: T) -> Self::Output {
+        Complex {
+            re: self.re.ref_add(rhs),
+            im: self.im.clone(),
+        }
+    }
+}
+
 impl<T> Add for Complex<T>
 where
     T: Add<T, Output = T>,
@@ -228,6 +276,21 @@ where
     #[inline]
     fn add(self, rhs: Self) -> Self::Output {
         Complex::new(self.re + rhs.re, self.im + rhs.im)
+    }
+}
+
+impl<T> Add<T> for Complex<T>
+where
+    T: Add<T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn add(self, rhs: T) -> Self::Output {
+        Complex {
+            re: self.re.add(rhs),
+            im: self.im,
+        }
     }
 }
 
@@ -241,6 +304,16 @@ where
     }
 }
 
+impl<T> AddAssign<T> for Complex<T>
+where
+    T: AddAssign<T>,
+{
+    #[inline]
+    fn add_assign(&mut self, rhs: T) {
+        self.re += rhs;
+    }
+}
+
 impl<T> AddAssign<&Complex<T>> for Complex<T>
 where
     for<'a> T: AddAssign<&'a T>,
@@ -249,6 +322,16 @@ where
     fn add_assign(&mut self, rhs: &Self) {
         self.re += &rhs.re;
         self.im += &rhs.im;
+    }
+}
+
+impl<T> AddAssign<&T> for Complex<T>
+where
+    T: for<'a> RefAdd<&'a T, Output = T>,
+{
+    #[inline]
+    fn add_assign(&mut self, rhs: &T) {
+        self.re = self.re.ref_add(rhs);
     }
 }
 
@@ -264,6 +347,21 @@ where
     }
 }
 
+impl<'a, 'b, T> Sub<&'a T> for &'b Complex<T>
+where
+    T: for<'c> RefSub<&'c T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn sub(self, rhs: &'a T) -> Self::Output {
+        Complex {
+            re: self.re.ref_sub(rhs),
+            im: self.im.clone(),
+        }
+    }
+}
+
 impl<'a, T> Sub<&'a Complex<T>> for Complex<T>
 where
     T: Sub<T, Output = T> + Clone,
@@ -273,6 +371,21 @@ where
     #[inline]
     fn sub(self, rhs: &'a Complex<T>) -> Self::Output {
         self - rhs.clone()
+    }
+}
+
+impl<'a, T> Sub<&'a T> for Complex<T>
+where
+    T: for<'c> RefSub<&'c T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn sub(self, rhs: &'a T) -> Self::Output {
+        Complex {
+            re: self.re.ref_sub(rhs),
+            im: self.im,
+        }
     }
 }
 
@@ -288,6 +401,21 @@ where
     }
 }
 
+impl<'b, T> Sub<T> for &'b Complex<T>
+where
+    T: RefSub<T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn sub(self, rhs: T) -> Self::Output {
+        Complex {
+            re: self.re.ref_sub(rhs),
+            im: self.im.clone(),
+        }
+    }
+}
+
 impl<T> Sub for Complex<T>
 where
     T: Sub<T, Output = T>,
@@ -297,6 +425,21 @@ where
     #[inline]
     fn sub(self, rhs: Self) -> Self::Output {
         Complex::new(self.re - rhs.re, self.im - rhs.im)
+    }
+}
+
+impl<T> Sub<T> for Complex<T>
+where
+    T: Sub<T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn sub(self, rhs: T) -> Self::Output {
+        Complex {
+            re: self.re - rhs,
+            im: self.im,
+        }
     }
 }
 
@@ -310,6 +453,16 @@ where
     }
 }
 
+impl<T> SubAssign<T> for Complex<T>
+where
+    T: SubAssign<T>,
+{
+    #[inline]
+    fn sub_assign(&mut self, rhs: T) {
+        self.re -= rhs;
+    }
+}
+
 impl<T> SubAssign<&Complex<T>> for Complex<T>
 where
     for<'a> T: SubAssign<&'a T>,
@@ -318,6 +471,16 @@ where
     fn sub_assign(&mut self, rhs: &Self) {
         self.re -= &rhs.re;
         self.im -= &rhs.im;
+    }
+}
+
+impl<T> SubAssign<&T> for Complex<T>
+where
+    T: for<'a> RefSub<&'a T, Output = T>,
+{
+    #[inline]
+    fn sub_assign(&mut self, rhs: &T) {
+        self.re = self.re.ref_sub(rhs);
     }
 }
 
@@ -338,6 +501,18 @@ where
     }
 }
 
+impl<'a, 'b, T> Mul<&'a T> for &'b Complex<T>
+where
+    T: for<'c> RefMul<&'c T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn mul(self, rhs: &'a T) -> Self::Output {
+        Complex::new(self.re.ref_mul(rhs), self.im.ref_mul(rhs))
+    }
+}
+
 impl<'a, T> Mul<&'a Complex<T>> for Complex<T>
 where
     T: Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Clone,
@@ -350,6 +525,18 @@ where
     }
 }
 
+impl<'a, T> Mul<&'a T> for Complex<T>
+where
+    T: for<'c> RefMul<&'c T, Output = T>,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn mul(self, rhs: &'a T) -> Self::Output {
+        Complex::new(self.re.ref_mul(rhs), self.im.ref_mul(rhs))
+    }
+}
+
 impl<'a, T> Mul<Complex<T>> for &'a Complex<T>
 where
     T: Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Clone,
@@ -359,6 +546,18 @@ where
     #[inline]
     fn mul(self, rhs: Complex<T>) -> Self::Output {
         self.clone() * rhs
+    }
+}
+
+impl<'b, T> Mul<T> for &'b Complex<T>
+where
+    T: RefMul<T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn mul(self, rhs: T) -> Self::Output {
+        Complex::new(self.re.ref_mul(rhs.clone()), self.im.ref_mul(rhs))
     }
 }
 
@@ -377,6 +576,18 @@ where
     }
 }
 
+impl<T> Mul<T> for Complex<T>
+where
+    T: Mul<T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn mul(self, rhs: T) -> Self::Output {
+        Complex::new(self.re * rhs.clone(), self.im * rhs)
+    }
+}
+
 impl<T> MulAssign for Complex<T>
 where
     T: Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Clone,
@@ -385,6 +596,17 @@ where
     fn mul_assign(&mut self, rhs: Self) {
         self.re = self.re.clone() * rhs.re.clone() - self.im.clone() * rhs.im.clone();
         self.im = self.re.clone() * rhs.im.clone() + self.im.clone() * rhs.re.clone();
+    }
+}
+
+impl<T> MulAssign<T> for Complex<T>
+where
+    T: MulAssign<T> + Clone,
+{
+    #[inline]
+    fn mul_assign(&mut self, rhs: T) {
+        self.re *= rhs.clone();
+        self.im *= rhs;
     }
 }
 
@@ -401,6 +623,17 @@ where
     }
 }
 
+impl<T> MulAssign<&T> for Complex<T>
+where
+    T: for<'c> RefMul<&'c T, Output = T>,
+{
+    #[inline]
+    fn mul_assign(&mut self, rhs: &T) {
+        self.re = self.re.ref_mul(rhs);
+        self.im = self.im.ref_mul(rhs);
+    }
+}
+
 impl<'a, 'b, T> Div<&'a Complex<T>> for &'b Complex<T>
 where
     T: Clone + Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Div<T, Output = T>,
@@ -410,6 +643,18 @@ where
     #[inline]
     fn div(self, rhs: &'a Complex<T>) -> Self::Output {
         self.clone() / rhs.clone()
+    }
+}
+
+impl<'a, 'b, T> Div<&'a T> for &'b Complex<T>
+where
+    T: for<'c> RefDiv<&'c T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn div(self, rhs: &'a T) -> Self::Output {
+        Complex::new(self.re.ref_div(rhs), self.im.ref_div(rhs))
     }
 }
 
@@ -425,6 +670,18 @@ where
     }
 }
 
+impl<'a, T> Div<&'a T> for Complex<T>
+where
+    T: for<'c> Div<&'c T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn div(self, rhs: &'a T) -> Self::Output {
+        Complex::new(self.re.div(rhs), self.im.div(rhs))
+    }
+}
+
 impl<'a, T> Div<Complex<T>> for &'a Complex<T>
 where
     T: Clone + Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Div<T, Output = T>,
@@ -434,6 +691,18 @@ where
     #[inline]
     fn div(self, rhs: Complex<T>) -> Self::Output {
         self.clone() / rhs
+    }
+}
+
+impl<'b, T> Div<T> for &'b Complex<T>
+where
+    T: RefDiv<T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn div(self, rhs: T) -> Self::Output {
+        Complex::new(self.re.ref_div(rhs.clone()), self.im.ref_div(rhs))
     }
 }
 
@@ -452,6 +721,18 @@ where
     }
 }
 
+impl<T> Div<T> for Complex<T>
+where
+    T: Div<T, Output = T> + Clone,
+{
+    type Output = Complex<T>;
+
+    #[inline]
+    fn div(self, rhs: T) -> Self::Output {
+        Complex::new(self.re.div(rhs.clone()), self.im.div(rhs))
+    }
+}
+
 impl<T> DivAssign for Complex<T>
 where
     for<'a> T: DivAssign<&'a T>,
@@ -459,6 +740,17 @@ where
     #[inline]
     fn div_assign(&mut self, rhs: Self) {
         self.div_assign(&rhs)
+    }
+}
+
+impl<T> DivAssign<T> for Complex<T>
+where
+    T: DivAssign<T> + Clone,
+{
+    #[inline]
+    fn div_assign(&mut self, rhs: T) {
+        self.re /= rhs.clone();
+        self.im /= rhs;
     }
 }
 
@@ -470,6 +762,17 @@ where
     fn div_assign(&mut self, rhs: &Self) {
         self.re /= &rhs.re;
         self.im /= &rhs.im;
+    }
+}
+
+impl<T> DivAssign<&T> for Complex<T>
+where
+    T: for<'a> RefDiv<&'a T, Output = T>,
+{
+    #[inline]
+    fn div_assign(&mut self, rhs: &T) {
+        self.re = self.re.ref_div(rhs);
+        self.im = self.im.ref_div(rhs);
     }
 }
 

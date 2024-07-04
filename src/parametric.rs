@@ -10,10 +10,12 @@ use crate::{
     FlatIndex, HasName, IsZero, IteratableTensor, RefZero, TensorStructure, ToSymbolic,
 };
 use symbolica::{
-    atom::{representation::FunView, Atom, AtomOrView, AtomView},
+    atom::{representation::FunView, Atom, AtomView},
     domains::{float::Real, rational::Rational},
-    evaluate::{ConstOrExpr, EvaluationFn, ExpressionEvaluator},
+    evaluate::{EvalTree, EvaluationFn, FunctionMap},
 };
+
+use std::hash::Hash;
 
 use super::{
     Contract, DataIterator, DataTensor, DenseTensor, HasStructure, Slot, SparseTensor,
@@ -56,15 +58,15 @@ pub enum ParamTensor<S: TensorStructure> {
 }
 
 impl<S: TensorStructure + Clone> ParamTensor<S> {
-    pub fn evaluator<'a, T: Clone + Default, F: Fn(&Rational) -> T + Copy>(
+    pub fn evaluator<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
         &'a self,
         coeff_map: F,
-        const_map: &HashMap<AtomOrView, ConstOrExpr<'a, T>>,
+        fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> DataTensor<ExpressionEvaluator<T>, S> {
+    ) -> DataTensor<EvalTree<T>, S> {
         match self {
-            ParamTensor::Composite(x) => x.evaluator(coeff_map, const_map, params),
-            ParamTensor::Param(x) => x.evaluator(coeff_map, const_map, params),
+            ParamTensor::Composite(x) => x.evaluator(coeff_map, fn_map, params),
+            ParamTensor::Param(x) => x.evaluator(coeff_map, fn_map, params),
         }
     }
 
@@ -545,15 +547,15 @@ impl<I> DataTensor<Atom, I>
 where
     I: Clone + TensorStructure,
 {
-    pub fn evaluator<'a, T: Clone + Default, F: Fn(&Rational) -> T + Copy>(
+    pub fn evaluator<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
         &'a self,
         coeff_map: F,
-        const_map: &HashMap<AtomOrView, ConstOrExpr<'a, T>>,
+        fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> DataTensor<ExpressionEvaluator<T>, I> {
+    ) -> DataTensor<EvalTree<T>, I> {
         match self {
-            DataTensor::Dense(x) => DataTensor::Dense(x.evaluator(coeff_map, const_map, params)),
-            DataTensor::Sparse(x) => DataTensor::Sparse(x.evaluator(coeff_map, const_map, params)),
+            DataTensor::Dense(x) => DataTensor::Dense(x.evaluator(coeff_map, fn_map, params)),
+            DataTensor::Sparse(x) => DataTensor::Sparse(x.evaluator(coeff_map, fn_map, params)),
         }
     }
 
@@ -580,16 +582,16 @@ impl<I> SparseTensor<Atom, I>
 where
     I: Clone + TensorStructure,
 {
-    pub fn evaluator<'a, T: Clone + Default, F: Fn(&Rational) -> T + Copy>(
+    pub fn evaluator<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
         &'a self,
         coeff_map: F,
-        const_map: &HashMap<AtomOrView, ConstOrExpr<'a, T>>,
+        fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> SparseTensor<ExpressionEvaluator<T>, I> {
-        let eval_data: AHashMap<FlatIndex, ExpressionEvaluator<_>> = AHashMap::from_iter(
+    ) -> SparseTensor<EvalTree<T>, I> {
+        let eval_data: AHashMap<FlatIndex, EvalTree<_>> = AHashMap::from_iter(
             self.elements
                 .iter()
-                .map(|(&i, a)| (i, a.as_view().evaluator(coeff_map, const_map, params))),
+                .map(|(&i, a)| (i, a.as_view().to_eval_tree(coeff_map, fn_map, params))),
         );
         SparseTensor {
             elements: eval_data,
@@ -634,16 +636,16 @@ impl<I> DenseTensor<Atom, I>
 where
     I: Clone + TensorStructure,
 {
-    pub fn evaluator<'a, T: Clone + Default, F: Fn(&Rational) -> T + Copy>(
+    pub fn evaluator<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
         &'a self,
         coeff_map: F,
-        const_map: &HashMap<AtomOrView, ConstOrExpr<'a, T>>,
+        fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> DenseTensor<ExpressionEvaluator<T>, I> {
-        let eval_data: Vec<ExpressionEvaluator<_>> = self
+    ) -> DenseTensor<EvalTree<T>, I> {
+        let eval_data: Vec<EvalTree<_>> = self
             .data
             .iter()
-            .map(|x| x.as_view().evaluator(coeff_map, const_map, params))
+            .map(|x| x.as_view().to_eval_tree(coeff_map, fn_map, params))
             .collect();
         DenseTensor {
             data: eval_data,

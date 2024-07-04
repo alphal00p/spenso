@@ -3,15 +3,35 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
+use crate::{RefOne, RefZero};
+use duplicate::duplicate;
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "shadowing")]
+use symbolica::domains::float::Complex as SymComplex;
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::ConstructibleFloat;
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::Real;
 
-use crate::{RefOne, RefZero};
-
+pub trait R {}
+duplicate! {
+    [t;
+    [f32];
+    [f64];
+    [i8];
+    [i16];
+    [i32];
+    [i64];
+    [i128];
+    [u8];
+    [u16];
+    [u32];
+    [u64];
+    [u128];
+    ]
+    impl R for t {}
+}
 #[derive(Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Complex<T> {
     pub re: T,
@@ -43,15 +63,15 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<T: Real> From<Complex<T>> for symbolica::domains::float::Complex<T> {
+impl<T: Real> From<Complex<T>> for SymComplex<T> {
     fn from(complex: Complex<T>) -> Self {
-        symbolica::domains::float::Complex::new(complex.re, complex.im)
+        SymComplex::new(complex.re, complex.im)
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl<T: Real> From<symbolica::domains::float::Complex<T>> for Complex<T> {
-    fn from(complex: symbolica::domains::float::Complex<T>) -> Self {
+impl<T: Real> From<SymComplex<T>> for Complex<T> {
+    fn from(complex: SymComplex<T>) -> Self {
         Complex::new(complex.re, complex.im)
     }
 }
@@ -69,6 +89,26 @@ impl<T> Complex<T> {
     #[inline]
     pub fn new(re: T, im: T) -> Complex<T> {
         Complex { re, im }
+    }
+
+    pub fn new_re(re: T) -> Complex<T>
+    where
+        T: RefZero,
+    {
+        Complex {
+            im: re.ref_zero(),
+            re,
+        }
+    }
+
+    pub fn new_im(im: T) -> Complex<T>
+    where
+        T: RefZero,
+    {
+        Complex {
+            re: im.ref_zero(),
+            im,
+        }
     }
 
     #[cfg(feature = "shadowing")]
@@ -163,7 +203,7 @@ impl<T> Complex<T> {
         (self.re.ref_mul(&self.re)) + (self.im.ref_mul(&self.im))
     }
 
-    fn inv(&self) -> Self
+    pub fn inv(&self) -> Self
     where
         T: for<'a> RefMul<&'a T, Output = T>
             + Add<T, Output = T>

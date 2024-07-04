@@ -21,11 +21,11 @@ use super::{
 };
 use symbolica::domains::float::Complex as SymComplex;
 
-impl RefZero for Atom {
-    fn ref_zero(&self) -> Self {
-        Atom::new_num(0)
-    }
-}
+// impl RefZero for Atom {
+//     fn ref_zero(&self) -> Self {
+//         Atom::new_num(0)
+//     }
+// }
 
 impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom> {
     type Error = String;

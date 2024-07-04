@@ -1,6 +1,6 @@
 use crate::{
     ConcreteIndex, GetTensorData, IsZero, IteratableTensor, RefZero, SetTensorData,
-    TensorStructure, TrySmallestUpgrade,
+    TensorStructure, TrySmallestUpgrade, R,
 };
 use std::ops::Neg;
 
@@ -199,7 +199,7 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<T: Clone, S: TensorStructure + Clone> FallibleAdd<RealOrComplexTensor<T, S>>
+impl<T: Clone + R, S: TensorStructure + Clone> FallibleAdd<RealOrComplexTensor<T, S>>
     for RealOrComplexTensor<T, S>
 where
     T: FallibleAdd<T, Output = T>
@@ -257,7 +257,7 @@ impl<S: TensorStructure + Clone> FallibleAdd<ParamTensor<S>> for ParamTensor<S> 
 }
 
 #[cfg(feature = "shadowing")]
-impl<I, T> FallibleAdd<MixedTensor<T, I>> for MixedTensor<T, I>
+impl<I, T: R> FallibleAdd<MixedTensor<T, I>> for MixedTensor<T, I>
 where
     I: TensorStructure + Clone,
     T: FallibleAdd<T, Output = T>
@@ -474,7 +474,7 @@ where
     }
 }
 #[cfg(feature = "shadowing")]
-impl<T: Clone, S: TensorStructure + Clone> FallibleSub<RealOrComplexTensor<T, S>>
+impl<T: Clone + R, S: TensorStructure + Clone> FallibleSub<RealOrComplexTensor<T, S>>
     for RealOrComplexTensor<T, S>
 where
     T: FallibleSub<T, Output = T>
@@ -534,7 +534,7 @@ impl<S: TensorStructure + Clone> FallibleSub<ParamTensor<S>> for ParamTensor<S> 
 }
 
 #[cfg(feature = "shadowing")]
-impl<I, T> FallibleSub<MixedTensor<T, I>> for MixedTensor<T, I>
+impl<I, T: R> FallibleSub<MixedTensor<T, I>> for MixedTensor<T, I>
 where
     I: TensorStructure + Clone,
     T: FallibleSub<T, Output = T>
@@ -652,7 +652,7 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<I, T> ScalarMul<T> for MixedTensor<T, I>
+impl<I, T: R> ScalarMul<T> for MixedTensor<T, I>
 where
     I: TensorStructure + Clone,
     T: FallibleMul<T, Output = T> + Clone,
@@ -679,7 +679,7 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<I, T> ScalarMul<Complex<T>> for MixedTensor<T, I>
+impl<I, T: R> ScalarMul<Complex<T>> for MixedTensor<T, I>
 where
     I: TensorStructure + Clone,
     T: FallibleMul<Complex<T>, Output = Complex<T>> + Clone,
@@ -720,7 +720,7 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<T, I> ScalarMul<Atom> for MixedTensor<T, I>
+impl<T: R, I> ScalarMul<Atom> for MixedTensor<T, I>
 where
     I: TensorStructure + Clone,
     T: Clone + FallibleMul<Atom, Output = Atom>,

@@ -39,7 +39,7 @@ fn main() {
     const_map.insert(params[1].as_view(), 0.32243234);
     const_map.insert(params[2].as_view(), 0.932);
 
-    let mut network = sym_tensor.to_network().unwrap();
+    let network = sym_tensor.to_network().unwrap();
 
     // for p in &network.params {
     //     println!("Param {}", p);

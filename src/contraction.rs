@@ -1,7 +1,8 @@
 use ahash::AHashMap;
 use duplicate::duplicate;
+// use num::Zero;
 #[cfg(feature = "shadowing")]
-use symbolica::domains::float::Real;
+use symbolica::{atom::Atom, domains::float::Real};
 
 use crate::{IteratableTensor, TensorStructure, TrySmallestUpgrade};
 
@@ -308,10 +309,17 @@ pub trait RefOne {
     fn ref_one(&self) -> Self;
 }
 
+// #[cfg(feature = "shadowing")]
+// impl<T: RefZero + NumericalFloatLike> RefZero for T {
+//     fn ref_zero(&self) -> Self {
+//         self.zero()
+//     }
+// } fu
+
 #[cfg(feature = "shadowing")]
-impl<T: RefZero + Real> RefZero for symbolica::domains::float::Complex<T> {
+impl RefZero for Atom {
     fn ref_zero(&self) -> Self {
-        Self::new(self.re.ref_zero(), self.im.ref_zero())
+        Atom::new_num(0)
     }
 }
 
@@ -319,6 +327,13 @@ impl<T: RefZero + Real> RefZero for symbolica::domains::float::Complex<T> {
 impl<T: RefOne + Real + RefZero> RefOne for symbolica::domains::float::Complex<T> {
     fn ref_one(&self) -> Self {
         Self::new(self.re.ref_one(), self.im.ref_zero())
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<T: Real + RefZero> RefZero for symbolica::domains::float::Complex<T> {
+    fn ref_zero(&self) -> Self {
+        Self::new(self.re.ref_zero(), self.im.ref_zero())
     }
 }
 

@@ -1,8 +1,7 @@
 use std::borrow::Cow;
 
 use duplicate::duplicate;
-use ref_ops::RefAdd;
-use std::ops::Mul;
+use ref_ops::{RefAdd, RefMul, RefSub};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -11,7 +10,7 @@ use symbolica::{
     state::State,
 };
 
-use crate::{Complex, RefZero};
+use crate::{Complex, RefZero, R};
 
 // #[derive(Copy, Clone, PartialEq)]
 // pub struct Complex<T: Scalar> {
@@ -721,7 +720,7 @@ pub trait TryFromUpgrade<T> {
 
 pub trait TrySmallestUpgrade<T> {
     type LCM: Clone;
-    type Order;
+    // type Order;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>;
 }
@@ -739,7 +738,7 @@ pub trait TrySmallestUpgrade<T> {
 //     U: Clone,
 // {
 //     type LCM = U;
-//     type Order = GreaterThan;
+//
 
 //     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
 //         Some(Cow::Borrowed(self))
@@ -748,7 +747,7 @@ pub trait TrySmallestUpgrade<T> {
 
 // impl<U> TrySmallestUpgrade<U> for U {
 //     type LCM = U;
-//     type Order = Equal;
+//
 
 //     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
 //         Some(Cow::Borrowed(self))
@@ -758,11 +757,11 @@ pub trait TrySmallestUpgrade<T> {
 #[cfg(feature = "shadowing")]
 impl<O: Real, U: Real, T: Real> TrySmallestUpgrade<SymbolicaComplex<T>> for SymbolicaComplex<U>
 where
-    U: TrySmallestUpgrade<T, LCM = O, Order = LessThan>,
-    T: TrySmallestUpgrade<U, LCM = O, Order = GreaterThan>,
+    U: TrySmallestUpgrade<T, LCM = O>,
+    T: TrySmallestUpgrade<U, LCM = O>,
 {
     type LCM = SymbolicaComplex<O>;
-    type Order = LessThan;
+    // type Order = LessThan;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
     where
@@ -774,6 +773,24 @@ where
             re.into_owned(),
             im.into_owned(),
         )))
+    }
+}
+
+impl<O: R + Clone, U: R, T: R> TrySmallestUpgrade<Complex<T>> for Complex<U>
+where
+    U: TrySmallestUpgrade<T, LCM = O>,
+    T: TrySmallestUpgrade<U, LCM = O>,
+{
+    type LCM = Complex<O>;
+    // type Order = LessThan;
+
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    where
+        Self::LCM: Clone,
+    {
+        let re = self.re.try_upgrade()?;
+        let im = self.im.try_upgrade()?;
+        Some(Cow::Owned(Complex::new(re.into_owned(), im.into_owned())))
     }
 }
 
@@ -850,7 +867,7 @@ where
 //     [i32] [Atom];]
 // impl TrySmallestUpgrade<smaller> for larger {
 //     type LCM = larger;
-//     type Order = GreaterThan;
+//
 //     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
 //         where
 //             Self::LCM: Clone {
@@ -893,12 +910,12 @@ duplicate! {
     [i16];
     [i32];
     [f64];
-    [Complex<f64>];
+    // [Complex<f64>];
     ]
 
 impl TrySmallestUpgrade<equal> for equal {
     type LCM = equal;
-    type Order = Equal;
+
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
         where
             Self::LCM: Clone {
@@ -910,7 +927,7 @@ impl TrySmallestUpgrade<equal> for equal {
 #[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Atom> for Atom {
     type LCM = Atom;
-    type Order = Equal;
+
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
     where
         Self::LCM: Clone,
@@ -926,7 +943,7 @@ duplicate! {
 
 impl TrySmallestUpgrade<larger> for smaller {
     type LCM = larger;
-    type Order = LessThan;
+
 
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
@@ -938,7 +955,7 @@ impl TrySmallestUpgrade<larger> for smaller {
 
 impl TrySmallestUpgrade<smaller> for larger {
     type LCM = larger;
-    type Order = GreaterThan;
+
 
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
@@ -955,7 +972,6 @@ where
     T: RefZero + Clone,
 {
     type LCM = Complex<T>;
-    type Order = LessThan;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
         let new = Complex::new(self.clone(), self.ref_zero());
@@ -966,7 +982,7 @@ where
 #[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Atom> for f64 {
     type LCM = Atom;
-    type Order = LessThan;
+
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
         let natrat = symbolica::domains::rational::Rational::from_f64(*self);
         let symrat = Atom::new_num(symbolica::coefficient::Coefficient::from(natrat));
@@ -978,7 +994,7 @@ impl TrySmallestUpgrade<Atom> for f64 {
 #[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Atom> for i32 {
     type LCM = Atom;
-    type Order = LessThan;
+
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
         let symnum = Atom::new_num(*self as i32);
 
@@ -989,7 +1005,7 @@ impl TrySmallestUpgrade<Atom> for i32 {
 #[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Atom> for Complex<f64> {
     type LCM = Atom;
-    type Order = LessThan;
+
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
         let real: Cow<'_, Atom> = <f64 as TrySmallestUpgrade<Atom>>::try_upgrade(&self.re)?;
         let imag: Cow<'_, Atom> = <f64 as TrySmallestUpgrade<Atom>>::try_upgrade(&self.im)?;
@@ -1009,7 +1025,7 @@ duplicate! {
 
 impl TrySmallestUpgrade<smaller> for larger {
     type LCM = larger;
-    type Order = GreaterThan;
+
 
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
@@ -1031,7 +1047,7 @@ duplicate! {
 
 impl TrySmallestUpgrade<smaller> for larger {
     type LCM = larger;
-    type Order = GreaterThan;
+
 
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
@@ -1054,14 +1070,14 @@ where
     U: TrySmallestUpgrade<T>,
     T: TrySmallestUpgrade<U, LCM = <U as TrySmallestUpgrade<T>>::LCM>,
     U::LCM: Clone,
-    for<'a, 'b> &'a U::LCM: std::ops::Mul<&'b U::LCM, Output = U::LCM>,
+    U::LCM: for<'b> RefMul<&'b U::LCM, Output = U::LCM>,
 {
     type Output = U::LCM;
 
     fn mul_fallible(&self, rhs: &T) -> Option<Self::Output> {
         let lhs = self.try_upgrade()?;
         let rhs = rhs.try_upgrade()?;
-        Some(lhs.as_ref().mul(rhs.as_ref()))
+        Some(lhs.as_ref().ref_mul(rhs.as_ref()))
     }
 }
 
@@ -1074,7 +1090,7 @@ impl<T, U> FallibleAdd<T> for U
 where
     U: TrySmallestUpgrade<T>,
     T: TrySmallestUpgrade<U, LCM = U::LCM>,
-    U::LCM: for<'a> RefAdd<&'a U::LCM, Output = U::LCM> + Clone,
+    U::LCM: for<'b> RefAdd<&'b U::LCM, Output = U::LCM>,
 {
     type Output = U::LCM;
 
@@ -1095,14 +1111,14 @@ where
     U: TrySmallestUpgrade<T>,
     T: TrySmallestUpgrade<U, LCM = <U as TrySmallestUpgrade<T>>::LCM>,
     U::LCM: Clone,
-    for<'a, 'b> &'a U::LCM: std::ops::Sub<&'b U::LCM, Output = U::LCM>,
+    U::LCM: for<'b> RefSub<&'b U::LCM, Output = U::LCM>,
 {
     type Output = U::LCM;
 
     fn sub_fallible(&self, rhs: &T) -> Option<Self::Output> {
         let lhs = self.try_upgrade()?;
         let rhs = rhs.try_upgrade()?;
-        Some(lhs.as_ref() - rhs.as_ref())
+        Some(lhs.as_ref().ref_sub(rhs.as_ref()))
     }
 }
 
@@ -1115,12 +1131,12 @@ where
     U: TrySmallestUpgrade<T, LCM = U>,
     T: TrySmallestUpgrade<U, LCM = U>,
     U::LCM: Clone,
-    for<'a, 'b> &'a U::LCM: std::ops::Add<&'b U::LCM, Output = U::LCM>,
+    U::LCM: for<'b> RefAdd<&'b U::LCM, Output = U::LCM>,
 {
     fn add_assign_fallible(&mut self, rhs: &T) {
         let lhs = self.try_upgrade().unwrap();
         let rhs = rhs.try_upgrade().unwrap();
-        let out = lhs.as_ref() + rhs.as_ref();
+        let out = lhs.as_ref().ref_add(rhs.as_ref());
         *self = out;
     }
 }
@@ -1134,12 +1150,12 @@ where
     U: TrySmallestUpgrade<T, LCM = U>,
     T: TrySmallestUpgrade<U, LCM = U>,
     U::LCM: Clone,
-    for<'a, 'b> &'a U::LCM: std::ops::Sub<&'b U::LCM, Output = U::LCM>,
+    U::LCM: for<'b> RefSub<&'b U::LCM, Output = U::LCM>,
 {
     fn sub_assign_fallible(&mut self, rhs: &T) {
         let lhs = self.try_upgrade().unwrap();
         let rhs = rhs.try_upgrade().unwrap();
-        let out = lhs.as_ref() - rhs.as_ref();
+        let out = lhs.as_ref().ref_sub(rhs.as_ref());
         *self = out;
     }
 }

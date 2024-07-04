@@ -13,7 +13,8 @@ use crate::{
     TrySmallestUpgrade,
 };
 
- use symbolica::{
+#[cfg(feature = "shadowing")]
+use symbolica::{
     atom::{representation::FunView, AddView, AtomOrView, MulView},
     atom::{Atom, AtomView, Symbol},
     domains::float::Complex as SymComplex,
@@ -22,7 +23,6 @@ use crate::{
     evaluate::EvaluationFn,
     state::State,
 };
-
 
 #[cfg(feature = "shadowing")]
 use ahash::AHashMap;

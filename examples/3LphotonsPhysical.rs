@@ -65,7 +65,6 @@ fn main() {
         .map(|(k, &v)| (k.as_view(), v.into()))
         .collect();
 
-
     let mut precontracted = network.clone();
     precontracted.contract();
     precontracted.evaluate_complex(|i| i.into(), &const_map);
@@ -85,7 +84,7 @@ fn main() {
 
     let mut postcontracted = network.clone();
     postcontracted.evaluate_complex(|i| i.into(), &const_map);
-    postcontracted.contract(); 
+    postcontracted.contract();
 
     println!(
         "Post contracted{}",

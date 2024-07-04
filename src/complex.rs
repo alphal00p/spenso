@@ -1,10 +1,11 @@
 use std::{
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, LowerExp},
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "shadowing")]
 use symbolica::domains::float::ConstructibleFloat;
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::Real;
@@ -70,6 +71,7 @@ impl<T> Complex<T> {
         Complex { re, im }
     }
 
+    #[cfg(feature = "shadowing")]
     pub fn new_zero() -> Self
     where
         T: ConstructibleFloat,
@@ -80,6 +82,7 @@ impl<T> Complex<T> {
         }
     }
 
+    #[cfg(feature = "shadowing")]
     #[inline]
     pub fn new_i() -> Self
     where
@@ -136,7 +139,7 @@ impl<T> Complex<T> {
 
     pub fn norm(&self) -> T
     where
-        T: num::Float,
+        T: num::Float + for<'a> RefMul<&'a T, Output = T> + Add<T, Output = T>,
     {
         self.norm_squared().sqrt()
     }
@@ -155,9 +158,20 @@ impl<T> Complex<T> {
     #[inline]
     pub fn norm_squared(&self) -> T
     where
-        T: Mul<T, Output = T> + Add<T, Output = T> + Clone,
+        T: for<'a> RefMul<&'a T, Output = T> + Add<T, Output = T>,
     {
-        (self.re.clone() * self.re.clone()) + (self.im.clone() * self.im.clone())
+        (self.re.ref_mul(&self.re)) + (self.im.ref_mul(&self.im))
+    }
+
+    fn inv(&self) -> Self
+    where
+        T: for<'a> RefMul<&'a T, Output = T>
+            + Add<T, Output = T>
+            + for<'a> RefDiv<&'a T, Output = T>
+            + Neg<Output = T>,
+    {
+        let n = self.norm_squared();
+        Complex::new(self.re.ref_div(&n), -self.im.ref_div(&n))
     }
 
     #[inline]
@@ -172,7 +186,7 @@ impl<T> Complex<T> {
     pub fn to_polar_coordinates(self) -> (T, T)
     where
         T: num::Float,
-        T: Mul<T, Output = T> + Add<T, Output = T>,
+        T: for<'a> RefMul<&'a T, Output = T> + Add<T, Output = T>,
     {
         (self.norm_squared().sqrt(), self.arg())
     }
@@ -636,7 +650,11 @@ where
 
 impl<'a, 'b, T> Div<&'a Complex<T>> for &'b Complex<T>
 where
-    T: Clone + Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Div<T, Output = T>,
+    T: Clone
+        + Sub<T, Output = T>
+        + Div<T, Output = T>
+        + for<'c> RefMul<&'c T, Output = T>
+        + Add<T, Output = T>,
 {
     type Output = Complex<T>;
 
@@ -660,7 +678,11 @@ where
 
 impl<'a, T> Div<&'a Complex<T>> for Complex<T>
 where
-    T: Clone + Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Div<T, Output = T>,
+    T: Clone
+        + Sub<T, Output = T>
+        + Div<T, Output = T>
+        + for<'b> RefMul<&'b T, Output = T>
+        + Add<T, Output = T>,
 {
     type Output = Complex<T>;
 
@@ -684,7 +706,11 @@ where
 
 impl<'a, T> Div<Complex<T>> for &'a Complex<T>
 where
-    T: Clone + Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Div<T, Output = T>,
+    T: Clone
+        + Sub<T, Output = T>
+        + Div<T, Output = T>
+        + for<'b> RefMul<&'b T, Output = T>
+        + Add<T, Output = T>,
 {
     type Output = Complex<T>;
 
@@ -708,15 +734,19 @@ where
 
 impl<T> Div for Complex<T>
 where
-    T: Clone + Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Div<T, Output = T>,
+    T: Clone
+        + Sub<T, Output = T>
+        + Div<T, Output = T>
+        + for<'a> RefMul<&'a T, Output = T>
+        + Add<T, Output = T>,
 {
     type Output = Self;
 
     #[inline]
     fn div(self, rhs: Self) -> Self::Output {
         let n = rhs.norm_squared();
-        let re = self.re.clone() * rhs.re.clone() + self.im.clone() * rhs.im.clone();
-        let im = self.im.clone() * rhs.re.clone() - self.re.clone() * rhs.im.clone();
+        let re = self.re.ref_mul(&rhs.re) + self.im.ref_mul(&rhs.im);
+        let im = self.im.ref_mul(&rhs.re) - self.re.ref_mul(&rhs.im);
         Complex::new(re / n.clone(), im / n)
     }
 }
@@ -797,5 +827,11 @@ impl<T: Display> std::fmt::Display for Complex<T> {
 impl<T: Debug> std::fmt::Debug for Complex<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("({:?}+{:?}i)", self.re, self.im))
+    }
+}
+
+impl<T: LowerExp> std::fmt::LowerExp for Complex<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("({:e}+{:e}i)", self.re, self.im))
     }
 }

@@ -5,23 +5,25 @@ use super::{
     Representation::{self, Euclidean, Lorentz},
     SetTensorData, Slot, SparseTensor,
 };
-use crate::ABSTRACTIND;
-use crate::BISPINOR;
 use crate::COLORADJ;
 use crate::COLORANTIFUND;
 use crate::COLORANTISEXT;
 use crate::COLORFUND;
 use crate::COLORSEXT;
 use crate::LORENTZ;
+use crate::{ABSTRACTIND, EUCLIDEAN};
+use crate::{BISPINOR, SPINFUND};
 
 #[cfg(feature = "shadowing")]
 use crate::{HistoryStructure, NamedStructure};
+use bitvec::ptr::read;
 use num::{NumCast, One, Zero};
 
 use crate::{Complex, Dimension, TensorStructure};
 
 #[cfg(feature = "shadowing")]
 use super::{IntoArgs, IntoSymbol, Shadowable};
+use const_format::concatcp;
 use constcat::concat;
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -108,120 +110,99 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-pub fn preprocess_ufo_spin(atom: Atom) -> Atom {
+pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool) -> Atom {
     let replacements = [
         (
             "Identity(i_,j_)",
-            concat!(
-                "id(",
-                ABSTRACTIND,
-                "(",
-                BISPINOR,
-                "(4,i_),",
-                BISPINOR,
-                "(4,j_)))"
+            named_tensor(
+                "id".into(),
+                &[
+                    &bis(wrapped_to_four("i_", wrapped)),
+                    &bis(wrapped_to_four("j_", wrapped)),
+                ],
             ),
         ),
         (
             "IdentityL(mu_,nu_)",
-            concat!(
-                "id(",
-                ABSTRACTIND,
-                "(",
-                LORENTZ,
-                "(4,mu_),",
-                LORENTZ,
-                "(4,nu_)))"
+            named_tensor(
+                "id".into(),
+                &[
+                    &lor(wrapped_to_four("mu_", wrapped)),
+                    &lor(wrapped_to_four("nu_", wrapped)),
+                ],
             ),
         ),
         (
             "Gamma(mu_,i_,j_)",
-            concat!(
-                "γ(",
-                ABSTRACTIND,
-                "(",
-                LORENTZ,
-                "(4,mu_),",
-                BISPINOR,
-                "(4,i_),",
-                BISPINOR,
-                "(4,j_)))"
+            named_tensor(
+                "γ".into(),
+                &[
+                    &lor(wrapped_to_four("mu_", wrapped)),
+                    &bis(wrapped_to_four("i_", wrapped)),
+                    &bis(wrapped_to_four("j_", wrapped)),
+                ],
             ),
         ),
         (
             "Gamma5(i_,j_)",
-            concat!(
-                "γ5(",
-                ABSTRACTIND,
-                "(",
-                BISPINOR,
-                "(4,i_),",
-                BISPINOR,
-                "(4,j_)))"
+            named_tensor(
+                "γ5".into(),
+                &[
+                    &bis(wrapped_to_four("i_", wrapped)),
+                    &bis(wrapped_to_four("j_", wrapped)),
+                ],
             ),
         ),
         (
             "ProjM(i_,j_)",
-            concat!(
-                "ProjM(",
-                ABSTRACTIND,
-                "(",
-                BISPINOR,
-                "(4,i_),",
-                BISPINOR,
-                "(4,j_)))"
+            named_tensor(
+                "ProjM".into(),
+                &[
+                    &bis(wrapped_to_four("i_", wrapped)),
+                    &bis(wrapped_to_four("j_", wrapped)),
+                ],
             ),
         ),
         (
             "ProjP(i_,j_)",
-            concat!(
-                "ProjP(",
-                ABSTRACTIND,
-                "(",
-                BISPINOR,
-                "(4,i_),",
-                BISPINOR,
-                "(4,j_)))"
+            named_tensor(
+                "ProjP".into(),
+                &[
+                    &bis(wrapped_to_four("i_", wrapped)),
+                    &bis(wrapped_to_four("j_", wrapped)),
+                ],
             ),
         ),
         (
             "Sigma(mu_,nu_,i_,j_)",
-            concat!(
-                "σ(",
-                ABSTRACTIND,
-                "(",
-                LORENTZ,
-                "(4,mu_),",
-                LORENTZ,
-                "(4,nu_),",
-                BISPINOR,
-                "(4,i_),",
-                BISPINOR,
-                "(4,j_)))"
+            named_tensor(
+                "σ".into(),
+                &[
+                    &lor(wrapped_to_four("mu_", wrapped)),
+                    &lor(wrapped_to_four("nu_", wrapped)),
+                    &bis(wrapped_to_four("i_", wrapped)),
+                    &bis(wrapped_to_four("j_", wrapped)),
+                ],
             ),
         ),
         (
             "C(i_,j_)",
-            concat!(
-                "C(",
-                ABSTRACTIND,
-                "(",
-                BISPINOR,
-                "(4,i_),",
-                BISPINOR,
-                "(4,j_)))"
+            named_tensor(
+                "C".into(),
+                &[
+                    &bis(wrapped_to_four("i_", wrapped)),
+                    &bis(wrapped_to_four("j_", wrapped)),
+                ],
             ),
         ),
         (
             "Metric(mu_,nu_)",
-            concat!(
-                "Metric(",
-                ABSTRACTIND,
-                "(",
-                LORENTZ,
-                "(4,mu_),",
-                LORENTZ,
-                "(4,nu_)))"
+            named_tensor(
+                "Metric".into(),
+                &[
+                    &bis(wrapped_to_four("mu_", wrapped)),
+                    &bis(wrapped_to_four("nu_", wrapped)),
+                ],
             ),
         ),
     ];
@@ -229,119 +210,191 @@ pub fn preprocess_ufo_spin(atom: Atom) -> Atom {
     batch_replace(&replacements, atom)
 }
 
+fn aind(args: &[&str]) -> String {
+    args.iter()
+        .fold(ABSTRACTIND.to_string() + "(", |acc, i| acc + *i)
+        + ")"
+}
+
+fn named_tensor(name: String, args: &[&str]) -> String {
+    name + "("
+        + args
+            .iter()
+            .fold(ABSTRACTIND.to_string() + "(", |acc, i| acc + *i)
+            .as_str()
+        + "))"
+}
+
+enum ReplacementArgs {
+    Wrapped(usize, &'static str),
+    Unwrapped(usize, &'static str),
+    Bare(&'static str),
+}
+
+fn rep_string(rep: &str, rep_args: ReplacementArgs) -> String {
+    rep.to_string()
+        + "("
+        + match rep_args {
+            ReplacementArgs::Wrapped(dim, ind) => dim.to_string() + "," + "indexid(" + ind + "))",
+            ReplacementArgs::Unwrapped(dim, ind) => dim.to_string() + "," + ind + ")",
+            ReplacementArgs::Bare(ind) => ind.to_string() + ")",
+        }
+        .as_str()
+}
+
+fn euc(rep_args: ReplacementArgs) -> String {
+    rep_string(EUCLIDEAN, rep_args)
+}
+
+fn lor(rep_args: ReplacementArgs) -> String {
+    rep_string(LORENTZ, rep_args)
+}
+
+fn bis(rep_args: ReplacementArgs) -> String {
+    rep_string(BISPINOR, rep_args)
+}
+
+fn spin(rep_args: ReplacementArgs) -> String {
+    rep_string(SPINFUND, rep_args)
+}
+
+fn coad(ind: &'static str, wrapped: bool) -> String {
+    if wrapped {
+        rep_string(COLORADJ, ReplacementArgs::Wrapped(8, ind))
+    } else {
+        rep_string(COLORADJ, ReplacementArgs::Bare(ind))
+    }
+}
+
+fn cof(ind: &'static str, wrapped: bool) -> String {
+    if wrapped {
+        rep_string(COLORFUND, ReplacementArgs::Wrapped(3, ind))
+    } else {
+        rep_string(COLORFUND, ReplacementArgs::Bare(ind))
+    }
+}
+
+fn coaf(ind: &'static str, wrapped: bool) -> String {
+    if wrapped {
+        rep_string(COLORANTIFUND, ReplacementArgs::Wrapped(3, ind))
+    } else {
+        rep_string(COLORANTIFUND, ReplacementArgs::Bare(ind))
+    }
+}
+
+fn cos(ind: &'static str, wrapped: bool) -> String {
+    if wrapped {
+        rep_string(COLORSEXT, ReplacementArgs::Wrapped(6, ind))
+    } else {
+        rep_string(COLORSEXT, ReplacementArgs::Bare(ind))
+    }
+}
+
+fn coas(ind: &'static str, wrapped: bool) -> String {
+    if wrapped {
+        rep_string(COLORANTISEXT, ReplacementArgs::Wrapped(6, ind))
+    } else {
+        rep_string(COLORANTISEXT, ReplacementArgs::Bare(ind))
+    }
+}
+
+fn wrapped_to_four(ind: &'static str, wrapped: bool) -> ReplacementArgs {
+    if wrapped {
+        ReplacementArgs::Wrapped(4, ind)
+    } else {
+        ReplacementArgs::Unwrapped(4, ind)
+    }
+}
+
 #[cfg(feature = "shadowing")]
-pub fn preprocess_ufo_color(atom: Atom) -> Atom {
+pub fn preprocess_ufo_color(atom: Atom, wrapped: bool) -> Atom {
     let replacements = [
         (
             "T(a_,i_,ia_)",
-            concat!(
-                "T(",
-                ABSTRACTIND,
-                "(",
-                COLORADJ,
-                "(a_),",
-                COLORFUND,
-                "(i_),",
-                COLORANTIFUND,
-                "(ia_)))"
+            named_tensor(
+                "T".into(),
+                &[
+                    &coad("a_", wrapped),
+                    &cof("i_", wrapped),
+                    &coaf("ia_", wrapped),
+                ],
             ),
         ),
         (
             "f(a1_,a2_,a3_)",
-            concat!(
-                "f(",
-                ABSTRACTIND,
-                "(",
-                COLORADJ,
-                "(a1_),",
-                COLORADJ,
-                "(a2_),",
-                COLORADJ,
-                "(a3_)))"
+            named_tensor(
+                "f".into(),
+                &[
+                    &coad("a1_", wrapped),
+                    &coad("a2_", wrapped),
+                    &coad("a3_", wrapped),
+                ],
             ),
         ),
         (
             "d(a1_,a2_,a3_)",
-            concat!(
-                "d(",
-                ABSTRACTIND,
-                "(",
-                COLORADJ,
-                "(a1_),",
-                COLORADJ,
-                "(a2_),",
-                COLORADJ,
-                "(a3_)))"
+            named_tensor(
+                "d".into(),
+                &[
+                    &coad("a1_", wrapped),
+                    &coad("a2_", wrapped),
+                    &coad("a3_", wrapped),
+                ],
             ),
         ),
         (
             "Epsilon(i1_,i2_,i3_)",
-            concat!(
-                "EpsilonBar(",
-                ABSTRACTIND,
-                "(",
-                COLORFUND,
-                "(i1_),",
-                COLORFUND,
-                "(i2_),",
-                COLORFUND,
-                "(i3_)))"
+            named_tensor(
+                "EpsilonBar".into(),
+                &[
+                    &cof("i1_", wrapped),
+                    &cof("i2_", wrapped),
+                    &cof("i3_", wrapped),
+                ],
             ),
         ),
         (
             "EpsilonBar(ia1_,ia2_,ia3_)",
-            concat!(
-                "Epsilon(",
-                ABSTRACTIND,
-                "(",
-                COLORANTIFUND,
-                "(ia1_),",
-                COLORANTIFUND,
-                "(ia2_),",
-                COLORANTIFUND,
-                "(ia3_)))"
+            named_tensor(
+                "Epsilon".into(),
+                &[
+                    &coaf("ia1_", wrapped),
+                    &coaf("ia2_", wrapped),
+                    &coaf("ia3_", wrapped),
+                ],
             ),
         ),
         (
             "T6(a_,s_,as_)",
-            concat!(
-                "T6(",
-                ABSTRACTIND,
-                "(",
-                COLORADJ,
-                "(a_),",
-                COLORSEXT,
-                "(s_),",
-                COLORANTISEXT,
-                "(as_)))"
+            named_tensor(
+                "T6".into(),
+                &[
+                    &coad("a_", wrapped),
+                    &cos("s_", wrapped),
+                    &coas("as_", wrapped),
+                ],
             ),
         ),
         (
             "K6(ia1_,ia2_,s_)",
-            concat!(
-                "K6(",
-                ABSTRACTIND,
-                "(",
-                COLORANTIFUND,
-                "(ia1_),",
-                COLORANTIFUND,
-                "(ia2_),",
-                COLORSEXT,
-                "(s_)))"
+            named_tensor(
+                "K6".into(),
+                &[
+                    &coaf("ia1_", wrapped),
+                    &coaf("ia2_", wrapped),
+                    &cos("s_", wrapped),
+                ],
             ),
         ),
         (
             "K6Bar(as_,i1_,i2_)",
-            concat!(
-                "K6Bar(",
-                ABSTRACTIND,
-                "(",
-                COLORANTISEXT,
-                "(as_),",
-                COLORFUND,
-                "(i1_),",
-                COLORFUND,
-                "(i2_)))"
+            named_tensor(
+                "K6Bar".into(),
+                &[
+                    &coas("as_", wrapped),
+                    &cof("i1_", wrapped),
+                    &cof("i2_", wrapped),
+                ],
             ),
         ),
     ];
@@ -350,10 +403,13 @@ pub fn preprocess_ufo_color(atom: Atom) -> Atom {
 }
 
 #[cfg(feature = "shadowing")]
-pub fn batch_replace(replacements: &[(&str, &str)], mut atom: Atom) -> Atom {
+pub fn batch_replace<T: AsRef<str>, U: AsRef<str>>(
+    replacements: &[(T, U)],
+    mut atom: Atom,
+) -> Atom {
     for (pattern, replacement) in replacements {
-        let pattern = Pattern::parse(pattern).unwrap();
-        let replacement = Pattern::parse(replacement).unwrap();
+        let pattern = Pattern::parse(pattern.as_ref()).unwrap();
+        let replacement = Pattern::parse(replacement.as_ref()).unwrap();
         atom = pattern.replace_all(atom.as_view(), &replacement, None, None);
     }
 
@@ -362,80 +418,12 @@ pub fn batch_replace(replacements: &[(&str, &str)], mut atom: Atom) -> Atom {
 
 #[cfg(feature = "shadowing")]
 pub fn preprocess_ufo_color_wrapped(atom: Atom) -> Atom {
-    let replacements = [
-        (
-            "T(a_,i_,ia_)",
-            "T(coad(8,indexid(a_)),cof(3,indexid(i_)),coaf(3,indexid(ia_)))",
-        ),
-        (
-            "f(a1_,a2_,a3_)",
-            "f(coad(8,indexid(a1_)),coad(8,indexid(a2_)),coad(8,indexid(a3_)))",
-        ),
-        (
-            "d(a1_,a2_,a3_)",
-            "d(coad(8,indexid(a1_)),coad(8,indexid(a2_)),coad(8,indexid(a3_)))",
-        ),
-        (
-            "Epsilon(i1_,i2_,i3_)",
-            "EpsilonBar(cof(3,indexid(i1_)),cof(3,indexid(i2_)),cof(3,indexid(i3_)))",
-        ),
-        (
-            "EpsilonBar(ia1_,ia2_,ia3_)",
-            "Epsilon(coaf(3,indexid(ia1_)),coaf(3,indexid(ia2_)),coaf(3,indexid(ia3_)))",
-        ),
-        (
-            "T6(a_,s_,as_)",
-            "T6(coad(8,indexid(a_)),cos(6,indexid(s_)),coas(6,indexid(as_)))",
-        ),
-        (
-            "K6(ia1_,ia2_,s_)",
-            "K6(coaf(3,indexid(ia1_)),coaf(3,indexid(ia2_)),cos(6,indexid(s_)))",
-        ),
-        (
-            "K6Bar(as_,i1_,i2_)",
-            "K6Bar(coas(6,indexid(as_)),cof(3,indexid(i1_)),cof(3,indexid(i2_)))",
-        ),
-    ];
-
-    batch_replace(&replacements, atom)
+    preprocess_ufo_color(atom, true)
 }
 
 #[cfg(feature = "shadowing")]
 pub fn preprocess_ufo_spin_wrapped(atom: Atom) -> Atom {
-    let replacements = [
-        (
-            "Identity(i_,j_)",
-            "id(bis(4,indexid(i_)),bis(4,indexid(j_)))",
-        ),
-        (
-            "IdentityL(mu_,nu_)",
-            "id(lor(4,indexid(mu_)),lor(4,indexid(nu_)))",
-        ),
-        (
-            "Gamma(mu_,i_,j_)",
-            "γ(lor(4,indexid(mu_)),bis(4,indexid(i_)),bis(4,indexid(j_)))",
-        ),
-        ("Gamma5(i_,j_)", "γ5(bis(4,indexid(i_)),bis(4,indexid(j_)))"),
-        (
-            "ProjM(i_,j_)",
-            "ProjM(bis(4,indexid(i_)),bis(4,indexid(j_)))",
-        ),
-        (
-            "ProjP(i_,j_)",
-            "ProjP(bis(4,indexid(i_)),bis(4,indexid(j_)))",
-        ),
-        (
-            "Sigma(mu_,nu_,i_,j_)",
-            "σ(lor(4,indexid(mu_)),lor(4,indexid(nu_)),bis(4,indexid(i_)),bis(4,indexid(j_)))",
-        ),
-        ("C(i_,j_)", "C(bis(4,indexid(i_)),bis(4,indexid(j_)))"),
-        (
-            "Metric(mu_,nu_)",
-            "Metric(lor(4,indexid(mu_)),lor(4,indexid(nu_)))",
-        ),
-    ];
-
-    batch_replace(&replacements, atom)
+    preprocess_ufo_spin(atom, true)
 }
 
 #[allow(dead_code)]

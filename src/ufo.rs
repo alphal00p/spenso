@@ -5,26 +5,21 @@ use super::{
     Representation::{self, Euclidean, Lorentz},
     SetTensorData, Slot, SparseTensor,
 };
-use crate::COLORADJ;
-use crate::COLORANTIFUND;
-use crate::COLORANTISEXT;
-use crate::COLORFUND;
-use crate::COLORSEXT;
-use crate::LORENTZ;
-use crate::{ABSTRACTIND, EUCLIDEAN};
-use crate::{BISPINOR, SPINFUND};
+
+#[cfg(feature = "shadowing")]
+use crate::{
+    ABSTRACTIND, BISPINOR, COLORADJ, COLORANTIFUND, COLORANTISEXT, COLORFUND, COLORSEXT, EUCLIDEAN,
+    LORENTZ, SPINFUND,
+};
 
 #[cfg(feature = "shadowing")]
 use crate::{HistoryStructure, NamedStructure};
-use bitvec::ptr::read;
 use num::{NumCast, One, Zero};
 
 use crate::{Complex, Dimension, TensorStructure};
 
 #[cfg(feature = "shadowing")]
 use super::{IntoArgs, IntoSymbol, Shadowable};
-use const_format::concatcp;
-use constcat::concat;
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, Symbol},
@@ -209,13 +204,7 @@ pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool) -> Atom {
 
     batch_replace(&replacements, atom)
 }
-
-fn aind(args: &[&str]) -> String {
-    args.iter()
-        .fold(ABSTRACTIND.to_string() + "(", |acc, i| acc + *i)
-        + ")"
-}
-
+#[cfg(feature = "shadowing")]
 fn named_tensor(name: String, args: &[&str]) -> String {
     name + "("
         + args
@@ -224,13 +213,13 @@ fn named_tensor(name: String, args: &[&str]) -> String {
             .as_str()
         + "))"
 }
-
+#[cfg(feature = "shadowing")]
 enum ReplacementArgs {
     Wrapped(usize, &'static str),
     Unwrapped(usize, &'static str),
     Bare(&'static str),
 }
-
+#[cfg(feature = "shadowing")]
 fn rep_string(rep: &str, rep_args: ReplacementArgs) -> String {
     rep.to_string()
         + "("
@@ -242,22 +231,26 @@ fn rep_string(rep: &str, rep_args: ReplacementArgs) -> String {
         .as_str()
 }
 
+#[allow(dead_code)]
+#[cfg(feature = "shadowing")]
 fn euc(rep_args: ReplacementArgs) -> String {
     rep_string(EUCLIDEAN, rep_args)
 }
-
+#[cfg(feature = "shadowing")]
 fn lor(rep_args: ReplacementArgs) -> String {
     rep_string(LORENTZ, rep_args)
 }
-
+#[cfg(feature = "shadowing")]
 fn bis(rep_args: ReplacementArgs) -> String {
     rep_string(BISPINOR, rep_args)
 }
 
+#[allow(dead_code)]
+#[cfg(feature = "shadowing")]
 fn spin(rep_args: ReplacementArgs) -> String {
     rep_string(SPINFUND, rep_args)
 }
-
+#[cfg(feature = "shadowing")]
 fn coad(ind: &'static str, wrapped: bool) -> String {
     if wrapped {
         rep_string(COLORADJ, ReplacementArgs::Wrapped(8, ind))
@@ -265,7 +258,7 @@ fn coad(ind: &'static str, wrapped: bool) -> String {
         rep_string(COLORADJ, ReplacementArgs::Bare(ind))
     }
 }
-
+#[cfg(feature = "shadowing")]
 fn cof(ind: &'static str, wrapped: bool) -> String {
     if wrapped {
         rep_string(COLORFUND, ReplacementArgs::Wrapped(3, ind))
@@ -273,7 +266,7 @@ fn cof(ind: &'static str, wrapped: bool) -> String {
         rep_string(COLORFUND, ReplacementArgs::Bare(ind))
     }
 }
-
+#[cfg(feature = "shadowing")]
 fn coaf(ind: &'static str, wrapped: bool) -> String {
     if wrapped {
         rep_string(COLORANTIFUND, ReplacementArgs::Wrapped(3, ind))
@@ -281,7 +274,7 @@ fn coaf(ind: &'static str, wrapped: bool) -> String {
         rep_string(COLORANTIFUND, ReplacementArgs::Bare(ind))
     }
 }
-
+#[cfg(feature = "shadowing")]
 fn cos(ind: &'static str, wrapped: bool) -> String {
     if wrapped {
         rep_string(COLORSEXT, ReplacementArgs::Wrapped(6, ind))
@@ -289,7 +282,7 @@ fn cos(ind: &'static str, wrapped: bool) -> String {
         rep_string(COLORSEXT, ReplacementArgs::Bare(ind))
     }
 }
-
+#[cfg(feature = "shadowing")]
 fn coas(ind: &'static str, wrapped: bool) -> String {
     if wrapped {
         rep_string(COLORANTISEXT, ReplacementArgs::Wrapped(6, ind))
@@ -298,6 +291,7 @@ fn coas(ind: &'static str, wrapped: bool) -> String {
     }
 }
 
+#[cfg(feature = "shadowing")]
 fn wrapped_to_four(ind: &'static str, wrapped: bool) -> ReplacementArgs {
     if wrapped {
         ReplacementArgs::Wrapped(4, ind)

@@ -113,11 +113,12 @@ pub trait ExteriorProduct<T> {
     fn exterior_product(&self, other: &T) -> Result<Self::LCM, ContractionError>;
 }
 
-impl<T, U, I, O> ExteriorProduct<DenseTensor<T, I>> for DenseTensor<U, I>
+impl<T, U, I> ExteriorProduct<DenseTensor<T, I>> for DenseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -143,7 +144,7 @@ where
     }
 }
 
-// impl<T, U, I, O> ExteriorProduct<DenseTensor<U, I>> for DenseTensor<T, I>
+// impl<T, U, I,> ExteriorProduct<DenseTensor<U, I>> for DenseTensor<T, I>
 // where
 //     U: ContractableWith<T, Out = O>,
 //     // T: ContractableWith<U, Out = O>,
@@ -173,11 +174,12 @@ where
 //     }
 // }
 
-impl<T, U, I, O> ExteriorProduct<DenseTensor<T, I>> for SparseTensor<U, I>
+impl<T, U, I> ExteriorProduct<DenseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -207,11 +209,12 @@ where
     }
 }
 
-impl<T, U, I, O> ExteriorProduct<SparseTensor<T, I>> for DenseTensor<U, I>
+impl<T, U, I> ExteriorProduct<SparseTensor<T, I>> for DenseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -236,11 +239,12 @@ where
     }
 }
 
-impl<T, U, I, O> ExteriorProduct<SparseTensor<T, I>> for SparseTensor<U, I>
+impl<T, U, I> ExteriorProduct<SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = SparseTensor<U::Out, I>;
@@ -442,11 +446,12 @@ where
     type Out = Out;
 }
 
-impl<T, U, I, O> SingleContract<DenseTensor<T, I>> for DenseTensor<U, I>
+impl<T, U, I> SingleContract<DenseTensor<T, I>> for DenseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -492,11 +497,12 @@ where
     }
 }
 
-impl<T, U, I, O> MultiContract<DenseTensor<T, I>> for DenseTensor<U, I>
+impl<T, U, I> MultiContract<DenseTensor<T, I>> for DenseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -577,11 +583,12 @@ where
     }
 }
 
-impl<T, U, I, O> SingleContract<DenseTensor<T, I>> for SparseTensor<U, I>
+impl<T, U, I> SingleContract<DenseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -635,11 +642,12 @@ where
     }
 }
 
-impl<T, U, I, O> SingleContract<SparseTensor<T, I>> for DenseTensor<U, I>
+impl<T, U, I> SingleContract<SparseTensor<T, I>> for DenseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -689,11 +697,12 @@ where
     }
 }
 
-impl<T, U, I, O> MultiContract<DenseTensor<T, I>> for SparseTensor<U, I>
+impl<T, U, I> MultiContract<DenseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -747,11 +756,12 @@ where
     }
 }
 
-impl<T, U, I, O> MultiContract<SparseTensor<T, I>> for DenseTensor<U, I>
+impl<T, U, I> MultiContract<SparseTensor<T, I>> for DenseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -801,11 +811,12 @@ where
     }
 }
 
-impl<T, U, I, O> SingleContract<SparseTensor<T, I>> for SparseTensor<U, I>
+impl<T, U, I> SingleContract<SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = SparseTensor<U::Out, I>;
@@ -888,11 +899,12 @@ where
     }
 }
 
-impl<T, U, I, O> MultiContract<SparseTensor<T, I>> for SparseTensor<U, I>
+impl<T, U, I> MultiContract<SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: ContractableWith<T, Out = O>,
-    // T: ContractableWith<U, Out = O>,
-    O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
+    U: ContractableWith<
+        T,
+        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+    >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = SparseTensor<U::Out, I>;

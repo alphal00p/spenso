@@ -1,6 +1,6 @@
 use crate::{
     ConcreteIndex, GetTensorData, IsZero, IteratableTensor, RefZero, SetTensorData,
-    TensorStructure, TrySmallestUpgrade, R,
+    TensorStructure, TrySmallestUpgrade,
 };
 use std::ops::Neg;
 
@@ -9,7 +9,7 @@ use super::{
 };
 
 #[cfg(feature = "shadowing")]
-use super::{Complex, MixedTensor, ParamTensor, RealOrComplexTensor};
+use super::{Complex, MixedTensor, ParamTensor, RealOrComplexTensor, R};
 #[cfg(feature = "shadowing")]
 use symbolica::atom::Atom;
 

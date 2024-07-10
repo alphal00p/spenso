@@ -8,6 +8,7 @@ use enum_try_as_inner::EnumTryAsInner;
 use crate::{
     Complex, ContractableWith, ContractionError, FallibleAddAssign, FallibleMul, FallibleSubAssign,
     FlatIndex, HasName, IsZero, IteratableTensor, RefZero, TensorStructure, ToSymbolic,
+    TrySmallestUpgrade,
 };
 use symbolica::{
     atom::{representation::FunView, Atom, AtomView},
@@ -814,7 +815,7 @@ where
         + FallibleSubAssign<T>
         + RefZero
         + IsZero,
-    Atom: ContractableWith<T, Out = Atom> + ContractableWith<Atom, Out = Atom>,
+    Atom: TrySmallestUpgrade<T, LCM = Atom>, // Atom: ContractableWith<T, Out = Atom> + ContractableWith<Atom, Out = Atom>,
 {
     type LCM = ParamOrConcrete<DataTensor<T, I>, I>;
     fn contract(
@@ -909,9 +910,7 @@ where
         + FallibleSubAssign<Complex<T>>
         + RefZero
         + IsZero,
-    Atom: ContractableWith<T, Out = Atom>
-        + ContractableWith<Atom, Out = Atom>
-        + ContractableWith<Complex<T>, Out = Atom>,
+    Atom: TrySmallestUpgrade<T, LCM = Atom> + TrySmallestUpgrade<Complex<T>, LCM = Atom>,
 {
     type LCM = ParamOrConcrete<RealOrComplexTensor<T, I>, I>;
     fn contract(

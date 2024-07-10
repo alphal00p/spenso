@@ -5,6 +5,14 @@ use super::{
     Representation::{self, Euclidean, Lorentz},
     SetTensorData, Slot, SparseTensor,
 };
+use crate::ABSTRACTIND;
+use crate::BISPINOR;
+use crate::COLORADJ;
+use crate::COLORANTIFUND;
+use crate::COLORANTISEXT;
+use crate::COLORFUND;
+use crate::COLORSEXT;
+use crate::LORENTZ;
 
 #[cfg(feature = "shadowing")]
 use crate::{HistoryStructure, NamedStructure};
@@ -13,14 +21,14 @@ use num::{NumCast, One, Zero};
 use crate::{Complex, Dimension, TensorStructure};
 
 #[cfg(feature = "shadowing")]
+use super::{IntoArgs, IntoSymbol, Shadowable};
+use constcat::concat;
+#[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, Symbol},
     id::Pattern,
     state::State,
 };
-
-#[cfg(feature = "shadowing")]
-use super::{IntoArgs, IntoSymbol, Shadowable};
 
 // pub fn init_state() {
 //     assert!(EUC == State::get_symbol("euc", None).unwrap());
@@ -102,18 +110,120 @@ where
 #[cfg(feature = "shadowing")]
 pub fn preprocess_ufo_spin(atom: Atom) -> Atom {
     let replacements = [
-        ("Identity(i_,j_)", "id(bis(4,i_),bis(4,j_))"),
-        ("IdentityL(mu_,nu_)", "id(lor(4,mu_),lor(4,nu_))"),
-        ("Gamma(mu_,i_,j_)", "γ(lor(4,mu_),bis(4,i_),bis(4,j_))"),
-        ("Gamma5(i_,j_)", "γ5(bis(4,i_),bis(4,j_))"),
-        ("ProjM(i_,j_)", "ProjM(bis(4,i_),bis(4,j_))"),
-        ("ProjP(i_,j_)", "ProjP(bis(4,i_),bis(4,j_))"),
+        (
+            "Identity(i_,j_)",
+            concat!(
+                "id(",
+                ABSTRACTIND,
+                "(",
+                BISPINOR,
+                "(4,i_),",
+                BISPINOR,
+                "(4,j_)))"
+            ),
+        ),
+        (
+            "IdentityL(mu_,nu_)",
+            concat!(
+                "id(",
+                ABSTRACTIND,
+                "(",
+                LORENTZ,
+                "(4,mu_),",
+                LORENTZ,
+                "(4,nu_)))"
+            ),
+        ),
+        (
+            "Gamma(mu_,i_,j_)",
+            concat!(
+                "γ(",
+                ABSTRACTIND,
+                "(",
+                LORENTZ,
+                "(4,mu_),",
+                BISPINOR,
+                "(4,i_),",
+                BISPINOR,
+                "(4,j_)))"
+            ),
+        ),
+        (
+            "Gamma5(i_,j_)",
+            concat!(
+                "γ5(",
+                ABSTRACTIND,
+                "(",
+                BISPINOR,
+                "(4,i_),",
+                BISPINOR,
+                "(4,j_)))"
+            ),
+        ),
+        (
+            "ProjM(i_,j_)",
+            concat!(
+                "ProjM(",
+                ABSTRACTIND,
+                "(",
+                BISPINOR,
+                "(4,i_),",
+                BISPINOR,
+                "(4,j_)))"
+            ),
+        ),
+        (
+            "ProjP(i_,j_)",
+            concat!(
+                "ProjP(",
+                ABSTRACTIND,
+                "(",
+                BISPINOR,
+                "(4,i_),",
+                BISPINOR,
+                "(4,j_)))"
+            ),
+        ),
         (
             "Sigma(mu_,nu_,i_,j_)",
-            "σ(lor(4,mu_),lor(4,nu_),bis(4,i_),bis(4,j_))",
+            concat!(
+                "σ(",
+                ABSTRACTIND,
+                "(",
+                LORENTZ,
+                "(4,mu_),",
+                LORENTZ,
+                "(4,nu_),",
+                BISPINOR,
+                "(4,i_),",
+                BISPINOR,
+                "(4,j_)))"
+            ),
         ),
-        ("C(i_,j_)", "C(bis(4,i_),bis(4,j_))"),
-        ("Metric(mu_,nu_)", "Metric(lor(4,mu_),lor(4,nu_))"),
+        (
+            "C(i_,j_)",
+            concat!(
+                "C(",
+                ABSTRACTIND,
+                "(",
+                BISPINOR,
+                "(4,i_),",
+                BISPINOR,
+                "(4,j_)))"
+            ),
+        ),
+        (
+            "Metric(mu_,nu_)",
+            concat!(
+                "Metric(",
+                ABSTRACTIND,
+                "(",
+                LORENTZ,
+                "(4,mu_),",
+                LORENTZ,
+                "(4,nu_)))"
+            ),
+        ),
     ];
 
     batch_replace(&replacements, atom)
@@ -122,20 +232,118 @@ pub fn preprocess_ufo_spin(atom: Atom) -> Atom {
 #[cfg(feature = "shadowing")]
 pub fn preprocess_ufo_color(atom: Atom) -> Atom {
     let replacements = [
-        ("T(a_,i_,ia_)", "T(coad(a_),cof(i_),coaf(ia_))"),
-        ("f(a1_,a2_,a3_)", "f(coad(a1_),coad(a2_),coad(a3_))"),
-        ("d(a1_,a2_,a3_)", "d(coad(a1_),coad(a2_),coad(a3_))"),
+        (
+            "T(a_,i_,ia_)",
+            concat!(
+                "T(",
+                ABSTRACTIND,
+                "(",
+                COLORADJ,
+                "(a_),",
+                COLORFUND,
+                "(i_),",
+                COLORANTIFUND,
+                "(ia_)))"
+            ),
+        ),
+        (
+            "f(a1_,a2_,a3_)",
+            concat!(
+                "f(",
+                ABSTRACTIND,
+                "(",
+                COLORADJ,
+                "(a1_),",
+                COLORADJ,
+                "(a2_),",
+                COLORADJ,
+                "(a3_)))"
+            ),
+        ),
+        (
+            "d(a1_,a2_,a3_)",
+            concat!(
+                "d(",
+                ABSTRACTIND,
+                "(",
+                COLORADJ,
+                "(a1_),",
+                COLORADJ,
+                "(a2_),",
+                COLORADJ,
+                "(a3_)))"
+            ),
+        ),
         (
             "Epsilon(i1_,i2_,i3_)",
-            "EpsilonBar(cof(i1_),cof(i2_),cof(i3_))",
+            concat!(
+                "EpsilonBar(",
+                ABSTRACTIND,
+                "(",
+                COLORFUND,
+                "(i1_),",
+                COLORFUND,
+                "(i2_),",
+                COLORFUND,
+                "(i3_)))"
+            ),
         ),
         (
             "EpsilonBar(ia1_,ia2_,ia3_)",
-            "Epsilon(coaf(ia1)),coaf(ia2)),coaf(ia3)))",
+            concat!(
+                "Epsilon(",
+                ABSTRACTIND,
+                "(",
+                COLORANTIFUND,
+                "(ia1_),",
+                COLORANTIFUND,
+                "(ia2_),",
+                COLORANTIFUND,
+                "(ia3_)))"
+            ),
         ),
-        ("T6(a_,s_,as_)", "T6(coad(a_),cos(s_),coas(as_))"),
-        ("K6(ia1_,ia2_,s_)", "K6(coaf(ia1)),coaf(ia2)),cos(s_))"),
-        ("K6Bar(as_,i1_,i2_)", "K6Bar(coas(as_),cof(i1_),cof(i2_))"),
+        (
+            "T6(a_,s_,as_)",
+            concat!(
+                "T6(",
+                ABSTRACTIND,
+                "(",
+                COLORADJ,
+                "(a_),",
+                COLORSEXT,
+                "(s_),",
+                COLORANTISEXT,
+                "(as_)))"
+            ),
+        ),
+        (
+            "K6(ia1_,ia2_,s_)",
+            concat!(
+                "K6(",
+                ABSTRACTIND,
+                "(",
+                COLORANTIFUND,
+                "(ia1_),",
+                COLORANTIFUND,
+                "(ia2_),",
+                COLORSEXT,
+                "(s_)))"
+            ),
+        ),
+        (
+            "K6Bar(as_,i1_,i2_)",
+            concat!(
+                "K6Bar(",
+                ABSTRACTIND,
+                "(",
+                COLORANTISEXT,
+                "(as_),",
+                COLORFUND,
+                "(i1_),",
+                COLORFUND,
+                "(i2_)))"
+            ),
+        ),
     ];
 
     batch_replace(&replacements, atom)

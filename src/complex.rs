@@ -569,13 +569,16 @@ where
 
 impl<'a, T> Mul<&'a Complex<T>> for Complex<T>
 where
-    T: Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Clone,
+    for<'b> T: Mul<&'b T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Clone,
 {
     type Output = Complex<T>;
 
     #[inline]
     fn mul(self, rhs: &'a Complex<T>) -> Self::Output {
-        self * rhs.clone()
+        Complex::new(
+            self.re.clone() * &rhs.re - self.im.clone() * &rhs.im,
+            self.re.clone() * &rhs.im + self.im.clone() * &rhs.re,
+        )
     }
 }
 
@@ -648,8 +651,7 @@ where
 {
     #[inline]
     fn mul_assign(&mut self, rhs: Self) {
-        self.re = self.re.clone() * rhs.re.clone() - self.im.clone() * rhs.im.clone();
-        self.im = self.re.clone() * rhs.im.clone() + self.im.clone() * rhs.re.clone();
+        *self = self.clone() * rhs;
     }
 }
 
@@ -672,8 +674,7 @@ where
 {
     #[inline]
     fn mul_assign(&mut self, rhs: &Self) {
-        self.re = self.re.ref_mul(&rhs.re).ref_sub(&self.im.ref_mul(&rhs.im));
-        self.im = self.re.ref_mul(&rhs.im).ref_add(&self.im.ref_mul(&rhs.re));
+        *self = &*self * rhs;
     }
 }
 
@@ -693,14 +694,17 @@ where
     T: Clone
         + Sub<T, Output = T>
         + Div<T, Output = T>
-        + for<'c> RefMul<&'c T, Output = T>
+        + for<'r> RefMul<&'r T, Output = T>
         + Add<T, Output = T>,
 {
     type Output = Complex<T>;
 
     #[inline]
     fn div(self, rhs: &'a Complex<T>) -> Self::Output {
-        self.clone() / rhs.clone()
+        let n = rhs.norm_squared();
+        let re = self.re.ref_mul(&rhs.re) + self.im.ref_mul(&rhs.im);
+        let im = self.im.ref_mul(&rhs.re) - self.re.ref_mul(&rhs.im);
+        Complex::new(re / n.clone(), im / n)
     }
 }
 
@@ -728,7 +732,7 @@ where
 
     #[inline]
     fn div(self, rhs: &'a Complex<T>) -> Self::Output {
-        self / rhs.clone()
+        &self / rhs
     }
 }
 
@@ -756,7 +760,7 @@ where
 
     #[inline]
     fn div(self, rhs: Complex<T>) -> Self::Output {
-        self.clone() / rhs
+        self / &rhs
     }
 }
 
@@ -784,10 +788,7 @@ where
 
     #[inline]
     fn div(self, rhs: Self) -> Self::Output {
-        let n = rhs.norm_squared();
-        let re = self.re.ref_mul(&rhs.re) + self.im.ref_mul(&rhs.im);
-        let im = self.im.ref_mul(&rhs.re) - self.re.ref_mul(&rhs.im);
-        Complex::new(re / n.clone(), im / n)
+        &self / &rhs
     }
 }
 
@@ -805,7 +806,11 @@ where
 
 impl<T> DivAssign for Complex<T>
 where
-    for<'a> T: DivAssign<&'a T>,
+    T: Clone
+        + Sub<T, Output = T>
+        + Div<T, Output = T>
+        + for<'a> RefMul<&'a T, Output = T>
+        + Add<T, Output = T>,
 {
     #[inline]
     fn div_assign(&mut self, rhs: Self) {
@@ -826,12 +831,15 @@ where
 
 impl<T> DivAssign<&Complex<T>> for Complex<T>
 where
-    for<'a> T: DivAssign<&'a T>,
+    T: Clone
+        + Sub<T, Output = T>
+        + Div<T, Output = T>
+        + for<'a> RefMul<&'a T, Output = T>
+        + Add<T, Output = T>,
 {
     #[inline]
     fn div_assign(&mut self, rhs: &Self) {
-        self.re /= &rhs.re;
-        self.im /= &rhs.im;
+        *self = &*self / rhs;
     }
 }
 

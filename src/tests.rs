@@ -1057,8 +1057,8 @@ fn evaluate() {
 fn convert_sym() {
     use crate::IteratableTensor;
 
-    let i = Complex::new(0.0, 1.0);
-    let mut data_b = vec![i * Complex::from(5.0), Complex::from(2.6) + i];
+    let i: Complex<f64> = Complex::new(0.0, 1.0);
+    let mut data_b: Vec<Complex<f64>> = vec![i * Complex::from(5.0), Complex::<f64>::from(2.6) + i];
     data_b.append(
         &mut [3.34, -17.125, 5.0, 6.0]
             .iter()

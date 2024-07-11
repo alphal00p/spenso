@@ -1,7 +1,7 @@
 use crate::{
-    Complex, ExpandedCoefficent, ExpandedIndex, FlatCoefficent, FlatIndex, HasName, IntoArgs,
-    IntoSymbol, IsZero, IteratableTensor, ParamTensor, ShadowMapping, Shadowable, TensorStructure,
-    TryFromUpgrade,
+    CastStructure, Complex, ExpandedCoefficent, ExpandedIndex, FlatCoefficent, FlatIndex, HasName,
+    IntoArgs, IntoSymbol, IsZero, IteratableTensor, ParamTensor, ShadowMapping, Shadowable,
+    TensorStructure, TryFromUpgrade,
 };
 
 use super::{
@@ -126,6 +126,17 @@ pub trait GetTensorData {
 pub struct SparseTensor<T, I = VecStructure> {
     pub elements: AHashMap<FlatIndex, T>,
     pub structure: I,
+}
+
+impl<T, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<SparseTensor<T, O>>
+    for SparseTensor<T, S>
+{
+    fn cast(self) -> SparseTensor<T, O> {
+        SparseTensor {
+            elements: self.elements,
+            structure: self.structure.into(),
+        }
+    }
 }
 
 impl<T: Clone, S: TensorStructure> Shadowable for SparseTensor<T, S>
@@ -488,6 +499,18 @@ pub struct DenseTensor<T, S = VecStructure> {
     pub data: Vec<T>,
     pub structure: S,
 }
+
+impl<T, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<DenseTensor<T, O>>
+    for DenseTensor<T, S>
+{
+    fn cast(self) -> DenseTensor<T, O> {
+        DenseTensor {
+            data: self.data,
+            structure: self.structure.into(),
+        }
+    }
+}
+
 impl<T: Clone, S: TensorStructure> Shadowable for DenseTensor<T, S>
 where
     S: HasName + Clone,
@@ -872,6 +895,17 @@ where
 pub enum DataTensor<T, I: TensorStructure = VecStructure> {
     Dense(DenseTensor<T, I>),
     Sparse(SparseTensor<T, I>),
+}
+
+impl<T: Clone, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<DataTensor<T, O>>
+    for DataTensor<T, S>
+{
+    fn cast(self) -> DataTensor<T, O> {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.cast()),
+            DataTensor::Sparse(d) => DataTensor::Sparse(d.cast()),
+        }
+    }
 }
 
 impl<T: Clone, S: TensorStructure> Shadowable for DataTensor<T, S>

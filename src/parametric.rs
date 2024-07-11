@@ -7,10 +7,10 @@ use ahash::{AHashMap, HashMap};
 use enum_try_as_inner::EnumTryAsInner;
 
 use crate::{
-    Complex, ContractableWith, ContractionError, ExpandedIndex, FallibleAddAssign, FallibleMul,
-    FallibleSubAssign, FlatIndex, HasName, IntoArgs, IntoSymbol, IsZero, IteratableTensor,
-    NamedStructure, RefZero, ShadowMapping, Shadowable, TensorStructure, ToSymbolic,
-    TrySmallestUpgrade,
+    CastStructure, Complex, ContractableWith, ContractionError, ExpandedIndex, FallibleAddAssign,
+    FallibleMul, FallibleSubAssign, FlatIndex, HasName, IntoArgs, IntoSymbol, IsZero,
+    IteratableTensor, NamedStructure, RefZero, ShadowMapping, Shadowable, TensorStructure,
+    ToSymbolic, TrySmallestUpgrade,
 };
 use symbolica::{
     atom::{representation::FunView, Atom, AtomOrView, AtomView, FunctionBuilder, Symbol},
@@ -157,6 +157,17 @@ pub enum ParamTensor<S: TensorStructure> {
     Param(DataTensor<Atom, S>),
     // Concrete(DataTensor<T, S>),
     Composite(DataTensor<Atom, S>),
+}
+
+impl<S: TensorStructure, O: From<S> + TensorStructure> CastStructure<ParamTensor<O>>
+    for ParamTensor<S>
+{
+    fn cast(self) -> ParamTensor<O> {
+        match self {
+            ParamTensor::Param(d) => ParamTensor::Param(d.cast()),
+            ParamTensor::Composite(d) => ParamTensor::Composite(d.cast()),
+        }
+    }
 }
 
 impl<S: TensorStructure> Shadowable for ParamTensor<S>
@@ -325,6 +336,21 @@ pub enum ParamOrConcrete<C: HasStructure<Structure = S> + Clone, S: TensorStruct
 }
 
 impl<
+        U: HasStructure<Structure = O> + Clone,
+        C: CastStructure<U> + HasStructure<Structure = S> + Clone,
+        S: TensorStructure,
+        O: From<S> + TensorStructure,
+    > CastStructure<ParamOrConcrete<U, O>> for ParamOrConcrete<C, S>
+{
+    fn cast(self) -> ParamOrConcrete<U, O> {
+        match self {
+            ParamOrConcrete::Concrete(c) => ParamOrConcrete::Concrete(c.cast()),
+            ParamOrConcrete::Param(p) => ParamOrConcrete::Param(p.cast()),
+        }
+    }
+}
+
+impl<
         C: HasStructure<Structure = S> + Clone + Shadowable,
         S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
     > Shadowable for ParamOrConcrete<C, S>
@@ -333,7 +359,7 @@ impl<
 
 impl<
         U,
-        C: HasStructure<Structure = S, Scalar = U> + Clone + ShadowMapping<U>,
+        C: HasStructure<Structure = S> + Clone + ShadowMapping<U>,
         S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
     > ShadowMapping<U> for ParamOrConcrete<C, S>
 {
@@ -523,6 +549,16 @@ pub enum RealOrComplexTensor<T, S: TensorStructure> {
     Complex(DataTensor<Complex<T>, S>),
 }
 
+impl<T: Clone, S: TensorStructure, O: From<S> + TensorStructure>
+    CastStructure<RealOrComplexTensor<T, O>> for RealOrComplexTensor<T, S>
+{
+    fn cast(self) -> RealOrComplexTensor<T, O> {
+        match self {
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.cast()),
+            RealOrComplexTensor::Complex(d) => RealOrComplexTensor::Complex(d.cast()),
+        }
+    }
+}
 impl<T: Clone, S: TensorStructure> Shadowable for RealOrComplexTensor<T, S>
 where
     S: HasName + Clone,

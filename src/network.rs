@@ -6,8 +6,8 @@ use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
 use symbolica::evaluate::FunctionMap;
 
 use crate::{
-    FallibleMul, GetTensorData, HasTensorData, RefZero, ShadowMapping, StructureContract,
-    TensorStructure,
+    CastStructure, FallibleMul, GetTensorData, HasTensorData, IntoSymbol, RefZero, ShadowMapping,
+    StructureContract, TensorStructure,
 };
 
 #[cfg(feature = "shadowing")]
@@ -51,6 +51,40 @@ pub struct HalfEdgeGraph<N, E> {
     pub nodes: DenseSlotMap<NodeId, N>,
     pub nodemap: SecondaryMap<HedgeId, NodeId>,
     pub reverse_nodemap: SecondaryMap<NodeId, HedgeId>,
+}
+
+impl<N, E> HalfEdgeGraph<N, E> {
+    pub fn map_nodes<U, F>(self, f: F) -> HalfEdgeGraph<U, E>
+    where
+        F: Fn((NodeId, N)) -> U,
+    {
+        let mut nodeidmap: SecondaryMap<NodeId, NodeId> = SecondaryMap::new();
+        let mut newnodes: DenseSlotMap<NodeId, U> = DenseSlotMap::with_key();
+
+        for (i, n) in self.nodes {
+            let nid = newnodes.insert(f((i, n)));
+            nodeidmap.insert(i, nid);
+        }
+
+        let mut newnodemap: SecondaryMap<HedgeId, NodeId> = SecondaryMap::new();
+        for (i, n) in self.nodemap {
+            newnodemap.insert(i, nodeidmap[n]);
+        }
+
+        let mut newreverse_nodemap: SecondaryMap<NodeId, HedgeId> = SecondaryMap::new();
+        for (i, n) in self.reverse_nodemap {
+            newreverse_nodemap.insert(nodeidmap[i], n);
+        }
+
+        HalfEdgeGraph {
+            edges: self.edges,
+            involution: self.involution,
+            nodes: newnodes,
+            nodemap: newnodemap,
+            reverse_nodemap: newreverse_nodemap,
+            neighbors: self.neighbors,
+        }
+    }
 }
 
 struct IncidentIterator<'a> {
@@ -833,6 +867,19 @@ where
     }
 }
 
+impl<T, S> TensorNetwork<T, S>
+where
+    T: Clone,
+{
+    pub fn result_tensor_ref<'a>(&'a self) -> Result<&'a T, TensorNetworkError> {
+        match self.graph.nodes.len() {
+            0 => Err(TensorNetworkError::NoNodes),
+            1 => Ok(self.graph.nodes.iter().next().unwrap().1),
+            _ => Err(TensorNetworkError::MoreThanOneNode),
+        }
+    }
+}
+
 impl<T, S> TensorNetwork<T, S> {
     pub fn dot(&self) -> std::string::String {
         self.graph.dot()
@@ -964,7 +1011,7 @@ where
     T: Shadowable + HasName<Name = Symbol, Args: IntoArgs>,
     T::Structure: Clone + ToSymbolic,
 {
-    pub fn symbolic_shadow(&mut self, name: &str) -> TensorNetwork<ParamTensor<T::Structure>, S> {
+    pub fn sym_shadow(&mut self, name: &str) -> TensorNetwork<ParamTensor<T::Structure>, S> {
         {
             for (i, n) in &mut self.graph.nodes {
                 n.set_name(State::get_symbol(format!("{}{}", name, i.data().as_ffi())));
@@ -1017,26 +1064,42 @@ where
     }
 }
 
+impl<T, S> TensorNetwork<T, S> {
+    pub fn cast<U>(self) -> TensorNetwork<U, S>
+    where
+        T: CastStructure<U> + HasStructure,
+        U: HasStructure,
+        U::Structure: From<T::Structure>,
+    {
+        TensorNetwork {
+            graph: self.graph.map_nodes(|(_, x)| x.cast()),
+            scalar: self.scalar,
+        }
+    }
+}
+
 #[cfg(feature = "shadowing")]
 impl<T, S> TensorNetwork<T, S>
 where
     T: HasName<Name = Symbol, Args: IntoArgs>,
 {
-    pub fn shadow_with_map<'a, U>(
-        &'a mut self,
-        name: &str,
-        fn_map: &mut FunctionMap<'a, U>,
-    ) -> TensorNetwork<ParamTensor<T::Structure>, S>
+    pub fn append_map<'a, U>(&'a self, fn_map: &mut FunctionMap<'a, U>)
     where
         T: ShadowMapping<U>,
         T::Structure: Clone + ToSymbolic,
+        S: Clone,
     {
-        {
-            for (i, n) in &mut self.graph.nodes {
-                n.set_name(State::get_symbol(format!("{}{}", name, i.data().as_ffi())));
-            }
+        for (_, n) in &self.graph.nodes {
+            n.expanded_append_map(fn_map)
         }
+    }
 
+    pub fn shadow(&self) -> TensorNetwork<ParamTensor<T::Structure>, S>
+    where
+        T: Shadowable,
+        T::Structure: Clone + ToSymbolic,
+        S: Clone,
+    {
         let edges = self.graph.edges.clone();
         let involution = self.graph.involution.clone();
         let neighbors = self.graph.neighbors.clone();
@@ -1046,9 +1109,9 @@ where
         let mut reverse_nodemap = SecondaryMap::new();
 
         for (i, n) in &self.graph.nodes {
-            let node = n.expanded_shadow_with_map(fn_map).unwrap();
+            let node = n.expanded_shadow().unwrap();
 
-            let nid = nodes.insert(node);
+            let nid = nodes.insert(ParamTensor::<T::Structure>::Param(node.clone().into()));
 
             let mut first = true;
             for e in self.graph.edges_incident(i) {
@@ -1069,7 +1132,7 @@ where
             nodemap,
         };
 
-        let scalar = self.scalar.take();
+        let scalar = self.scalar.clone();
 
         TensorNetwork {
             graph: g,
@@ -1138,7 +1201,7 @@ where
 pub struct Levels<T: Clone, S: TensorStructure + HasName + Clone> {
     pub levels: Vec<TensorNetwork<ParamTensor<S>, Atom>>,
     initial: TensorNetwork<MixedTensor<T, S>, Atom>,
-    fn_map: FunctionMap<'static, Complex<T>>,
+    // fn_map: FunctionMap<'static, Complex<T>>,
     params: Vec<Atom>,
 }
 
@@ -1152,7 +1215,7 @@ where
         Levels {
             initial: t,
             levels: vec![],
-            fn_map: FunctionMap::new(),
+            // fn_map: FunctionMap::new(),
             params: vec![],
         }
     }
@@ -1162,35 +1225,79 @@ where
 impl<T: Clone + RefZero, S: TensorStructure + Clone + TracksCount> Levels<T, S>
 where
     MixedTensor<T, S>: Contract<LCM = MixedTensor<T, S>>,
+
     S: HasName<Name = Symbol, Args: IntoArgs> + ToSymbolic + StructureContract,
 {
-    fn contract_levels(&mut self, depth: usize) {
+    fn contract_levels(
+        &mut self,
+        depth: usize,
+        // fn_map: &mut FunctionMap<'a, Complex<T>>,
+    ) {
         let mut not_done = true;
+        let level = self.levels.len();
 
-        while not_done {
-            let level = self.levels.len();
+        if let Some(current_level) = self.levels.last_mut() {
+            current_level.namesym(&format!("L{level}"))
+        } else {
+            not_done = false;
+        }
 
-            if let Some(current_level) = self.levels.last_mut() {
-                let mut new_level = current_level.symbolic_shadow(&format!("L{level}"));
-                new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
-                if new_level.graph.nodes.len() == 1 {
-                    not_done = false;
-                }
-                self.levels.push(new_level);
-            } else {
-                break;
+        let nl = if let Some(current_level) = self.levels.last() {
+            let mut new_level = current_level.shadow();
+            new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+            if new_level.graph.nodes.len() == 1 {
+                not_done = false;
             }
+            Some(new_level)
+        } else {
+            None
+        };
+
+        if let Some(nl) = nl {
+            self.levels.push(nl);
+        }
+
+        if not_done {
+            self.contract_levels(depth)
         }
     }
 
-    fn contract(&mut self, depth: usize) {
+    pub fn contract<'a, R>(
+        &'a mut self,
+        depth: usize,
+        fn_map: &mut FunctionMap<'a, R>,
+    ) -> ParamTensor<S>
+    where
+        R: From<T> + From<Complex<T>>,
+    {
         self.initial
             .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
 
         if self.initial.graph.nodes.len() > 1 {
-            let mut new_level = self.initial.shadow_with_map("L0", &mut self.fn_map);
+            self.initial.namesym("L0");
+            let mut new_level = (*self).initial.shadow();
             new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
             self.levels.push(new_level);
+
+            self.contract_levels(depth);
+            self.generate_fn_map(fn_map);
+            self.levels.last().unwrap().result_tensor().unwrap()
+        } else {
+            self.initial
+                .result_tensor_ref()
+                .unwrap()
+                .expanded_shadow_with_map(fn_map)
+                .unwrap()
+        }
+    }
+
+    fn generate_fn_map<'a, R>(&'a self, fn_map: &mut FunctionMap<'a, R>)
+    where
+        R: From<T> + From<Complex<T>>,
+    {
+        self.initial.append_map(fn_map);
+        for l in &self.levels {
+            l.append_map(fn_map);
         }
     }
 }

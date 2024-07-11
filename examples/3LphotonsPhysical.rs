@@ -2,9 +2,13 @@ use std::{fs::File, io::BufReader};
 
 use ahash::AHashMap;
 
-use spenso::{Complex, SymbolicTensor};
+use spenso::{
+    network, Complex, Levels, MixedTensor, SmartShadowStructure, SymbolicTensor, TensorNetwork,
+};
 use symbolica::{
-    atom::{Atom, AtomView},
+    atom::{Atom, AtomView, Symbol},
+    domains::{float::NumericalFloatLike, rational::Rational},
+    evaluate::FunctionMap,
     state::State,
 };
 
@@ -97,5 +101,19 @@ fn main() {
             .unwrap()
             .try_into_dense()
             .unwrap()
+    );
+
+    let network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> = network.cast();
+
+    let mut levels: Levels<_, _> = network.into();
+
+    let mut fn_map: FunctionMap<Complex<Rational>> = FunctionMap::new();
+    let evaluator_tensor = levels.contract(2, &mut fn_map).evaluator(
+        |a| Complex {
+            im: a.zero(),
+            re: a.clone(),
+        },
+        &fn_map,
+        &params,
     );
 }

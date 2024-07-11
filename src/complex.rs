@@ -6,13 +6,14 @@ use std::{
 use crate::{RefOne, RefZero};
 use duplicate::duplicate;
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
-use serde::{Deserialize, Serialize};
+use serde::{de::value, Deserialize, Serialize};
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::Complex as SymComplex;
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::ConstructibleFloat;
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::Real;
+use symbolica::domains::{float::NumericalFloatLike, rational::Rational};
 
 pub trait R {}
 duplicate! {
@@ -32,10 +33,34 @@ duplicate! {
     ]
     impl R for t {}
 }
-#[derive(Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Serialize, Deserialize, Hash, Eq, PartialOrd, Ord)]
 pub struct Complex<T> {
     pub re: T,
     pub im: T,
+}
+
+impl RefZero for Rational {
+    fn ref_zero(&self) -> Self {
+        self.zero()
+    }
+}
+
+impl From<f64> for Complex<Rational> {
+    fn from(re: f64) -> Self {
+        Complex {
+            re: Rational::from_f64(re),
+            im: Rational::zero(),
+        }
+    }
+}
+
+impl From<Complex<f64>> for Complex<Rational> {
+    fn from(value: Complex<f64>) -> Self {
+        Complex {
+            re: Rational::from_f64(value.re),
+            im: Rational::from_f64(value.im),
+        }
+    }
 }
 
 impl<T: RefZero> RefZero for Complex<T> {

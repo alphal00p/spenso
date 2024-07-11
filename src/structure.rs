@@ -681,6 +681,10 @@ pub trait HasStructure {
     //     S: TensorStructure + From<Self::Structure>;
 }
 
+pub trait CastStructure<O: HasStructure<Structure: From<Self::Structure>>>: HasStructure {
+    fn cast(self) -> O;
+}
+
 pub struct Tensor<Store, Structure> {
     pub store: Store,
     pub structure: Structure,
@@ -1941,6 +1945,17 @@ impl<N, A> StructureContract for SmartShadowStructure<N, A> {
     }
 }
 
+impl<N, A> From<NamedStructure<N, A>> for SmartShadowStructure<N, A> {
+    fn from(value: NamedStructure<N, A>) -> Self {
+        Self {
+            structure: value.structure,
+            contractions: 0,
+            global_name: value.global_name,
+            additional_args: value.additional_args,
+        }
+    }
+}
+
 /// A tracking structure
 ///
 /// It contains two vecs of [`Slot`]s, one for the internal structure, simply extended during each contraction, and one external, coresponding to all the free indices
@@ -2310,6 +2325,23 @@ pub trait ShadowMapping<Const>: Shadowable {
         Some(ParamTensor::Param(self.shadow(index_to_atom)?.into()))
     }
 
+    fn append_map<'a, T>(
+        &'a self,
+        _fn_map: &mut FunctionMap<'a, Const>,
+        _index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+    ) where
+        T: TensorCoefficient,
+    {
+    }
+
+    fn flat_append_map<'a>(&'a self, fn_map: &mut FunctionMap<'a, Const>) {
+        self.append_map(fn_map, Self::Structure::flat_coef)
+    }
+
+    fn expanded_append_map<'a>(&'a self, fn_map: &mut FunctionMap<'a, Const>) {
+        self.append_map(fn_map, Self::Structure::expanded_coef)
+    }
+
     fn flat_shadow_with_map<'a>(
         &'a self,
         fn_map: &mut FunctionMap<'a, Const>,
@@ -2371,6 +2403,16 @@ where
 impl<S: TensorStructure> TensorShell<S> {
     pub fn new(structure: S) -> Self {
         Self { structure }
+    }
+}
+
+impl<S: TensorStructure, O: From<S> + TensorStructure> CastStructure<TensorShell<O>>
+    for TensorShell<S>
+{
+    fn cast(self) -> TensorShell<O> {
+        TensorShell {
+            structure: self.structure.into(),
+        }
     }
 }
 

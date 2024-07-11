@@ -3,12 +3,12 @@ use ahash::{AHashSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
-use symbolica::{
-    domains::factorized_rational_polynomial::FromNumeratorAndFactorizedDenominator,
-    evaluate::FunctionMap,
-};
+use symbolica::evaluate::FunctionMap;
 
-use crate::{FallibleMul, GetTensorData, HasTensorData, StructureContract, TensorStructure};
+use crate::{
+    FallibleMul, GetTensorData, HasTensorData, RefZero, ShadowMapping, StructureContract,
+    TensorStructure,
+};
 
 #[cfg(feature = "shadowing")]
 use crate::{
@@ -19,7 +19,7 @@ use crate::{
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{representation::FunView, AddView, AtomOrView, MulView},
+    atom::{representation::FunView, AddView, MulView},
     atom::{Atom, AtomView, Symbol},
     domains::float::Complex as SymComplex,
     domains::float::Real,
@@ -1017,6 +1017,68 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
+impl<T, S> TensorNetwork<T, S>
+where
+    T: HasName<Name = Symbol, Args: IntoArgs>,
+{
+    pub fn shadow_with_map<'a, U>(
+        &'a mut self,
+        name: &str,
+        fn_map: &mut FunctionMap<'a, U>,
+    ) -> TensorNetwork<ParamTensor<T::Structure>, S>
+    where
+        T: ShadowMapping<U>,
+        T::Structure: Clone + ToSymbolic,
+    {
+        {
+            for (i, n) in &mut self.graph.nodes {
+                n.set_name(State::get_symbol(format!("{}{}", name, i.data().as_ffi())));
+            }
+        }
+
+        let edges = self.graph.edges.clone();
+        let involution = self.graph.involution.clone();
+        let neighbors = self.graph.neighbors.clone();
+
+        let mut nodes = DenseSlotMap::with_key();
+        let mut nodemap = SecondaryMap::new();
+        let mut reverse_nodemap = SecondaryMap::new();
+
+        for (i, n) in &self.graph.nodes {
+            let node = n.expanded_shadow_with_map(fn_map).unwrap();
+
+            let nid = nodes.insert(node);
+
+            let mut first = true;
+            for e in self.graph.edges_incident(i) {
+                if first {
+                    reverse_nodemap.insert(nid, e);
+                    first = false;
+                }
+                nodemap.insert(e, nid);
+            }
+        }
+
+        let g = HalfEdgeGraph {
+            edges,
+            involution,
+            reverse_nodemap,
+            neighbors,
+            nodes,
+            nodemap,
+        };
+
+        let scalar = self.scalar.take();
+
+        TensorNetwork {
+            graph: g,
+            // params,
+            scalar,
+        }
+    }
+}
+
 impl<T, S> TensorNetwork<T, S>
 where
     T: HasName,
@@ -1076,7 +1138,7 @@ where
 pub struct Levels<T: Clone, S: TensorStructure + HasName + Clone> {
     pub levels: Vec<TensorNetwork<ParamTensor<S>, Atom>>,
     initial: TensorNetwork<MixedTensor<T, S>, Atom>,
-    fn_map: FunctionMap<'static, T>,
+    fn_map: FunctionMap<'static, Complex<T>>,
     params: Vec<Atom>,
 }
 
@@ -1097,7 +1159,7 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<T: Clone, S: TensorStructure + Clone + TracksCount> Levels<T, S>
+impl<T: Clone + RefZero, S: TensorStructure + Clone + TracksCount> Levels<T, S>
 where
     MixedTensor<T, S>: Contract<LCM = MixedTensor<T, S>>,
     S: HasName<Name = Symbol, Args: IntoArgs> + ToSymbolic + StructureContract,
@@ -1126,7 +1188,7 @@ where
             .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
 
         if self.initial.graph.nodes.len() > 1 {
-            let mut new_level = self.initial.symbolic_shadow(&format!("L0"));
+            let mut new_level = self.initial.shadow_with_map("L0", &mut self.fn_map);
             new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
             self.levels.push(new_level);
         }

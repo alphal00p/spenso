@@ -55,7 +55,7 @@ fn gamma_net_param(
             let id = Atom::new_num(i);
 
             result.push(MixedTensor::param(
-                ps.to_dense_labeled(|s, index| FlatCoefficent {
+                ps.to_dense_labeled(|_, index| FlatCoefficent {
                     name: Some(p),
                     index,
                     args: Some([id.clone()]),

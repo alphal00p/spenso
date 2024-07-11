@@ -1,12 +1,9 @@
 extern crate derive_more;
 
-use std::{
-    env::Args,
-    fmt::{Debug, Display},
-};
+use std::fmt::{Debug, Display};
 
 use ahash::{AHashMap, HashMap};
-use bitvec::mem::elts;
+
 use enum_try_as_inner::EnumTryAsInner;
 
 use crate::{
@@ -25,7 +22,7 @@ use std::hash::Hash;
 
 use super::{
     Contract, DataIterator, DataTensor, DenseTensor, HasStructure, Slot, SparseTensor,
-    StructureContract, TracksCount, VecStructure,
+    StructureContract, TracksCount,
 };
 use symbolica::domains::float::Complex as SymComplex;
 
@@ -192,7 +189,9 @@ where
                     for (i, a) in d.flat_iter() {
                         let labeled_coef = index_to_atom(self.structure(), i);
 
-                        labeled_coef.add_tagged_function(fn_map, a.as_view());
+                        labeled_coef
+                            .add_tagged_function(fn_map, a.as_view())
+                            .unwrap();
                         data.push(labeled_coef.to_atom().unwrap());
                     }
                     let param = DenseTensor {
@@ -206,7 +205,9 @@ where
                     for (i, a) in d.flat_iter() {
                         let labeled_coef = index_to_atom(self.structure(), i);
 
-                        labeled_coef.add_tagged_function(fn_map, a.as_view());
+                        labeled_coef
+                            .add_tagged_function(fn_map, a.as_view())
+                            .unwrap();
                         data.push(labeled_coef.to_atom().unwrap());
                     }
                     let param = DenseTensor {
@@ -310,10 +311,9 @@ where
     }
 
     fn set_name(&mut self, name: Self::Name) {
-        match self {
-            ParamTensor::Composite(x) => x.set_name(name),
-            ParamTensor::Param(x) => x.set_name(name),
-        }
+        if let ParamTensor::Composite(x) = self {
+            x.set_name(name);
+        } // never set the name of a param tensor, it is always set by construction
     }
 }
 

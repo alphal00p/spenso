@@ -19,7 +19,7 @@ use rand_xoshiro::Xoroshiro64Star;
 use smartstring::alias::String;
 
 #[cfg(feature = "shadowing")]
-use super::{symbolic::SymbolicTensor, IntoSymbol, MixedTensor, Shadowable, TryIntoUpgrade};
+use super::{symbolic::SymbolicTensor, MixedTensor, Shadowable, TryIntoUpgrade};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView},
@@ -1119,11 +1119,11 @@ fn simple_multi_contract_sym() {
     )
     .unwrap();
 
-    let a: DataTensor<Atom, NamedStructure<&str,()>> = structa
+    let a: DataTensor<Atom, NamedStructure<&str, ()>> = structa
         .to_named("a", None)
         .to_dense_expanded_labels()
         .into();
-    let b: DataTensor<Atom, NamedStructure<&str,()>> = structb
+    let b: DataTensor<Atom, NamedStructure<&str, ()>> = structb
         .to_named("b", None)
         .to_dense_expanded_labels()
         .into();

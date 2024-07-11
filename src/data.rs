@@ -1,7 +1,7 @@
 use crate::{
     Complex, ExpandedCoefficent, ExpandedIndex, FlatCoefficent, FlatIndex, HasName, IntoArgs,
     IntoSymbol, IsZero, IteratableTensor, ParamTensor, ShadowMapping, Shadowable, TensorStructure,
-    ToSymbolic, TryFromUpgrade,
+    TryFromUpgrade,
 };
 
 use super::{

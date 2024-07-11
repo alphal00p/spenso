@@ -1,6 +1,7 @@
 use crate::{
-    Complex, ExpandedIndex, FlatIndex, HasName, IsZero, IteratableTensor, TensorStructure,
-    TryFromUpgrade,
+    Complex, ExpandedCoefficent, ExpandedIndex, FlatCoefficent, FlatIndex, HasName, IntoArgs,
+    IntoSymbol, IsZero, IteratableTensor, ParamTensor, ShadowMapping, Shadowable, TensorStructure,
+    ToSymbolic, TryFromUpgrade,
 };
 
 use super::{
@@ -127,9 +128,48 @@ pub struct SparseTensor<T, I = VecStructure> {
     pub structure: I,
 }
 
+impl<T: Clone, S: TensorStructure> Shadowable for SparseTensor<T, S>
+where
+    S: HasName + Clone,
+    S::Name: IntoSymbol,
+    S::Args: IntoArgs,
+{
+}
+
+impl<T: Clone, S: TensorStructure, R> ShadowMapping<R> for SparseTensor<T, S>
+where
+    S: HasName + Clone,
+    S::Name: IntoSymbol,
+    S::Args: IntoArgs,
+    R: From<T>,
+{
+    fn shadow_with_map<'a, C>(
+        &self,
+        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
+    ) -> Option<ParamTensor<Self::Structure>>
+    where
+        C: crate::TensorCoefficient,
+    {
+        let mut data = vec![];
+        for (i, d) in self.flat_iter() {
+            let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
+            fn_map.add_constant(labeled_coef.clone().into(), d.clone().into());
+            data.push(labeled_coef);
+        }
+
+        let param = DenseTensor {
+            data,
+            structure: self.structure.clone(),
+        };
+
+        Some(ParamTensor::Param(param.into()))
+    }
+}
+
 impl<T, S> HasName for SparseTensor<T, S>
 where
-    S: HasName,
+    S: HasName + TensorStructure,
 {
     type Args = S::Args;
     type Name = S::Name;
@@ -137,12 +177,30 @@ where
         self.structure.name()
     }
 
-    fn id(&self) -> Option<Self::Args> {
-        self.structure.id()
+    fn args(&self) -> Option<Self::Args> {
+        self.structure.args()
     }
 
     fn set_name(&mut self, name: Self::Name) {
         self.structure.set_name(name);
+    }
+
+    fn expanded_coef(&self, id: FlatIndex) -> ExpandedCoefficent<Self::Args>
+    where
+        Self: TensorStructure,
+        Self::Name: IntoSymbol,
+        Self::Args: IntoArgs,
+    {
+        self.structure.expanded_coef(id)
+    }
+
+    fn flat_coef(&self, id: FlatIndex) -> FlatCoefficent<Self::Args>
+    where
+        Self: TensorStructure,
+        Self::Name: IntoSymbol,
+        Self::Args: IntoArgs,
+    {
+        self.structure.flat_coef(id)
     }
 }
 
@@ -426,9 +484,47 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-pub struct DenseTensor<T, I = VecStructure> {
+pub struct DenseTensor<T, S = VecStructure> {
     pub data: Vec<T>,
-    pub structure: I,
+    pub structure: S,
+}
+impl<T: Clone, S: TensorStructure> Shadowable for DenseTensor<T, S>
+where
+    S: HasName + Clone,
+    S::Name: IntoSymbol,
+    S::Args: IntoArgs,
+{
+}
+impl<T: Clone, S: TensorStructure, R> ShadowMapping<R> for DenseTensor<T, S>
+where
+    S: HasName + Clone,
+    S::Name: IntoSymbol,
+    S::Args: IntoArgs,
+    R: From<T>,
+{
+    fn shadow_with_map<'a, U>(
+        &self,
+        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
+    ) -> Option<ParamTensor<Self::Structure>>
+    where
+        U: crate::TensorCoefficient,
+        R: From<T>,
+    {
+        let mut data = vec![];
+        for (i, d) in self.flat_iter() {
+            let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
+            fn_map.add_constant(labeled_coef.clone().into(), d.clone().into());
+            data.push(labeled_coef);
+        }
+
+        let param = DenseTensor {
+            data,
+            structure: self.structure.clone(),
+        };
+
+        Some(ParamTensor::Param(param.into()))
+    }
 }
 
 impl<T: Display, I: TensorStructure> std::fmt::Display for DenseTensor<T, I> {
@@ -482,7 +578,7 @@ where
 
 impl<T, S> HasName for DenseTensor<T, S>
 where
-    S: HasName,
+    S: HasName + TensorStructure,
 {
     type Args = S::Args;
     type Name = S::Name;
@@ -490,8 +586,8 @@ where
         self.structure.name()
     }
 
-    fn id(&self) -> Option<Self::Args> {
-        self.structure.id()
+    fn args(&self) -> Option<Self::Args> {
+        self.structure.args()
     }
 
     fn set_name(&mut self, name: Self::Name) {
@@ -778,6 +874,36 @@ pub enum DataTensor<T, I: TensorStructure = VecStructure> {
     Sparse(SparseTensor<T, I>),
 }
 
+impl<T: Clone, S: TensorStructure> Shadowable for DataTensor<T, S>
+where
+    S: HasName + Clone,
+    S::Name: IntoSymbol,
+    S::Args: IntoArgs,
+{
+}
+
+impl<T: Clone, S: TensorStructure, R> ShadowMapping<R> for DataTensor<T, S>
+where
+    S: HasName + Clone,
+    S::Name: IntoSymbol,
+    S::Args: IntoArgs,
+    R: From<T>,
+{
+    fn shadow_with_map<'a, U>(
+        &'a self,
+        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
+    ) -> Option<ParamTensor<Self::Structure>>
+    where
+        U: crate::TensorCoefficient,
+    {
+        match self {
+            DataTensor::Dense(d) => d.shadow_with_map(fn_map, index_to_atom),
+            DataTensor::Sparse(s) => s.shadow_with_map(fn_map, index_to_atom),
+        }
+    }
+}
+
 impl<T, I> DataTensor<T, I>
 where
     I: TensorStructure + Clone,
@@ -902,10 +1028,10 @@ where
         }
     }
 
-    fn id(&self) -> Option<Self::Args> {
+    fn args(&self) -> Option<Self::Args> {
         match self {
-            DataTensor::Dense(d) => d.id(),
-            DataTensor::Sparse(s) => s.id(),
+            DataTensor::Dense(d) => d.args(),
+            DataTensor::Sparse(s) => s.args(),
         }
     }
 

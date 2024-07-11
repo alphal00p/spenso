@@ -1,17 +1,22 @@
 extern crate derive_more;
 
-use std::fmt::{Debug, Display};
+use std::{
+    env::Args,
+    fmt::{Debug, Display},
+};
 
 use ahash::{AHashMap, HashMap};
+use bitvec::mem::elts;
 use enum_try_as_inner::EnumTryAsInner;
 
 use crate::{
-    Complex, ContractableWith, ContractionError, FallibleAddAssign, FallibleMul, FallibleSubAssign,
-    FlatIndex, HasName, IsZero, IteratableTensor, RefZero, TensorStructure, ToSymbolic,
+    Complex, ContractableWith, ContractionError, ExpandedIndex, FallibleAddAssign, FallibleMul,
+    FallibleSubAssign, FlatIndex, HasName, IntoArgs, IntoSymbol, IsZero, IteratableTensor,
+    NamedStructure, RefZero, ShadowMapping, Shadowable, TensorStructure, ToSymbolic,
     TrySmallestUpgrade,
 };
 use symbolica::{
-    atom::{representation::FunView, Atom, AtomView},
+    atom::{representation::FunView, Atom, AtomOrView, AtomView, FunctionBuilder, Symbol},
     domains::{float::Real, rational::Rational},
     evaluate::{EvalTree, EvaluationFn, FunctionMap},
 };
@@ -30,7 +35,106 @@ use symbolica::domains::float::Complex as SymComplex;
 //     }
 // }
 
-impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom> {
+pub trait TensorCoefficient {
+    fn cooked_name(&self) -> Option<String>;
+    fn name(&self) -> Option<Symbol>;
+    fn tags(&self) -> Vec<AtomOrView>;
+    fn to_atom(&self) -> Option<Atom>;
+    fn add_tagged_function<'c, 'a, 'b: 'c, T>(
+        &'c self,
+        fn_map: &'b mut FunctionMap<'a, T>,
+        body: AtomView<'a>,
+    ) -> Result<(), &str> {
+        if let Some((name, cooked_name)) = self.name().zip(self.cooked_name()) {
+            fn_map.add_tagged_function(name, self.tags(), cooked_name, vec![], body)
+        } else {
+            Err("Unnamed ")
+        }
+    }
+}
+
+pub struct FlatCoefficent<Args: IntoArgs> {
+    pub name: Option<Symbol>,
+    pub index: FlatIndex,
+    pub args: Option<Args>,
+}
+
+impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
+    fn name(&self) -> Option<Symbol> {
+        self.name
+    }
+
+    fn cooked_name(&self) -> Option<String> {
+        let mut name = self.name?.to_string();
+        if let Some(ref args) = self.args {
+            name += args.cooked_name().as_str();
+        }
+        Some(name)
+    }
+
+    fn tags(&self) -> Vec<AtomOrView> {
+        let mut tags: Vec<AtomOrView> = if let Some(ref args) = self.args {
+            args.args().into_iter().map(AtomOrView::from).collect()
+        } else {
+            vec![]
+        };
+        tags.push(Atom::from(self.index).into());
+        tags
+    }
+
+    fn to_atom(&self) -> Option<Atom> {
+        let mut fn_builder = FunctionBuilder::new(self.name?);
+        if let Some(ref args) = self.args {
+            for arg in args.into_args() {
+                fn_builder = fn_builder.add_arg(arg.as_view());
+            }
+        }
+        fn_builder = fn_builder.add_arg(Atom::from(self.index).as_view());
+        Some(fn_builder.finish())
+    }
+}
+
+pub struct ExpandedCoefficent<Args: IntoArgs> {
+    pub name: Option<Symbol>,
+    pub index: ExpandedIndex,
+    pub args: Option<Args>,
+}
+
+impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
+    fn name(&self) -> Option<Symbol> {
+        self.name
+    }
+    fn cooked_name(&self) -> Option<String> {
+        let mut name = self.name?.to_string();
+        if let Some(ref args) = self.args {
+            name += args.cooked_name().as_str();
+        }
+        Some(name)
+    }
+
+    fn tags(&self) -> Vec<AtomOrView> {
+        let mut tags: Vec<AtomOrView> = if let Some(ref args) = self.args {
+            args.args().into_iter().map(AtomOrView::from).collect()
+        } else {
+            vec![]
+        };
+        tags.push(Atom::from(self.index.clone()).into());
+        tags
+    }
+
+    fn to_atom(&self) -> Option<Atom> {
+        let mut fn_builder = FunctionBuilder::new(self.name?);
+        if let Some(ref args) = self.args {
+            for arg in args.into_args() {
+                fn_builder = fn_builder.add_arg(arg.as_view());
+            }
+        }
+        fn_builder = fn_builder.add_arg(Atom::from(self.index.clone()).as_view());
+        Some(fn_builder.finish())
+    }
+}
+
+impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<Atom>>> {
     type Error = String;
 
     fn try_from(f: FunView<'a>) -> Result<Self, Self::Error> {
@@ -45,8 +149,8 @@ impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom> {
                 args.push(arg.to_owned());
             }
         }
-        let s: VecStructure = structure.into();
-        Ok(s.shadow_with(f_id, &args))
+        let s = NamedStructure::from_iter(structure, f_id, Some(args));
+        Ok(s.to_dense_expanded_labels())
     }
 }
 
@@ -56,6 +160,64 @@ pub enum ParamTensor<S: TensorStructure> {
     Param(DataTensor<Atom, S>),
     // Concrete(DataTensor<T, S>),
     Composite(DataTensor<Atom, S>),
+}
+
+impl<S: TensorStructure> Shadowable for ParamTensor<S>
+where
+    S: HasName + Clone,
+    S::Name: IntoSymbol,
+    S::Args: IntoArgs,
+{
+}
+
+impl<S: TensorStructure, Const> ShadowMapping<Const> for ParamTensor<S>
+where
+    S: HasName + Clone,
+    S::Name: IntoSymbol,
+    S::Args: IntoArgs,
+{
+    fn shadow_with_map<'a, T>(
+        &'a self,
+        fn_map: &mut FunctionMap<'a, Const>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+    ) -> Option<ParamTensor<Self::Structure>>
+    where
+        T: TensorCoefficient,
+    {
+        match self {
+            ParamTensor::Param(_) => return Some(self.clone()),
+            ParamTensor::Composite(c) => match c {
+                DataTensor::Dense(d) => {
+                    let mut data = vec![];
+                    for (i, a) in d.flat_iter() {
+                        let labeled_coef = index_to_atom(self.structure(), i);
+
+                        labeled_coef.add_tagged_function(fn_map, a.as_view());
+                        data.push(labeled_coef.to_atom().unwrap());
+                    }
+                    let param = DenseTensor {
+                        data,
+                        structure: d.structure.clone(),
+                    };
+                    Some(ParamTensor::Param(param.into()))
+                }
+                DataTensor::Sparse(d) => {
+                    let mut data = vec![];
+                    for (i, a) in d.flat_iter() {
+                        let labeled_coef = index_to_atom(self.structure(), i);
+
+                        labeled_coef.add_tagged_function(fn_map, a.as_view());
+                        data.push(labeled_coef.to_atom().unwrap());
+                    }
+                    let param = DenseTensor {
+                        data,
+                        structure: d.structure.clone(),
+                    };
+                    Some(ParamTensor::Param(param.into()))
+                }
+            },
+        }
+    }
 }
 
 impl<S: TensorStructure + Clone> ParamTensor<S> {
@@ -133,10 +295,10 @@ where
     type Args = S::Args;
     type Name = S::Name;
 
-    fn id(&self) -> Option<Self::Args> {
+    fn args(&self) -> Option<Self::Args> {
         match self {
-            ParamTensor::Composite(x) => x.id(),
-            ParamTensor::Param(x) => x.id(),
+            ParamTensor::Composite(x) => x.args(),
+            ParamTensor::Param(x) => x.args(),
         }
     }
 
@@ -157,9 +319,37 @@ where
 
 #[derive(Debug, Clone)]
 // #[derive_err(Debug)]
-pub enum ParamOrConcrete<C: HasStructure + Clone, S: TensorStructure> {
+pub enum ParamOrConcrete<C: HasStructure<Structure = S> + Clone, S: TensorStructure> {
     Concrete(C),
     Param(ParamTensor<S>),
+}
+
+impl<
+        C: HasStructure<Structure = S> + Clone + Shadowable,
+        S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
+    > Shadowable for ParamOrConcrete<C, S>
+{
+}
+
+impl<
+        U,
+        C: HasStructure<Structure = S, Scalar = U> + Clone + ShadowMapping<U>,
+        S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
+    > ShadowMapping<U> for ParamOrConcrete<C, S>
+{
+    fn shadow_with_map<'a, T>(
+        &'a self,
+        fn_map: &mut FunctionMap<'a, U>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+    ) -> Option<ParamTensor<Self::Structure>>
+    where
+        T: TensorCoefficient,
+    {
+        match self {
+            ParamOrConcrete::Concrete(c) => c.shadow_with_map(fn_map, index_to_atom),
+            ParamOrConcrete::Param(p) => p.shadow_with_map(fn_map, index_to_atom),
+        }
+    }
 }
 
 pub enum AtomViewOrConcrete<'a, T> {
@@ -167,7 +357,26 @@ pub enum AtomViewOrConcrete<'a, T> {
     Concrete(T),
 }
 
-impl<C: HasStructure + Clone, S: TensorStructure> ParamOrConcrete<C, S> {
+pub enum AtomOrConcrete<T> {
+    Atom(Atom),
+    Concrete(T),
+}
+
+pub trait Concrete {}
+
+impl<T> From<Atom> for AtomOrConcrete<T> {
+    fn from(value: Atom) -> Self {
+        AtomOrConcrete::Atom(value)
+    }
+}
+
+impl<T: Concrete> From<T> for AtomOrConcrete<T> {
+    fn from(value: T) -> Self {
+        AtomOrConcrete::Concrete(value)
+    }
+}
+
+impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure> ParamOrConcrete<C, S> {
     pub fn is_parametric(&self) -> bool {
         match self {
             ParamOrConcrete::Param(_) => true,
@@ -195,7 +404,7 @@ where
     C: HasStructure<Structure = S> + Clone,
     S: TensorStructure,
 {
-    type Scalar = Atom;
+    type Scalar = C::Scalar;
     type Structure = S;
 
     fn structure(&self) -> &Self::Structure {
@@ -215,7 +424,7 @@ where
 
 impl<C, S> TracksCount for ParamOrConcrete<C, S>
 where
-    C: TracksCount + HasStructure + Clone,
+    C: TracksCount + HasStructure<Structure = S> + Clone,
     S: TensorStructure + TracksCount,
 {
     fn contractions_num(&self) -> usize {
@@ -228,16 +437,16 @@ where
 
 impl<C, S> HasName for ParamOrConcrete<C, S>
 where
-    C: HasName + HasStructure + Clone,
+    C: HasName + HasStructure<Structure = S> + Clone,
     S: TensorStructure + HasName<Name = C::Name, Args = C::Args>,
 {
     type Args = C::Args;
     type Name = C::Name;
 
-    fn id(&self) -> Option<Self::Args> {
+    fn args(&self) -> Option<Self::Args> {
         match self {
-            ParamOrConcrete::Concrete(x) => x.id(),
-            ParamOrConcrete::Param(x) => x.id(),
+            ParamOrConcrete::Concrete(x) => x.args(),
+            ParamOrConcrete::Param(x) => x.args(),
         }
     }
 
@@ -314,12 +523,43 @@ pub enum RealOrComplexTensor<T, S: TensorStructure> {
     Complex(DataTensor<Complex<T>, S>),
 }
 
+impl<T: Clone, S: TensorStructure> Shadowable for RealOrComplexTensor<T, S>
+where
+    S: HasName + Clone,
+    S::Name: IntoSymbol,
+    S::Args: IntoArgs,
+{
+}
+
+impl<T: Clone + RefZero, S: TensorStructure, R> ShadowMapping<R> for RealOrComplexTensor<T, S>
+where
+    S: HasName + Clone,
+    S::Name: IntoSymbol,
+    S::Args: IntoArgs,
+    R: From<T> + From<Complex<T>>,
+{
+    fn shadow_with_map<'a, C>(
+        &'a self,
+        fn_map: &mut FunctionMap<'a, R>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
+    ) -> Option<ParamTensor<Self::Structure>>
+    where
+        C: TensorCoefficient,
+    {
+        match self {
+            RealOrComplexTensor::Real(c) => c.shadow_with_map(fn_map, index_to_atom),
+            RealOrComplexTensor::Complex(p) => p.shadow_with_map(fn_map, index_to_atom),
+        }
+    }
+}
+
 pub enum RealOrComplexRef<'a, T> {
     Real(&'a T),
     Complex(&'a Complex<T>),
 }
 
-pub type MixedTensor<T = f64, S = VecStructure> = ParamOrConcrete<RealOrComplexTensor<T, S>, S>;
+pub type MixedTensor<T = f64, S = NamedStructure<Symbol, Vec<Atom>>> =
+    ParamOrConcrete<RealOrComplexTensor<T, S>, S>;
 
 impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
     type Scalar = Complex<T>;
@@ -374,10 +614,10 @@ where
         }
     }
 
-    fn id(&self) -> Option<S::Args> {
+    fn args(&self) -> Option<S::Args> {
         match self {
-            RealOrComplexTensor::Real(r) => r.id(),
-            RealOrComplexTensor::Complex(r) => r.id(),
+            RealOrComplexTensor::Real(r) => r.args(),
+            RealOrComplexTensor::Complex(r) => r.args(),
         }
     }
 }
@@ -436,8 +676,8 @@ impl<'a> TryFrom<FunView<'a>> for MixedTensor {
                 args.push(arg.to_owned());
             }
         }
-        let s: VecStructure = structure.into();
-        Ok(s.to_explicit_rep(f_id, &args))
+        let s = NamedStructure::from_iter(structure, f_id, Some(args));
+        s.to_explicit_rep().ok_or("not found".into())
     }
 }
 

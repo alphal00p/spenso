@@ -3,8 +3,12 @@ use ahash::{AHashSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
+use symbolica::{
+    domains::factorized_rational_polynomial::FromNumeratorAndFactorizedDenominator,
+    evaluate::FunctionMap,
+};
 
-use crate::{FallibleMul, GetTensorData, HasTensorData, TensorStructure};
+use crate::{FallibleMul, GetTensorData, HasTensorData, StructureContract, TensorStructure};
 
 #[cfg(feature = "shadowing")]
 use crate::{
@@ -687,7 +691,7 @@ impl<S: TensorStructure + Clone> TensorNetwork<ParamTensor<S>, Atom> {
         evaluated_net
     }
 }
-impl<T> From<Vec<T>> for TensorNetwork<T, T::Scalar>
+impl<T, S> From<Vec<T>> for TensorNetwork<T, S>
 where
     T: HasStructure,
 {
@@ -912,10 +916,7 @@ impl<'a> TryFrom<FunView<'a>>
 
         let mut scalar = None;
         if let Ok(s) = s {
-            let t = s
-                .to_shell()
-                .smart_shadow()
-                .ok_or(anyhow!("Cannot shadow"))?;
+            let t = s.to_shell().to_explicit().ok_or(anyhow!("Cannot shadow"))?;
             network.push(t);
         } else {
             scalar = Some(value.as_view().to_owned());
@@ -947,23 +948,23 @@ impl<'a> TryFrom<AddView<'a>>
                 Err(e) => return Err(e),
             }
         }
-        let mut net = TensorNetwork::from(vec![tensors
-            .into_iter()
-            .reduce(|a, b| a.add_fallible(&b).unwrap())
-            .unwrap()]);
+        let mut net: TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom> =
+            TensorNetwork::from(vec![tensors
+                .into_iter()
+                .reduce(|a, b| a.add_fallible(&b).unwrap())
+                .unwrap()]);
         net.scalar = Some(scalars);
         Ok(net)
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl<T, S, I> TensorNetwork<T, S>
+impl<T, S> TensorNetwork<T, S>
 where
-    T: HasStructure<Structure = I> + Clone + HasName<Name = Symbol>,
-    I: TensorStructure + Clone + ToSymbolic,
-    T::Args: IntoArgs,
+    T: Shadowable + HasName<Name = Symbol, Args: IntoArgs>,
+    T::Structure: Clone + ToSymbolic,
 {
-    pub fn symbolic_shadow(&mut self, name: &str) -> TensorNetwork<MixedTensor<f64, I>, S> {
+    pub fn symbolic_shadow(&mut self, name: &str) -> TensorNetwork<ParamTensor<T::Structure>, S> {
         {
             for (i, n) in &mut self.graph.nodes {
                 n.set_name(State::get_symbol(format!("{}{}", name, i.data().as_ffi())));
@@ -980,9 +981,9 @@ where
         let mut params = AHashSet::new();
 
         for (i, n) in &self.graph.nodes {
-            let node = n.shadow().unwrap();
+            let node = n.expanded_shadow().unwrap();
 
-            let nid = nodes.insert(MixedTensor::<f64, I>::param(node.clone().into()));
+            let nid = nodes.insert(ParamTensor::<T::Structure>::Param(node.clone().into()));
 
             for (_, a) in node.flat_iter() {
                 params.insert(a.clone());
@@ -1046,7 +1047,7 @@ impl<T, S> TensorNetwork<T, S>
 where
     T: Contract<T, LCM = T> + HasStructure,
 {
-    pub fn contract_algo(&mut self, edge_choice: fn(&Self) -> Option<HedgeId>) {
+    pub fn contract_algo(&mut self, edge_choice: impl Fn(&Self) -> Option<HedgeId>) {
         if let Some(e) = edge_choice(self) {
             self.contract_edge(e);
             // println!("{}", self.dot());
@@ -1072,23 +1073,62 @@ where
 
 #[cfg(feature = "shadowing")]
 #[allow(dead_code)]
-pub struct Levels<T, S: TensorStructure> {
-    pub levels: Vec<TensorNetwork<DataTensor<Atom, S>, Atom>>,
-    const_map: AHashMap<AtomOrView<'static>, T>,
+pub struct Levels<T: Clone, S: TensorStructure + HasName + Clone> {
+    pub levels: Vec<TensorNetwork<ParamTensor<S>, Atom>>,
+    initial: TensorNetwork<MixedTensor<T, S>, Atom>,
+    fn_map: FunctionMap<'static, T>,
     params: Vec<Atom>,
 }
 
 #[cfg(feature = "shadowing")]
-impl<T, S> From<TensorNetwork<DataTensor<Atom, S>, Atom>> for Levels<T, S>
+impl<T, S> From<TensorNetwork<MixedTensor<T, S>, Atom>> for Levels<T, S>
 where
     T: Clone,
-    S: TensorStructure,
+    S: TensorStructure + HasName + Clone,
 {
-    fn from(t: TensorNetwork<DataTensor<Atom, S>, Atom>) -> Self {
+    fn from(t: TensorNetwork<MixedTensor<T, S>, Atom>) -> Self {
         Levels {
-            levels: vec![t],
-            const_map: AHashMap::new(),
+            initial: t,
+            levels: vec![],
+            fn_map: FunctionMap::new(),
             params: vec![],
+        }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<T: Clone, S: TensorStructure + Clone + TracksCount> Levels<T, S>
+where
+    MixedTensor<T, S>: Contract<LCM = MixedTensor<T, S>>,
+    S: HasName<Name = Symbol, Args: IntoArgs> + ToSymbolic + StructureContract,
+{
+    fn contract_levels(&mut self, depth: usize) {
+        let mut not_done = true;
+
+        while not_done {
+            let level = self.levels.len();
+
+            if let Some(current_level) = self.levels.last_mut() {
+                let mut new_level = current_level.symbolic_shadow(&format!("L{level}"));
+                new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+                if new_level.graph.nodes.len() == 1 {
+                    not_done = false;
+                }
+                self.levels.push(new_level);
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn contract(&mut self, depth: usize) {
+        self.initial
+            .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+
+        if self.initial.graph.nodes.len() > 1 {
+            let mut new_level = self.initial.symbolic_shadow(&format!("L0"));
+            new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+            self.levels.push(new_level);
         }
     }
 }

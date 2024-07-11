@@ -520,7 +520,7 @@ where
         args,
     ))
     .to_shell()
-    .shadow()
+    .expanded_shadow()
     .unwrap_or_else(|| unreachable!())
 }
 
@@ -539,7 +539,7 @@ where
         None,
     ))
     .to_shell()
-    .shadow()
+    .expanded_shadow()
     .unwrap_or_else(|| unreachable!())
 }
 

@@ -1,11 +1,11 @@
 use std::ops::Neg;
 
-use spenso::Complex;
 use spenso::{
     ufo::{euclidean_four_vector, gamma},
     AbstractIndex, ContractionCountStructure, FallibleMul, MixedTensor, Representation, Slot,
     TensorNetwork, ToSymbolic,
 };
+use spenso::{Complex, FlatCoefficent};
 
 use ahash::{AHashMap, AHashSet, HashMap};
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -54,7 +54,14 @@ fn gamma_net_param(
             i += 1;
             let id = Atom::new_num(i);
 
-            result.push(MixedTensor::param(ps.shadow_with(p, &[id]).into()));
+            result.push(MixedTensor::param(
+                ps.to_dense_labeled(|s, index| FlatCoefficent {
+                    name: Some(p),
+                    index,
+                    args: Some([id.clone()]),
+                })
+                .into(),
+            ));
 
             result.push(gamma(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
         } else {

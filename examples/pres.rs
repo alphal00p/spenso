@@ -129,7 +129,7 @@ fn main() {
             None,
         )
         .to_shell()
-        .shadow()
+        .expanded_shadow()
         .unwrap()
         .into(),
     );

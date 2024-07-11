@@ -1,12 +1,12 @@
 use std::ops::Neg;
 
 use ahash::{AHashMap, AHashSet, HashMap};
-use spenso::Complex;
 use spenso::{
     ufo::{euclidean_four_vector, gamma},
     AbstractIndex, ContractionCountStructure, FallibleMul, HasTensorData, MixedTensor,
     Representation, Slot, TensorNetwork, ToSymbolic,
 };
+use spenso::{Complex, FlatCoefficent};
 
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
@@ -39,8 +39,14 @@ fn gamma_net_param(
             i += 1;
             let id = Atom::new_num(i);
 
-            result.push(MixedTensor::param(ps.shadow_with(p, &[id]).into()));
-
+            result.push(MixedTensor::param(
+                ps.to_dense_labeled(|s, index| FlatCoefficent {
+                    name: Some(p),
+                    index,
+                    args: Some([id.clone()]),
+                })
+                .into(),
+            ));
             result.push(gamma(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
         } else {
             result.push(

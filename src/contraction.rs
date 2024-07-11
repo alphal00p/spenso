@@ -407,7 +407,7 @@ where
         }
     }
 }
-pub trait Contract<T> {
+pub trait Contract<T = Self> {
     type LCM;
     fn contract(&self, other: &T) -> Result<Self::LCM, ContractionError>;
 }

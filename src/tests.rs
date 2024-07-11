@@ -280,7 +280,7 @@ fn construct_dense_tensor() {
 
     #[cfg(feature = "shadowing")]
     {
-        let mixed_tensor: MixedTensor<_> = tensor.clone().into();
+        let mixed_tensor: MixedTensor<f64, _> = tensor.clone().into();
         assert_eq!(
             mixed_tensor
                 .try_into_concrete()
@@ -312,7 +312,7 @@ fn construct_sparse_tensor() -> Result<(), String> {
 
     #[cfg(feature = "shadowing")]
     {
-        let mixed_tensor: MixedTensor<_> = a.clone().into();
+        let mixed_tensor: MixedTensor<f64, _> = a.clone().into();
         assert_eq!(
             mixed_tensor
                 .try_into_concrete()
@@ -896,7 +896,8 @@ fn tensor_net() {
         .contract(&d)
         .unwrap();
 
-    let mut n = TensorNetwork::from(vec![a, b, c, p, q, d, r, s]);
+    let mut n: TensorNetwork<NumTensor, Complex<f64>> =
+        TensorNetwork::from(vec![a, b, c, p, q, d, r, s]);
 
     assert!(n.graph.validate_neighbors());
 
@@ -1038,7 +1039,7 @@ fn evaluate() {
 
     let a: TensorShell<_> = structure.clone().into();
 
-    let a = a.shadow().unwrap();
+    let a = a.expanded_shadow().unwrap();
 
     let adata = test_tensor(structure, 1, Some((-100., 100.))).to_dense();
 
@@ -1118,8 +1119,14 @@ fn simple_multi_contract_sym() {
     )
     .unwrap();
 
-    let a: DataTensor<Atom> = structa.shadow_with("a".into_symbol(), &[]).into();
-    let b: DataTensor<Atom> = structb.shadow_with("b".into_symbol(), &[]).into();
+    let a: DataTensor<Atom, NamedStructure<&str,()>> = structa
+        .to_named("a", None)
+        .to_dense_expanded_labels()
+        .into();
+    let b: DataTensor<Atom, NamedStructure<&str,()>> = structb
+        .to_named("b", None)
+        .to_dense_expanded_labels()
+        .into();
 
     let _f = a.contract(&b).unwrap();
 }

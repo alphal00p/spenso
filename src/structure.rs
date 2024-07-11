@@ -23,6 +23,7 @@ use std::fmt::Debug;
 #[cfg(feature = "shadowing")]
 use std::fmt::Display;
 use std::ops::Deref;
+use symbolica::evaluate::FunctionMap;
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -36,7 +37,11 @@ use symbolica::{
 
 use std::ops::Range;
 
+use crate::ExpandedCoefficent;
+use crate::FlatCoefficent;
+use crate::ParamTensor;
 use crate::Permutation;
+use crate::TensorCoefficient;
 
 use std::collections::HashSet;
 use std::{cmp::Ordering, collections::HashMap};
@@ -170,6 +175,16 @@ pub struct ExpandedIndex {
     indices: Vec<ConcreteIndex>,
 }
 
+impl From<ExpandedIndex> for Atom {
+    fn from(value: ExpandedIndex) -> Self {
+        let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
+        for i in value.iter() {
+            cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
+        }
+        cind.finish()
+    }
+}
+
 impl Deref for ExpandedIndex {
     type Target = [ConcreteIndex];
 
@@ -214,6 +229,14 @@ pub struct FlatIndex {
     index: usize,
 }
 
+impl From<FlatIndex> for Atom {
+    fn from(value: FlatIndex) -> Self {
+        let mut cind = FunctionBuilder::new(State::get_symbol(FLATIND));
+        cind = cind.add_arg(Atom::new_num(value.index as i64).as_atom_view());
+        cind.finish()
+    }
+}
+
 pub const EUCLIDEAN: &str = "euc";
 pub const LORENTZ: &str = "lor";
 pub const BISPINOR: &str = "bis";
@@ -225,6 +248,7 @@ pub const COLORANTIFUND: &str = "coaf";
 pub const COLORSEXT: &str = "cos";
 pub const COLORANTISEXT: &str = "coas";
 pub const CONCRETEIND: &str = "cind";
+pub const FLATIND: &str = "find";
 pub const ABSTRACTIND: &str = "aind";
 
 /// A Representation/Dimension of the index.
@@ -649,7 +673,7 @@ pub trait HasStructure {
     where
         Self::Structure: HasName,
     {
-        self.structure().id()
+        self.structure().args()
     }
     // fn cast_structure<O, S>(self) -> O
     // where
@@ -692,25 +716,65 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<T> ToSymbolic for T where T: HasStructure {}
+impl<T: HasName> ToSymbolic for T
+where
+    T: TensorStructure,
+    T::Name: IntoSymbol,
+    T::Args: IntoArgs,
+{
+    fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
+        ExpandedCoefficent {
+            name: self.name().map(|n| n.into_symbol()),
+            index: self.expanded_index(id).unwrap(),
+            args: None,
+        }
+    }
+
+    fn flat_atom(&self, id: FlatIndex) -> FlatCoefficent<()> {
+        FlatCoefficent {
+            name: self.name().map(|n| n.into_symbol()),
+            index: id,
+            args: None,
+        }
+    }
+}
 
 #[cfg(feature = "shadowing")]
 pub trait ToSymbolic: TensorStructure {
-    fn concrete_atom(&self, id: FlatIndex) -> Atom {
-        let exp = self.expanded_index(id).unwrap();
-        let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
-        for i in exp.iter() {
-            cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
+    fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
+        ExpandedCoefficent {
+            name: None,
+            index: self.expanded_index(id).unwrap(),
+            args: None,
         }
-        cind.finish()
     }
-    fn shadow_with(self, name: Symbol, args: &[Atom]) -> DenseTensor<Atom, Self>
+
+    fn flat_atom(&self, id: FlatIndex) -> FlatCoefficent<()> {
+        FlatCoefficent {
+            name: None,
+            index: id,
+            args: None,
+        }
+    }
+
+    fn to_dense_expanded_labels(self) -> DenseTensor<Atom, Self>
     where
         Self: std::marker::Sized + Clone,
     {
+        self.to_dense_labeled(Self::concrete_atom)
+    }
+
+    fn to_dense_labeled<T>(
+        self,
+        index_to_atom: impl Fn(&Self, FlatIndex) -> T,
+    ) -> DenseTensor<Atom, Self>
+    where
+        Self: Sized,
+        T: TensorCoefficient,
+    {
         let mut data = vec![];
-        for index in self.index_iter() {
-            data.push(atomic_expanded_label_id(&index, name, args));
+        for index in 0..self.size() {
+            data.push(index_to_atom(&self, index.into()).to_atom().unwrap());
         }
 
         DenseTensor {
@@ -718,9 +782,17 @@ pub trait ToSymbolic: TensorStructure {
             structure: self,
         }
     }
-    fn to_explicit_rep(self, name: Symbol, args: &[Atom]) -> MixedTensor<f64, Self>
+
+    fn to_dense_flat_labels(self) -> DenseTensor<Atom, Self>
     where
         Self: std::marker::Sized + Clone,
+    {
+        self.to_dense_labeled(Self::flat_atom)
+    }
+    fn to_explicit_rep(self) -> Option<MixedTensor<f64, Self>>
+    where
+        Self: std::marker::Sized + Clone + HasName,
+        Self::Name: IntoSymbol,
     {
         let identity = State::get_symbol("id");
         let gamma = State::get_symbol("γ");
@@ -730,17 +802,51 @@ pub trait ToSymbolic: TensorStructure {
         let sigma = State::get_symbol("σ");
         let metric = State::get_symbol("Metric");
 
-        match name {
-            _ if name == identity => ufo::identity_data::<f64, Self>(self).into(),
+        if let Some(name) = self.name() {
+            let name = name.into_symbol();
+            Some(match name {
+                _ if name == identity => ufo::identity_data::<f64, Self>(self).into(),
 
-            _ if name == gamma => ufo::gamma_data(self).into(),
-            _ if name == gamma5 => ufo::gamma5_data(self).into(),
-            _ if name == proj_m => ufo::proj_m_data(self).into(),
-            _ if name == proj_p => ufo::proj_p_data(self).into(),
-            _ if name == sigma => ufo::sigma_data(self).into(),
-            _ if name == metric => ufo::metric_data::<f64, Self>(self).into(),
-            name => MixedTensor::param(self.shadow_with(name, args).into()),
+                _ if name == gamma => ufo::gamma_data(self).into(),
+                _ if name == gamma5 => ufo::gamma5_data(self).into(),
+                _ if name == proj_m => ufo::proj_m_data(self).into(),
+                _ if name == proj_p => ufo::proj_p_data(self).into(),
+                _ if name == sigma => ufo::sigma_data(self).into(),
+                _ if name == metric => ufo::metric_data::<f64, Self>(self).into(),
+                _ => MixedTensor::param(self.to_dense_expanded_labels().into()),
+            })
+        } else {
+            None
         }
+    }
+
+    fn to_symbolic(&self) -> Option<Atom>
+    where
+        Self: HasName<Name: IntoSymbol, Args: IntoArgs>,
+    {
+        let args = self.args().map(|s| s.args()).unwrap_or(vec![]);
+
+        Some(self.to_symbolic_with(self.name()?.into_symbol(), &args))
+    }
+
+    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
+        let slots = self
+            .external_structure_iter()
+            .map(|slot| slot.to_symbolic())
+            .collect::<Vec<_>>();
+
+        let mut value_builder = FunctionBuilder::new(name.into_symbol());
+
+        let mut index_func = FunctionBuilder::new(State::get_symbol("aind"));
+        for arg in args {
+            value_builder = value_builder.add_arg(arg);
+        }
+
+        for s in slots {
+            index_func = index_func.add_arg(&s);
+        }
+        let indices = index_func.finish();
+        value_builder.add_arg(&indices).finish()
     }
 }
 
@@ -1608,7 +1714,7 @@ where
     fn set_name(&mut self, name: Self::Name) {
         self.global_name = Some(name);
     }
-    fn id(&self) -> Option<Self::Args> {
+    fn args(&self) -> Option<Self::Args> {
         self.additional_args.clone()
     }
 }
@@ -1617,8 +1723,32 @@ pub trait HasName {
     type Name: Clone;
     type Args: Clone;
     fn name(&self) -> Option<Self::Name>;
-    fn id(&self) -> Option<Self::Args>;
+    fn args(&self) -> Option<Self::Args>;
     fn set_name(&mut self, name: Self::Name);
+    fn expanded_coef(&self, id: FlatIndex) -> ExpandedCoefficent<Self::Args>
+    where
+        Self: TensorStructure,
+        Self::Name: IntoSymbol,
+        Self::Args: IntoArgs,
+    {
+        ExpandedCoefficent {
+            name: self.name().map(|n| n.into_symbol()),
+            index: self.expanded_index(id).unwrap(),
+            args: self.args(),
+        }
+    }
+    fn flat_coef(&self, id: FlatIndex) -> FlatCoefficent<Self::Args>
+    where
+        Self: TensorStructure,
+        Self::Name: IntoSymbol,
+        Self::Args: IntoArgs,
+    {
+        FlatCoefficent {
+            name: self.name().map(|n| n.into_symbol()),
+            index: id,
+            args: self.args(),
+        }
+    }
 }
 
 impl<N, A> TensorStructure for NamedStructure<N, A> {
@@ -1630,24 +1760,6 @@ impl<N, A> TensorStructure for NamedStructure<N, A> {
             fn get_slot(&self, i: usize) -> Option<Slot>;
             fn get_rep(&self, i: usize) -> Option<Representation>;
             fn get_dim(&self, i: usize) -> Option<Dimension>;
-        }
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<N: IntoSymbol, A: IntoArgs> ToSymbolic for NamedStructure<N, A> {
-    fn concrete_atom(&self, id: FlatIndex) -> Atom {
-        let exp_atom = self.structure.concrete_atom(id);
-        if let Some(ref f) = self.global_name {
-            let mut fun = FunctionBuilder::new(f.into_symbol());
-            if let Some(ref args) = self.additional_args {
-                for arg in args.into_args() {
-                    fun = fun.add_arg(arg.as_atom_view());
-                }
-            }
-            fun.add_arg(exp_atom.as_atom_view()).finish()
-        } else {
-            exp_atom
         }
     }
 }
@@ -1782,7 +1894,7 @@ where
     fn set_name(&mut self, name: Self::Name) {
         self.global_name = Some(name);
     }
-    fn id(&self) -> Option<Self::Args> {
+    fn args(&self) -> Option<Self::Args> {
         self.additional_args.clone()
     }
 }
@@ -1800,23 +1912,6 @@ impl<N, A> TensorStructure for SmartShadowStructure<N, A> {
     }
 }
 
-#[cfg(feature = "shadowing")]
-impl<N: IntoSymbol, A: IntoArgs> ToSymbolic for SmartShadowStructure<N, A> {
-    fn concrete_atom(&self, id: FlatIndex) -> Atom {
-        let exp_atom = self.structure.concrete_atom(id);
-        if let Some(ref f) = self.global_name {
-            let mut fun = FunctionBuilder::new(f.into_symbol());
-            if let Some(ref args) = self.additional_args {
-                for arg in args.into_args() {
-                    fun = fun.add_arg(arg.as_atom_view());
-                }
-            }
-            fun.add_arg(exp_atom.as_atom_view()).finish()
-        } else {
-            exp_atom
-        }
-    }
-}
 impl<N, A> TracksCount for SmartShadowStructure<N, A> {
     fn contractions_num(&self) -> usize {
         self.contractions
@@ -1912,7 +2007,7 @@ where
         to self.external {
             fn name(&self) -> Option<Self::Name>;
             fn set_name(&mut self, name: Self::Name);
-            fn id(&self) -> Option<Self::Args>;
+            fn args(&self) -> Option<Self::Args>;
         }
     }
 }
@@ -1943,15 +2038,6 @@ impl<N, A> TensorStructure for HistoryStructure<N, A> {
         let set2: HashSet<_> = (&other.internal).into_iter().collect();
         set1 == set2
         // TODO: check names
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<N: IntoSymbol, A: IntoArgs> ToSymbolic for HistoryStructure<N, A> {
-    delegate! {
-        to self.external{
-
-        }
     }
 }
 
@@ -2083,12 +2169,16 @@ pub trait IntoArgs {
     fn args(&self) -> Vec<Atom> {
         self.into_args().collect()
     }
+    fn cooked_name(&self) -> std::string::String;
 }
 
 #[cfg(feature = "shadowing")]
 impl IntoArgs for usize {
     fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
         std::iter::once(Atom::new_num(*self as i64))
+    }
+    fn cooked_name(&self) -> std::string::String {
+        format!("{self}")
     }
 }
 
@@ -2097,6 +2187,9 @@ impl IntoArgs for () {
     fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
         std::iter::empty()
     }
+    fn cooked_name(&self) -> std::string::String {
+        "".into()
+    }
 }
 
 #[cfg(feature = "shadowing")]
@@ -2104,12 +2197,35 @@ impl IntoArgs for Atom {
     fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
         std::iter::once(self.clone())
     }
+
+    fn cooked_name(&self) -> std::string::String {
+        self.to_string()
+    }
 }
 
 #[cfg(feature = "shadowing")]
 impl IntoArgs for Vec<Atom> {
     fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
         self.iter().cloned()
+    }
+
+    fn cooked_name(&self) -> std::string::String {
+        let init = "".into();
+        self.iter()
+            .fold(init, |acc, x| acc + x.to_string().as_str())
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<const N: usize> IntoArgs for [Atom; N] {
+    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+        self.iter().cloned()
+    }
+
+    fn cooked_name(&self) -> std::string::String {
+        let init = "".into();
+        self.iter()
+            .fold(init, |acc, x| acc + x.to_string().as_str())
     }
 }
 
@@ -2145,68 +2261,60 @@ impl IntoSymbol for std::string::String {
 ///
 /// This creates a dense tensor of atoms, where the atoms are the expanded indices of the tensor, with the global name as the name of the labels.
 #[cfg(feature = "shadowing")]
-pub trait Shadowable: HasStructure + TensorStructure + HasName {
-    fn shadow(&self) -> Option<DenseTensor<Atom, Self::Structure>>
-    where
-        Self: std::marker::Sized,
-        Self::Name: IntoSymbol + Clone,
-        Self::Args: IntoArgs,
-        Self::Structure: Clone + TensorStructure + ToSymbolic,
-    {
-        let name = self.name()?;
-        let args = self.id().map(|s| s.args()).unwrap_or(vec![]);
-
-        Some(
-            self.structure()
-                .clone()
-                .shadow_with(name.into_symbol(), &args),
-        )
+pub trait Shadowable:
+    HasStructure<
+        Structure: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs> + Clone + Sized,
+    > + Sized
+{
+    // type Const;
+    fn expanded_shadow(&self) -> Option<DenseTensor<Atom, Self::Structure>> {
+        self.shadow(Self::Structure::expanded_coef)
     }
 
-    fn smart_shadow(&self) -> Option<MixedTensor<f64, Self::Structure>>
-    where
-        Self: std::marker::Sized,
-        Self::Args: IntoArgs,
-        Self::Structure: Clone + TensorStructure + ToSymbolic,
-        Self::Name: IntoSymbol + Clone,
-    {
-        let name = self.name()?;
-        let args = self.id()?.args();
-        Some(
-            self.structure()
-                .clone()
-                .to_explicit_rep(name.into_symbol(), &args),
-        )
+    fn flat_shadow(&self) -> Option<DenseTensor<Atom, Self::Structure>> {
+        self.shadow(Self::Structure::flat_coef)
     }
 
-    fn to_symbolic(&self) -> Option<Atom>
+    fn shadow<T>(
+        &self,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+    ) -> Option<DenseTensor<Atom, Self::Structure>>
     where
-        Self::Name: IntoSymbol + Clone,
-        Self::Args: IntoArgs,
+        T: TensorCoefficient,
     {
-        let args = self.id().map(|s| s.args()).unwrap_or(vec![]);
-
-        Some(self.to_symbolic_with(self.name()?.into_symbol(), &args))
+        Some(self.structure().clone().to_dense_labeled(index_to_atom))
     }
 
-    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
-        let slots = self
-            .external_structure_iter()
-            .map(|slot| slot.to_symbolic())
-            .collect::<Vec<_>>();
+    fn to_explicit(&self) -> Option<MixedTensor<f64, Self::Structure>> {
+        self.structure().clone().to_explicit_rep()
+    }
+}
 
-        let mut value_builder = FunctionBuilder::new(name.into_symbol());
+#[cfg(feature = "shadowing")]
+pub trait ShadowMapping<Const>: Shadowable {
+    fn expanded_shadow_with_map<'a>(
+        &'a self,
+        fn_map: &mut FunctionMap<'a, Const>,
+    ) -> Option<ParamTensor<Self::Structure>> {
+        self.shadow_with_map(fn_map, Self::Structure::expanded_coef)
+    }
 
-        let mut index_func = FunctionBuilder::new(State::get_symbol("aind"));
-        for arg in args {
-            value_builder = value_builder.add_arg(arg);
-        }
+    fn shadow_with_map<'a, T>(
+        &'a self,
+        _fn_map: &mut FunctionMap<'a, Const>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+    ) -> Option<ParamTensor<Self::Structure>>
+    where
+        T: TensorCoefficient,
+    {
+        Some(ParamTensor::Param(self.shadow(index_to_atom)?.into()))
+    }
 
-        for s in slots {
-            index_func = index_func.add_arg(&s);
-        }
-        let indices = index_func.finish();
-        value_builder.add_arg(&indices).finish()
+    fn flat_shadow_with_map<'a>(
+        &'a self,
+        fn_map: &mut FunctionMap<'a, Const>,
+    ) -> Option<ParamTensor<Self::Structure>> {
+        self.shadow_with_map(fn_map, Self::Structure::flat_coef)
     }
 }
 
@@ -2233,8 +2341,8 @@ where
     type Args = S::Args;
     type Name = S::Name;
 
-    fn id(&self) -> Option<Self::Args> {
-        self.structure.id()
+    fn args(&self) -> Option<Self::Args> {
+        self.structure.args()
     }
 
     fn name(&self) -> Option<Self::Name> {
@@ -2273,11 +2381,18 @@ impl<S: TensorStructure> From<S> for TensorShell<S> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<N> Shadowable for N
+impl<S: TensorStructure + HasName + Clone> Shadowable for TensorShell<S>
 where
-    N: HasStructure + HasName + TensorStructure,
-    N::Name: IntoSymbol + Clone,
-    N::Structure: Clone + TensorStructure,
+    S::Name: IntoSymbol + Clone,
+    S::Args: IntoArgs,
+{
+}
+
+#[cfg(feature = "shadowing")]
+impl<S: TensorStructure + HasName + Clone, Const> ShadowMapping<Const> for TensorShell<S>
+where
+    S::Name: IntoSymbol + Clone,
+    S::Args: IntoArgs,
 {
 }
 

@@ -1,5 +1,6 @@
 use crate::{
-    ContractionError, HasStructure, IntoArgs, NamedStructure, TensorNetworkError, ABSTRACTIND,
+    ContractionError, HasStructure, IntoArgs, NamedStructure, TensorNetworkError, TensorStructure,
+    ToSymbolic, ABSTRACTIND,
 };
 
 use super::{
@@ -63,11 +64,13 @@ impl StructureContract for SymbolicTensor {
     }
 }
 
+// impl<Const> Shadowable<Const> for SymbolicTensor {}
+
 #[allow(dead_code)]
 impl SymbolicTensor {
     pub fn from_named<N>(structure: &N) -> Option<Self>
     where
-        N: Shadowable + HasName,
+        N: ToSymbolic + HasName + TensorStructure,
         N::Name: IntoSymbol + Clone,
         N::Args: IntoArgs,
     {
@@ -81,7 +84,7 @@ impl SymbolicTensor {
         NamedStructure {
             structure: self.structure.clone(),
             global_name: self.name(),
-            additional_args: self.id(),
+            additional_args: self.args(),
         }
     }
 
@@ -98,7 +101,7 @@ impl SymbolicTensor {
     }
 
     pub fn to_mixed(self) -> MixedTensor {
-        self.smart_shadow().unwrap()
+        self.to_named().to_shell().to_explicit().unwrap()
     }
 
     pub fn to_network(
@@ -139,7 +142,7 @@ impl HasName for SymbolicTensor {
         unimplemented!("Cannot set name of a symbolic tensor")
     }
 
-    fn id(&self) -> Option<Self::Args> {
+    fn args(&self) -> Option<Self::Args> {
         let mut args = vec![];
         match self.expression.as_view() {
             AtomView::Fun(f) => {

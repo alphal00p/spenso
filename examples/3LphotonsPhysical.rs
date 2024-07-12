@@ -59,20 +59,37 @@ fn main() {
     let file = File::open("./examples/data.json").unwrap();
     let reader = BufReader::new(file);
 
-    let string_map: AHashMap<String, Complex<f64>> = serde_json::from_reader(reader).unwrap();
+    let data_string_map: AHashMap<String, Complex<f64>> = serde_json::from_reader(reader).unwrap();
 
-    let mut atom_map: AHashMap<Atom, Complex<f64>> = string_map
+    let file = File::open("./examples/const.json").unwrap();
+    let reader = BufReader::new(file);
+
+    let const_string_map: AHashMap<String, Complex<f64>> = serde_json::from_reader(reader).unwrap();
+
+    let mut data_atom_map: (Vec<Atom>, Vec<Complex<f64>>) = data_string_map
+        .into_iter()
+        .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
+        .unzip();
+
+    let mut const_atom_map: AHashMap<Atom, Complex<f64>> = const_string_map
         .into_iter()
         .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
         .collect();
 
     let i = Atom::new_var(State::I);
-    atom_map.insert(i, Complex::i());
+    const_atom_map.insert(i, Complex::i());
 
-    let const_map: AHashMap<AtomView<'_>, symbolica::domains::float::Complex<f64>> = atom_map
-        .iter()
-        .map(|(k, &v)| (k.as_view(), v.into()))
-        .collect();
+    let mut const_map: AHashMap<AtomView<'_>, symbolica::domains::float::Complex<f64>> =
+        data_atom_map
+            .0
+            .iter()
+            .zip(data_atom_map.1.iter())
+            .map(|(k, v)| (k.as_view(), (*v).into()))
+            .collect();
+
+    for (k, &v) in const_atom_map.iter() {
+        const_map.insert(k.as_view(), v.into());
+    }
 
     let mut precontracted = network.clone();
     precontracted.contract();
@@ -113,7 +130,20 @@ fn main() {
     let mut levels: Levels<_, _> = network.into();
 
     let mut fn_map: FunctionMap<Complex<Rational>> = FunctionMap::new();
-    let evaluator_tensor = levels.contract(2, &mut fn_map).eval_tree(
+
+    for (k, v) in const_atom_map.iter() {
+        fn_map.add_constant(k.as_view().into(), (*v).map(Rational::from_f64))
+    }
+
+    let params = data_atom_map.0;
+
+    let values: Vec<Complex<Rational>> = data_atom_map
+        .1
+        .iter()
+        .map(|c| c.map(|f| Rational::from_f64(f)))
+        .collect();
+
+    let mut evaluator_tensor = levels.contract(2, &mut fn_map).eval_tree(
         |a| Complex {
             im: a.zero(),
             re: a.clone(),
@@ -122,9 +152,12 @@ fn main() {
         &params,
     );
 
-    let neet =
+    // evaluator_tensor.evaluate(&values);
+
+    let mut neet =
         evaluator_tensor.map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
 
-    // neet.evaluate() complex needs to derive Default Hash and Ord
-    // neet.linearize()
+    let values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
+    let out = neet.evaluate(&values);
+    // neet.linearize(); //default needs to be derived on partial eq;
 }

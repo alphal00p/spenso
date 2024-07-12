@@ -1239,13 +1239,16 @@ pub struct EvalTreeTensor<T, S> {
     structure: S,
 }
 
-impl<S: Clone, T: Clone + Default + Debug + Hash + Ord> EvalTreeTensor<T, S> {
+impl<S: Clone, T> EvalTreeTensor<T, S> {
     pub fn from_dense<'a, F: Fn(&Rational) -> T + Copy>(
         dense: &'a DenseTensor<Atom, S>,
         coeff_map: F,
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> Self {
+    ) -> Self
+    where
+        T: Clone + Default + Debug + Hash + Ord,
+    {
         let atomviews: Vec<AtomView> = dense.data.iter().map(|a| a.as_view()).collect();
         let eval = AtomView::to_eval_tree_multiple(&atomviews, coeff_map, fn_map, params);
 
@@ -1261,7 +1264,10 @@ impl<S: Clone, T: Clone + Default + Debug + Hash + Ord> EvalTreeTensor<T, S> {
         coeff_map: F,
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> Self {
+    ) -> Self
+    where
+        T: Clone + Default + Debug + Hash + Ord,
+    {
         let atomviews: (Vec<FlatIndex>, Vec<AtomView>) = dense
             .elements
             .iter()
@@ -1284,6 +1290,7 @@ impl<S: Clone, T: Clone + Default + Debug + Hash + Ord> EvalTreeTensor<T, S> {
     ) -> Self
     where
         S: TensorStructure,
+        T: Clone + Default + Debug + Hash + Ord,
     {
         match data {
             DataTensor::Dense(d) => Self::from_dense(d, coeff_map, fn_map, params),
@@ -1291,7 +1298,10 @@ impl<S: Clone, T: Clone + Default + Debug + Hash + Ord> EvalTreeTensor<T, S> {
         }
     }
 
-    pub fn map_coeff<T2, F: Fn(&T) -> T2>(&self, f: &F) -> EvalTreeTensor<T2, S> {
+    pub fn map_coeff<T2, F: Fn(&T) -> T2>(&self, f: &F) -> EvalTreeTensor<T2, S>
+    where
+        T: Clone + Default + PartialEq,
+    {
         EvalTreeTensor {
             eval: self.eval.map_coeff(f),
             indexmap: self.indexmap.clone(),
@@ -1300,7 +1310,10 @@ impl<S: Clone, T: Clone + Default + Debug + Hash + Ord> EvalTreeTensor<T, S> {
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self, param_len: usize) -> EvalTensor<T, S> {
+    pub fn linearize(self, param_len: usize) -> EvalTensor<T, S>
+    where
+        T: Clone + Default + PartialEq,
+    {
         EvalTensor {
             eval: self.eval.linearize(param_len),
             structure: self.structure,
@@ -1310,14 +1323,14 @@ impl<S: Clone, T: Clone + Default + Debug + Hash + Ord> EvalTreeTensor<T, S> {
 
     pub fn common_subexpression_elimination(&mut self)
     where
-        T: Debug + Hash + Eq + Ord,
+        T: Debug + Hash + Eq + Ord + Clone + Default,
     {
         self.eval.common_subexpression_elimination()
     }
 
     pub fn common_pair_elimination(&mut self)
     where
-        T: Debug + Hash + Eq + Ord,
+        T: Debug + Hash + Eq + Ord + Clone + Default,
     {
         self.eval.common_pair_elimination()
     }

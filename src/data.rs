@@ -90,7 +90,7 @@ pub trait HasTensorData: HasStructure {
     #[cfg(feature = "shadowing")]
     fn symhashmap(&self, name: Symbol, args: &[Atom]) -> HashMap<Atom, Self::Data>;
 
-    fn map(&self, f: impl Fn(&Self::Data) -> Self::Data) -> Self;
+    // fn map(&self, f: impl Fn(&Self::Data) -> Self::Data) -> Self;
 }
 
 /// Trait for setting the data of a tensor
@@ -253,16 +253,50 @@ where
         }
         hashmap
     }
+}
 
-    fn map(&self, f: impl Fn(&Self::Data) -> Self::Data) -> Self
+impl<T, S: TensorStructure> SparseTensor<T, S> {
+    pub fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> SparseTensor<U, S>
     where
-        I: Clone,
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
     {
         let elements = self.elements.iter().map(|(k, v)| (*k, f(v))).collect();
         SparseTensor {
             elements,
             structure: self.structure.clone(),
         }
+    }
+
+    pub fn map_data<U>(self, f: impl Fn(T) -> U) -> SparseTensor<U, S> {
+        let elements = self.elements.into_iter().map(|(k, v)| (k, f(v))).collect();
+        SparseTensor {
+            elements,
+            structure: self.structure,
+        }
+    }
+
+    pub fn map_data_ref_mut<U>(&mut self, mut f: impl FnMut(&mut T) -> U) -> SparseTensor<U, S>
+    where
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
+    {
+        let elements = self.elements.iter_mut().map(|(k, v)| (*k, f(v))).collect();
+        SparseTensor {
+            elements,
+            structure: self.structure.clone(),
+        }
+    }
+
+    pub fn map_data_mut(&mut self, f: impl FnMut(&mut T))
+    where
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
+    {
+        self.elements.values_mut().for_each(f);
     }
 }
 
@@ -635,6 +669,23 @@ where
     }
 }
 
+impl<T, S: TensorStructure> DenseTensor<T, S> {
+    pub fn repeat(structure: S, r: T) -> Self
+    where
+        T: Clone,
+    {
+        let length = if structure.is_scalar() {
+            1
+        } else {
+            structure.size()
+        };
+        DenseTensor {
+            data: vec![r; length],
+            structure,
+        }
+    }
+}
+
 impl<T: Zero + Clone, I> DenseTensor<T, I>
 where
     I: TensorStructure,
@@ -651,6 +702,8 @@ where
         }
     }
 }
+
+// impl<T,S:TensorStructure> DenseTensor<T,S>{}
 
 impl<U, I> DenseTensor<U, I>
 where
@@ -829,16 +882,52 @@ where
         }
         hashmap
     }
+}
 
-    fn map(&self, f: impl Fn(&Self::Data) -> Self::Data) -> Self {
+impl<T, S: TensorStructure> DenseTensor<T, S> {
+    pub fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> DenseTensor<U, S>
+    where
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
+    {
         let data = self.data.iter().map(f).collect();
         DenseTensor {
             data,
             structure: self.structure.clone(),
         }
     }
-}
 
+    pub fn map_data_ref_mut<U>(&mut self, f: impl FnMut(&mut T) -> U) -> DenseTensor<U, S>
+    where
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
+    {
+        let data = self.data.iter_mut().map(f).collect();
+        DenseTensor {
+            data,
+            structure: self.structure.clone(),
+        }
+    }
+
+    pub fn map_data_mut(&mut self, f: impl FnMut(&mut T))
+    where
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
+    {
+        self.data.iter_mut().for_each(f);
+    }
+
+    pub fn map_data<U>(self, f: impl Fn(T) -> U) -> DenseTensor<U, S> {
+        let data = self.data.into_iter().map(f).collect();
+        DenseTensor {
+            data,
+            structure: self.structure,
+        }
+    }
+}
 impl<T, I> SetTensorData for DenseTensor<T, I>
 where
     I: TensorStructure,
@@ -996,11 +1085,47 @@ where
             DataTensor::Sparse(s) => s.symhashmap(name, args),
         }
     }
+}
 
-    fn map(&self, f: impl Fn(&Self::Data) -> Self::Data) -> Self {
+impl<T, S: TensorStructure> DataTensor<T, S> {
+    pub fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> DataTensor<U, S>
+    where
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
+    {
         match self {
-            DataTensor::Dense(d) => DataTensor::Dense(d.map(f)),
-            DataTensor::Sparse(s) => DataTensor::Sparse(s.map(f)),
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_data_ref(f)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_data_ref(f)),
+        }
+    }
+
+    pub fn map_data<U>(self, f: impl Fn(T) -> U) -> DataTensor<U, S> {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_data(f)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_data(f)),
+        }
+    }
+
+    pub fn map_data_mut(&mut self, f: impl FnMut(&mut T))
+    where
+        S: Clone,
+    {
+        match self {
+            DataTensor::Dense(d) => d.map_data_mut(f),
+            DataTensor::Sparse(s) => s.map_data_mut(f),
+        }
+    }
+
+    pub fn map_data_ref_mut<U>(&mut self, f: impl FnMut(&mut T) -> U) -> DataTensor<U, S>
+    where
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
+    {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_data_ref_mut(f)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_data_ref_mut(f)),
         }
     }
 }

@@ -111,6 +111,31 @@ impl<T: Default> Default for Complex<T> {
 }
 
 impl<T> Complex<T> {
+    pub fn map_ref<U>(&self, f: impl Fn(&T) -> U) -> Complex<U> {
+        Complex {
+            re: f(&self.re),
+            im: f(&self.im),
+        }
+    }
+
+    pub fn map<U>(self, f: impl Fn(T) -> U) -> Complex<U> {
+        Complex {
+            re: f(self.re),
+            im: f(self.im),
+        }
+    }
+
+    pub fn map_mut(&mut self, mut f: impl FnMut(&mut T)) {
+        f(&mut self.re);
+        f(&mut self.im);
+    }
+
+    pub fn map_ref_mut<U>(&mut self, mut f: impl FnMut(&mut T) -> U) -> Complex<U> {
+        Complex {
+            re: f(&mut self.re),
+            im: f(&mut self.im),
+        }
+    }
     #[inline]
     pub fn new(re: T, im: T) -> Complex<T> {
         Complex { re, im }

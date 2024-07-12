@@ -7,10 +7,15 @@ use spenso::{
 };
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
-    domains::{float::NumericalFloatLike, rational::Rational},
+    domains::{
+        float::{NumericalFloatComparison, NumericalFloatLike},
+        rational::Rational,
+    },
     evaluate::FunctionMap,
     state::State,
 };
+
+use symbolica::domains::float::Complex as SymComplex;
 
 fn main() {
     let expr = concat!("-64/729*G^4*ee^6",
@@ -108,7 +113,7 @@ fn main() {
     let mut levels: Levels<_, _> = network.into();
 
     let mut fn_map: FunctionMap<Complex<Rational>> = FunctionMap::new();
-    let evaluator_tensor = levels.contract(2, &mut fn_map).evaluator(
+    let evaluator_tensor = levels.contract(2, &mut fn_map).eval_tree(
         |a| Complex {
             im: a.zero(),
             re: a.clone(),
@@ -116,4 +121,10 @@ fn main() {
         &fn_map,
         &params,
     );
+
+    let neet =
+        evaluator_tensor.map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
+
+    // neet.evaluate() complex needs to derive Default Hash and Ord
+    // neet.linearize()
 }

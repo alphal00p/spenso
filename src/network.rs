@@ -3,18 +3,14 @@ use ahash::{AHashSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
-use symbolica::evaluate::FunctionMap;
 
-use crate::{
-    CastStructure, FallibleMul, GetTensorData, HasTensorData, IntoSymbol, RefZero, ShadowMapping,
-    StructureContract, TensorStructure,
-};
+use crate::{CastStructure, FallibleMul, GetTensorData, HasTensorData, TensorStructure};
 
 #[cfg(feature = "shadowing")]
 use crate::{
-    AtomViewOrConcrete, Complex, DataIterator, DataTensor, FallibleAdd, IntoArgs, IteratableTensor,
-    MixedTensor, NamedStructure, ParamTensor, RealOrComplexTensor, Shadowable, ToSymbolic,
-    TrySmallestUpgrade,
+    AtomViewOrConcrete, Complex, DataIterator, DataTensor, FallibleAdd, IntoArgs, IntoSymbol,
+    IteratableTensor, MixedTensor, NamedStructure, ParamTensor, RealOrComplexTensor, RefZero,
+    ShadowMapping, Shadowable, StructureContract, ToSymbolic, TrySmallestUpgrade,
 };
 
 #[cfg(feature = "shadowing")]
@@ -25,6 +21,7 @@ use symbolica::{
     domains::float::Real,
     domains::rational::Rational,
     evaluate::EvaluationFn,
+    evaluate::FunctionMap,
     state::State,
 };
 

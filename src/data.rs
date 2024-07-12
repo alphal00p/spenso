@@ -1,6 +1,5 @@
 use crate::{
-    CastStructure, Complex, ExpandedCoefficent, ExpandedIndex, FlatCoefficent, FlatIndex, HasName,
-    IntoArgs, IntoSymbol, IsZero, IteratableTensor, ParamTensor, ShadowMapping, Shadowable,
+    CastStructure, Complex, ExpandedIndex, FlatIndex, HasName, IsZero, IteratableTensor,
     TensorStructure, TryFromUpgrade,
 };
 
@@ -23,7 +22,10 @@ use std::{
 };
 
 #[cfg(feature = "shadowing")]
-use super::atomic_expanded_label_id;
+use crate::{
+    atomic_expanded_label_id, ExpandedCoefficent, FlatCoefficent, IntoArgs, IntoSymbol,
+    ParamTensor, ShadowMapping, Shadowable,
+};
 #[cfg(feature = "shadowing")]
 use std::collections::HashMap;
 #[cfg(feature = "shadowing")]
@@ -139,6 +141,7 @@ impl<T, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<SparseTe
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: Clone, S: TensorStructure> Shadowable for SparseTensor<T, S>
 where
     S: HasName + Clone,
@@ -147,6 +150,7 @@ where
 {
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: Clone, S: TensorStructure, R> ShadowMapping<R> for SparseTensor<T, S>
 where
     S: HasName + Clone,
@@ -196,6 +200,7 @@ where
         self.structure.set_name(name);
     }
 
+    #[cfg(feature = "shadowing")]
     fn expanded_coef(&self, id: FlatIndex) -> ExpandedCoefficent<Self::Args>
     where
         Self: TensorStructure,
@@ -205,6 +210,7 @@ where
         self.structure.expanded_coef(id)
     }
 
+    #[cfg(feature = "shadowing")]
     fn flat_coef(&self, id: FlatIndex) -> FlatCoefficent<Self::Args>
     where
         Self: TensorStructure,
@@ -545,6 +551,7 @@ impl<T, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<DenseTen
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: Clone, S: TensorStructure> Shadowable for DenseTensor<T, S>
 where
     S: HasName + Clone,
@@ -552,6 +559,8 @@ where
     S::Args: IntoArgs,
 {
 }
+
+#[cfg(feature = "shadowing")]
 impl<T: Clone, S: TensorStructure, R> ShadowMapping<R> for DenseTensor<T, S>
 where
     S: HasName + Clone,
@@ -997,6 +1006,7 @@ impl<T: Clone, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<D
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: Clone, S: TensorStructure> Shadowable for DataTensor<T, S>
 where
     S: HasName + Clone,
@@ -1005,6 +1015,7 @@ where
 {
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: Clone, S: TensorStructure, R> ShadowMapping<R> for DataTensor<T, S>
 where
     S: HasName + Clone,

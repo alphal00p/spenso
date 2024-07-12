@@ -9,7 +9,8 @@
     "network",
     "contraction",
     "symbolica",
-    "clippy"
+    "clippy",
+    "build"
   ],
   "github.copilot.enable": {
     "quarto": false,

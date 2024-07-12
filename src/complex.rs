@@ -6,14 +6,13 @@ use std::{
 use crate::{RefOne, RefZero};
 use duplicate::duplicate;
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
-use serde::{de::value, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::Complex as SymComplex;
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::ConstructibleFloat;
 #[cfg(feature = "shadowing")]
-use symbolica::domains::float::Real;
-use symbolica::domains::{float::NumericalFloatLike, rational::Rational};
+use symbolica::domains::{float::NumericalFloatLike, float::Real, rational::Rational};
 
 pub trait R {}
 duplicate! {
@@ -39,12 +38,14 @@ pub struct Complex<T> {
     pub im: T,
 }
 
+#[cfg(feature = "shadowing")]
 impl RefZero for Rational {
     fn ref_zero(&self) -> Self {
         self.zero()
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl From<f64> for Complex<Rational> {
     fn from(re: f64) -> Self {
         Complex {
@@ -54,6 +55,7 @@ impl From<f64> for Complex<Rational> {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl From<Complex<f64>> for Complex<Rational> {
     fn from(value: Complex<f64>) -> Self {
         Complex {

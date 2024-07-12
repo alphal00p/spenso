@@ -23,6 +23,8 @@ use std::fmt::Debug;
 #[cfg(feature = "shadowing")]
 use std::fmt::Display;
 use std::ops::Deref;
+
+#[cfg(feature = "shadowing")]
 use symbolica::evaluate::FunctionMap;
 
 #[cfg(feature = "shadowing")]
@@ -35,13 +37,10 @@ use symbolica::{
     state::State,
 };
 
-use std::ops::Range;
-
-use crate::ExpandedCoefficent;
-use crate::FlatCoefficent;
-use crate::ParamTensor;
 use crate::Permutation;
-use crate::TensorCoefficient;
+#[cfg(feature = "shadowing")]
+use crate::{ExpandedCoefficent, FlatCoefficent, ParamTensor, TensorCoefficient};
+use std::ops::Range;
 
 use std::collections::HashSet;
 use std::{cmp::Ordering, collections::HashMap};
@@ -175,6 +174,7 @@ pub struct ExpandedIndex {
     indices: Vec<ConcreteIndex>,
 }
 
+#[cfg(feature = "shadowing")]
 impl From<ExpandedIndex> for Atom {
     fn from(value: ExpandedIndex) -> Self {
         let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
@@ -229,6 +229,7 @@ pub struct FlatIndex {
     index: usize,
 }
 
+#[cfg(feature = "shadowing")]
 impl From<FlatIndex> for Atom {
     fn from(value: FlatIndex) -> Self {
         let mut cind = FunctionBuilder::new(State::get_symbol(FLATIND));
@@ -1729,6 +1730,8 @@ pub trait HasName {
     fn name(&self) -> Option<Self::Name>;
     fn args(&self) -> Option<Self::Args>;
     fn set_name(&mut self, name: Self::Name);
+
+    #[cfg(feature = "shadowing")]
     fn expanded_coef(&self, id: FlatIndex) -> ExpandedCoefficent<Self::Args>
     where
         Self: TensorStructure,
@@ -1741,6 +1744,8 @@ pub trait HasName {
             args: self.args(),
         }
     }
+
+    #[cfg(feature = "shadowing")]
     fn flat_coef(&self, id: FlatIndex) -> FlatCoefficent<Self::Args>
     where
         Self: TensorStructure,

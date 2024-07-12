@@ -3,8 +3,12 @@ use ahash::{AHashSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
+use symbolica::evaluate::{EvalTree, ExpressionEvaluator};
 
-use crate::{CastStructure, FallibleMul, GetTensorData, HasTensorData, TensorStructure};
+use crate::{
+    CastStructure, EvalTensor, EvalTreeTensor, FallibleMul, GetTensorData, HasTensorData,
+    TensorStructure,
+};
 
 #[cfg(feature = "shadowing")]
 use crate::{
@@ -80,6 +84,82 @@ impl<N, E> HalfEdgeGraph<N, E> {
             nodemap: newnodemap,
             reverse_nodemap: newreverse_nodemap,
             neighbors: self.neighbors,
+        }
+    }
+
+    pub fn map_nodes_ref<U, F>(&self, f: F) -> HalfEdgeGraph<U, E>
+    where
+        F: Fn((NodeId, &N)) -> U,
+        E: Clone,
+    {
+        let mut nodeidmap: SecondaryMap<NodeId, NodeId> = SecondaryMap::new();
+        let mut newnodes: DenseSlotMap<NodeId, U> = DenseSlotMap::with_key();
+
+        for (i, n) in &self.nodes {
+            let nid = newnodes.insert(f((i, n)));
+            nodeidmap.insert(i, nid);
+        }
+
+        let mut newnodemap: SecondaryMap<HedgeId, NodeId> = SecondaryMap::new();
+        for (i, &n) in &self.nodemap {
+            newnodemap.insert(i, nodeidmap[n]);
+        }
+
+        let mut newreverse_nodemap: SecondaryMap<NodeId, HedgeId> = SecondaryMap::new();
+        for (i, &n) in &self.reverse_nodemap {
+            newreverse_nodemap.insert(nodeidmap[i], n);
+        }
+
+        HalfEdgeGraph {
+            edges: self.edges.clone(),
+            involution: self.involution.clone(),
+            nodes: newnodes,
+            nodemap: newnodemap,
+            reverse_nodemap: newreverse_nodemap,
+            neighbors: self.neighbors.clone(),
+        }
+    }
+
+    pub fn map_nodes_ref_mut<U, F>(&mut self, mut f: F) -> HalfEdgeGraph<U, E>
+    where
+        F: FnMut((NodeId, &mut N)) -> U,
+        E: Clone,
+    {
+        let mut nodeidmap: SecondaryMap<NodeId, NodeId> = SecondaryMap::new();
+        let mut newnodes: DenseSlotMap<NodeId, U> = DenseSlotMap::with_key();
+
+        for (i, n) in &mut self.nodes {
+            let nid = newnodes.insert(f((i, n)));
+            nodeidmap.insert(i, nid);
+        }
+
+        let mut newnodemap: SecondaryMap<HedgeId, NodeId> = SecondaryMap::new();
+        for (i, &n) in &self.nodemap {
+            newnodemap.insert(i, nodeidmap[n]);
+        }
+
+        let mut newreverse_nodemap: SecondaryMap<NodeId, HedgeId> = SecondaryMap::new();
+        for (i, &n) in &self.reverse_nodemap {
+            newreverse_nodemap.insert(nodeidmap[i], n);
+        }
+
+        HalfEdgeGraph {
+            edges: self.edges.clone(),
+            involution: self.involution.clone(),
+            nodes: newnodes,
+            nodemap: newnodemap,
+            reverse_nodemap: newreverse_nodemap,
+            neighbors: self.neighbors.clone(),
+        }
+    }
+
+    pub fn map_nodes_mut<F>(&mut self, mut f: F)
+    where
+        F: FnMut((NodeId, &mut N)),
+        E: Clone,
+    {
+        for (i, n) in &mut self.nodes {
+            f((i, n));
         }
     }
 }
@@ -695,7 +775,33 @@ where
 }
 
 #[cfg(feature = "shadowing")]
+use std::hash::Hash;
+
+#[cfg(feature = "shadowing")]
 impl<S: TensorStructure + Clone> TensorNetwork<ParamTensor<S>, Atom> {
+    pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
+        &'a self,
+        coeff_map: F,
+        fn_map: &FunctionMap<'a, T>,
+        params: &[Atom],
+    ) -> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>>
+    where
+        S: TensorStructure,
+    {
+        let mut evaluate_net = TensorNetwork::new();
+        for (_, t) in &self.graph.nodes {
+            let evaluated_tensor = t.eval_tree(coeff_map, fn_map, params);
+            evaluate_net.push(evaluated_tensor);
+        }
+
+        evaluate_net.scalar = self
+            .scalar
+            .as_ref()
+            .map(|a| a.as_view().to_eval_tree(coeff_map, fn_map, params));
+
+        evaluate_net
+    }
+
     pub fn evaluate<'a, D, F: Fn(&Rational) -> D + Copy>(
         &'a self,
         coeff_map: F,
@@ -722,6 +828,81 @@ impl<S: TensorStructure + Clone> TensorNetwork<ParamTensor<S>, Atom> {
         evaluated_net
     }
 }
+
+#[cfg(feature = "shadowing")]
+impl<T, S> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
+    pub fn map_coeff<T2, F: Fn(&T) -> T2>(
+        &self,
+        f: &F,
+    ) -> TensorNetwork<EvalTreeTensor<T2, S>, EvalTree<T2>>
+    where
+        T: Clone + Default + PartialEq,
+        S: Clone,
+    {
+        let new_graph = self.graph.map_nodes_ref(|(_, x)| x.map_coeff(f));
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self.scalar.as_ref().map(|a| a.map_coeff(f)),
+        }
+        // self.map_data_ref(|x| x.map_coeff(f))
+    }
+
+    pub fn linearize(
+        self,
+        param_len: usize,
+    ) -> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<T>>
+    where
+        T: Clone + Default + PartialEq,
+        S: Clone,
+    {
+        let new_graph = self.graph.map_nodes(|(_, x)| x.linearize(param_len));
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self.scalar.map(|a| a.linearize(param_len)),
+        }
+    }
+
+    pub fn common_subexpression_elimination(&mut self)
+    where
+        T: Debug + Hash + Eq + Ord + Clone + Default,
+        S: Clone,
+    {
+        self.graph
+            .map_nodes_mut(|(_, x)| x.common_subexpression_elimination());
+        self.scalar
+            .as_mut()
+            .map(|a| a.common_subexpression_elimination());
+    }
+
+    pub fn common_pair_elimination(&mut self)
+    where
+        T: Debug + Hash + Eq + Ord + Clone + Default,
+        S: Clone,
+    {
+        self.graph
+            .map_nodes_mut(|(_, x)| x.common_pair_elimination());
+        self.scalar.as_mut().map(|a| a.common_pair_elimination());
+    }
+
+    pub fn evaluate(&mut self, params: &[T]) -> TensorNetwork<DataTensor<T, S>, T>
+    where
+        T: Real,
+        S: TensorStructure + Clone,
+    {
+        let zero = params[0].zero();
+        let new_graph = self.graph.map_nodes_ref_mut(|(_, x)| x.evaluate(params));
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self.scalar.as_mut().map(|a| {
+                let mut out = [zero];
+                a.evaluate(params, &mut out);
+                let [o] = out;
+                o
+            }),
+        }
+    }
+}
+
 impl<T, S> From<Vec<T>> for TensorNetwork<T, S>
 where
     T: HasStructure,
@@ -1197,7 +1378,7 @@ where
 #[allow(dead_code)]
 pub struct Levels<T: Clone, S: TensorStructure + HasName + Clone> {
     pub levels: Vec<TensorNetwork<ParamTensor<S>, Atom>>,
-    initial: TensorNetwork<MixedTensor<T, S>, Atom>,
+    pub initial: TensorNetwork<MixedTensor<T, S>, Atom>,
     // fn_map: FunctionMap<'static, Complex<T>>,
     params: Vec<Atom>,
 }
@@ -1219,7 +1400,7 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<T: Clone + RefZero, S: TensorStructure + Clone + TracksCount> Levels<T, S>
+impl<T: Clone + RefZero + Display, S: TensorStructure + Clone + TracksCount + Display> Levels<T, S>
 where
     MixedTensor<T, S>: Contract<LCM = MixedTensor<T, S>>,
 
@@ -1270,8 +1451,8 @@ where
         self.initial
             .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
 
+        self.initial.namesym("L0");
         if self.initial.graph.nodes.len() > 1 {
-            self.initial.namesym("L0");
             let mut new_level = (*self).initial.shadow();
             new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
             self.levels.push(new_level);

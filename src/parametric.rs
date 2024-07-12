@@ -1,9 +1,10 @@
 extern crate derive_more;
 
-use std::fmt::{Debug, Display};
+use std::fmt::{format, write, Debug, Display};
 
 use ahash::{AHashMap, HashMap};
 
+// use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
 
 use crate::{
@@ -37,7 +38,7 @@ use symbolica::domains::float::Complex as SymComplex;
 //     }
 // }
 
-pub trait TensorCoefficient {
+pub trait TensorCoefficient: Display {
     fn cooked_name(&self) -> Option<String>;
     fn name(&self) -> Option<Symbol>;
     fn tags(&self) -> Vec<AtomOrView>;
@@ -46,19 +47,38 @@ pub trait TensorCoefficient {
         &'c self,
         fn_map: &'b mut FunctionMap<'a, T>,
         body: AtomView<'a>,
-    ) -> Result<(), &str> {
+    ) -> Result<(), String> {
         if let Some((name, cooked_name)) = self.name().zip(self.cooked_name()) {
-            fn_map.add_tagged_function(name, self.tags(), cooked_name, vec![], body)
+            fn_map
+                .add_tagged_function(name, self.tags(), cooked_name, vec![], body)
+                .map_err(String::from)
         } else {
-            Err("Unnamed ")
+            Err(format!("unnamed {}", self))
         }
     }
 }
 
+#[derive(Debug)]
 pub struct FlatCoefficent<Args: IntoArgs> {
     pub name: Option<Symbol>,
     pub index: FlatIndex,
     pub args: Option<Args>,
+}
+
+impl<Arg: IntoArgs> Display for FlatCoefficent<Arg> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(name) = self.name {
+            write!(f, "{}", name)?
+        }
+        write!(f, "(")?;
+        if let Some(ref args) = self.args {
+            let args: Vec<String> = args.into_args().map(|s| s.to_string()).collect();
+            write!(f, "{},", args.join(","))?
+        }
+
+        write!(f, "{})", self.index)?;
+        Result::Ok(())
+    }
 }
 
 impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
@@ -100,6 +120,21 @@ pub struct ExpandedCoefficent<Args: IntoArgs> {
     pub name: Option<Symbol>,
     pub index: ExpandedIndex,
     pub args: Option<Args>,
+}
+
+impl<Arg: IntoArgs> Display for ExpandedCoefficent<Arg> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(name) = self.name {
+            write!(f, "{}", name)?
+        }
+        write!(f, "(")?;
+        if let Some(ref args) = self.args {
+            let args: Vec<String> = args.into_args().map(|s| s.to_string()).collect();
+            write!(f, "{},", args.join(","))?
+        }
+        write!(f, "{})", self.index)?;
+        Result::Ok(())
+    }
 }
 
 impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
@@ -231,6 +266,38 @@ where
                         structure: d.structure.clone(),
                     };
                     Some(ParamTensor::Param(param.into()))
+                }
+            },
+        }
+    }
+
+    fn append_map<'a, T>(
+        &'a self,
+        fn_map: &mut FunctionMap<'a, Const>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+    ) where
+        T: TensorCoefficient,
+    {
+        match self {
+            ParamTensor::Param(_) => {}
+            ParamTensor::Composite(c) => match c {
+                DataTensor::Dense(d) => {
+                    for (i, a) in d.flat_iter() {
+                        let labeled_coef = index_to_atom(self.structure(), i);
+
+                        labeled_coef
+                            .add_tagged_function(fn_map, a.as_view())
+                            .unwrap();
+                    }
+                }
+                DataTensor::Sparse(d) => {
+                    for (i, a) in d.flat_iter() {
+                        let labeled_coef = index_to_atom(self.structure(), i);
+
+                        labeled_coef
+                            .add_tagged_function(fn_map, a.as_view())
+                            .unwrap();
+                    }
                 }
             },
         }
@@ -405,6 +472,19 @@ impl<
         match self {
             ParamOrConcrete::Concrete(c) => c.shadow_with_map(fn_map, index_to_atom),
             ParamOrConcrete::Param(p) => p.shadow_with_map(fn_map, index_to_atom),
+        }
+    }
+
+    fn append_map<'a, T>(
+        &'a self,
+        fn_map: &mut FunctionMap<'a, U>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+    ) where
+        T: TensorCoefficient,
+    {
+        match self {
+            ParamOrConcrete::Concrete(c) => c.append_map(fn_map, index_to_atom),
+            ParamOrConcrete::Param(p) => p.append_map(fn_map, index_to_atom),
         }
     }
 }
@@ -625,6 +705,19 @@ where
         match self {
             RealOrComplexTensor::Real(c) => c.shadow_with_map(fn_map, index_to_atom),
             RealOrComplexTensor::Complex(p) => p.shadow_with_map(fn_map, index_to_atom),
+        }
+    }
+
+    fn append_map<'a, C>(
+        &'a self,
+        fn_map: &mut FunctionMap<'a, R>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
+    ) where
+        C: TensorCoefficient,
+    {
+        match self {
+            RealOrComplexTensor::Real(c) => c.append_map(fn_map, index_to_atom),
+            RealOrComplexTensor::Complex(p) => p.append_map(fn_map, index_to_atom),
         }
     }
 }
@@ -1257,6 +1350,19 @@ pub struct EvalTreeTensor<T, S> {
     eval: EvalTree<T>,
     indexmap: Option<Vec<FlatIndex>>,
     structure: S,
+}
+
+impl<T, S: TensorStructure> HasStructure for EvalTreeTensor<T, S> {
+    type Scalar = T;
+    type Structure = S;
+
+    fn mut_structure(&mut self) -> &mut Self::Structure {
+        &mut self.structure
+    }
+
+    fn structure<'a>(&'a self) -> &'a Self::Structure {
+        &self.structure
+    }
 }
 
 impl<S: Clone, T> EvalTreeTensor<T, S> {

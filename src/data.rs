@@ -180,6 +180,19 @@ where
 
         Some(ParamTensor::Param(param.into()))
     }
+
+    fn append_map<'a, U>(
+        &'a self,
+        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
+    ) where
+        U: crate::TensorCoefficient,
+    {
+        for (i, d) in self.flat_iter() {
+            let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
+            fn_map.add_constant(labeled_coef.clone().into(), d.clone().into());
+        }
+    }
 }
 
 impl<T, S> HasName for SparseTensor<T, S>
@@ -590,6 +603,19 @@ where
         };
 
         Some(ParamTensor::Param(param.into()))
+    }
+
+    fn append_map<'a, U>(
+        &'a self,
+        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
+    ) where
+        U: crate::TensorCoefficient,
+    {
+        for (i, d) in self.flat_iter() {
+            let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
+            fn_map.add_constant(labeled_coef.clone().into(), d.clone().into());
+        }
     }
 }
 
@@ -1034,6 +1060,19 @@ where
         match self {
             DataTensor::Dense(d) => d.shadow_with_map(fn_map, index_to_atom),
             DataTensor::Sparse(s) => s.shadow_with_map(fn_map, index_to_atom),
+        }
+    }
+
+    fn append_map<'a, U>(
+        &'a self,
+        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
+    ) where
+        U: crate::TensorCoefficient,
+    {
+        match self {
+            DataTensor::Dense(d) => d.append_map(fn_map, index_to_atom),
+            DataTensor::Sparse(s) => s.append_map(fn_map, index_to_atom),
         }
     }
 }

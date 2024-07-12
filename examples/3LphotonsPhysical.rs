@@ -37,16 +37,9 @@ fn main() {
     "*ϵ(0,aind(lor(4,45)))*ϵ(1,aind(lor(4,81)))*ϵbar(2,aind(lor(4,94)))*ϵbar(3,aind(lor(4,108)))*ϵbar(4,aind(lor(4,115)))*ϵbar(5,aind(lor(4,128)))"
 );
 
-    let params = ["MT", "G", "ee"].map(|p| Atom::parse(p).unwrap());
-
     let atom = Atom::parse(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
-
-    let mut const_map = AHashMap::new();
-    const_map.insert(params[0].as_view(), 0.2);
-    const_map.insert(params[1].as_view(), 0.32243234);
-    const_map.insert(params[2].as_view(), 0.932);
 
     let network = sym_tensor.to_network().unwrap();
 
@@ -129,10 +122,12 @@ fn main() {
             .unwrap()
     );
 
-    let network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> = network.cast();
+    let counting_network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
+        network.clone().cast();
+    // println!("{}", network.dot());
+    let mut levels: Levels<_, _> = counting_network.into();
 
-    let mut levels: Levels<_, _> = network.into();
-
+    // println!("{}", levels.initial.graph.nodes.len());
     let mut fn_map: FunctionMap<Complex<Rational>> = FunctionMap::new();
 
     for (k, v) in const_atom_map.iter() {
@@ -141,13 +136,13 @@ fn main() {
 
     let params = data_atom_map.0;
 
-    let values: Vec<Complex<Rational>> = data_atom_map
-        .1
-        .iter()
-        .map(|c| c.map(|f| Rational::from_f64(f)))
-        .collect();
+    // let values: Vec<Complex<Rational>> = data_atom_map
+    //     .1
+    //     .iter()
+    //     .map(|c| c.map(|f| Rational::from_f64(f)))
+    //     .collect();
 
-    let mut evaluator_tensor = levels.contract(2, &mut fn_map).eval_tree(
+    let evaluator_tensor = levels.contract(1, &mut fn_map).eval_tree(
         |a| Complex {
             im: a.zero(),
             re: a.clone(),
@@ -161,5 +156,43 @@ fn main() {
 
     let values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
     let out = neet.evaluate(&values);
+
+    println!("{}", out);
+
+    let mut precontracted_new = network.clone();
+    precontracted_new.contract();
+    let eval_precontracted = precontracted_new.to_fully_parametric().eval_tree(
+        |a| Complex {
+            im: a.zero(),
+            re: a.clone(),
+        },
+        &fn_map,
+        &params,
+    );
+
+    let mut neeet = eval_precontracted
+        .map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
+
+    let out = neeet.evaluate(&values);
+
+    println!("Pre contracted new{}", out.result_tensor().unwrap());
+
+    let postcontracted_new = network.clone();
+
+    let eval_postcontracted = postcontracted_new.to_fully_parametric().eval_tree(
+        |a| Complex {
+            im: a.zero(),
+            re: a.clone(),
+        },
+        &fn_map,
+        &params,
+    );
+
+    let mut neeet = eval_postcontracted
+        .map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
+
+    let mut out = neeet.evaluate(&values);
+    out.contract();
+    println!("Post contracted new{}", out.result_tensor().unwrap());
     // neet.linearize(); //default needs to be derived on partial eq;
 }

@@ -1908,6 +1908,22 @@ where
     }
 }
 
+impl<N: IntoSymbol, A: IntoArgs> Display for SmartShadowStructure<N, A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(ref name) = self.global_name {
+            write!(f, "{}", name.into_symbol().to_string())?
+        }
+        write!(f, "(")?;
+        if let Some(ref args) = self.additional_args {
+            let args: Vec<std::string::String> = args.into_args().map(|s| s.to_string()).collect();
+            write!(f, "{},", args.join(","))?
+        }
+
+        write!(f, "{})", self.structure)?;
+        Result::Ok(())
+    }
+}
+
 impl<N, A> TensorStructure for SmartShadowStructure<N, A> {
     delegate! {
         to self.structure {
@@ -2360,12 +2376,10 @@ pub trait ShadowMapping<Const>: Shadowable {
 
     fn append_map<'a, T>(
         &'a self,
-        _fn_map: &mut FunctionMap<'a, Const>,
-        _index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+        fn_map: &mut FunctionMap<'a, Const>,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
     ) where
-        T: TensorCoefficient,
-    {
-    }
+        T: TensorCoefficient;
 
     fn flat_append_map<'a>(&'a self, fn_map: &mut FunctionMap<'a, Const>) {
         self.append_map(fn_map, Self::Structure::flat_coef)
@@ -2469,6 +2483,14 @@ where
     S::Name: IntoSymbol + Clone,
     S::Args: IntoArgs,
 {
+    fn append_map<'a, T>(
+        &'a self,
+        _fn_map: &mut FunctionMap<'a, Const>,
+        _index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+    ) where
+        T: TensorCoefficient,
+    {
+    }
 }
 
 #[cfg(feature = "shadowing")]

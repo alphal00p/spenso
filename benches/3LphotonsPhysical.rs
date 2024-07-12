@@ -2,11 +2,18 @@ use std::{fs::File, io::BufReader};
 
 use ahash::AHashMap;
 use criterion::{criterion_group, criterion_main, Criterion};
-use spenso::{Complex, SymbolicTensor};
+use spenso::{Complex, Levels, MixedTensor, SmartShadowStructure, SymbolicTensor, TensorNetwork};
 use symbolica::{
     atom::{Atom, AtomView},
+    domains::{
+        float::{NumericalFloatComparison, NumericalFloatLike},
+        rational::Rational,
+    },
+    evaluate::FunctionMap,
     state::State,
 };
+
+use symbolica::domains::float::Complex as SymComplex;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let expr = concat!("-64/729*G^4*ee^6",
@@ -28,40 +35,58 @@ fn criterion_benchmark(c: &mut Criterion) {
     "*ϵ(0,aind(lor(4,45)))*ϵ(1,aind(lor(4,81)))*ϵbar(2,aind(lor(4,94)))*ϵbar(3,aind(lor(4,108)))*ϵbar(4,aind(lor(4,115)))*ϵbar(5,aind(lor(4,128)))"
 );
 
-    let params = ["MT", "G", "ee"].map(|p| Atom::parse(p).unwrap());
-
     let atom = Atom::parse(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-    let mut const_map = AHashMap::new();
-    const_map.insert(params[0].as_view(), 0.2);
-    const_map.insert(params[1].as_view(), 0.32243234);
-    const_map.insert(params[2].as_view(), 0.932);
-
     let mut network = sym_tensor.to_network().unwrap();
 
-    let mut group = c.benchmark_group("evaluate_net");
+    let mut group = c.benchmark_group("nested_evaluate_net");
 
     let file = File::open("./examples/data.json").unwrap();
     let reader = BufReader::new(file);
 
-    let string_map: AHashMap<String, Complex<f64>> = serde_json::from_reader(reader).unwrap();
+    let data_string_map: AHashMap<String, Complex<f64>> = serde_json::from_reader(reader).unwrap();
 
-    let mut atom_map: AHashMap<Atom, Complex<f64>> = string_map
+    let file = File::open("./examples/const.json").unwrap();
+    let reader = BufReader::new(file);
+
+    let const_string_map: AHashMap<String, Complex<f64>> = serde_json::from_reader(reader).unwrap();
+
+    let data_atom_map: (Vec<Atom>, Vec<Complex<f64>>) = data_string_map
+        .into_iter()
+        .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
+        .unzip();
+
+    let mut const_atom_map: AHashMap<Atom, Complex<f64>> = const_string_map
         .into_iter()
         .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
         .collect();
 
     let i = Atom::new_var(State::I);
-    atom_map.insert(i, Complex::i());
+    const_atom_map.insert(i, Complex::i());
 
-    let const_map: AHashMap<AtomView<'_>, symbolica::domains::float::Complex<f64>> = atom_map
-        .iter()
-        .map(|(k, &v)| (k.as_view(), v.into()))
-        .collect();
+    let mut const_map: AHashMap<AtomView<'_>, symbolica::domains::float::Complex<f64>> =
+        data_atom_map
+            .0
+            .iter()
+            .zip(data_atom_map.1.iter())
+            .map(|(k, v)| (k.as_view(), (*v).into()))
+            .collect();
 
-    group.bench_function("3LPhysical", |b| {
+    for (k, &v) in const_atom_map.iter() {
+        const_map.insert(k.as_view(), v.into());
+    }
+
+    let mut fn_map: FunctionMap<Complex<Rational>> = FunctionMap::new();
+
+    for (k, v) in const_atom_map.iter() {
+        fn_map.add_constant(k.as_view().into(), (*v).map(Rational::from_f64))
+    }
+
+    let params = data_atom_map.0.clone();
+
+    group.bench_function("3LPhysical postcontracted", |b| {
         b.iter_batched(
             || network.clone(),
             |mut network| {
@@ -72,6 +97,49 @@ fn criterion_benchmark(c: &mut Criterion) {
         )
     });
 
+    let eval_postcontracted = network.clone().to_fully_parametric().eval_tree(
+        |a| Complex {
+            im: a.zero(),
+            re: a.clone(),
+        },
+        &fn_map,
+        &params,
+    );
+
+    let mut neeet = eval_postcontracted
+        .map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
+
+    let values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
+
+    group.bench_function("3LPhysical postcontracted new", |b| {
+        b.iter(|| {
+            let mut out = neeet.evaluate(&values);
+            out.contract();
+        })
+    });
+
+    let counting_network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
+        network.clone().cast();
+    // println!("{}", network.dot());
+    let mut levels: Levels<_, _> = counting_network.into();
+
+    let evaluator_tensor = levels.contract(1, &mut fn_map).eval_tree(
+        |a| Complex {
+            im: a.zero(),
+            re: a.clone(),
+        },
+        &fn_map,
+        &params,
+    );
+    // evaluator_tensor.evaluate(&values);
+    let mut neet =
+        evaluator_tensor.map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
+
+    group.bench_function("3LPhysical leveled", |b| {
+        b.iter(|| {
+            let out = neet.evaluate(&values);
+        })
+    });
     network.contract();
 
     group.bench_function("3LPhysical precontracted", |b| {
@@ -82,6 +150,23 @@ fn criterion_benchmark(c: &mut Criterion) {
             },
             criterion::BatchSize::SmallInput,
         )
+    });
+    let eval_precontracted = network.clone().to_fully_parametric().eval_tree(
+        |a| Complex {
+            im: a.zero(),
+            re: a.clone(),
+        },
+        &fn_map,
+        &params,
+    );
+
+    let mut neeet = eval_precontracted
+        .map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
+
+    group.bench_function("3LPhysical precontracted new", |b| {
+        b.iter(|| {
+            let out = neeet.evaluate(&values);
+        })
     });
 }
 

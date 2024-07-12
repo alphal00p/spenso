@@ -50,6 +50,10 @@ fn main() {
 
     let network = sym_tensor.to_network().unwrap();
 
+    for (n, t) in &network.graph.nodes {
+        println!("{}", t);
+    }
+
     // for p in &network.params {
     //     println!("Param {}", p);
     // }

@@ -355,6 +355,17 @@ pub enum ParamOrConcrete<C: HasStructure<Structure = S> + Clone, S: TensorStruct
     Param(ParamTensor<S>),
 }
 
+impl<C: Display + HasStructure<Structure = S> + Clone, S: TensorStructure> Display
+    for ParamOrConcrete<C, S>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParamOrConcrete::Concrete(c) => c.fmt(f),
+            ParamOrConcrete::Param(p) => p.fmt(f),
+        }
+    }
+}
+
 impl<
         U: HasStructure<Structure = O> + Clone,
         C: CastStructure<U> + HasStructure<Structure = S> + Clone,
@@ -567,6 +578,15 @@ where
 pub enum RealOrComplexTensor<T, S: TensorStructure> {
     Real(DataTensor<T, S>),
     Complex(DataTensor<Complex<T>, S>),
+}
+
+impl<T: Display, S: TensorStructure> Display for RealOrComplexTensor<T, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RealOrComplexTensor::Real(d) => d.fmt(f),
+            RealOrComplexTensor::Complex(d) => d.fmt(f),
+        }
+    }
 }
 
 impl<T: Clone, S: TensorStructure, O: From<S> + TensorStructure>

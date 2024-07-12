@@ -2301,7 +2301,35 @@ pub trait Shadowable:
     }
 
     fn to_explicit(&self) -> Option<MixedTensor<f64, Self::Structure>> {
-        self.structure().clone().to_explicit_rep()
+        let identity = State::get_symbol("id");
+        let gamma = State::get_symbol("γ");
+        let gamma5 = State::get_symbol("γ5");
+        let proj_m = State::get_symbol("ProjM");
+        let proj_p = State::get_symbol("ProjP");
+        let sigma = State::get_symbol("σ");
+        let metric = State::get_symbol("Metric");
+
+        if let Some(name) = self.structure().name() {
+            let name = name.into_symbol();
+            Some(match name {
+                _ if name == identity => {
+                    ufo::identity_data::<f64, Self::Structure>(self.structure().clone()).into()
+                }
+
+                _ if name == gamma => ufo::gamma_data(self.structure().clone()).into(),
+                _ if name == gamma5 => ufo::gamma5_data(self.structure().clone()).into(),
+                _ if name == proj_m => ufo::proj_m_data(self.structure().clone()).into(),
+                _ if name == proj_p => ufo::proj_p_data(self.structure().clone()).into(),
+                _ if name == sigma => ufo::sigma_data(self.structure().clone()).into(),
+                _ if name == metric => {
+                    ufo::metric_data::<f64, Self::Structure>(self.structure().clone()).into()
+                }
+                _ => MixedTensor::param(self.expanded_shadow().unwrap().into()),
+            })
+        } else {
+            None
+        }
+        // self.structure().clone().to_explicit_rep()
     }
 }
 

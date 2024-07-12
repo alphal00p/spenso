@@ -151,9 +151,7 @@ fn main() {
         &fn_map,
         &params,
     );
-
     // evaluator_tensor.evaluate(&values);
-
     let mut neet =
         evaluator_tensor.map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
 

@@ -206,12 +206,7 @@ pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool) -> Atom {
 }
 #[cfg(feature = "shadowing")]
 fn named_tensor(name: String, args: &[&str]) -> String {
-    name + "("
-        + args
-            .iter()
-            .fold(ABSTRACTIND.to_string() + "(", |acc, i| acc + *i)
-            .as_str()
-        + "))"
+    name + "(" + ABSTRACTIND + "(" + args.join(",").as_str() + "))"
 }
 #[cfg(feature = "shadowing")]
 enum ReplacementArgs {

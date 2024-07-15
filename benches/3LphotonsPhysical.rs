@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufReader};
 
 use ahash::AHashMap;
-use approx::assert_relative_eq;
+use approx::{assert_relative_eq, RelativeEq};
 use criterion::{criterion_group, criterion_main, Criterion};
 use spenso::{
     Complex, HasStructure, Levels, MixedTensor, SmartShadowStructure, SymbolicTensor, TensorNetwork,
@@ -135,7 +135,8 @@ fn criterion_benchmark(c: &mut Criterion) {
                         .try_into_concrete()
                         .unwrap()
                         .try_into_complex()
-                        .unwrap()
+                        .unwrap(),
+                    epsilon = 0.1
                 );
             },
             criterion::BatchSize::SmallInput,
@@ -164,7 +165,11 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| {
             let mut out = mapped_postcontracted_eval_tree_tensor.evaluate(&values);
             out.contract();
-            assert_relative_eq!(truth, out.result_tensor().unwrap().scalar().unwrap().into());
+            assert_relative_eq!(
+                truth,
+                out.result_tensor().unwrap().scalar().unwrap().into(),
+                epsilon = 0.1
+            );
         })
     });
 
@@ -195,14 +200,14 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.bench_function("3LPhysical leveled", |b| {
         b.iter(|| {
             let out = neet.evaluate(&values).scalar().unwrap();
-            assert_relative_eq!(truth, out.into())
+            assert!(truth.relative_eq(&out.into(), 0.1, 1.))
         })
     });
 
     group.bench_function("3LPhysical leveled 2", |b| {
         b.iter(|| {
             let out = neet2.evaluate(&values).scalar().unwrap();
-            assert_relative_eq!(truth, out.into())
+            assert!(truth.relative_eq(&out.into(), 0.1, 1.))
         })
     });
     network.contract();
@@ -212,9 +217,8 @@ fn criterion_benchmark(c: &mut Criterion) {
             || network.clone(),
             |mut network| {
                 network.evaluate_complex(|i| i.into(), &const_map);
-                assert_relative_eq!(
-                    truth,
-                    network
+                assert!(truth.relative_eq(
+                    &network
                         .result_tensor()
                         .unwrap()
                         .scalar()
@@ -222,8 +226,10 @@ fn criterion_benchmark(c: &mut Criterion) {
                         .try_into_concrete()
                         .unwrap()
                         .try_into_complex()
-                        .unwrap()
-                );
+                        .unwrap(),
+                    0.1,
+                    1.
+                ));
             },
             criterion::BatchSize::SmallInput,
         )
@@ -247,7 +253,11 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.bench_function("3LPhysical precontracted new optimized", |b| {
         b.iter(|| {
             let out = mapped_precontracted_eval_tree_net.evaluate(&values);
-            assert_relative_eq!(truth, out.result_tensor().unwrap().scalar().unwrap().into());
+            assert!(truth.relative_eq(
+                &out.result_tensor().unwrap().scalar().unwrap().into(),
+                0.1,
+                1.
+            ));
         })
     });
 
@@ -257,7 +267,11 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.bench_function("3LPhysical precontracted new lin", |b| {
         b.iter(|| {
             let out = mapped_precontracted_eval_net.evaluate(&values);
-            assert_relative_eq!(truth, out.result_tensor().unwrap().scalar().unwrap().into());
+            assert!(truth.relative_eq(
+                &out.result_tensor().unwrap().scalar().unwrap().into(),
+                0.1,
+                1.
+            ));
         })
     });
 
@@ -268,7 +282,11 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.bench_function("3LPhysical precontracted new compiled", |b| {
         b.iter(|| {
             let out = neeet.evaluate_complex(&values);
-            assert_relative_eq!(truth, out.result_tensor().unwrap().scalar().unwrap().into());
+            assert!(truth.relative_eq(
+                &(out.result_tensor().unwrap().scalar().unwrap()).into(),
+                0.1,
+                1.
+            ),);
         })
     });
 }

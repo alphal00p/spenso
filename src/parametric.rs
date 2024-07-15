@@ -6,6 +6,7 @@ use ahash::{AHashMap, HashMap};
 
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
+use rand::seq::index;
 
 use crate::{
     CastStructure, Complex, ContractableWith, ContractionError, ExpandedIndex, FallibleAddAssign,
@@ -22,6 +23,8 @@ use symbolica::{
     evaluate::{
         CompileOptions, CompiledEvaluator, EvalTree, EvaluationFn, ExpressionEvaluator, FunctionMap,
     },
+    id::{Condition, MatchSettings, Pattern, Replacement, WildcardAndRestriction},
+    state::State,
 };
 
 use std::hash::Hash;
@@ -43,6 +46,8 @@ pub trait TensorCoefficient: Display {
     fn name(&self) -> Option<Symbol>;
     fn tags(&self) -> Vec<AtomOrView>;
     fn to_atom(&self) -> Option<Atom>;
+    fn to_atom_re(&self) -> Option<Atom>;
+    fn to_atom_im(&self) -> Option<Atom>;
     fn add_tagged_function<'c, 'a, 'b: 'c, T>(
         &'c self,
         fn_map: &'b mut FunctionMap<'a, T>,
@@ -114,6 +119,32 @@ impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
         fn_builder = fn_builder.add_arg(Atom::from(self.index).as_view());
         Some(fn_builder.finish())
     }
+
+    fn to_atom_re(&self) -> Option<Atom> {
+        let name = State::get_symbol(self.name?.to_string() + "_re");
+
+        let mut fn_builder = FunctionBuilder::new(name);
+        if let Some(ref args) = self.args {
+            for arg in args.into_args() {
+                fn_builder = fn_builder.add_arg(arg.as_view());
+            }
+        }
+        fn_builder = fn_builder.add_arg(Atom::from(self.index).as_view());
+        Some(fn_builder.finish())
+    }
+
+    fn to_atom_im(&self) -> Option<Atom> {
+        let name = State::get_symbol(self.name?.to_string() + "_im");
+
+        let mut fn_builder = FunctionBuilder::new(name);
+        if let Some(ref args) = self.args {
+            for arg in args.into_args() {
+                fn_builder = fn_builder.add_arg(arg.as_view());
+            }
+        }
+        fn_builder = fn_builder.add_arg(Atom::from(self.index).as_view());
+        Some(fn_builder.finish())
+    }
 }
 
 pub struct ExpandedCoefficent<Args: IntoArgs> {
@@ -161,6 +192,31 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
 
     fn to_atom(&self) -> Option<Atom> {
         let mut fn_builder = FunctionBuilder::new(self.name?);
+        if let Some(ref args) = self.args {
+            for arg in args.into_args() {
+                fn_builder = fn_builder.add_arg(arg.as_view());
+            }
+        }
+        fn_builder = fn_builder.add_arg(Atom::from(self.index.clone()).as_view());
+        Some(fn_builder.finish())
+    }
+    fn to_atom_re(&self) -> Option<Atom> {
+        let name = State::get_symbol(self.name?.to_string() + "_re");
+
+        let mut fn_builder = FunctionBuilder::new(name);
+        if let Some(ref args) = self.args {
+            for arg in args.into_args() {
+                fn_builder = fn_builder.add_arg(arg.as_view());
+            }
+        }
+        fn_builder = fn_builder.add_arg(Atom::from(self.index.clone()).as_view());
+        Some(fn_builder.finish())
+    }
+
+    fn to_atom_im(&self) -> Option<Atom> {
+        let name = State::get_symbol(self.name?.to_string() + "_im");
+
+        let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
             for arg in args.into_args() {
                 fn_builder = fn_builder.add_arg(arg.as_view());
@@ -224,52 +280,52 @@ where
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
 {
-    fn shadow_with_map<'a, T>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, Const>,
-        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
-    ) -> Option<ParamTensor<Self::Structure>>
-    where
-        T: TensorCoefficient,
-    {
-        match self {
-            ParamTensor::Param(_) => return Some(self.clone()),
-            ParamTensor::Composite(c) => match c {
-                DataTensor::Dense(d) => {
-                    let mut data = vec![];
-                    for (i, a) in d.flat_iter() {
-                        let labeled_coef = index_to_atom(self.structure(), i);
+    // fn shadow_with_map<'a, T>(
+    //     &'a self,
+    //     fn_map: &mut FunctionMap<'a, Const>,
+    //     index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+    // ) -> Option<ParamTensor<Self::Structure>>
+    // where
+    //     T: TensorCoefficient,
+    // {
+    //     match self {
+    //         ParamTensor::Param(_) => return Some(self.clone()),
+    //         ParamTensor::Composite(c) => match c {
+    //             DataTensor::Dense(d) => {
+    //                 let mut data = vec![];
+    //                 for (i, a) in d.flat_iter() {
+    //                     let labeled_coef = index_to_atom(self.structure(), i);
 
-                        labeled_coef
-                            .add_tagged_function(fn_map, a.as_view())
-                            .unwrap();
-                        data.push(labeled_coef.to_atom().unwrap());
-                    }
-                    let param = DenseTensor {
-                        data,
-                        structure: d.structure.clone(),
-                    };
-                    Some(ParamTensor::Param(param.into()))
-                }
-                DataTensor::Sparse(d) => {
-                    let mut data = vec![];
-                    for (i, a) in d.flat_iter() {
-                        let labeled_coef = index_to_atom(self.structure(), i);
+    //                     labeled_coef
+    //                         .add_tagged_function(fn_map, a.as_view())
+    //                         .unwrap();
+    //                     data.push(labeled_coef.to_atom().unwrap());
+    //                 }
+    //                 let param = DenseTensor {
+    //                     data,
+    //                     structure: d.structure.clone(),
+    //                 };
+    //                 Some(ParamTensor::Param(param.into()))
+    //             }
+    //             DataTensor::Sparse(d) => {
+    //                 let mut data = vec![];
+    //                 for (i, a) in d.flat_iter() {
+    //                     let labeled_coef = index_to_atom(self.structure(), i);
 
-                        labeled_coef
-                            .add_tagged_function(fn_map, a.as_view())
-                            .unwrap();
-                        data.push(labeled_coef.to_atom().unwrap());
-                    }
-                    let param = DenseTensor {
-                        data,
-                        structure: d.structure.clone(),
-                    };
-                    Some(ParamTensor::Param(param.into()))
-                }
-            },
-        }
-    }
+    //                     labeled_coef
+    //                         .add_tagged_function(fn_map, a.as_view())
+    //                         .unwrap();
+    //                     data.push(labeled_coef.to_atom().unwrap());
+    //                 }
+    //                 let param = DenseTensor {
+    //                     data,
+    //                     structure: d.structure.clone(),
+    //                 };
+    //                 Some(ParamTensor::Param(param.into()))
+    //             }
+    //         },
+    //     }
+    // }
 
     fn append_map<'a, T>(
         &'a self,
@@ -320,6 +376,33 @@ impl DataTensor<EvalTree<Rational>> {
 }
 
 impl<S: TensorStructure + Clone> ParamTensor<S> {
+    pub fn replace_all(
+        &self,
+        pattern: &Pattern,
+        rhs: &Pattern,
+        conditions: Option<&Condition<WildcardAndRestriction>>,
+        settings: Option<&MatchSettings>,
+    ) -> Self {
+        match self {
+            ParamTensor::Composite(c) => ParamTensor::Composite(
+                c.map_data_ref(|a| a.replace_all(pattern, rhs, conditions, settings)),
+            ),
+            ParamTensor::Param(c) => ParamTensor::Composite(
+                c.map_data_ref(|a| a.replace_all(pattern, rhs, conditions, settings)),
+            ),
+        }
+    }
+
+    pub fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
+        match self {
+            ParamTensor::Composite(c) => {
+                ParamTensor::Composite(c.map_data_ref(|a| a.replace_all_multiple(replacements)))
+            }
+            ParamTensor::Param(c) => {
+                ParamTensor::Composite(c.map_data_ref(|a| a.replace_all_multiple(replacements)))
+            }
+        }
+    }
     pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
         &'a self,
         coeff_map: F,
@@ -461,19 +544,19 @@ impl<
         S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
     > ShadowMapping<U> for ParamOrConcrete<C, S>
 {
-    fn shadow_with_map<'a, T>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, U>,
-        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
-    ) -> Option<ParamTensor<Self::Structure>>
-    where
-        T: TensorCoefficient,
-    {
-        match self {
-            ParamOrConcrete::Concrete(c) => c.shadow_with_map(fn_map, index_to_atom),
-            ParamOrConcrete::Param(p) => p.shadow_with_map(fn_map, index_to_atom),
-        }
-    }
+    // fn shadow_with_map<'a, T>(
+    //     &'a self,
+    //     fn_map: &mut FunctionMap<'a, U>,
+    //     index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+    // ) -> Option<ParamTensor<Self::Structure>>
+    // where
+    //     T: TensorCoefficient,
+    // {
+    //     match self {
+    //         ParamOrConcrete::Concrete(c) => c.shadow_with_map(fn_map, index_to_atom),
+    //         ParamOrConcrete::Param(p) => p.shadow_with_map(fn_map, index_to_atom),
+    //     }
+    // }
 
     fn append_map<'a, T>(
         &'a self,
@@ -514,6 +597,36 @@ impl<T: Concrete> From<T> for AtomOrConcrete<T> {
 }
 
 impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure> ParamOrConcrete<C, S> {
+    pub fn replace_all(
+        &self,
+        pattern: &Pattern,
+        rhs: &Pattern,
+        conditions: Option<&Condition<WildcardAndRestriction>>,
+        settings: Option<&MatchSettings>,
+    ) -> Self
+    where
+        S: Clone,
+    {
+        match self {
+            ParamOrConcrete::Param(p) => {
+                ParamOrConcrete::Param(p.replace_all(pattern, rhs, conditions, settings))
+            }
+            _ => self.clone(),
+        }
+    }
+
+    pub fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self
+    where
+        S: Clone,
+    {
+        match self {
+            ParamOrConcrete::Param(p) => {
+                ParamOrConcrete::Param(p.replace_all_multiple(replacements))
+            }
+            _ => self.clone(),
+        }
+    }
+
     pub fn is_parametric(&self) -> bool {
         match self {
             ParamOrConcrete::Param(_) => true,
@@ -685,6 +798,23 @@ where
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
 {
+    fn shadow<C>(
+        &self,
+        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
+    ) -> Option<DenseTensor<Atom, Self::Structure>>
+    where
+        C: TensorCoefficient,
+    {
+        match self {
+            RealOrComplexTensor::Real(r) => r.shadow(index_to_atom),
+            RealOrComplexTensor::Complex(r) => Some(
+                r.structure()
+                    .clone()
+                    .to_dense_labeled_complex(index_to_atom),
+            ),
+        }
+        // Some(self.structure().clone().to_dense_labeled(index_to_atom))
+    }
 }
 
 impl<T: Clone + RefZero, S: TensorStructure, R> ShadowMapping<R> for RealOrComplexTensor<T, S>
@@ -692,22 +822,8 @@ where
     S: HasName + Clone,
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
-    R: From<T> + From<Complex<T>>,
+    R: From<T>,
 {
-    fn shadow_with_map<'a, C>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, R>,
-        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
-    ) -> Option<ParamTensor<Self::Structure>>
-    where
-        C: TensorCoefficient,
-    {
-        match self {
-            RealOrComplexTensor::Real(c) => c.shadow_with_map(fn_map, index_to_atom),
-            RealOrComplexTensor::Complex(p) => p.shadow_with_map(fn_map, index_to_atom),
-        }
-    }
-
     fn append_map<'a, C>(
         &'a self,
         fn_map: &mut FunctionMap<'a, R>,
@@ -717,7 +833,28 @@ where
     {
         match self {
             RealOrComplexTensor::Real(c) => c.append_map(fn_map, index_to_atom),
-            RealOrComplexTensor::Complex(p) => p.append_map(fn_map, index_to_atom),
+            RealOrComplexTensor::Complex(p) => match p {
+                DataTensor::Dense(d) => {
+                    for (i, c) in d.flat_iter() {
+                        let labeled_coef_re =
+                            index_to_atom(self.structure(), i).to_atom_re().unwrap();
+                        let labeled_coef_im =
+                            index_to_atom(self.structure(), i).to_atom_im().unwrap();
+                        fn_map.add_constant(labeled_coef_re.clone().into(), c.re.clone().into());
+                        fn_map.add_constant(labeled_coef_im.clone().into(), c.re.clone().into());
+                    }
+                }
+                DataTensor::Sparse(d) => {
+                    for (i, c) in d.flat_iter() {
+                        let labeled_coef_re =
+                            index_to_atom(self.structure(), i).to_atom_re().unwrap();
+                        let labeled_coef_im =
+                            index_to_atom(self.structure(), i).to_atom_im().unwrap();
+                        fn_map.add_constant(labeled_coef_re.clone().into(), c.re.clone().into());
+                        fn_map.add_constant(labeled_coef_im.clone().into(), c.re.clone().into());
+                    }
+                }
+            }, // p.append_map(fn_map, index_to_atom),
         }
     }
 }
@@ -1362,6 +1499,12 @@ impl<T, S: TensorStructure> HasStructure for EvalTreeTensor<T, S> {
 
     fn structure<'a>(&'a self) -> &'a Self::Structure {
         &self.structure
+    }
+}
+
+impl<S: Clone> EvalTreeTensor<Rational, S> {
+    pub fn horner_scheme(&mut self) {
+        self.eval.horner_scheme()
     }
 }
 

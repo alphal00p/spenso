@@ -3,7 +3,10 @@ use ahash::{AHashSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
-use symbolica::evaluate::{EvalTree, ExpressionEvaluator};
+use symbolica::{
+    evaluate::{EvalTree, ExpressionEvaluator},
+    id::{Condition, MatchSettings, Pattern, Replacement, WildcardAndRestriction},
+};
 
 use crate::{
     CastStructure, EvalTensor, EvalTreeTensor, FallibleMul, GetTensorData, HasTensorData,
@@ -903,6 +906,13 @@ impl<T, S> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
     }
 }
 
+impl<S: Clone> TensorNetwork<EvalTreeTensor<Rational, S>, EvalTree<Rational>> {
+    pub fn horner_scheme(&mut self) {
+        self.graph.map_nodes_mut(|(_, x)| x.horner_scheme());
+        self.scalar.as_mut().map(|a| a.horner_scheme());
+    }
+}
+
 impl<T, S> From<Vec<T>> for TensorNetwork<T, S>
 where
     T: HasStructure,
@@ -1070,6 +1080,41 @@ where
     S: TensorStructure + Clone,
     T: Clone,
 {
+    pub fn replace_all(
+        &self,
+        pattern: &Pattern,
+        rhs: &Pattern,
+        conditions: Option<&Condition<WildcardAndRestriction>>,
+        settings: Option<&MatchSettings>,
+    ) -> Self
+    where
+        S: Clone,
+    {
+        let new_graph = self
+            .graph
+            .map_nodes_ref(|(_, t)| t.replace_all(pattern, rhs, conditions, settings));
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.replace_all(pattern, rhs, conditions, settings)),
+        }
+    }
+
+    pub fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
+        let new_graph = self
+            .graph
+            .map_nodes_ref(|(_, t)| t.replace_all_multiple(replacements));
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.replace_all_multiple(replacements)),
+        }
+    }
+
     pub fn generate_params(&mut self) -> AHashSet<Atom> {
         let mut params = AHashSet::new();
         for (_, n) in self.graph.nodes.iter().filter(|(_, n)| n.is_parametric()) {
@@ -1376,6 +1421,7 @@ where
 
 #[cfg(feature = "shadowing")]
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct Levels<T: Clone, S: TensorStructure + HasName + Clone> {
     pub levels: Vec<TensorNetwork<ParamTensor<S>, Atom>>,
     pub initial: TensorNetwork<MixedTensor<T, S>, Atom>,
@@ -1446,7 +1492,7 @@ where
         fn_map: &mut FunctionMap<'a, R>,
     ) -> ParamTensor<S>
     where
-        R: From<T> + From<Complex<T>>,
+        R: From<T>,
     {
         self.initial
             .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
@@ -1458,6 +1504,7 @@ where
             self.levels.push(new_level);
 
             self.contract_levels(depth);
+            println!("levels {}", self.levels.len());
             self.generate_fn_map(fn_map);
             self.levels.last().unwrap().result_tensor().unwrap()
         } else {
@@ -1471,7 +1518,7 @@ where
 
     fn generate_fn_map<'a, R>(&'a self, fn_map: &mut FunctionMap<'a, R>)
     where
-        R: From<T> + From<Complex<T>>,
+        R: From<T>,
     {
         self.initial.append_map(fn_map);
         for l in &self.levels {

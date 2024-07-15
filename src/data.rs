@@ -158,28 +158,28 @@ where
     S::Args: IntoArgs,
     R: From<T>,
 {
-    fn shadow_with_map<'a, C>(
-        &self,
-        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
-        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
-    ) -> Option<ParamTensor<Self::Structure>>
-    where
-        C: crate::TensorCoefficient,
-    {
-        let mut data = vec![];
-        for (i, d) in self.flat_iter() {
-            let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
-            fn_map.add_constant(labeled_coef.clone().into(), d.clone().into());
-            data.push(labeled_coef);
-        }
+    // fn shadow_with_map<'a, C>(
+    //     &self,
+    //     fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+    //     index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
+    // ) -> Option<ParamTensor<Self::Structure>>
+    // where
+    //     C: crate::TensorCoefficient,
+    // {
+    //     let mut data = vec![];
+    //     for (i, d) in self.flat_iter() {
+    //         let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
+    //         fn_map.add_constant(labeled_coef.clone().into(), d.clone().into());
+    //         data.push(labeled_coef);
+    //     }
 
-        let param = DenseTensor {
-            data,
-            structure: self.structure.clone(),
-        };
+    //     let param = DenseTensor {
+    //         data,
+    //         structure: self.structure.clone(),
+    //     };
 
-        Some(ParamTensor::Param(param.into()))
-    }
+    //     Some(ParamTensor::Param(param.into()))
+    // }
 
     fn append_map<'a, U>(
         &'a self,
@@ -581,29 +581,29 @@ where
     S::Args: IntoArgs,
     R: From<T>,
 {
-    fn shadow_with_map<'a, U>(
-        &self,
-        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
-        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
-    ) -> Option<ParamTensor<Self::Structure>>
-    where
-        U: crate::TensorCoefficient,
-        R: From<T>,
-    {
-        let mut data = vec![];
-        for (i, d) in self.flat_iter() {
-            let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
-            fn_map.add_constant(labeled_coef.clone().into(), d.clone().into());
-            data.push(labeled_coef);
-        }
+    // fn shadow_with_map<'a, U>(
+    //     &self,
+    //     fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+    //     index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
+    // ) -> Option<ParamTensor<Self::Structure>>
+    // where
+    //     U: crate::TensorCoefficient,
+    //     R: From<T>,
+    // {
+    //     let mut data = vec![];
+    //     for (i, d) in self.flat_iter() {
+    //         let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
+    //         fn_map.add_constant(labeled_coef.clone().into(), d.clone().into());
+    //         data.push(labeled_coef);
+    //     }
 
-        let param = DenseTensor {
-            data,
-            structure: self.structure.clone(),
-        };
+    //     let param = DenseTensor {
+    //         data,
+    //         structure: self.structure.clone(),
+    //     };
 
-        Some(ParamTensor::Param(param.into()))
-    }
+    //     Some(ParamTensor::Param(param.into()))
+    // }
 
     fn append_map<'a, U>(
         &'a self,
@@ -1049,19 +1049,19 @@ where
     S::Args: IntoArgs,
     R: From<T>,
 {
-    fn shadow_with_map<'a, U>(
-        &'a self,
-        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
-        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
-    ) -> Option<ParamTensor<Self::Structure>>
-    where
-        U: crate::TensorCoefficient,
-    {
-        match self {
-            DataTensor::Dense(d) => d.shadow_with_map(fn_map, index_to_atom),
-            DataTensor::Sparse(s) => s.shadow_with_map(fn_map, index_to_atom),
-        }
-    }
+    // fn shadow_with_map<'a, U>(
+    //     &'a self,
+    //     fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+    //     index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
+    // ) -> Option<ParamTensor<Self::Structure>>
+    // where
+    //     U: crate::TensorCoefficient,
+    // {
+    //     match self {
+    //         DataTensor::Dense(d) => d.shadow_with_map(fn_map, index_to_atom),
+    //         DataTensor::Sparse(s) => s.shadow_with_map(fn_map, index_to_atom),
+    //     }
+    // }
 
     fn append_map<'a, U>(
         &'a self,

@@ -4,12 +4,13 @@ use ahash::AHashMap;
 use criterion::{criterion_group, criterion_main, Criterion};
 use spenso::{Complex, Levels, MixedTensor, SmartShadowStructure, SymbolicTensor, TensorNetwork};
 use symbolica::{
-    atom::{Atom, AtomView},
+    atom::{Atom, AtomView, Symbol},
     domains::{
         float::{NumericalFloatComparison, NumericalFloatLike},
         rational::Rational,
     },
     evaluate::FunctionMap,
+    id::Replacement,
     state::State,
 };
 
@@ -58,13 +59,12 @@ fn criterion_benchmark(c: &mut Criterion) {
         .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
         .unzip();
 
-    let mut const_atom_map: AHashMap<Atom, Complex<f64>> = const_string_map
+    let mut const_atom_map: AHashMap<Symbol, Complex<f64>> = const_string_map
         .into_iter()
-        .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
+        .map(|(k, v)| (State::get_symbol(&k), v))
         .collect();
 
-    let i = Atom::new_var(State::I);
-    const_atom_map.insert(i, Complex::i());
+    const_atom_map.insert(State::I, Complex::i());
 
     let mut const_map: AHashMap<AtomView<'_>, symbolica::domains::float::Complex<f64>> =
         data_atom_map
@@ -74,17 +74,36 @@ fn criterion_benchmark(c: &mut Criterion) {
             .map(|(k, v)| (k.as_view(), (*v).into()))
             .collect();
 
-    for (k, &v) in const_atom_map.iter() {
+    let mut constvec = AHashMap::new();
+
+    for (k, v) in const_atom_map.iter() {
+        constvec.insert(Atom::new_var(*k), *v);
+    }
+    for (k, &v) in constvec.iter() {
         const_map.insert(k.as_view(), v.into());
     }
 
-    let mut fn_map: FunctionMap<Complex<Rational>> = FunctionMap::new();
+    let mut replacements = vec![];
+    let mut fn_map: FunctionMap<Rational> = FunctionMap::new();
 
     for (k, v) in const_atom_map.iter() {
-        fn_map.add_constant(k.as_view().into(), (*v).map(Rational::from_f64))
+        let name_re = Atom::new_var(State::get_symbol(k.to_string() + "_re"));
+        let name_im = Atom::new_var(State::get_symbol(k.to_string() + "_im"));
+        let i = Atom::new_var(State::I);
+        let pat = &name_re + i * &name_im;
+        replacements.push((Atom::new_var(*k).into_pattern(), pat.into_pattern()));
+
+        fn_map.add_constant(name_re.into(), Rational::from_f64(v.re));
+        fn_map.add_constant(name_im.into(), Rational::from_f64(v.im));
     }
 
-    let params = data_atom_map.0.clone();
+    let reps: Vec<Replacement> = replacements
+        .iter()
+        .map(|(pat, rhs)| Replacement::new(&pat, &rhs))
+        .collect();
+
+    let mut params = data_atom_map.0.clone();
+    params.push(Atom::new_var(State::I));
 
     group.bench_function("3LPhysical postcontracted", |b| {
         b.iter_batched(
@@ -97,20 +116,21 @@ fn criterion_benchmark(c: &mut Criterion) {
         )
     });
 
-    let eval_postcontracted = network.clone().to_fully_parametric().eval_tree(
-        |a| Complex {
-            im: a.zero(),
-            re: a.clone(),
-        },
-        &fn_map,
-        &params,
-    );
+    let counting_network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
+        network.clone().cast();
+    let counting_network = counting_network.replace_all_multiple(&reps);
+    let postcontracted_new = counting_network.clone();
 
-    let mut neeet = eval_postcontracted
-        .map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
+    let mut eval_postcontracted =
+        postcontracted_new
+            .to_fully_parametric()
+            .eval_tree(|a| a.clone(), &fn_map, &params);
+    eval_postcontracted.horner_scheme();
+    eval_postcontracted.common_pair_elimination();
+    let mut neeet = eval_postcontracted.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
-    let values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
-
+    let mut values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
+    values.push(SymComplex::from(Complex::i()));
     group.bench_function("3LPhysical postcontracted new", |b| {
         b.iter(|| {
             let mut out = neeet.evaluate(&values);
@@ -118,26 +138,40 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    let counting_network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
-        network.clone().cast();
     // println!("{}", network.dot());
-    let mut levels: Levels<_, _> = counting_network.into();
+    let mut levels: Levels<_, _> = counting_network.clone().into();
+    let mut levels2 = levels.clone();
 
-    let evaluator_tensor = levels.contract(1, &mut fn_map).eval_tree(
-        |a| Complex {
-            im: a.zero(),
-            re: a.clone(),
-        },
-        &fn_map,
-        &params,
-    );
+    let mut evaluator_tensor =
+        levels
+            .contract(1, &mut fn_map)
+            .eval_tree(|a| a.clone(), &fn_map, &params);
+
+    evaluator_tensor.horner_scheme();
+    // evaluator_tensor.common_pair_elimination();
+    evaluator_tensor.common_subexpression_elimination();
+
+    let mut evaluator_tensor_depth2 =
+        levels2
+            .contract(2, &mut fn_map)
+            .eval_tree(|a| a.clone(), &fn_map, &params);
+
+    evaluator_tensor_depth2.horner_scheme();
+    // evaluator_tensor.common_pair_elimination();
+    evaluator_tensor_depth2.common_subexpression_elimination();
     // evaluator_tensor.evaluate(&values);
-    let mut neet =
-        evaluator_tensor.map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
+    let mut neet = evaluator_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
+    let mut neet2 = evaluator_tensor_depth2.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
     group.bench_function("3LPhysical leveled", |b| {
         b.iter(|| {
             let out = neet.evaluate(&values);
+        })
+    });
+
+    group.bench_function("3LPhysical leveled 2", |b| {
+        b.iter(|| {
+            let out = neet2.evaluate(&values);
         })
     });
     network.contract();
@@ -151,17 +185,15 @@ fn criterion_benchmark(c: &mut Criterion) {
             criterion::BatchSize::SmallInput,
         )
     });
-    let eval_precontracted = network.clone().to_fully_parametric().eval_tree(
-        |a| Complex {
-            im: a.zero(),
-            re: a.clone(),
-        },
-        &fn_map,
-        &params,
-    );
+    let mut eval_precontracted =
+        counting_network
+            .clone()
+            .to_fully_parametric()
+            .eval_tree(|a| a.clone(), &fn_map, &params);
+    eval_precontracted.horner_scheme();
+    eval_precontracted.common_subexpression_elimination();
 
-    let mut neeet = eval_precontracted
-        .map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
+    let mut neeet = eval_precontracted.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
     group.bench_function("3LPhysical precontracted new", |b| {
         b.iter(|| {

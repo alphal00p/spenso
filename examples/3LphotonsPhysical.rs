@@ -1,4 +1,4 @@
-use std::{fs::File, io::BufReader};
+use std::{f64::consts::E, fs::File, io::BufReader};
 
 use ahash::AHashMap;
 
@@ -12,6 +12,7 @@ use symbolica::{
         rational::Rational,
     },
     evaluate::FunctionMap,
+    id::Replacement,
     state::State,
 };
 
@@ -68,13 +69,13 @@ fn main() {
         .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
         .unzip();
 
-    let mut const_atom_map: AHashMap<Atom, Complex<f64>> = const_string_map
+    let mut const_atom_map: AHashMap<Symbol, Complex<f64>> = const_string_map
         .into_iter()
-        .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
+        .map(|(k, v)| (State::get_symbol(&k), v))
         .collect();
 
     let i = Atom::new_var(State::I);
-    const_atom_map.insert(i, Complex::i());
+    const_atom_map.insert(State::I, Complex::i());
 
     let mut const_map: AHashMap<AtomView<'_>, symbolica::domains::float::Complex<f64>> =
         data_atom_map
@@ -84,7 +85,12 @@ fn main() {
             .map(|(k, v)| (k.as_view(), (*v).into()))
             .collect();
 
-    for (k, &v) in const_atom_map.iter() {
+    let mut constvec = AHashMap::new();
+
+    for (k, v) in const_atom_map.iter() {
+        constvec.insert(Atom::new_var(*k), *v);
+    }
+    for (k, &v) in constvec.iter() {
         const_map.insert(k.as_view(), v.into());
     }
 
@@ -124,75 +130,81 @@ fn main() {
 
     let counting_network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
         network.clone().cast();
-    // println!("{}", network.dot());
-    let mut levels: Levels<_, _> = counting_network.into();
 
-    // println!("{}", levels.initial.graph.nodes.len());
-    let mut fn_map: FunctionMap<Complex<Rational>> = FunctionMap::new();
+    let mut replacements = vec![];
+
+    let mut fn_map: FunctionMap<Rational> = FunctionMap::new();
 
     for (k, v) in const_atom_map.iter() {
-        fn_map.add_constant(k.as_view().into(), (*v).map(Rational::from_f64))
+        let name_re = Atom::new_var(State::get_symbol(k.to_string() + "_re"));
+        let name_im = Atom::new_var(State::get_symbol(k.to_string() + "_im"));
+        let i = Atom::new_var(State::I);
+        let pat = &name_re + i * &name_im;
+        replacements.push((Atom::new_var(*k).into_pattern(), pat.into_pattern()));
+
+        fn_map.add_constant(name_re.into(), Rational::from_f64(v.re));
+        fn_map.add_constant(name_im.into(), Rational::from_f64(v.im));
     }
+    let reps: Vec<Replacement> = replacements
+        .iter()
+        .map(|(pat, rhs)| Replacement::new(&pat, &rhs))
+        .collect();
 
-    let params = data_atom_map.0;
-
-    // let values: Vec<Complex<Rational>> = data_atom_map
-    //     .1
-    //     .iter()
-    //     .map(|c| c.map(|f| Rational::from_f64(f)))
-    //     .collect();
-
-    let evaluator_tensor = levels.contract(1, &mut fn_map).eval_tree(
-        |a| Complex {
-            im: a.zero(),
-            re: a.clone(),
-        },
-        &fn_map,
-        &params,
+    println!(
+        "scalar: {}",
+        counting_network
+            .replace_all_multiple(&reps)
+            .scalar
+            .as_ref()
+            .unwrap()
     );
-    // evaluator_tensor.evaluate(&values);
-    let mut neet =
-        evaluator_tensor.map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
 
-    let values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
-    let out = neet.evaluate(&values);
+    let counting_network = counting_network.replace_all_multiple(&reps);
+    let mut levels: Levels<_, _> = counting_network.replace_all_multiple(&reps).into();
+    let mut params = data_atom_map.0;
+    params.push(Atom::new_var(State::I));
+
+    let mut evaluator_tensor =
+        levels
+            .contract(1, &mut fn_map)
+            .eval_tree(|a| a.clone(), &fn_map, &params);
+
+    evaluator_tensor.horner_scheme();
+    // evaluator_tensor.common_pair_elimination();
+    evaluator_tensor.common_subexpression_elimination();
+    let mut neet = evaluator_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
+    let mut ev = neet.linearize(params.len());
+
+    let mut values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
+    values.push(SymComplex::from(Complex::i()));
+    let out = ev.evaluate(&values);
 
     println!("{}", out);
 
-    let mut precontracted_new = network.clone();
+    let mut precontracted_new = counting_network.clone();
     precontracted_new.contract();
-    let eval_precontracted = precontracted_new.to_fully_parametric().eval_tree(
-        |a| Complex {
-            im: a.zero(),
-            re: a.clone(),
-        },
-        &fn_map,
-        &params,
-    );
+    let eval_precontracted =
+        precontracted_new
+            .to_fully_parametric()
+            .eval_tree(|a| a.clone(), &fn_map, &params);
 
-    let mut neeet = eval_precontracted
-        .map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
+    let mut neeet = eval_precontracted.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
     let out = neeet.evaluate(&values);
 
     println!("Pre contracted new{}", out.result_tensor().unwrap());
 
-    let postcontracted_new = network.clone();
+    let postcontracted_new = counting_network.clone();
 
-    let eval_postcontracted = postcontracted_new.to_fully_parametric().eval_tree(
-        |a| Complex {
-            im: a.zero(),
-            re: a.clone(),
-        },
-        &fn_map,
-        &params,
-    );
+    let eval_postcontracted =
+        postcontracted_new
+            .to_fully_parametric()
+            .eval_tree(|a| a.clone(), &fn_map, &params);
 
-    let mut neeet = eval_postcontracted
-        .map_coeff(&|t| SymComplex::<f64>::from(t.map_ref(|r| r.clone().to_f64())));
+    let mut neeet = eval_postcontracted.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
     let mut out = neeet.evaluate(&values);
     out.contract();
+    // neet.common_pair_elimination(); //default needs to be derived on complex;
     println!("Post contracted new{}", out.result_tensor().unwrap());
-    // neet.linearize(); //default needs to be derived on partial eq;
 }

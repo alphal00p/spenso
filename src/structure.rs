@@ -788,6 +788,28 @@ pub trait ToSymbolic: TensorStructure {
         }
     }
 
+    fn to_dense_labeled_complex<T>(
+        self,
+        index_to_atom: impl Fn(&Self, FlatIndex) -> T,
+    ) -> DenseTensor<Atom, Self>
+    where
+        Self: Sized,
+        T: TensorCoefficient,
+    {
+        let mut data = vec![];
+        for index in 0..self.size() {
+            let re = index_to_atom(&self, index.into()).to_atom_re().unwrap();
+            let im = index_to_atom(&self, index.into()).to_atom_im().unwrap();
+            let i = Atom::new_var(State::I);
+            data.push(&re + i * &im);
+        }
+
+        DenseTensor {
+            data,
+            structure: self,
+        }
+    }
+
     fn to_dense_flat_labels(self) -> DenseTensor<Atom, Self>
     where
         Self: std::marker::Sized + Clone,
@@ -2363,15 +2385,19 @@ pub trait ShadowMapping<Const>: Shadowable {
         self.shadow_with_map(fn_map, Self::Structure::expanded_coef)
     }
 
-    fn shadow_with_map<'a, T>(
+    fn shadow_with_map<'a, T, F>(
         &'a self,
-        _fn_map: &mut FunctionMap<'a, Const>,
-        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
+        fn_map: &mut FunctionMap<'a, Const>,
+        index_to_atom: F,
     ) -> Option<ParamTensor<Self::Structure>>
     where
         T: TensorCoefficient,
+        F: Fn(&Self::Structure, FlatIndex) -> T + Clone,
     {
-        Some(ParamTensor::Param(self.shadow(index_to_atom)?.into()))
+        // Some(ParamTensor::Param(self.shadow(index_to_atom)?.into()))
+        self.append_map(fn_map, index_to_atom.clone());
+        self.shadow(index_to_atom)
+            .map(|x| ParamTensor::Param(x.into()))
     }
 
     fn append_map<'a, T>(

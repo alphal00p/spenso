@@ -916,15 +916,20 @@ impl<T, S> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
         T: NumericalFloatLike,
         S: Clone,
     {
-        let new_graph = self
-            .graph
-            .map_nodes_ref(|(_, x)| x.compile(filename, library_name));
+        let new_graph = self.graph.map_nodes_ref(|(n, x)| {
+            let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
+            let library_name = format!("{library_name}_{}.so", n.data().as_ffi());
+            x.compile(&filename, &library_name)
+        });
+
+        let filename = format!("{filename}_scalar.cpp");
+        let library_name = format!("{library_name}_scalar.so");
         TensorNetwork {
             graph: new_graph,
             scalar: self.scalar.as_ref().map(|a| {
-                a.export_cpp(filename)
+                a.export_cpp(&filename)
                     .unwrap()
-                    .compile(library_name, CompileOptions::default())
+                    .compile(&library_name, CompileOptions::default())
                     .unwrap()
                     .load()
                     .unwrap()

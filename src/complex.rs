@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{RefOne, RefZero};
+use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use duplicate::duplicate;
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,49 @@ duplicate! {
 pub struct Complex<T> {
     pub re: T,
     pub im: T,
+}
+
+impl<T: AbsDiffEq> AbsDiffEq for Complex<T>
+where
+    T::Epsilon: Copy,
+{
+    type Epsilon = T::Epsilon;
+
+    fn default_epsilon() -> T::Epsilon {
+        T::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: T::Epsilon) -> bool {
+        T::abs_diff_eq(&self.re, &other.re, epsilon) && T::abs_diff_eq(&self.im, &other.im, epsilon)
+    }
+}
+
+impl<T: RelativeEq> RelativeEq for Complex<T>
+where
+    T::Epsilon: Copy,
+{
+    fn default_max_relative() -> T::Epsilon {
+        T::default_max_relative()
+    }
+
+    fn relative_eq(&self, other: &Self, epsilon: T::Epsilon, max_relative: T::Epsilon) -> bool {
+        T::relative_eq(&self.re, &other.re, epsilon, max_relative)
+            && T::relative_eq(&self.im, &other.im, epsilon, max_relative)
+    }
+}
+
+impl<T: UlpsEq> UlpsEq for Complex<T>
+where
+    T::Epsilon: Copy,
+{
+    fn default_max_ulps() -> u32 {
+        T::default_max_ulps()
+    }
+
+    fn ulps_eq(&self, other: &Self, epsilon: T::Epsilon, max_ulps: u32) -> bool {
+        T::ulps_eq(&self.re, &other.re, epsilon, max_ulps)
+            && T::ulps_eq(&self.im, &other.im, epsilon, max_ulps)
+    }
 }
 
 #[cfg(feature = "shadowing")]

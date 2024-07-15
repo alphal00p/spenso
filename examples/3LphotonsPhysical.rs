@@ -3,7 +3,8 @@ use std::{f64::consts::E, fs::File, io::BufReader};
 use ahash::AHashMap;
 
 use spenso::{
-    network, Complex, Levels, MixedTensor, SmartShadowStructure, SymbolicTensor, TensorNetwork,
+    network, Complex, HasStructure, Levels, MixedTensor, SmartShadowStructure, SymbolicTensor,
+    TensorNetwork,
 };
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
@@ -230,12 +231,17 @@ fn main() {
         .eval_tree(|a| a.clone(), &fn_map, &params)
         .unwrap();
 
-    let mut neeet = eval_postcontracted.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
+    let mut neeet = eval_postcontracted.map_coeff::<f64, _>(&|r| r.into());
 
-    // let mut neeet = neeet.compile("nested_evaluation.cpp", "libneval.so");
+    let mut neeet = neeet.compile("nested_evaluation", "libneval");
 
-    // let mut out = neeet.evaluate_complex(&values);
-    // out.contract();
+    let mut out = neeet.evaluate_complex(&values);
+    out.contract();
+
+    let o = out.result_tensor().unwrap().scalar().unwrap();
     // neet.common_pair_elimination(); //default needs to be derived on complex;
-    println!("Post contracted new{}", out.result_tensor().unwrap());
+    println!(
+        "Post contracted new{}",
+        out.result_tensor().unwrap().scalar().unwrap()
+    );
 }

@@ -658,6 +658,7 @@ pub trait HasStructure {
     type Scalar;
     fn structure<'a>(&'a self) -> &'a Self::Structure;
     fn mut_structure(&mut self) -> &mut Self::Structure;
+    fn scalar(self) -> Option<Self::Scalar>;
     fn set_structure_name<N>(&mut self, name: N)
     where
         Self::Structure: HasName<Name = N>,
@@ -2433,6 +2434,13 @@ impl<S: TensorStructure> HasStructure for TensorShell<S> {
     type Scalar = ();
     fn structure(&self) -> &S {
         &self.structure
+    }
+    fn scalar(self) -> Option<Self::Scalar> {
+        if self.structure.is_scalar() {
+            Some(())
+        } else {
+            None
+        }
     }
     fn mut_structure(&mut self) -> &mut S {
         &mut self.structure

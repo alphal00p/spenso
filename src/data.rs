@@ -410,6 +410,14 @@ where
     fn mut_structure(&mut self) -> &mut Self::Structure {
         &mut self.structure
     }
+
+    fn scalar(mut self) -> Option<Self::Scalar> {
+        if self.structure.is_scalar() {
+            self.elements.drain().next().map(|(_, v)| v)
+        } else {
+            None
+        }
+    }
 }
 
 impl<T, I> TracksCount for SparseTensor<T, I>
@@ -656,6 +664,13 @@ where
     }
     fn mut_structure(&mut self) -> &mut Self::Structure {
         &mut self.structure
+    }
+    fn scalar(mut self) -> Option<Self::Scalar> {
+        if self.is_scalar() {
+            self.data.drain(0..).next()
+        } else {
+            None
+        }
     }
 }
 
@@ -1183,7 +1198,6 @@ impl<T, S: TensorStructure> DataTensor<T, S> {
 impl<T, I> HasStructure for DataTensor<T, I>
 where
     I: TensorStructure,
-    T: Clone,
 {
     type Scalar = T;
     type Structure = I;
@@ -1197,6 +1211,13 @@ where
         match self {
             DataTensor::Dense(d) => d.mut_structure(),
             DataTensor::Sparse(s) => s.mut_structure(),
+        }
+    }
+
+    fn scalar(self) -> Option<Self::Scalar> {
+        match self {
+            DataTensor::Dense(d) => d.scalar(),
+            DataTensor::Sparse(s) => s.scalar(),
         }
     }
 }
@@ -1356,6 +1377,13 @@ where
         match self {
             NumTensor::Float(f) => f.mut_structure(),
             NumTensor::Complex(c) => c.mut_structure(),
+        }
+    }
+
+    fn scalar(self) -> Option<Self::Scalar> {
+        match self {
+            NumTensor::Float(f) => f.scalar().map(|x| Complex { re: x, im: 0. }),
+            NumTensor::Complex(c) => c.scalar(),
         }
     }
 }

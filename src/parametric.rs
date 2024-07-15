@@ -649,12 +649,19 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure> ParamOrConcrete
     }
 }
 
+#[derive(Clone, Debug, EnumTryAsInner)]
+#[derive_err(Debug)]
+pub enum ConcreteOrParam<C> {
+    Concrete(C),
+    Param(Atom),
+}
+
 impl<C, S> HasStructure for ParamOrConcrete<C, S>
 where
     C: HasStructure<Structure = S> + Clone,
     S: TensorStructure,
 {
-    type Scalar = C::Scalar;
+    type Scalar = ConcreteOrParam<C::Scalar>;
     type Structure = S;
 
     fn structure(&self) -> &Self::Structure {
@@ -668,6 +675,13 @@ where
         match self {
             ParamOrConcrete::Concrete(x) => x.mut_structure(),
             ParamOrConcrete::Param(x) => x.mut_structure(),
+        }
+    }
+
+    fn scalar(self) -> Option<Self::Scalar> {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.scalar().map(|x| ConcreteOrParam::Concrete(x)),
+            ParamOrConcrete::Param(x) => x.scalar().map(|x| ConcreteOrParam::Param(x)),
         }
     }
 }
@@ -864,11 +878,18 @@ pub enum RealOrComplexRef<'a, T> {
     Complex(&'a Complex<T>),
 }
 
+#[derive(Clone, Debug, EnumTryAsInner)]
+#[derive_err(Debug)]
+pub enum RealOrComplex<T> {
+    Real(T),
+    Complex(Complex<T>),
+}
+
 pub type MixedTensor<T = f64, S = NamedStructure<Symbol, Vec<Atom>>> =
     ParamOrConcrete<RealOrComplexTensor<T, S>, S>;
 
 impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
-    type Scalar = Complex<T>;
+    type Scalar = RealOrComplex<T>;
     type Structure = S;
     fn structure(&self) -> &Self::Structure {
         match self {
@@ -881,6 +902,13 @@ impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
         match self {
             RealOrComplexTensor::Real(r) => r.mut_structure(),
             RealOrComplexTensor::Complex(r) => r.mut_structure(),
+        }
+    }
+
+    fn scalar(self) -> Option<Self::Scalar> {
+        match self {
+            RealOrComplexTensor::Real(r) => r.scalar().map(|x| RealOrComplex::Real(x)),
+            RealOrComplexTensor::Complex(r) => r.scalar().map(|x| RealOrComplex::Complex(x)),
         }
     }
 }
@@ -1243,6 +1271,13 @@ where
             ParamTensor::Composite(t) => t.mut_structure(),
         }
     }
+
+    fn scalar(self) -> Option<Self::Scalar> {
+        match self {
+            ParamTensor::Param(t) => t.scalar(),
+            ParamTensor::Composite(t) => t.scalar(),
+        }
+    }
 }
 
 impl<S> TracksCount for ParamTensor<S>
@@ -1490,7 +1525,7 @@ pub struct EvalTreeTensor<T, S> {
 }
 
 impl<T, S: TensorStructure> HasStructure for EvalTreeTensor<T, S> {
-    type Scalar = T;
+    type Scalar = EvalTree<T>;
     type Structure = S;
 
     fn mut_structure(&mut self) -> &mut Self::Structure {
@@ -1499,6 +1534,14 @@ impl<T, S: TensorStructure> HasStructure for EvalTreeTensor<T, S> {
 
     fn structure<'a>(&'a self) -> &'a Self::Structure {
         &self.structure
+    }
+
+    fn scalar(self) -> Option<Self::Scalar> {
+        if self.is_scalar() {
+            Some(self.eval)
+        } else {
+            None
+        }
     }
 }
 

@@ -36,6 +36,14 @@ impl HasStructure for SymbolicTensor {
     fn mut_structure(&mut self) -> &mut Self::Structure {
         &mut self.structure
     }
+
+    fn scalar(self) -> Option<Self::Scalar> {
+        if self.is_scalar() {
+            Some(self.expression)
+        } else {
+            None
+        }
+    }
 }
 
 impl StructureContract for SymbolicTensor {

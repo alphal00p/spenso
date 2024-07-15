@@ -1,14 +1,14 @@
 use std::{fs::File, io::BufReader};
 
 use ahash::AHashMap;
+use approx::assert_relative_eq;
 use criterion::{criterion_group, criterion_main, Criterion};
-use spenso::{Complex, Levels, MixedTensor, SmartShadowStructure, SymbolicTensor, TensorNetwork};
+use spenso::{
+    Complex, HasStructure, Levels, MixedTensor, SmartShadowStructure, SymbolicTensor, TensorNetwork,
+};
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
-    domains::{
-        float::{NumericalFloatComparison, NumericalFloatLike},
-        rational::Rational,
-    },
+    domains::rational::Rational,
     evaluate::FunctionMap,
     id::Replacement,
     state::State,
@@ -105,74 +105,104 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut params = data_atom_map.0.clone();
     params.push(Atom::new_var(State::I));
 
+    let mut truth_net = network.clone();
+
+    truth_net.evaluate_complex(|i| i.into(), &const_map);
+    truth_net.contract();
+    let truth = truth_net
+        .result_tensor()
+        .unwrap()
+        .scalar()
+        .unwrap()
+        .try_into_concrete()
+        .unwrap()
+        .try_into_complex()
+        .unwrap();
+
     group.bench_function("3LPhysical postcontracted", |b| {
         b.iter_batched(
             || network.clone(),
             |mut network| {
                 network.evaluate_complex(|i| i.into(), &const_map);
                 network.contract();
+                assert_relative_eq!(
+                    truth,
+                    network
+                        .result_tensor()
+                        .unwrap()
+                        .scalar()
+                        .unwrap()
+                        .try_into_concrete()
+                        .unwrap()
+                        .try_into_complex()
+                        .unwrap()
+                );
             },
             criterion::BatchSize::SmallInput,
         )
     });
 
     let counting_network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
-        network.clone().cast();
-    let counting_network = counting_network.replace_all_multiple(&reps);
-    let postcontracted_new = counting_network.clone();
+        network.clone().cast().replace_all_multiple(&reps);
+    let mut values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
+    values.push(SymComplex::from(Complex::i()));
 
-    let mut eval_postcontracted = postcontracted_new
+    let mut postcontracted_eval_tree_tensor = counting_network
+        .clone()
         .to_fully_parametric()
         .eval_tree(|a| a.clone(), &fn_map, &params)
         .unwrap();
-    eval_postcontracted.horner_scheme();
-    // eval_postcontracted.common_pair_elimination();
-    eval_postcontracted.common_subexpression_elimination();
-    let mut neeet = eval_postcontracted.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
-    let mut values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
-    values.push(SymComplex::from(Complex::i()));
+    postcontracted_eval_tree_tensor.horner_scheme();
+    // postcontracted_eval_tree_tensor.common_pair_elimination();
+    postcontracted_eval_tree_tensor.common_subexpression_elimination();
+
+    let mut mapped_postcontracted_eval_tree_tensor =
+        postcontracted_eval_tree_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
+
     group.bench_function("3LPhysical postcontracted new", |b| {
         b.iter(|| {
-            let mut out = neeet.evaluate(&values);
+            let mut out = mapped_postcontracted_eval_tree_tensor.evaluate(&values);
             out.contract();
+            assert_relative_eq!(truth, out.result_tensor().unwrap().scalar().unwrap().into());
         })
     });
 
-    // println!("{}", network.dot());
     let mut levels: Levels<_, _> = counting_network.clone().into();
     let mut levels2 = levels.clone();
 
-    let mut evaluator_tensor = levels
+    let mut eval_tree_leveled_tensor = levels
         .contract(1, &mut fn_map)
         .eval_tree(|a| a.clone(), &fn_map, &params)
         .unwrap();
 
-    evaluator_tensor.horner_scheme();
-    evaluator_tensor.common_subexpression_elimination();
+    eval_tree_leveled_tensor.horner_scheme();
+    eval_tree_leveled_tensor.common_subexpression_elimination();
     // evaluator_tensor.common_pair_elimination();
 
-    let mut evaluator_tensor_depth2 = levels2
+    let mut eval_tree_leveled_tensor_depth2 = levels2
         .contract(2, &mut fn_map)
         .eval_tree(|a| a.clone(), &fn_map, &params)
         .unwrap();
 
-    evaluator_tensor_depth2.horner_scheme();
-    evaluator_tensor_depth2.common_subexpression_elimination();
-    // evaluator_tensor_depth2.common_pair_elimination();
+    eval_tree_leveled_tensor_depth2.horner_scheme();
+    eval_tree_leveled_tensor_depth2.common_subexpression_elimination();
+    // eval_tree_leveled_tensor_depth2.common_pair_elimination();
     // evaluator_tensor.evaluate(&values);
-    let mut neet = evaluator_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
+    let mut neet = eval_tree_leveled_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
-    let mut neet2 = evaluator_tensor_depth2.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
+    let mut neet2 = eval_tree_leveled_tensor_depth2.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
     group.bench_function("3LPhysical leveled", |b| {
         b.iter(|| {
-            let out = neet.evaluate(&values);
+            let out = neet.evaluate(&values).scalar().unwrap();
+            assert_relative_eq!(truth, out.into())
         })
     });
 
     group.bench_function("3LPhysical leveled 2", |b| {
         b.iter(|| {
-            let out = neet2.evaluate(&values);
+            let out = neet2.evaluate(&values).scalar().unwrap();
+            assert_relative_eq!(truth, out.into())
         })
     });
     network.contract();
@@ -182,40 +212,63 @@ fn criterion_benchmark(c: &mut Criterion) {
             || network.clone(),
             |mut network| {
                 network.evaluate_complex(|i| i.into(), &const_map);
+                assert_relative_eq!(
+                    truth,
+                    network
+                        .result_tensor()
+                        .unwrap()
+                        .scalar()
+                        .unwrap()
+                        .try_into_concrete()
+                        .unwrap()
+                        .try_into_complex()
+                        .unwrap()
+                );
             },
             criterion::BatchSize::SmallInput,
         )
     });
-    let mut eval_precontracted = counting_network
+
+    let mut contracted_counting_network = counting_network.clone();
+    contracted_counting_network.contract();
+
+    let mut precontracted_eval_tree_net = contracted_counting_network
         .clone()
         .to_fully_parametric()
         .eval_tree(|a| a.clone(), &fn_map, &params)
         .unwrap();
-    eval_precontracted.horner_scheme();
-    eval_precontracted.common_subexpression_elimination();
-    // eval_precontracted.common_pair_elimination();
+    precontracted_eval_tree_net.horner_scheme();
+    precontracted_eval_tree_net.common_subexpression_elimination();
+    // precontracted_eval_tree_net.common_pair_elimination();
 
-    let mut neeet = eval_precontracted.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
+    let mut mapped_precontracted_eval_tree_net =
+        precontracted_eval_tree_net.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
     group.bench_function("3LPhysical precontracted new optimized", |b| {
         b.iter(|| {
-            let out = neeet.evaluate(&values);
+            let out = mapped_precontracted_eval_tree_net.evaluate(&values);
+            assert_relative_eq!(truth, out.result_tensor().unwrap().scalar().unwrap().into());
         })
     });
 
-    let mut neeetlin = neeet.linearize(params.len());
+    let mut mapped_precontracted_eval_net =
+        mapped_precontracted_eval_tree_net.linearize(params.len());
 
     group.bench_function("3LPhysical precontracted new lin", |b| {
         b.iter(|| {
-            let out = neeetlin.evaluate(&values);
+            let out = mapped_precontracted_eval_net.evaluate(&values);
+            assert_relative_eq!(truth, out.result_tensor().unwrap().scalar().unwrap().into());
         })
     });
 
-    let mut neeet = eval_precontracted.compile("nested_evaluation.cpp", "libneval.so");
+    let mut neeet = precontracted_eval_tree_net
+        .map_coeff::<f64, _>(&|r| r.into())
+        .compile("nested_evaluation", "libneval");
 
     group.bench_function("3LPhysical precontracted new compiled", |b| {
         b.iter(|| {
             let out = neeet.evaluate_complex(&values);
+            assert_relative_eq!(truth, out.result_tensor().unwrap().scalar().unwrap().into());
         })
     });
 }

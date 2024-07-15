@@ -2,3 +2,5 @@
 /target
 /result
 .envrc
+*.cpp
+*.so

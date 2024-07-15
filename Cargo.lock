@@ -1119,7 +1119,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "symbolica"
 version = "0.7.0"
-source = "git+https://github.com/benruijl/symbolica?branch=nested_evaluate#41c0a3a8d876a8c67fc8b530f49c8b11e977fcc0"
+source = "git+https://github.com/benruijl/symbolica?branch=nested_evaluate#28c09c7f2b828f5e331e3724ec510a8fa9a2dc10"
 dependencies = [
  "ahash",
  "append-only-vec",

@@ -121,12 +121,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     let counting_network = counting_network.replace_all_multiple(&reps);
     let postcontracted_new = counting_network.clone();
 
-    let mut eval_postcontracted =
-        postcontracted_new
-            .to_fully_parametric()
-            .eval_tree(|a| a.clone(), &fn_map, &params);
+    let mut eval_postcontracted = postcontracted_new
+        .to_fully_parametric()
+        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .unwrap();
     eval_postcontracted.horner_scheme();
-    eval_postcontracted.common_pair_elimination();
+    // eval_postcontracted.common_pair_elimination();
+    eval_postcontracted.common_subexpression_elimination();
     let mut neeet = eval_postcontracted.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
     let mut values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
@@ -142,23 +143,23 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut levels: Levels<_, _> = counting_network.clone().into();
     let mut levels2 = levels.clone();
 
-    let mut evaluator_tensor =
-        levels
-            .contract(1, &mut fn_map)
-            .eval_tree(|a| a.clone(), &fn_map, &params);
+    let mut evaluator_tensor = levels
+        .contract(1, &mut fn_map)
+        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .unwrap();
 
     evaluator_tensor.horner_scheme();
-    // evaluator_tensor.common_pair_elimination();
     evaluator_tensor.common_subexpression_elimination();
+    // evaluator_tensor.common_pair_elimination();
 
-    let mut evaluator_tensor_depth2 =
-        levels2
-            .contract(2, &mut fn_map)
-            .eval_tree(|a| a.clone(), &fn_map, &params);
+    let mut evaluator_tensor_depth2 = levels2
+        .contract(2, &mut fn_map)
+        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .unwrap();
 
     evaluator_tensor_depth2.horner_scheme();
-    // evaluator_tensor.common_pair_elimination();
     evaluator_tensor_depth2.common_subexpression_elimination();
+    // evaluator_tensor_depth2.common_pair_elimination();
     // evaluator_tensor.evaluate(&values);
     let mut neet = evaluator_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
@@ -185,19 +186,36 @@ fn criterion_benchmark(c: &mut Criterion) {
             criterion::BatchSize::SmallInput,
         )
     });
-    let mut eval_precontracted =
-        counting_network
-            .clone()
-            .to_fully_parametric()
-            .eval_tree(|a| a.clone(), &fn_map, &params);
+    let mut eval_precontracted = counting_network
+        .clone()
+        .to_fully_parametric()
+        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .unwrap();
     eval_precontracted.horner_scheme();
     eval_precontracted.common_subexpression_elimination();
+    // eval_precontracted.common_pair_elimination();
 
     let mut neeet = eval_precontracted.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
-    group.bench_function("3LPhysical precontracted new", |b| {
+    group.bench_function("3LPhysical precontracted new optimized", |b| {
         b.iter(|| {
             let out = neeet.evaluate(&values);
+        })
+    });
+
+    let mut neeetlin = neeet.linearize(params.len());
+
+    group.bench_function("3LPhysical precontracted new lin", |b| {
+        b.iter(|| {
+            let out = neeetlin.evaluate(&values);
+        })
+    });
+
+    let mut neeet = eval_precontracted.compile("nested_evaluation.cpp", "libneval.so");
+
+    group.bench_function("3LPhysical precontracted new compiled", |b| {
+        b.iter(|| {
+            let out = neeet.evaluate_complex(&values);
         })
     });
 }

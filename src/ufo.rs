@@ -195,8 +195,8 @@ pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool) -> Atom {
             named_tensor(
                 "Metric".into(),
                 &[
-                    &bis(wrapped_to_four("mu_", wrapped)),
-                    &bis(wrapped_to_four("nu_", wrapped)),
+                    &lor(wrapped_to_four("mu_", wrapped)),
+                    &lor(wrapped_to_four("nu_", wrapped)),
                 ],
             ),
         ),
@@ -952,7 +952,7 @@ where
 
                 metric
             }
-            _ => panic!("Metric tensor must have Lorentz indices"),
+            _ => panic!("Metric tensor must have Lorentz indices not {}", reps[0]),
         }
     } else {
         panic!("Metric tensor must have equal indices")

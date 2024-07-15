@@ -4,13 +4,14 @@ use ahash::{AHashSet, HashMap};
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
 use symbolica::{
-    evaluate::{EvalTree, ExpressionEvaluator},
+    domains::float::NumericalFloatLike,
+    evaluate::{CompileOptions, CompiledEvaluator, EvalTree, ExpressionEvaluator},
     id::{Condition, MatchSettings, Pattern, Replacement, WildcardAndRestriction},
 };
 
 use crate::{
-    CastStructure, EvalTensor, EvalTreeTensor, FallibleMul, GetTensorData, HasTensorData,
-    TensorStructure,
+    CastStructure, CompiledEvalTensor, EvalTensor, EvalTreeTensor, FallibleMul, GetTensorData,
+    HasTensorData, TensorStructure,
 };
 
 #[cfg(feature = "shadowing")]
@@ -787,22 +788,23 @@ impl<S: TensorStructure + Clone> TensorNetwork<ParamTensor<S>, Atom> {
         coeff_map: F,
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>>
+    ) -> Result<TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>>, String>
     where
         S: TensorStructure,
     {
         let mut evaluate_net = TensorNetwork::new();
         for (_, t) in &self.graph.nodes {
-            let evaluated_tensor = t.eval_tree(coeff_map, fn_map, params);
+            let evaluated_tensor = t.eval_tree(coeff_map, fn_map, params)?;
             evaluate_net.push(evaluated_tensor);
         }
 
         evaluate_net.scalar = self
             .scalar
             .as_ref()
-            .map(|a| a.as_view().to_eval_tree(coeff_map, fn_map, params));
+            .map(|a| a.as_view().to_eval_tree(coeff_map, fn_map, params))
+            .transpose()?;
 
-        evaluate_net
+        Ok(evaluate_net)
     }
 
     pub fn evaluate<'a, D, F: Fn(&Rational) -> D + Copy>(
@@ -899,6 +901,96 @@ impl<T, S> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
             scalar: self.scalar.as_mut().map(|a| {
                 let mut out = [zero];
                 a.evaluate(params, &mut out);
+                let [o] = out;
+                o
+            }),
+        }
+    }
+
+    pub fn compile(
+        &self,
+        filename: &str,
+        library_name: &str,
+    ) -> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator>
+    where
+        T: NumericalFloatLike,
+        S: Clone,
+    {
+        let new_graph = self
+            .graph
+            .map_nodes_ref(|(_, x)| x.compile(filename, library_name));
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self.scalar.as_ref().map(|a| {
+                a.export_cpp(filename)
+                    .unwrap()
+                    .compile(library_name, CompileOptions::default())
+                    .unwrap()
+                    .load()
+                    .unwrap()
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<T, S> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<T>> {
+    pub fn evaluate(&mut self, params: &[T]) -> TensorNetwork<DataTensor<T, S>, T>
+    where
+        T: Real,
+        S: TensorStructure + Clone,
+    {
+        let zero = params[0].zero();
+        let new_graph = self.graph.map_nodes_ref_mut(|(_, x)| x.evaluate(params));
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self.scalar.as_mut().map(|a| {
+                let mut out = [zero];
+                a.evaluate_multiple(params, &mut out);
+                let [o] = out;
+                o
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<S> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator> {
+    pub fn evaluate_float(&mut self, params: &[f64]) -> TensorNetwork<DataTensor<f64, S>, f64>
+    where
+        S: TensorStructure + Clone,
+    {
+        let zero = params[0].zero();
+        let new_graph = self
+            .graph
+            .map_nodes_ref_mut(|(_, x)| x.evaluate_float(params));
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self.scalar.as_mut().map(|a| {
+                let mut out = [zero];
+                a.evaluate(params, &mut out);
+                let [o] = out;
+                o
+            }),
+        }
+    }
+
+    pub fn evaluate_complex(
+        &mut self,
+        params: &[SymComplex<f64>],
+    ) -> TensorNetwork<DataTensor<SymComplex<f64>, S>, SymComplex<f64>>
+    where
+        S: TensorStructure + Clone,
+    {
+        let zero = params[0].zero();
+        let new_graph = self
+            .graph
+            .map_nodes_ref_mut(|(_, x)| x.evaluate_complex(params));
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self.scalar.as_mut().map(|a| {
+                let mut out = [zero];
+                a.evaluate_complex(params, &mut out);
                 let [o] = out;
                 o
             }),

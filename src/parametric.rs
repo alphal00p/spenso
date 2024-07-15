@@ -408,7 +408,7 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
         coeff_map: F,
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> EvalTreeTensor<T, S> {
+    ) -> Result<EvalTreeTensor<T, S>, String> {
         match self {
             ParamTensor::Composite(x) => x.eval_tree(coeff_map, fn_map, params),
             ParamTensor::Param(x) => x.eval_tree(coeff_map, fn_map, params),
@@ -1099,7 +1099,7 @@ where
         coeff_map: F,
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> EvalTreeTensor<T, I> {
+    ) -> Result<EvalTreeTensor<T, I>, String> {
         EvalTreeTensor::from_data(self, coeff_map, fn_map, params)
     }
 
@@ -1131,7 +1131,7 @@ where
         coeff_map: F,
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> EvalTreeTensor<T, I> {
+    ) -> Result<EvalTreeTensor<T, I>, String> {
         EvalTreeTensor::from_sparse(self, coeff_map, fn_map, params)
     }
 
@@ -1177,7 +1177,7 @@ where
         coeff_map: F,
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> EvalTreeTensor<T, I> {
+    ) -> Result<EvalTreeTensor<T, I>, String> {
         EvalTreeTensor::from_dense(self, coeff_map, fn_map, params)
     }
 
@@ -1514,18 +1514,18 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         coeff_map: F,
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> Self
+    ) -> Result<Self, String>
     where
         T: Clone + Default + Debug + Hash + Ord,
     {
         let atomviews: Vec<AtomView> = dense.data.iter().map(|a| a.as_view()).collect();
-        let eval = AtomView::to_eval_tree_multiple(&atomviews, coeff_map, fn_map, params);
+        let eval = AtomView::to_eval_tree_multiple(&atomviews, coeff_map, fn_map, params)?;
 
-        EvalTreeTensor {
+        Ok(EvalTreeTensor {
             eval,
             indexmap: None,
             structure: dense.structure.clone(),
-        }
+        })
     }
 
     pub fn from_sparse<'a, F: Fn(&Rational) -> T + Copy>(
@@ -1533,7 +1533,7 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         coeff_map: F,
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> Self
+    ) -> Result<Self, String>
     where
         T: Clone + Default + Debug + Hash + Ord,
     {
@@ -1542,13 +1542,13 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
             .iter()
             .map(|(k, a)| (*k, a.as_view()))
             .unzip();
-        let eval = AtomView::to_eval_tree_multiple(&atomviews.1, coeff_map, fn_map, params);
+        let eval = AtomView::to_eval_tree_multiple(&atomviews.1, coeff_map, fn_map, params)?;
 
-        EvalTreeTensor {
+        Ok(EvalTreeTensor {
             eval,
             indexmap: Some(atomviews.0),
             structure: dense.structure.clone(),
-        }
+        })
     }
 
     pub fn from_data<'a, F: Fn(&Rational) -> T + Copy>(
@@ -1556,7 +1556,7 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         coeff_map: F,
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
-    ) -> Self
+    ) -> Result<Self, String>
     where
         S: TensorStructure,
         T: Clone + Default + Debug + Hash + Ord,
@@ -1680,7 +1680,7 @@ pub struct CompiledEvalTensor<S> {
 }
 
 impl<S> CompiledEvalTensor<S> {
-    pub fn evaluate(&self, params: &[f64]) -> DataTensor<f64, S>
+    pub fn evaluate_float(&self, params: &[f64]) -> DataTensor<f64, S>
     where
         S: TensorStructure + Clone,
     {
@@ -1695,6 +1695,25 @@ impl<S> CompiledEvalTensor<S> {
         } else {
             let mut out_data = DenseTensor::repeat(self.structure.clone(), 0.);
             self.eval.evaluate(params, &mut out_data.data);
+            DataTensor::Dense(out_data)
+        }
+    }
+
+    pub fn evaluate_complex(&self, params: &[SymComplex<f64>]) -> DataTensor<SymComplex<f64>, S>
+    where
+        S: TensorStructure + Clone,
+    {
+        if let Some(ref indexmap) = self.indexmap {
+            let mut elements: Vec<SymComplex<f64>> = vec![SymComplex::new_zero(); indexmap.len()];
+            self.eval.evaluate_complex(params, &mut elements);
+            let s = SparseTensor {
+                elements: indexmap.iter().cloned().zip(elements.drain(0..)).collect(),
+                structure: self.structure.clone(),
+            };
+            DataTensor::Sparse(s)
+        } else {
+            let mut out_data = DenseTensor::repeat(self.structure.clone(), SymComplex::new_zero());
+            self.eval.evaluate_complex(params, &mut out_data.data);
             DataTensor::Dense(out_data)
         }
     }

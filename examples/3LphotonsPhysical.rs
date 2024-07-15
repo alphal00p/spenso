@@ -38,15 +38,41 @@ fn main() {
     "*ϵ(0,aind(lor(4,45)))*ϵ(1,aind(lor(4,81)))*ϵbar(2,aind(lor(4,94)))*ϵbar(3,aind(lor(4,108)))*ϵbar(4,aind(lor(4,115)))*ϵbar(5,aind(lor(4,128)))"
 );
 
+    let exprnew=concat!("-64/729*ee^6*G^4",
+    "*(MT*id(aind(bis(4,105),bis(4,175)))+Q(15,aind(lor(4,192)))*γ(aind(lor(4,192),bis(4,105),bis(4,175))))",
+    "*(MT*id(aind(bis(4,137),bis(4,104)))+Q(6,aind(lor(4,182)))*γ(aind(lor(4,182),bis(4,137),bis(4,104))))",
+    "*(MT*id(aind(bis(4,141),bis(4,136)))+Q(7,aind(lor(4,183)))*γ(aind(lor(4,183),bis(4,141),bis(4,136))))",
+    "*(MT*id(aind(bis(4,146),bis(4,185)))+Q(8,aind(lor(4,184)))*γ(aind(lor(4,184),bis(4,146),bis(4,185))))",
+    "*(MT*id(aind(bis(4,151),bis(4,145)))+Q(9,aind(lor(4,186)))*γ(aind(lor(4,186),bis(4,151),bis(4,145))))",
+    "*(MT*id(aind(bis(4,156),bis(4,150)))+Q(10,aind(lor(4,187)))*γ(aind(lor(4,187),bis(4,156),bis(4,150))))",
+    "*(MT*id(aind(bis(4,161),bis(4,155)))+Q(11,aind(lor(4,188)))*γ(aind(lor(4,188),bis(4,161),bis(4,155))))",
+    "*(MT*id(aind(bis(4,166),bis(4,160)))+Q(12,aind(lor(4,189)))*γ(aind(lor(4,189),bis(4,166),bis(4,160))))",
+    "*(MT*id(aind(bis(4,171),bis(4,165)))+Q(13,aind(lor(4,190)))*γ(aind(lor(4,190),bis(4,171),bis(4,165))))",
+    "*(MT*id(aind(bis(4,176),bis(4,170)))+Q(14,aind(lor(4,191)))*γ(aind(lor(4,191),bis(4,176),bis(4,170))))",
+    "*Metric(aind(lor(4,167),lor(4,142)))*Metric(aind(lor(4,177),lor(4,152)))",
+    // "*T(aind(coad(8,142),cof(3,141),coaf(3,104)))*T(aind(coad(8,152),cof(3,151),coaf(3,150)))*T(aind(coad(8,167),cof(3,166),coaf(3,165)))*T(aind(coad(8,177),cof(3,176),coaf(3,175)))",
+    // "*id(aind(coaf(3,104),cof(3,105)))*id(aind(coaf(3,136),cof(3,137)))*id(aind(coaf(3,145),cof(3,146)))*id(aind(coaf(3,155),cof(3,156)))*id(aind(coaf(3,160),cof(3,161)))*id(aind(coaf(3,170),cof(3,171)))",
+    "*γ(aind(lor(4,106),bis(4,105),bis(4,104)))",
+    "*γ(aind(lor(4,138),bis(4,137),bis(4,136)))",
+    "*γ(aind(lor(4,142),bis(4,141),bis(4,104)))",
+    "*γ(aind(lor(4,147),bis(4,146),bis(4,145)))",
+    "*γ(aind(lor(4,152),bis(4,151),bis(4,150)))",
+    "*γ(aind(lor(4,157),bis(4,156),bis(4,155)))",
+    "*γ(aind(lor(4,162),bis(4,161),bis(4,160)))",
+    "*γ(aind(lor(4,167),bis(4,166),bis(4,165)))",
+    "*γ(aind(lor(4,172),bis(4,171),bis(4,170)))",
+    "*γ(aind(lor(4,177),bis(4,176),bis(4,175)))",
+    "*ϵ(0,aind(lor(4,106)))*ϵ(1,aind(lor(4,138)))*ϵbar(2,aind(lor(4,147)))*ϵbar(3,aind(lor(4,157)))*ϵbar(4,aind(lor(4,162)))*ϵbar(5,aind(lor(4,172)))");
+
     let atom = Atom::parse(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
     let network = sym_tensor.to_network().unwrap();
 
-    for (n, t) in &network.graph.nodes {
-        println!("{}", t)
-    }
+    // for (n, t) in &network.graph.nodes {
+    //     println!("{}", t)
+    // }
 
     // for p in &network.params {
     //     println!("Param {}", p);
@@ -164,14 +190,15 @@ fn main() {
     let mut params = data_atom_map.0;
     params.push(Atom::new_var(State::I));
 
-    let mut evaluator_tensor =
-        levels
-            .contract(1, &mut fn_map)
-            .eval_tree(|a| a.clone(), &fn_map, &params);
+    let mut evaluator_tensor = levels
+        .contract(1, &mut fn_map)
+        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .unwrap();
 
     evaluator_tensor.horner_scheme();
-    // evaluator_tensor.common_pair_elimination();
     evaluator_tensor.common_subexpression_elimination();
+    // evaluator_tensor.common_pair_elimination();
+    // let evaluator_tensor = evaluator_tensor.linearize(params.len());
     let mut neet = evaluator_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
     let mut ev = neet.linearize(params.len());
 
@@ -183,12 +210,14 @@ fn main() {
 
     let mut precontracted_new = counting_network.clone();
     precontracted_new.contract();
-    let eval_precontracted =
-        precontracted_new
-            .to_fully_parametric()
-            .eval_tree(|a| a.clone(), &fn_map, &params);
+    let eval_precontracted = precontracted_new
+        .to_fully_parametric()
+        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .unwrap();
 
-    let mut neeet = eval_precontracted.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
+    let mut neeet = eval_precontracted
+        .map_coeff::<SymComplex<f64>, _>(&|r| r.into())
+        .linearize(params.len());
 
     let out = neeet.evaluate(&values);
 
@@ -196,15 +225,17 @@ fn main() {
 
     let postcontracted_new = counting_network.clone();
 
-    let eval_postcontracted =
-        postcontracted_new
-            .to_fully_parametric()
-            .eval_tree(|a| a.clone(), &fn_map, &params);
+    let eval_postcontracted = postcontracted_new
+        .to_fully_parametric()
+        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .unwrap();
 
     let mut neeet = eval_postcontracted.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
-    let mut out = neeet.evaluate(&values);
-    out.contract();
+    // let mut neeet = neeet.compile("nested_evaluation.cpp", "libneval.so");
+
+    // let mut out = neeet.evaluate_complex(&values);
+    // out.contract();
     // neet.common_pair_elimination(); //default needs to be derived on complex;
     println!("Post contracted new{}", out.result_tensor().unwrap());
 }

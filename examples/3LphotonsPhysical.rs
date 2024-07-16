@@ -39,7 +39,7 @@ fn main() {
     "*ϵ(0,aind(lor(4,45)))*ϵ(1,aind(lor(4,81)))*ϵbar(2,aind(lor(4,94)))*ϵbar(3,aind(lor(4,108)))*ϵbar(4,aind(lor(4,115)))*ϵbar(5,aind(lor(4,128)))"
 );
 
-    let exprnew=concat!("-64/729*ee^6*G^4",
+    let expr=concat!("-64/729*ee^6*G^4",
     "*(MT*id(aind(bis(4,105),bis(4,175)))+Q(15,aind(lor(4,192)))*γ(aind(lor(4,192),bis(4,105),bis(4,175))))",
     "*(MT*id(aind(bis(4,137),bis(4,104)))+Q(6,aind(lor(4,182)))*γ(aind(lor(4,182),bis(4,137),bis(4,104))))",
     "*(MT*id(aind(bis(4,141),bis(4,136)))+Q(7,aind(lor(4,183)))*γ(aind(lor(4,183),bis(4,141),bis(4,136))))",
@@ -81,167 +81,167 @@ fn main() {
 
     println!("Network dot: {}", network.dot());
 
-    let file = File::open("./examples/data.json").unwrap();
-    let reader = BufReader::new(file);
+    // let file = File::open("./examples/data.json").unwrap();
+    // let reader = BufReader::new(file);
 
-    let data_string_map: AHashMap<String, Complex<f64>> = serde_json::from_reader(reader).unwrap();
+    // let data_string_map: AHashMap<String, Complex<f64>> = serde_json::from_reader(reader).unwrap();
 
-    let file = File::open("./examples/const.json").unwrap();
-    let reader = BufReader::new(file);
+    // let file = File::open("./examples/const.json").unwrap();
+    // let reader = BufReader::new(file);
 
-    let const_string_map: AHashMap<String, Complex<f64>> = serde_json::from_reader(reader).unwrap();
+    // let const_string_map: AHashMap<String, Complex<f64>> = serde_json::from_reader(reader).unwrap();
 
-    let mut data_atom_map: (Vec<Atom>, Vec<Complex<f64>>) = data_string_map
-        .into_iter()
-        .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
-        .unzip();
+    // let mut data_atom_map: (Vec<Atom>, Vec<Complex<f64>>) = data_string_map
+    //     .into_iter()
+    //     .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
+    //     .unzip();
 
-    let mut const_atom_map: AHashMap<Symbol, Complex<f64>> = const_string_map
-        .into_iter()
-        .map(|(k, v)| (State::get_symbol(&k), v))
-        .collect();
+    // let mut const_atom_map: AHashMap<Symbol, Complex<f64>> = const_string_map
+    //     .into_iter()
+    //     .map(|(k, v)| (State::get_symbol(&k), v))
+    //     .collect();
 
-    let i = Atom::new_var(State::I);
-    const_atom_map.insert(State::I, Complex::i());
+    // let i = Atom::new_var(State::I);
+    // const_atom_map.insert(State::I, Complex::i());
 
-    let mut const_map: AHashMap<AtomView<'_>, symbolica::domains::float::Complex<f64>> =
-        data_atom_map
-            .0
-            .iter()
-            .zip(data_atom_map.1.iter())
-            .map(|(k, v)| (k.as_view(), (*v).into()))
-            .collect();
+    // let mut const_map: AHashMap<AtomView<'_>, symbolica::domains::float::Complex<f64>> =
+    //     data_atom_map
+    //         .0
+    //         .iter()
+    //         .zip(data_atom_map.1.iter())
+    //         .map(|(k, v)| (k.as_view(), (*v).into()))
+    //         .collect();
 
-    let mut constvec = AHashMap::new();
+    // let mut constvec = AHashMap::new();
 
-    for (k, v) in const_atom_map.iter() {
-        constvec.insert(Atom::new_var(*k), *v);
-    }
-    for (k, &v) in constvec.iter() {
-        const_map.insert(k.as_view(), v.into());
-    }
+    // for (k, v) in const_atom_map.iter() {
+    //     constvec.insert(Atom::new_var(*k), *v);
+    // }
+    // for (k, &v) in constvec.iter() {
+    //     const_map.insert(k.as_view(), v.into());
+    // }
 
-    let mut precontracted = network.clone();
-    precontracted.contract();
-    precontracted.evaluate_complex(|i| i.into(), &const_map);
+    // let mut precontracted = network.clone();
+    // precontracted.contract();
+    // precontracted.evaluate_complex(|i| i.into(), &const_map);
 
-    println!(
-        "Pre contracted{}",
-        precontracted
-            .result_tensor()
-            .unwrap()
-            .try_into_concrete()
-            .unwrap()
-            .try_into_complex()
-            .unwrap()
-            .try_into_dense()
-            .unwrap()
-    );
+    // println!(
+    //     "Pre contracted{}",
+    //     precontracted
+    //         .result_tensor()
+    //         .unwrap()
+    //         .try_into_concrete()
+    //         .unwrap()
+    //         .try_into_complex()
+    //         .unwrap()
+    //         .try_into_dense()
+    //         .unwrap()
+    // );
 
-    let mut postcontracted = network.clone();
-    postcontracted.evaluate_complex(|i| i.into(), &const_map);
-    postcontracted.contract();
+    // let mut postcontracted = network.clone();
+    // postcontracted.evaluate_complex(|i| i.into(), &const_map);
+    // postcontracted.contract();
 
-    println!(
-        "Post contracted{}",
-        postcontracted
-            .result_tensor()
-            .unwrap()
-            .try_into_concrete()
-            .unwrap()
-            .try_into_complex()
-            .unwrap()
-            .try_into_dense()
-            .unwrap()
-    );
+    // println!(
+    //     "Post contracted{}",
+    //     postcontracted
+    //         .result_tensor()
+    //         .unwrap()
+    //         .try_into_concrete()
+    //         .unwrap()
+    //         .try_into_complex()
+    //         .unwrap()
+    //         .try_into_dense()
+    //         .unwrap()
+    // );
 
-    let counting_network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
-        network.clone().cast();
+    // let counting_network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
+    //     network.clone().cast();
 
-    let mut replacements = vec![];
+    // let mut replacements = vec![];
 
-    let mut fn_map: FunctionMap<Rational> = FunctionMap::new();
+    // let mut fn_map: FunctionMap<Rational> = FunctionMap::new();
 
-    for (k, v) in const_atom_map.iter() {
-        let name_re = Atom::new_var(State::get_symbol(k.to_string() + "_re"));
-        let name_im = Atom::new_var(State::get_symbol(k.to_string() + "_im"));
-        let i = Atom::new_var(State::I);
-        let pat = &name_re + i * &name_im;
-        replacements.push((Atom::new_var(*k).into_pattern(), pat.into_pattern()));
+    // for (k, v) in const_atom_map.iter() {
+    //     let name_re = Atom::new_var(State::get_symbol(k.to_string() + "_re"));
+    //     let name_im = Atom::new_var(State::get_symbol(k.to_string() + "_im"));
+    //     let i = Atom::new_var(State::I);
+    //     let pat = &name_re + i * &name_im;
+    //     replacements.push((Atom::new_var(*k).into_pattern(), pat.into_pattern()));
 
-        fn_map.add_constant(name_re.into(), Rational::from_f64(v.re));
-        fn_map.add_constant(name_im.into(), Rational::from_f64(v.im));
-    }
-    let reps: Vec<Replacement> = replacements
-        .iter()
-        .map(|(pat, rhs)| Replacement::new(&pat, &rhs))
-        .collect();
+    //     fn_map.add_constant(name_re.into(), Rational::from_f64(v.re));
+    //     fn_map.add_constant(name_im.into(), Rational::from_f64(v.im));
+    // }
+    // let reps: Vec<Replacement> = replacements
+    //     .iter()
+    //     .map(|(pat, rhs)| Replacement::new(&pat, &rhs))
+    //     .collect();
 
-    println!(
-        "scalar: {}",
-        counting_network
-            .replace_all_multiple(&reps)
-            .scalar
-            .as_ref()
-            .unwrap()
-    );
+    // println!(
+    //     "scalar: {}",
+    //     counting_network
+    //         .replace_all_multiple(&reps)
+    //         .scalar
+    //         .as_ref()
+    //         .unwrap()
+    // );
 
-    let counting_network = counting_network.replace_all_multiple(&reps);
-    let mut levels: Levels<_, _> = counting_network.replace_all_multiple(&reps).into();
-    let mut params = data_atom_map.0;
-    params.push(Atom::new_var(State::I));
+    // let counting_network = counting_network.replace_all_multiple(&reps);
+    // let mut levels: Levels<_, _> = counting_network.replace_all_multiple(&reps).into();
+    // let mut params = data_atom_map.0;
+    // params.push(Atom::new_var(State::I));
 
-    let mut evaluator_tensor = levels
-        .contract(1, &mut fn_map)
-        .eval_tree(|a| a.clone(), &fn_map, &params)
-        .unwrap();
+    // let mut evaluator_tensor = levels
+    //     .contract(1, &mut fn_map)
+    //     .eval_tree(|a| a.clone(), &fn_map, &params)
+    //     .unwrap();
 
-    evaluator_tensor.horner_scheme();
-    evaluator_tensor.common_subexpression_elimination();
-    // evaluator_tensor.common_pair_elimination();
-    // let evaluator_tensor = evaluator_tensor.linearize(params.len());
-    let mut neet = evaluator_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
-    let mut ev = neet.linearize(params.len());
+    // evaluator_tensor.horner_scheme();
+    // evaluator_tensor.common_subexpression_elimination();
+    // // evaluator_tensor.common_pair_elimination();
+    // // let evaluator_tensor = evaluator_tensor.linearize(params.len());
+    // let mut neet = evaluator_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
+    // let mut ev = neet.linearize(params.len());
 
-    let mut values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
-    values.push(SymComplex::from(Complex::i()));
-    let out = ev.evaluate(&values);
+    // let mut values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
+    // values.push(SymComplex::from(Complex::i()));
+    // let out = ev.evaluate(&values);
 
-    println!("{}", out);
+    // println!("{}", out);
 
-    let mut precontracted_new = counting_network.clone();
-    precontracted_new.contract();
-    let eval_precontracted = precontracted_new
-        .to_fully_parametric()
-        .eval_tree(|a| a.clone(), &fn_map, &params)
-        .unwrap();
+    // let mut precontracted_new = counting_network.clone();
+    // precontracted_new.contract();
+    // let eval_precontracted = precontracted_new
+    //     .to_fully_parametric()
+    //     .eval_tree(|a| a.clone(), &fn_map, &params)
+    //     .unwrap();
 
-    let mut neeet = eval_precontracted
-        .map_coeff::<SymComplex<f64>, _>(&|r| r.into())
-        .linearize(params.len());
+    // let mut neeet = eval_precontracted
+    //     .map_coeff::<SymComplex<f64>, _>(&|r| r.into())
+    //     .linearize(params.len());
 
-    let out = neeet.evaluate(&values);
+    // let out = neeet.evaluate(&values);
 
-    println!("Pre contracted new{}", out.result_tensor().unwrap());
+    // println!("Pre contracted new{}", out.result_tensor().unwrap());
 
-    let postcontracted_new = counting_network.clone();
+    // let postcontracted_new = counting_network.clone();
 
-    let eval_postcontracted = postcontracted_new
-        .to_fully_parametric()
-        .eval_tree(|a| a.clone(), &fn_map, &params)
-        .unwrap();
+    // let eval_postcontracted = postcontracted_new
+    //     .to_fully_parametric()
+    //     .eval_tree(|a| a.clone(), &fn_map, &params)
+    //     .unwrap();
 
-    let mut neeet = eval_postcontracted.map_coeff::<f64, _>(&|r| r.into());
+    // let mut neeet = eval_postcontracted.map_coeff::<f64, _>(&|r| r.into());
 
-    let mut neeet = neeet.compile("nested_evaluation", "libneval");
+    // let mut neeet = neeet.compile("nested_evaluation", "libneval");
 
-    let mut out = neeet.evaluate_complex(&values);
-    out.contract();
+    // let mut out = neeet.evaluate_complex(&values);
+    // out.contract();
 
-    let o = out.result_tensor().unwrap().scalar().unwrap();
-    // neet.common_pair_elimination(); //default needs to be derived on complex;
-    println!(
-        "Post contracted new{}",
-        out.result_tensor().unwrap().scalar().unwrap()
-    );
+    // let o = out.result_tensor().unwrap().scalar().unwrap();
+    // // neet.common_pair_elimination(); //default needs to be derived on complex;
+    // println!(
+    //     "Post contracted new{}",
+    //     out.result_tensor().unwrap().scalar().unwrap()
+    // );
 }

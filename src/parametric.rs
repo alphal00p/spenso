@@ -1,12 +1,11 @@
 extern crate derive_more;
 
-use std::fmt::{format, write, Debug, Display};
+use std::fmt::{Debug, Display};
 
 use ahash::{AHashMap, HashMap};
 
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
-use rand::seq::index;
 
 use crate::{
     CastStructure, Complex, ContractableWith, ContractionError, ExpandedIndex, FallibleAddAssign,

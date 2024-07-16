@@ -24,7 +24,7 @@ use std::{
 #[cfg(feature = "shadowing")]
 use crate::{
     atomic_expanded_label_id, ExpandedCoefficent, FlatCoefficent, IntoArgs, IntoSymbol,
-    ParamTensor, ShadowMapping, Shadowable,
+    ShadowMapping, Shadowable,
 };
 #[cfg(feature = "shadowing")]
 use std::collections::HashMap;

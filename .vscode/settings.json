@@ -10,7 +10,8 @@
     "contraction",
     "symbolica",
     "clippy",
-    "build"
+    "build",
+    "gammaloop"
   ],
   "github.copilot.enable": {
     "quarto": false,

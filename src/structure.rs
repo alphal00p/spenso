@@ -636,6 +636,14 @@ impl Slot {
             value_builder.add_arg(Atom::new_num(usize::from(self.index) as i64).as_atom_view());
         value_builder.finish()
     }
+
+    #[cfg(feature = "shadowing")]
+    pub fn to_symbolic_wrapped(&self) -> Atom {
+        let mut value_builder = self.representation.to_fnbuilder();
+        let id = Atom::parse(&format!("indexid({})", self.index.0)).unwrap();
+        value_builder = value_builder.add_arg(&id);
+        value_builder.finish()
+    }
 }
 
 impl std::fmt::Display for Slot {

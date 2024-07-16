@@ -16,9 +16,9 @@ use crate::{
 
 #[cfg(feature = "shadowing")]
 use crate::{
-    AtomViewOrConcrete, Complex, DataIterator, DataTensor, FallibleAdd, IntoArgs, IntoSymbol,
-    IteratableTensor, MixedTensor, NamedStructure, ParamTensor, RealOrComplexTensor, RefZero,
-    ShadowMapping, Shadowable, StructureContract, ToSymbolic, TrySmallestUpgrade,
+    AtomViewOrConcrete, Complex, DataIterator, DataTensor, FallibleAdd, IntoArgs, IteratableTensor,
+    MixedTensor, NamedStructure, ParamTensor, RealOrComplexTensor, RefZero, ShadowMapping,
+    Shadowable, StructureContract, ToSymbolic, TrySmallestUpgrade,
 };
 
 #[cfg(feature = "shadowing")]

@@ -11,7 +11,7 @@ use symbolica::{
 
 use crate::{
     CastStructure, CompiledEvalTensor, EvalTensor, EvalTreeTensor, FallibleMul, GetTensorData,
-    HasTensorData, TensorStructure,
+    HasTensorData, IntoSymbol, TensorStructure,
 };
 
 #[cfg(feature = "shadowing")]
@@ -1168,6 +1168,51 @@ where
 impl<T, S> TensorNetwork<T, S> {
     pub fn dot(&self) -> std::string::String {
         self.graph.dot()
+    }
+}
+
+impl<T: HasName<Name: IntoSymbol>, S> TensorNetwork<T, S> {
+    pub fn dot_nodes(&self) -> std::string::String {
+        let mut out = "graph {\n".to_string();
+        out.push_str("  node [shape=circle,height=0.1,label=\"\"];  overlap=\"scale\";");
+
+        for (i, n) in &self.graph.nodes {
+            out.push_str(&format!(
+                "\n {} [label=\"{}\"] ",
+                i.data().as_ffi(),
+                n.name()
+                    .map(|x| x.into_symbol().to_string())
+                    .unwrap_or("".into())
+            ));
+        }
+        for (i, _) in &self.graph.neighbors {
+            match i.cmp(&self.graph.involution[i]) {
+                std::cmp::Ordering::Greater => {
+                    out.push_str(&format!(
+                        "\n {} -- {} [label=\" {} \"];",
+                        self.graph.nodemap[i].data().as_ffi(),
+                        self.graph.nodemap[self.graph.involution[i]].data().as_ffi(),
+                        self.graph.edges[i]
+                    ));
+                }
+                std::cmp::Ordering::Equal => {
+                    out.push_str(&format!(
+                        " \n ext{} [shape=none, label=\"\"];",
+                        i.data().as_ffi()
+                    ));
+                    out.push_str(&format!(
+                        "\n {} -- ext{} [label =\" {}\"];",
+                        self.graph.nodemap[i].data().as_ffi(),
+                        i.data().as_ffi(),
+                        self.graph.edges[i]
+                    ));
+                }
+                _ => {}
+            }
+        }
+
+        out += "}";
+        out
     }
 }
 

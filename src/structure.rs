@@ -13,6 +13,7 @@ use derive_more::Rem;
 use derive_more::RemAssign;
 use derive_more::Sub;
 use derive_more::SubAssign;
+use duplicate::duplicate;
 use indexmap::IndexMap;
 use serde::Deserialize;
 use serde::Serialize;
@@ -22,6 +23,7 @@ use smartstring::SmartString;
 use std::fmt::Debug;
 #[cfg(feature = "shadowing")]
 use std::fmt::Display;
+use std::marker::PhantomData;
 use std::ops::Deref;
 
 #[cfg(feature = "shadowing")]
@@ -274,6 +276,343 @@ pub enum Representation {
     ColorSextet(Dimension),
     /// Represents a Color Anti-Sextet space of the given dimension
     ColorAntiSextet(Dimension),
+}
+
+pub trait Rep: Copy {
+    type Dual: Rep<Dual = Self>;
+    const NAME: &'static str;
+    fn dual(self) -> Self::Dual;
+
+    fn is_neg(i: usize) -> bool;
+
+    #[allow(clippy::cast_possible_wrap)]
+    #[cfg(feature = "shadowing")]
+    fn to_fnbuilder() -> FunctionBuilder {
+        FunctionBuilder::new(State::get_symbol(&Self::name()))
+    }
+
+    fn name() -> String {
+        Self::NAME.into()
+    }
+
+    fn new_slot(self, dim: Dimension, aind: AbstractIndex) -> GenSlot<Self>
+    where
+        Self: Sized,
+    {
+        GenSlot {
+            rep: self.new_dimed_rep(dim),
+            aind,
+        }
+    }
+
+    fn new_dimed_rep(self, dim: Dimension) -> Repr<Self>
+    where
+        Self: Sized,
+    {
+        Repr {
+            dim,
+            rep: PhantomData,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Dual<T> {
+    inner: T,
+}
+
+impl<T: Rep<Dual = Dual<T>>> Rep for Dual<T> {
+    type Dual = T;
+    const NAME: &'static str = T::NAME;
+    fn dual(self) -> Self::Dual {
+        self.inner
+    }
+    fn is_neg(i: usize) -> bool {
+        T::is_neg(i)
+    }
+}
+
+duplicate! {
+   [isnotselfdual isneg constname;
+    [Lorentz] [i > 0] ["lor"];
+    [SpinFundamental] [false] ["spin"];
+    [ColorFundamental] [false] ["cof"];
+    [ColorSextet] [false] ["cos"]]
+    #[derive(Debug, Clone, Copy)]
+
+    pub struct isnotselfdual {}
+    #[allow(unused_variables)]
+    impl Rep for isnotselfdual {
+        type Dual = Dual<isnotselfdual>;
+        const NAME: &'static str = constname;
+        fn dual(self) -> Self::Dual {
+            Dual { inner: self }
+        }
+        fn is_neg(i: usize) -> bool {
+            isneg
+        }
+
+    }
+
+
+    impl<B: IsAbstractSlot<Dual = B>> From<GenSlot<isnotselfdual>> for RecSlotEnum<DualPair<isnotselfdual>, B> {
+        fn from(value: GenSlot<isnotselfdual>) -> Self {
+            RecSlotEnum::A(value.dual_pair())
+        }
+    }
+
+
+    impl<B: IsAbstractSlot<Dual = B>> From<GenSlot<Dual<isnotselfdual>>> for RecSlotEnum<DualPair<isnotselfdual>, B> {
+        fn from(value: GenSlot<Dual<isnotselfdual>>) -> Self {
+            RecSlotEnum::A(value.pair())
+        }
+    }
+}
+
+duplicate! {
+   [isselfdual constname;
+    [Euclidean] ["euc"];
+    [Bispinor] ["bis"];
+    [ColorAdjoint] ["coad"]]
+    #[derive(Debug, Clone, Copy)]
+    pub struct isselfdual {}
+
+    impl Rep for isselfdual {
+        const NAME: &'static str = constname;
+        type Dual = isselfdual;
+        fn dual(self) -> Self::Dual {
+            self
+        }
+
+        fn is_neg(i: usize) -> bool {
+            false
+        }
+    }
+
+    impl<B: IsAbstractSlot<Dual = B>> From<GenSlot<isselfdual>> for RecSlotEnum<isselfdual, B> {
+        fn from(value: GenSlot<isselfdual>) -> Self {
+            RecSlotEnum::A(value)
+        }
+    }
+
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Repr<T: Rep> {
+    pub dim: Dimension,
+    rep: PhantomData<T>,
+}
+
+impl<T: Rep> Repr<T> {
+    pub fn dual(self) -> Repr<T::Dual> {
+        Repr {
+            dim: self.dim,
+            rep: PhantomData,
+        }
+    }
+
+    pub fn dual_pair(self) -> Repr<DualPair<T>>
+    where
+        T: Rep<Dual = Dual<T>>,
+    {
+        Repr {
+            dim: self.dim,
+            rep: PhantomData,
+        }
+    }
+
+    pub fn new_slot(&self, aind: AbstractIndex) -> GenSlot<T> {
+        GenSlot { aind, rep: *self }
+    }
+}
+
+impl<T: Rep<Dual = Dual<T>>> Repr<Dual<T>> {
+    pub fn pair(self) -> Repr<DualPair<T>> {
+        Repr {
+            dim: self.dim,
+            rep: PhantomData,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct GenSlot<T: Rep> {
+    pub aind: AbstractIndex,
+    rep: Repr<T>,
+}
+
+impl<T: Rep> GenSlot<T> {
+    pub fn dual_pair(self) -> GenSlot<DualPair<T>>
+    where
+        T: Rep<Dual = Dual<T>>,
+    {
+        GenSlot {
+            aind: self.aind,
+            rep: self.rep.dual_pair(),
+        }
+    }
+}
+
+impl<T: Rep<Dual = Dual<T>>> GenSlot<Dual<T>> {
+    pub fn pair(self) -> GenSlot<DualPair<T>> {
+        GenSlot {
+            aind: self.aind,
+            rep: self.rep.pair(),
+        }
+    }
+}
+
+pub trait IsAbstractSlot: Copy {
+    type Dual;
+    fn dim(&self) -> Dimension;
+    fn aind(&self) -> AbstractIndex;
+    fn dual(&self) -> Self::Dual;
+    fn matches<O: IsAbstractSlot<Dual = Self>>(&self, other: &O) -> bool {
+        self.dim() == other.dim() && self.aind() == other.aind()
+    }
+}
+
+impl<T: Rep> IsAbstractSlot for GenSlot<T> {
+    type Dual = GenSlot<T::Dual>;
+    fn dim(&self) -> Dimension {
+        self.rep.dim
+    }
+    fn aind(&self) -> AbstractIndex {
+        self.aind
+    }
+    fn dual(&self) -> Self::Dual {
+        GenSlot {
+            rep: self.rep.dual(),
+            aind: self.aind,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum DualPair<R: Rep> {
+    Rep(R),
+    DualRep(Dual<R>),
+}
+
+impl<R: Rep<Dual = Dual<R>>> Rep for DualPair<R> {
+    type Dual = DualPair<R>;
+    const NAME: &'static str = R::NAME;
+    fn dual(self) -> Self::Dual {
+        match self {
+            Self::Rep(r) => Self::DualRep(r.dual()),
+            Self::DualRep(d) => Self::Rep(d.dual()),
+        }
+    }
+    fn is_neg(i: usize) -> bool {
+        R::is_neg(i)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum RecSlotEnum<A: Rep, B: IsAbstractSlot<Dual = B>> {
+    A(GenSlot<A>),
+    B(B),
+}
+
+impl<A: Rep<Dual = A>, B: IsAbstractSlot<Dual = B>> IsAbstractSlot for RecSlotEnum<A, B> {
+    type Dual = Self;
+    fn dim(&self) -> Dimension {
+        match self {
+            Self::A(a) => a.dim(),
+            Self::B(b) => b.dim(),
+        }
+    }
+    fn aind(&self) -> AbstractIndex {
+        match self {
+            Self::A(a) => a.aind,
+            Self::B(b) => b.aind(),
+        }
+    }
+
+    fn dual(&self) -> Self::Dual {
+        match self {
+            Self::A(a) => Self::A(a.dual()),
+            Self::B(b) => Self::B(b.dual()),
+        }
+    }
+
+    fn matches<O: IsAbstractSlot<Dual = Self>>(&self, other: &O) -> bool {
+        match (self, other.dual().dual()) {
+            (Self::A(a), Self::A(b)) => a.matches(&b),
+            (Self::B(a), Self::B(b)) => a.matches(&b),
+            _ => false,
+        }
+    }
+}
+
+pub type NewSlots = RecSlotEnum<
+    DualPair<Lorentz>,
+    RecSlotEnum<
+        DualPair<SpinFundamental>,
+        RecSlotEnum<
+            DualPair<ColorFundamental>,
+            RecSlotEnum<
+                DualPair<ColorSextet>,
+                RecSlotEnum<Euclidean, RecSlotEnum<Bispinor, GenSlot<ColorAdjoint>>>,
+            >,
+        >,
+    >,
+>;
+
+// pub type NewNewSlot = RecSlotEnum<DualPair<iwffnfby>, NewSlots>;
+
+impl From<GenSlot<ColorAdjoint>> for NewSlots {
+    fn from(value: GenSlot<ColorAdjoint>) -> Self {
+        value.into()
+    }
+}
+
+impl From<GenSlot<Bispinor>> for NewSlots {
+    fn from(value: GenSlot<Bispinor>) -> Self {
+        value.into()
+    }
+}
+
+impl From<GenSlot<Euclidean>> for NewSlots {
+    fn from(value: GenSlot<Euclidean>) -> Self {
+        value.into()
+    }
+}
+
+impl From<GenSlot<SpinFundamental>> for NewSlots {
+    fn from(value: GenSlot<SpinFundamental>) -> Self {
+        value.into()
+    }
+}
+
+impl From<GenSlot<Dual<SpinFundamental>>> for NewSlots {
+    fn from(value: GenSlot<Dual<SpinFundamental>>) -> Self {
+        value.into()
+    }
+}
+
+impl From<GenSlot<ColorFundamental>> for NewSlots {
+    fn from(value: GenSlot<ColorFundamental>) -> Self {
+        value.into()
+    }
+}
+
+impl From<GenSlot<Dual<ColorFundamental>>> for NewSlots {
+    fn from(value: GenSlot<Dual<ColorFundamental>>) -> Self {
+        value.into()
+    }
+}
+
+impl From<GenSlot<ColorSextet>> for NewSlots {
+    fn from(value: GenSlot<ColorSextet>) -> Self {
+        value.into()
+    }
+}
+
+impl From<GenSlot<Dual<ColorSextet>>> for NewSlots {
+    fn from(value: GenSlot<Dual<ColorSextet>>) -> Self {
+        value.into()
+    }
 }
 
 impl Representation {

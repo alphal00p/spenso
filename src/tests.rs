@@ -1247,7 +1247,39 @@ fn test_fallible_mul() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn get_license_key() {
+    use gat_lending_iterator::Enumerate;
+    use serde::de::IntoDeserializer;
     use symbolica::LicenseManager;
 
+    use crate::{
+        ColorAdjoint, ColorFundamental, Euclidean, GenSlot, IsAbstractSlot, Lorentz, NewSlots, Rep,
+    };
+
     LicenseManager::new();
+
+    let a = Lorentz {}
+        .dual()
+        .dual()
+        .dual()
+        .dual()
+        .new_dimed_rep(4.into());
+
+    let b: NewSlots = Lorentz {}.dual().new_slot(4.into(), 4.into()).into();
+    let aslot: NewSlots = a.new_slot(4.into()).into();
+
+    let domatch = b.matches(&aslot);
+
+    let mu: NewSlots = a.new_slot(34.into()).into();
+    let nu: NewSlots = Lorentz {}
+        .dual()
+        .dual()
+        .new_slot(5.into(), 45645.into())
+        .into();
+    let matches = mu.matches(&nu);
+    let e = Euclidean {}.dual();
+
+    // let adual = a; //.dual();
+    // let b = Euclidean {}.new(4.into());
+
+    // let matches = a.matches(&adual);
 }

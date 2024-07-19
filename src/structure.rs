@@ -295,22 +295,22 @@ pub trait Rep: Copy {
         Self::NAME.into()
     }
 
-    fn new_slot(self, dim: Dimension, aind: AbstractIndex) -> GenSlot<Self>
+    fn new_slot<D: Into<Dimension>, A: Into<AbstractIndex>>(self, dim: D, aind: A) -> GenSlot<Self>
     where
         Self: Sized,
     {
         GenSlot {
             rep: self.new_dimed_rep(dim),
-            aind,
+            aind: aind.into(),
         }
     }
 
-    fn new_dimed_rep(self, dim: Dimension) -> Repr<Self>
+    fn new_dimed_rep<D: Into<Dimension>>(self, dim: D) -> Repr<Self>
     where
         Self: Sized,
     {
         Repr {
-            dim,
+            dim: dim.into(),
             rep: PhantomData,
         }
     }
@@ -355,14 +355,14 @@ duplicate! {
     }
 
 
-    impl<B: IsAbstractSlot<Dual = B>> From<GenSlot<isnotselfdual>> for RecSlotEnum<DualPair<isnotselfdual>, B> {
+    impl<B: IsAbstractSlot> From<GenSlot<isnotselfdual>> for RecSlotEnum<DualPair<isnotselfdual>, B> {
         fn from(value: GenSlot<isnotselfdual>) -> Self {
             RecSlotEnum::A(value.dual_pair())
         }
     }
 
 
-    impl<B: IsAbstractSlot<Dual = B>> From<GenSlot<Dual<isnotselfdual>>> for RecSlotEnum<DualPair<isnotselfdual>, B> {
+    impl<B: IsAbstractSlot> From<GenSlot<Dual<isnotselfdual>>> for RecSlotEnum<DualPair<isnotselfdual>, B> {
         fn from(value: GenSlot<Dual<isnotselfdual>>) -> Self {
             RecSlotEnum::A(value.pair())
         }
@@ -389,7 +389,7 @@ duplicate! {
         }
     }
 
-    impl<B: IsAbstractSlot<Dual = B>> From<GenSlot<isselfdual>> for RecSlotEnum<isselfdual, B> {
+    impl<B: IsAbstractSlot> From<GenSlot<isselfdual>> for RecSlotEnum<isselfdual, B> {
         fn from(value: GenSlot<isselfdual>) -> Self {
             RecSlotEnum::A(value)
         }
@@ -421,8 +421,30 @@ impl<T: Rep> Repr<T> {
         }
     }
 
-    pub fn new_slot(&self, aind: AbstractIndex) -> GenSlot<T> {
-        GenSlot { aind, rep: *self }
+    pub fn new_slot<A: Into<AbstractIndex>>(&self, aind: A) -> GenSlot<T> {
+        GenSlot {
+            aind: aind.into(),
+            rep: *self,
+        }
+    }
+
+    pub fn negative(&self) -> Vec<bool> {
+        (0..usize::from(self.dim)).map(T::is_neg).collect()
+    }
+}
+
+impl From<Dimension> for Repr<Euclidean> {
+    fn from(value: Dimension) -> Self {
+        Repr {
+            dim: value,
+            rep: PhantomData,
+        }
+    }
+}
+
+impl<'a, T: Rep> FromIterator<&'a Repr<T>> for Vec<Dimension> {
+    fn from_iter<I: IntoIterator<Item = &'a Repr<T>>>(iter: I) -> Self {
+        iter.into_iter().map(|rep| rep.dim).collect()
     }
 }
 
@@ -463,28 +485,36 @@ impl<T: Rep<Dual = Dual<T>>> GenSlot<Dual<T>> {
 }
 
 pub trait IsAbstractSlot: Copy {
-    type Dual;
     fn dim(&self) -> Dimension;
     fn aind(&self) -> AbstractIndex;
+}
+
+pub trait DualSlotTo: IsAbstractSlot {
+    type Dual: IsAbstractSlot;
     fn dual(&self) -> Self::Dual;
-    fn matches<O: IsAbstractSlot<Dual = Self>>(&self, other: &O) -> bool {
-        self.dim() == other.dim() && self.aind() == other.aind()
-    }
+    fn matches(&self, other: &Self::Dual) -> bool;
 }
 
 impl<T: Rep> IsAbstractSlot for GenSlot<T> {
-    type Dual = GenSlot<T::Dual>;
+    // type Dual = GenSlot<T::Dual>;
     fn dim(&self) -> Dimension {
         self.rep.dim
     }
     fn aind(&self) -> AbstractIndex {
         self.aind
     }
-    fn dual(&self) -> Self::Dual {
+}
+
+impl<T: Rep> DualSlotTo for GenSlot<T> {
+    type Dual = GenSlot<T::Dual>;
+    fn dual(&self) -> GenSlot<T::Dual> {
         GenSlot {
             rep: self.rep.dual(),
             aind: self.aind,
         }
+    }
+    fn matches(&self, other: &Self::Dual) -> bool {
+        self.dim() == other.dim() && self.aind() == other.aind()
     }
 }
 
@@ -509,13 +539,126 @@ impl<R: Rep<Dual = Dual<R>>> Rep for DualPair<R> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum RecSlotEnum<A: Rep, B: IsAbstractSlot<Dual = B>> {
+pub enum RecSlotEnum<A: Rep, B: IsAbstractSlot> {
     A(GenSlot<A>),
     B(B),
 }
 
-impl<A: Rep<Dual = A>, B: IsAbstractSlot<Dual = B>> IsAbstractSlot for RecSlotEnum<A, B> {
-    type Dual = Self;
+impl<A: Rep, C: Rep, B: IsAbstractSlot> From<RecSlotEnum<A, B>>
+    for RecSlotEnum<C, RecSlotEnum<A, B>>
+{
+    fn from(v: RecSlotEnum<A, B>) -> RecSlotEnum<C, RecSlotEnum<A, B>> {
+        RecSlotEnum::B(v)
+    }
+}
+
+impl<A: Rep, C: Rep, D: Rep, B: IsAbstractSlot> From<RecSlotEnum<A, B>>
+    for RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<A, B>>>
+{
+    fn from(value: RecSlotEnum<A, B>) -> Self {
+        RecSlotEnum::B(value.into())
+    }
+}
+
+impl<A: Rep, B: Rep, C: Rep, D: Rep, Slot: IsAbstractSlot> From<RecSlotEnum<A, Slot>>
+    for RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>
+{
+    fn from(value: RecSlotEnum<A, Slot>) -> Self {
+        RecSlotEnum::B(value.into())
+    }
+}
+
+impl<A: Rep, B: Rep, C: Rep, D: Rep, E: Rep, Slot: IsAbstractSlot> From<RecSlotEnum<A, Slot>>
+    for RecSlotEnum<E, RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>>
+{
+    fn from(value: RecSlotEnum<A, Slot>) -> Self {
+        RecSlotEnum::B(value.into())
+    }
+}
+
+impl<A: Rep, B: Rep, C: Rep, D: Rep, E: Rep, F: Rep, Slot: IsAbstractSlot>
+    From<RecSlotEnum<A, Slot>>
+    for RecSlotEnum<
+        F,
+        RecSlotEnum<E, RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>>,
+    >
+{
+    fn from(value: RecSlotEnum<A, Slot>) -> Self {
+        RecSlotEnum::B(value.into())
+    }
+}
+
+impl<A: Rep, B: Rep, C: Rep, D: Rep, E: Rep, F: Rep, G: Rep, Slot: IsAbstractSlot>
+    From<RecSlotEnum<A, Slot>>
+    for RecSlotEnum<
+        G,
+        RecSlotEnum<
+            F,
+            RecSlotEnum<E, RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>>,
+        >,
+    >
+{
+    fn from(value: RecSlotEnum<A, Slot>) -> Self {
+        RecSlotEnum::B(value.into())
+    }
+}
+
+impl<A: Rep, B: Rep, C: Rep, D: Rep, E: Rep, F: Rep, G: Rep, H: Rep, Slot: IsAbstractSlot>
+    From<RecSlotEnum<A, Slot>>
+    for RecSlotEnum<
+        H,
+        RecSlotEnum<
+            G,
+            RecSlotEnum<
+                F,
+                RecSlotEnum<
+                    E,
+                    RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>,
+                >,
+            >,
+        >,
+    >
+{
+    fn from(value: RecSlotEnum<A, Slot>) -> Self {
+        RecSlotEnum::B(value.into())
+    }
+}
+
+impl<
+        A: Rep,
+        B: Rep,
+        C: Rep,
+        D: Rep,
+        E: Rep,
+        F: Rep,
+        G: Rep,
+        H: Rep,
+        I: Rep,
+        Slot: IsAbstractSlot,
+    > From<RecSlotEnum<A, Slot>>
+    for RecSlotEnum<
+        I,
+        RecSlotEnum<
+            H,
+            RecSlotEnum<
+                G,
+                RecSlotEnum<
+                    F,
+                    RecSlotEnum<
+                        E,
+                        RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>,
+                    >,
+                >,
+            >,
+        >,
+    >
+{
+    fn from(value: RecSlotEnum<A, Slot>) -> Self {
+        RecSlotEnum::B(value.into())
+    }
+}
+
+impl<A: Rep, B: IsAbstractSlot> IsAbstractSlot for RecSlotEnum<A, B> {
     fn dim(&self) -> Dimension {
         match self {
             Self::A(a) => a.dim(),
@@ -528,18 +671,21 @@ impl<A: Rep<Dual = A>, B: IsAbstractSlot<Dual = B>> IsAbstractSlot for RecSlotEn
             Self::B(b) => b.aind(),
         }
     }
+}
 
-    fn dual(&self) -> Self::Dual {
+impl<A: Rep<Dual = A>, B: DualSlotTo<Dual = B>> DualSlotTo for RecSlotEnum<A, B> {
+    type Dual = RecSlotEnum<A::Dual, B>;
+    fn dual(&self) -> RecSlotEnum<A::Dual, B> {
         match self {
-            Self::A(a) => Self::A(a.dual()),
-            Self::B(b) => Self::B(b.dual()),
+            Self::A(a) => RecSlotEnum::A(a.dual()),
+            Self::B(b) => RecSlotEnum::B(b.dual()),
         }
     }
 
-    fn matches<O: IsAbstractSlot<Dual = Self>>(&self, other: &O) -> bool {
-        match (self, other.dual().dual()) {
-            (Self::A(a), Self::A(b)) => a.matches(&b),
-            (Self::B(a), Self::B(b)) => a.matches(&b),
+    fn matches(&self, other: &Self::Dual) -> bool {
+        match (self, other) {
+            (RecSlotEnum::A(a), RecSlotEnum::A(b)) => a.dim() == b.dim() && a.aind() == b.aind(),
+            (RecSlotEnum::B(a), RecSlotEnum::B(b)) => a.matches(b),
             _ => false,
         }
     }
@@ -559,59 +705,57 @@ pub type NewSlots = RecSlotEnum<
     >,
 >;
 
-// pub type NewNewSlot = RecSlotEnum<DualPair<iwffnfby>, NewSlots>;
-
-impl From<GenSlot<ColorAdjoint>> for NewSlots {
-    fn from(value: GenSlot<ColorAdjoint>) -> Self {
-        value.into()
-    }
-}
-
-impl From<GenSlot<Bispinor>> for NewSlots {
-    fn from(value: GenSlot<Bispinor>) -> Self {
-        value.into()
-    }
-}
-
-impl From<GenSlot<Euclidean>> for NewSlots {
-    fn from(value: GenSlot<Euclidean>) -> Self {
-        value.into()
-    }
-}
-
 impl From<GenSlot<SpinFundamental>> for NewSlots {
     fn from(value: GenSlot<SpinFundamental>) -> Self {
-        value.into()
+        RecSlotEnum::A(value.dual_pair()).into()
     }
 }
 
 impl From<GenSlot<Dual<SpinFundamental>>> for NewSlots {
     fn from(value: GenSlot<Dual<SpinFundamental>>) -> Self {
-        value.into()
+        RecSlotEnum::A(value.pair()).into()
     }
 }
 
 impl From<GenSlot<ColorFundamental>> for NewSlots {
     fn from(value: GenSlot<ColorFundamental>) -> Self {
-        value.into()
+        RecSlotEnum::A(value.dual_pair()).into()
     }
 }
 
 impl From<GenSlot<Dual<ColorFundamental>>> for NewSlots {
     fn from(value: GenSlot<Dual<ColorFundamental>>) -> Self {
-        value.into()
+        RecSlotEnum::A(value.pair()).into()
     }
 }
 
 impl From<GenSlot<ColorSextet>> for NewSlots {
     fn from(value: GenSlot<ColorSextet>) -> Self {
-        value.into()
+        RecSlotEnum::A(value.dual_pair()).into()
     }
 }
 
 impl From<GenSlot<Dual<ColorSextet>>> for NewSlots {
     fn from(value: GenSlot<Dual<ColorSextet>>) -> Self {
-        value.into()
+        RecSlotEnum::A(value.pair()).into()
+    }
+}
+
+impl From<GenSlot<Euclidean>> for NewSlots {
+    fn from(value: GenSlot<Euclidean>) -> Self {
+        RecSlotEnum::A(value).into()
+    }
+}
+
+impl From<GenSlot<Bispinor>> for NewSlots {
+    fn from(value: GenSlot<Bispinor>) -> Self {
+        RecSlotEnum::A(value).into()
+    }
+}
+
+impl From<GenSlot<ColorAdjoint>> for NewSlots {
+    fn from(value: GenSlot<ColorAdjoint>) -> Self {
+        RecSlotEnum::B(value).into()
     }
 }
 
@@ -2900,3 +3044,11 @@ where
         write!(f, "{string}")
     }
 }
+
+// pub struct Kroneker {
+//     structure: VecStructure,
+// }
+
+// impl Kroneker {
+//     pub fn new<T: Rep>(i: GenSlot<T>, j: GenSlot<T::Dual>) -> Self {}
+// }

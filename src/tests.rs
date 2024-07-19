@@ -3,8 +3,9 @@ use crate::{
     GetTensorData, HasTensorData, Representation, SparseTensor, StructureContract,
 };
 use crate::{
-    AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, ExpandedIndex, Fiber,
-    FiberClass, FlatIndex, IteratesAlongFibers, TensorStructure,
+    AbstractFiber, ColorAdjoint, CoreExpandedFiberIterator, CoreFlatFiberIterator, DualSlotTo,
+    Euclidean, ExpandedIndex, Fiber, FiberClass, FlatIndex, IteratesAlongFibers, Lorentz, NewSlots,
+    RecSlotEnum, Rep, TensorStructure,
 };
 #[cfg(feature = "shadowing")]
 use ahash::{HashMap, HashMapExt};
@@ -1252,29 +1253,22 @@ fn get_license_key() {
     use symbolica::LicenseManager;
 
     use crate::{
-        ColorAdjoint, ColorFundamental, Euclidean, GenSlot, IsAbstractSlot, Lorentz, NewSlots, Rep,
+        ColorAdjoint, ColorFundamental, DualSlotTo, Euclidean, GenSlot, IsAbstractSlot, Lorentz,
+        NewSlots, Rep,
     };
 
     LicenseManager::new();
 
-    let a = Lorentz {}
-        .dual()
-        .dual()
-        .dual()
-        .dual()
-        .new_dimed_rep(4.into());
+    let a = Lorentz {}.dual().dual().dual().dual().new_dimed_rep(4);
 
-    let b: NewSlots = Lorentz {}.dual().new_slot(4.into(), 4.into()).into();
-    let aslot: NewSlots = a.new_slot(4.into()).into();
-
+    let b: NewSlots = Lorentz {}.dual().new_slot(4, 4).into();
+    let aslot: NewSlots = a.new_slot(4).into();
+    let c = a.new_slot(4);
+    let domatchdisp = aslot.matches(&NewSlots::from(c));
     let domatch = b.matches(&aslot);
 
-    let mu: NewSlots = a.new_slot(34.into()).into();
-    let nu: NewSlots = Lorentz {}
-        .dual()
-        .dual()
-        .new_slot(5.into(), 45645.into())
-        .into();
+    let mu: NewSlots = a.new_slot(34).into();
+    let nu: NewSlots = Lorentz {}.dual().dual().new_slot(5, 45645).into();
     let matches = mu.matches(&nu);
     let e = Euclidean {}.dual();
 
@@ -1282,4 +1276,21 @@ fn get_license_key() {
     // let b = Euclidean {}.new(4.into());
 
     // let matches = a.matches(&adual);
+}
+
+#[test]
+fn duals() {
+    let a = Lorentz {}.dual().new_dimed_rep(4);
+    let mu = a.new_slot(1);
+    let nu = a.dual().new_slot(1);
+
+    assert!(mu.matches(&nu));
+
+    let mu: NewSlots = mu.into();
+
+    assert!(mu.matches(&NewSlots::from(nu)));
+
+    let rho: NewSlots = ColorAdjoint {}.dual().new_slot(4, 1).into();
+
+    assert!(!mu.matches(&rho))
 }

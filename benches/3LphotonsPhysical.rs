@@ -93,8 +93,8 @@ fn criterion_benchmark(c: &mut Criterion) {
         let pat = &name_re + i * &name_im;
         replacements.push((Atom::new_var(*k).into_pattern(), pat.into_pattern()));
 
-        fn_map.add_constant(name_re.into(), Rational::from_f64(v.re));
-        fn_map.add_constant(name_im.into(), Rational::from_f64(v.im));
+        fn_map.add_constant(name_re.into(), Rational::from(v.re));
+        fn_map.add_constant(name_im.into(), Rational::from(v.im));
     }
 
     let reps: Vec<Replacement> = replacements

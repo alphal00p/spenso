@@ -1674,7 +1674,7 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         CompiledEvalTensor {
             eval: self
                 .eval
-                .export_cpp(filename)
+                .export_cpp(filename, filename, true)
                 .unwrap()
                 .compile(library_name, CompileOptions::default())
                 .unwrap()

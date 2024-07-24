@@ -927,7 +927,7 @@ impl<T, S> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
         TensorNetwork {
             graph: new_graph,
             scalar: self.scalar.as_ref().map(|a| {
-                a.export_cpp(&filename)
+                a.export_cpp(&filename, &filename, true)
                     .unwrap()
                     .compile(&library_name, CompileOptions::default())
                     .unwrap()

@@ -984,7 +984,7 @@ impl TrySmallestUpgrade<Atom> for f64 {
     type LCM = Atom;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
-        let natrat = symbolica::domains::rational::Rational::from_f64(*self);
+        let natrat = symbolica::domains::rational::Rational::from(*self);
         let symrat = Atom::new_num(symbolica::coefficient::Coefficient::from(natrat));
 
         Some(Cow::Owned(symrat))

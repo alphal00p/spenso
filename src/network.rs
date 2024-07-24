@@ -11,7 +11,7 @@ use symbolica::{
 
 use crate::{
     CastStructure, CompiledEvalTensor, EvalTensor, EvalTreeTensor, FallibleMul, GetTensorData,
-    HasTensorData, IntoSymbol, TensorStructure,
+    HasTensorData, IntoSymbol, IsAbstractSlot, TensorStructure,
 };
 
 #[cfg(feature = "shadowing")]
@@ -637,13 +637,13 @@ fn merge() {
 }
 
 #[derive(Debug, Clone)]
-pub struct TensorNetwork<T, S> {
-    pub graph: HalfEdgeGraph<T, Slot>,
+pub struct TensorNetwork<T: TensorStructure, S> {
+    pub graph: HalfEdgeGraph<T, <T as TensorStructure>::Slot>,
     // pub params: AHashSet<Atom>,
     pub scalar: Option<S>,
 }
 
-impl<T, S> TensorNetwork<T, S> {
+impl<T: TensorStructure, S> TensorNetwork<T, S> {
     pub fn scalar_mul(&mut self, scalar: S)
     where
         S: FallibleMul<S, Output = S>,
@@ -835,7 +835,7 @@ impl<S: TensorStructure + Clone> TensorNetwork<ParamTensor<S>, Atom> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<T, S> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
+impl<T, S: TensorStructure> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(
         &self,
         f: &F,
@@ -939,7 +939,7 @@ impl<T, S> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<T, S> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<T>> {
+impl<T, S: TensorStructure> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<T>> {
     pub fn evaluate(&mut self, params: &[T]) -> TensorNetwork<DataTensor<T, S>, T>
     where
         T: Real,
@@ -960,7 +960,7 @@ impl<T, S> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<T>> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<S> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator> {
+impl<S: TensorStructure> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator> {
     pub fn evaluate_float(&mut self, params: &[f64]) -> TensorNetwork<DataTensor<f64, S>, f64>
     where
         S: TensorStructure + Clone,
@@ -1003,7 +1003,7 @@ impl<S> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator> {
     }
 }
 
-impl<S: Clone> TensorNetwork<EvalTreeTensor<Rational, S>, EvalTree<Rational>> {
+impl<S: Clone + TensorStructure> TensorNetwork<EvalTreeTensor<Rational, S>, EvalTree<Rational>> {
     pub fn horner_scheme(&mut self) {
         self.graph.map_nodes_mut(|(_, x)| x.horner_scheme());
         self.scalar.as_mut().map(|a| a.horner_scheme());
@@ -1049,8 +1049,8 @@ where
         self.graph.add_node_with_edges(tensor, &slots)
     }
 
-    fn generate_network_graph(tensors: Vec<T>) -> HalfEdgeGraph<T, Slot> {
-        let mut graph = HalfEdgeGraph::<T, Slot>::new();
+    fn generate_network_graph(tensors: Vec<T>) -> HalfEdgeGraph<T, <T as TensorStructure>::Slot> {
+        let mut graph = HalfEdgeGraph::<T, _>::new();
 
         for tensor in tensors {
             let slots = tensor.external_structure().to_vec();
@@ -1141,7 +1141,7 @@ pub enum TensorNetworkError {
 
 impl<T, S> TensorNetwork<T, S>
 where
-    T: Clone,
+    T: Clone + TensorStructure,
 {
     pub fn result_tensor(&self) -> Result<T, TensorNetworkError> {
         match self.graph.nodes.len() {
@@ -1154,7 +1154,7 @@ where
 
 impl<T, S> TensorNetwork<T, S>
 where
-    T: Clone,
+    T: Clone + TensorStructure,
 {
     pub fn result_tensor_ref<'a>(&'a self) -> Result<&'a T, TensorNetworkError> {
         match self.graph.nodes.len() {
@@ -1165,13 +1165,13 @@ where
     }
 }
 
-impl<T, S> TensorNetwork<T, S> {
+impl<T: TensorStructure<Slot: Display>, S> TensorNetwork<T, S> {
     pub fn dot(&self) -> std::string::String {
         self.graph.dot()
     }
 }
 
-impl<T: HasName<Name: IntoSymbol>, S> TensorNetwork<T, S> {
+impl<T: HasName<Name: IntoSymbol> + TensorStructure<Slot: Display>, S> TensorNetwork<T, S> {
     pub fn dot_nodes(&self) -> std::string::String {
         let mut out = "graph {\n".to_string();
         out.push_str("  node [shape=circle,height=0.1,label=\"\"];  overlap=\"scale\";");
@@ -1429,12 +1429,12 @@ where
     }
 }
 
-impl<T, S> TensorNetwork<T, S> {
+impl<T: TensorStructure, S> TensorNetwork<T, S> {
     pub fn cast<U>(self) -> TensorNetwork<U, S>
     where
         T: CastStructure<U> + HasStructure,
         U: HasStructure,
-        U::Structure: From<T::Structure>,
+        U::Structure: From<T::Structure> + TensorStructure<Slot = T::Slot>,
     {
         TensorNetwork {
             graph: self.graph.map_nodes(|(_, x)| x.cast()),
@@ -1446,7 +1446,7 @@ impl<T, S> TensorNetwork<T, S> {
 #[cfg(feature = "shadowing")]
 impl<T, S> TensorNetwork<T, S>
 where
-    T: HasName<Name = Symbol, Args: IntoArgs>,
+    T: HasName<Name = Symbol, Args: IntoArgs> + TensorStructure,
 {
     pub fn append_map<'a, U>(&'a self, fn_map: &mut FunctionMap<'a, U>)
     where
@@ -1462,7 +1462,7 @@ where
     pub fn shadow(&self) -> TensorNetwork<ParamTensor<T::Structure>, S>
     where
         T: Shadowable,
-        T::Structure: Clone + ToSymbolic,
+        T::Structure: Clone + ToSymbolic + TensorStructure<Slot = T::Slot>,
         S: Clone,
     {
         let edges = self.graph.edges.clone();
@@ -1509,7 +1509,7 @@ where
 
 impl<T, S> TensorNetwork<T, S>
 where
-    T: HasName,
+    T: HasName + TensorStructure,
 {
     pub fn name(&mut self, name: T::Name)
     where
@@ -1524,7 +1524,7 @@ where
 #[cfg(feature = "shadowing")]
 impl<T, S> TensorNetwork<T, S>
 where
-    T: HasName<Name = Symbol>,
+    T: HasName<Name = Symbol> + TensorStructure,
 {
     pub fn namesym(&mut self, name: &str) {
         for (id, n) in &mut self.graph.nodes {

@@ -1,6 +1,6 @@
 use crate::{
-    ContractionError, HasStructure, IntoArgs, NamedStructure, TensorNetworkError, TensorStructure,
-    ToSymbolic, ABSTRACTIND,
+    ContractionError, HasStructure, IntoArgs, NamedStructure, PhysicalSlots, TensorNetworkError,
+    TensorStructure, ToSymbolic, ABSTRACTIND,
 };
 
 use super::{
@@ -78,7 +78,7 @@ impl StructureContract for SymbolicTensor {
 impl SymbolicTensor {
     pub fn from_named<N>(structure: &N) -> Option<Self>
     where
-        N: ToSymbolic + HasName + TensorStructure,
+        N: ToSymbolic + HasName + TensorStructure<Slot = PhysicalSlots>,
         N::Name: IntoSymbol + Clone,
         N::Args: IntoArgs,
     {

@@ -13,8 +13,9 @@ use std::{
 };
 
 use crate::{
-    ContractableWith, DataTensor, ExpandedIndex, FallibleAddAssign, FallibleSubAssign, FlatIndex,
-    HasStructure, RefZero, TensorStructure, VecStructure,
+    ContractableWith, DataTensor, Euclidean, ExpandedIndex, FallibleAddAssign, FallibleSubAssign,
+    FlatIndex, HasStructure, IsAbstractSlot, PhysReps, RefZero, RepName, TensorStructure,
+    VecStructure,
 };
 
 use super::{ConcreteIndex, DenseTensor, Dimension, GetTensorData, Representation, SparseTensor};
@@ -123,9 +124,10 @@ impl From<FlatIndex> for FiberData<'_> {
 }
 
 pub trait AbstractFiber<Out: AbstractFiberIndex>: Index<usize, Output = Out> {
+    type Repr: RepName;
     fn strides(&self) -> Vec<usize>;
     fn shape(&self) -> Vec<Dimension>;
-    fn reps(&self) -> Vec<Representation>;
+    fn reps(&self) -> Vec<Representation<Self::Repr>>;
     fn order(&self) -> usize;
     fn single(&self) -> Option<usize>;
     fn bitvec(&self) -> BitVec;
@@ -296,11 +298,12 @@ impl<'a, I> AbstractFiber<FiberIndex> for Fiber<'a, I>
 where
     I: TensorStructure,
 {
+    type Repr = <I::Slot as IsAbstractSlot>::R;
     fn strides(&self) -> Vec<usize> {
-        self.structure.strides()
+        self.structure.strides().unwrap()
     }
 
-    fn reps(&self) -> Vec<Representation> {
+    fn reps(&self) -> Vec<Representation<Self::Repr>> {
         self.structure.reps()
     }
 
@@ -344,14 +347,14 @@ where
     pub fn iter_perm(
         self,
         permutation: Permutation,
-    ) -> FiberIterator<'a, S, CoreExpandedFiberIterator> {
+    ) -> FiberIterator<'a, S, CoreExpandedFiberIterator<<S::Slot as IsAbstractSlot>::R>> {
         FiberIterator::new_permuted(self, permutation, false)
     }
 
     pub fn iter_perm_metric(
         self,
         permutation: Permutation,
-    ) -> FiberIterator<'a, S, MetricFiberIterator> {
+    ) -> FiberIterator<'a, S, MetricFiberIterator<<S::Slot as IsAbstractSlot>::R>> {
         FiberIterator::new_permuted(self, permutation, false)
     }
 
@@ -430,11 +433,12 @@ impl<'a, I> AbstractFiber<FiberIndex> for FiberMut<'a, I>
 where
     I: TensorStructure,
 {
+    type Repr = <I::Slot as IsAbstractSlot>::R;
     fn strides(&self) -> Vec<usize> {
-        self.structure.strides()
+        self.structure.strides().unwrap()
     }
 
-    fn reps(&self) -> Vec<Representation> {
+    fn reps(&self) -> Vec<Representation<Self::Repr>> {
         self.structure.reps()
     }
 
@@ -566,15 +570,17 @@ impl<'a, I: TensorStructure> From<FiberClass<'a, I>> for Fiber<'a, I> {
 }
 
 impl<'a, I: TensorStructure> AbstractFiber<FiberClassIndex> for FiberClass<'a, I> {
+    type Repr = <I::Slot as IsAbstractSlot>::R;
+    // type Repr = I::R;
     fn strides(&self) -> Vec<usize> {
-        self.structure.strides()
+        self.structure.strides().unwrap()
     }
 
     fn shape(&self) -> Vec<Dimension> {
         self.structure.shape()
     }
 
-    fn reps(&self) -> Vec<Representation> {
+    fn reps(&self) -> Vec<Representation<Self::Repr>> {
         self.structure.reps()
     }
 
@@ -602,14 +608,14 @@ impl<'a, S: TensorStructure> FiberClass<'a, S> {
     pub fn iter_perm(
         self,
         permutation: Permutation,
-    ) -> FiberClassIterator<'a, S, CoreExpandedFiberIterator> {
+    ) -> FiberClassIterator<'a, S, CoreExpandedFiberIterator<<S::Slot as IsAbstractSlot>::R>> {
         FiberClassIterator::new_permuted(self, permutation)
     }
 
     pub fn iter_perm_metric(
         self,
         permutation: Permutation,
-    ) -> FiberClassIterator<'a, S, MetricFiberIterator> {
+    ) -> FiberClassIterator<'a, S, MetricFiberIterator<<S::Slot as IsAbstractSlot>::R>> {
         FiberClassIterator::new_permuted(self, permutation)
     }
 }
@@ -656,15 +662,17 @@ impl<'a, I: TensorStructure> From<FiberClassMut<'a, I>> for FiberMut<'a, I> {
 }
 
 impl<'a, I: TensorStructure> AbstractFiber<FiberClassIndex> for FiberClassMut<'a, I> {
+    // type Repr = I::R;
+    type Repr = <I::Slot as IsAbstractSlot>::R;
     fn strides(&self) -> Vec<usize> {
-        self.structure.strides()
+        self.structure.strides().unwrap()
     }
 
     fn shape(&self) -> Vec<Dimension> {
         self.structure.shape()
     }
 
-    fn reps(&self) -> Vec<Representation> {
+    fn reps(&self) -> Vec<Representation<Self::Repr>> {
         self.structure.reps()
     }
 
@@ -772,28 +780,29 @@ impl<I: FiberIteratorItem> FiberIteratorItem for MetricItem<I> {
     }
 }
 
-pub trait IteratesAlongFibers: Iterator {
+pub trait IteratesAlongFibers<R>: Iterator {
+    // type Reps: RepName;
     fn reset(&mut self);
-
-    fn shift(&mut self, shift: usize);
 
     fn new<I, J>(fiber: &I, conj: bool) -> Self
     where
-        I: AbstractFiber<J>,
-        J: AbstractFiberIndex;
-
-    /// should be equivalent to (new(fiber, true), new(fiber, false)), but could be faster in certain cases
-    fn new_paired_conjugates<I, J>(fiber: &I) -> (Self, Self)
-    where
-        I: AbstractFiber<J>,
+        I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex,
         Self: Sized;
+
+    fn new_paired_conjugates<I, J>(fiber: &I) -> (Self, Self)
+    where
+        I: AbstractFiber<J, Repr = R>,
+        J: AbstractFiberIndex,
+        Self: Sized;
+
+    fn shift(&mut self, shift: usize);
 }
 
-pub trait IteratesAlongPermutedFibers: IteratesAlongFibers {
+pub trait IteratesAlongPermutedFibers<R>: IteratesAlongFibers<R> {
     fn new_permuted<I, J>(fiber: &I, conj: bool, permutation: Permutation) -> Self
     where
-        I: AbstractFiber<J>,
+        I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex;
 }
 
@@ -842,7 +851,7 @@ impl CoreFlatFiberIterator {
             }
 
             if fi.is_free() ^ conj {
-                max += (usize::from(dims[pos]) - 1) * strides[pos];
+                max += (usize::try_from(dims[pos]).unwrap() - 1) * strides[pos];
                 if first {
                     increment = strides[pos];
                     first = false;
@@ -867,8 +876,11 @@ impl CoreFlatFiberIterator {
         // max -= 1;
 
         let fiber_stride = strides[fiber_position];
-        let dim: usize = dims[fiber_position].into();
-        let size = dims.iter().map(|x| usize::from(*x)).product::<usize>();
+        let dim: usize = dims[fiber_position].try_into().unwrap();
+        let size = dims
+            .iter()
+            .map(|x| usize::try_from(*x).unwrap())
+            .product::<usize>();
         let mut stride = None;
         let mut shift = None;
 
@@ -925,7 +937,7 @@ impl Iterator for CoreFlatFiberIterator {
     }
 }
 
-impl IteratesAlongFibers for CoreFlatFiberIterator {
+impl<R: RepName> IteratesAlongFibers<R> for CoreFlatFiberIterator {
     fn reset(&mut self) {
         self.varying_fiber_index = 0.into();
     }
@@ -936,7 +948,7 @@ impl IteratesAlongFibers for CoreFlatFiberIterator {
 
     fn new<I, J>(fiber: &I, conj: bool) -> Self
     where
-        I: AbstractFiber<J>,
+        I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex,
         Self: Sized,
     {
@@ -973,7 +985,7 @@ impl IteratesAlongFibers for CoreFlatFiberIterator {
     // faster than seperate functions
     fn new_paired_conjugates<I, J>(fiber: &I) -> (Self, Self)
     where
-        I: AbstractFiber<J>,
+        I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex,
     {
         let strides = fiber.strides();
@@ -1025,13 +1037,13 @@ impl IteratesAlongFibers for CoreFlatFiberIterator {
             }
 
             if fi.is_fixed() {
-                max_conj += (usize::from(dims[pos]) - 1) * strides[pos];
+                max_conj += (usize::try_from(dims[pos]).unwrap() - 1) * strides[pos];
                 if first_conj {
                     increment_conj = strides[pos];
                     first_conj = false;
                 }
             } else {
-                max += (usize::from(dims[pos]) - 1) * strides[pos];
+                max += (usize::try_from(dims[pos]).unwrap() - 1) * strides[pos];
                 if first {
                     increment = strides[pos];
                     first = false;
@@ -1069,19 +1081,19 @@ impl IteratesAlongFibers for CoreFlatFiberIterator {
 }
 
 #[derive(Debug, Clone)]
-pub struct CoreExpandedFiberIterator {
+pub struct CoreExpandedFiberIterator<R: RepName> {
     pub varying_fiber_index: Vec<ConcreteIndex>,
-    pub dims: Vec<Representation>,
+    pub dims: Vec<Representation<R>>,
     pub strides: Vec<usize>,
     pub zero_index: FlatIndex,
     pub flat: FlatIndex,
     exhausted: bool,
 }
 
-impl CoreExpandedFiberIterator {
+impl<R: RepName> CoreExpandedFiberIterator<R> {
     fn init_iter<I, J>(fiber: &I, conj: bool, permutation: Option<Permutation>) -> Self
     where
-        I: AbstractFiber<J>,
+        I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex,
     {
         let varying_indices = fiber.bitvec();
@@ -1116,7 +1128,7 @@ impl CoreExpandedFiberIterator {
     }
 }
 
-impl Iterator for CoreExpandedFiberIterator {
+impl<R: RepName> Iterator for CoreExpandedFiberIterator<R> {
     type Item = FlatIndex;
     fn next(&mut self) -> Option<Self::Item> {
         if self.exhausted {
@@ -1135,9 +1147,9 @@ impl Iterator for CoreExpandedFiberIterator {
         {
             if carry {
                 *pos += 1;
-                if *pos >= usize::from(*dim) {
+                if *pos >= usize::try_from(*dim).unwrap() {
                     *pos = 0;
-                    self.flat -= (stride * (usize::from(*dim) - 1)).into();
+                    self.flat -= (stride * (usize::try_from(*dim).unwrap() - 1)).into();
                 } else {
                     self.flat += (*stride).into();
                     carry = false;
@@ -1157,20 +1169,22 @@ impl Iterator for CoreExpandedFiberIterator {
 fn test() {
     use std::collections::HashSet;
 
+    let rep = Euclidean {};
+
     let structura = VecStructure::new(vec![
-        (0, 4).into(),
-        (4, 4).into(),
-        (1, 5).into(),
-        (3, 7).into(),
-        (2, 8).into(),
+        rep.new_slot(0, 4).into(),
+        rep.new_slot(4, 4).into(),
+        rep.new_slot(1, 5).into(),
+        rep.new_slot(3, 7).into(),
+        rep.new_slot(2, 8).into(),
     ]);
 
     let structurb = VecStructure::new(vec![
-        (2, 8).into(),
-        (3, 7).into(),
-        (0, 4).into(),
-        (1, 5).into(),
-        (5, 4).into(),
+        rep.new_slot(2, 8).into(),
+        rep.new_slot(3, 7).into(),
+        rep.new_slot(0, 4).into(),
+        rep.new_slot(1, 5).into(),
+        rep.new_slot(5, 4).into(),
     ]);
 
     let fibera = Fiber::from(
@@ -1202,10 +1216,10 @@ fn test() {
     // assert_ron_snapshot!(collecteda);
 }
 
-impl IteratesAlongFibers for CoreExpandedFiberIterator {
+impl<R: RepName> IteratesAlongFibers<R> for CoreExpandedFiberIterator<R> {
     fn new<I, J>(fiber: &I, conj: bool) -> Self
     where
-        I: AbstractFiber<J>,
+        I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex,
     {
         Self::init_iter(fiber, conj, None)
@@ -1213,7 +1227,7 @@ impl IteratesAlongFibers for CoreExpandedFiberIterator {
 
     fn new_paired_conjugates<I, J>(fiber: &I) -> (Self, Self)
     where
-        I: AbstractFiber<J>,
+        I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex,
         Self: Sized,
     {
@@ -1234,10 +1248,10 @@ impl IteratesAlongFibers for CoreExpandedFiberIterator {
     }
 }
 
-impl IteratesAlongPermutedFibers for CoreExpandedFiberIterator {
+impl<R: RepName> IteratesAlongPermutedFibers<R> for CoreExpandedFiberIterator<R> {
     fn new_permuted<I, J>(fiber: &I, conj: bool, permutation: Permutation) -> Self
     where
-        I: AbstractFiber<J>,
+        I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex,
     {
         Self::init_iter(fiber, conj, Some(permutation))
@@ -1245,15 +1259,25 @@ impl IteratesAlongPermutedFibers for CoreExpandedFiberIterator {
 }
 
 #[derive(Debug, Clone)]
-pub struct MetricFiberIterator {
-    pub iter: CoreExpandedFiberIterator,
+pub struct MetricFiberIterator<R: RepName> {
+    pub iter: CoreExpandedFiberIterator<R>,
     neg: bool,
 }
 
-impl IteratesAlongFibers for MetricFiberIterator {
+impl<R: RepName> IteratesAlongFibers<R> for MetricFiberIterator<R> {
+    fn reset(&mut self) {
+        self.iter.reset();
+
+        // self.neg = false;
+    }
+
+    fn shift(&mut self, shift: usize) {
+        self.iter.shift(shift);
+    }
+
     fn new<I, J>(fiber: &I, conj: bool) -> Self
     where
-        I: AbstractFiber<J>,
+        I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex,
     {
         MetricFiberIterator {
@@ -1264,7 +1288,7 @@ impl IteratesAlongFibers for MetricFiberIterator {
 
     fn new_paired_conjugates<I, J>(fiber: &I) -> (Self, Self)
     where
-        I: AbstractFiber<J>,
+        I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex,
         Self: Sized,
     {
@@ -1279,22 +1303,12 @@ impl IteratesAlongFibers for MetricFiberIterator {
             },
         )
     }
-
-    fn reset(&mut self) {
-        self.iter.reset();
-
-        // self.neg = false;
-    }
-
-    fn shift(&mut self, shift: usize) {
-        self.iter.shift(shift);
-    }
 }
 
-impl IteratesAlongPermutedFibers for MetricFiberIterator {
+impl<R: RepName> IteratesAlongPermutedFibers<R> for MetricFiberIterator<R> {
     fn new_permuted<I, J>(fiber: &I, conj: bool, permutation: Permutation) -> Self
     where
-        I: AbstractFiber<J>,
+        I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex,
     {
         MetricFiberIterator {
@@ -1304,7 +1318,7 @@ impl IteratesAlongPermutedFibers for MetricFiberIterator {
     }
 }
 
-impl Iterator for MetricFiberIterator {
+impl<R: RepName> Iterator for MetricFiberIterator<R> {
     type Item = MetricItem<FlatIndex>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.iter.exhausted {
@@ -1326,9 +1340,9 @@ impl Iterator for MetricFiberIterator {
             self.neg ^= dim.is_neg(*pos);
             if carry {
                 *pos += 1;
-                if *pos >= usize::from(*dim) {
+                if *pos >= usize::try_from(*dim).unwrap() {
                     *pos = 0;
-                    self.iter.flat -= (stride * (usize::from(*dim) - 1)).into();
+                    self.iter.flat -= (stride * (usize::try_from(*dim).unwrap() - 1)).into();
                 } else {
                     self.iter.flat += (*stride).into();
                     carry = false;
@@ -1348,13 +1362,19 @@ impl Iterator for MetricFiberIterator {
 }
 
 #[derive(Debug)]
-pub struct FiberIterator<'a, S: TensorStructure, I: IteratesAlongFibers> {
+pub struct FiberIterator<
+    'a,
+    S: TensorStructure,
+    I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R>,
+> {
     pub fiber: Fiber<'a, S>,
     pub iter: I,
     pub skipped: usize,
 }
 
-impl<'a, S: TensorStructure, I: IteratesAlongFibers + Clone> Clone for FiberIterator<'a, S, I> {
+impl<'a, S: TensorStructure, I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R> + Clone> Clone
+    for FiberIterator<'a, S, I>
+{
     fn clone(&self) -> Self {
         FiberIterator {
             fiber: self.fiber.clone(),
@@ -1364,7 +1384,9 @@ impl<'a, S: TensorStructure, I: IteratesAlongFibers + Clone> Clone for FiberIter
     }
 }
 
-impl<'a, S: TensorStructure, I: IteratesAlongFibers> FiberIterator<'a, S, I> {
+impl<'a, S: TensorStructure, I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R>>
+    FiberIterator<'a, S, I>
+{
     pub fn new(fiber: Fiber<'a, S>, conj: bool) -> Self {
         FiberIterator {
             iter: I::new(&fiber, conj),
@@ -1384,7 +1406,9 @@ impl<'a, S: TensorStructure, I: IteratesAlongFibers> FiberIterator<'a, S, I> {
     }
 }
 
-impl<'a, S: TensorStructure, I: IteratesAlongPermutedFibers> FiberIterator<'a, S, I> {
+impl<'a, S: TensorStructure, I: IteratesAlongPermutedFibers<<S::Slot as IsAbstractSlot>::R>>
+    FiberIterator<'a, S, I>
+{
     pub fn new_permuted(fiber: Fiber<'a, S>, permutation: Permutation, conj: bool) -> Self {
         FiberIterator {
             iter: I::new_permuted(&fiber, conj, permutation),
@@ -1394,15 +1418,20 @@ impl<'a, S: TensorStructure, I: IteratesAlongPermutedFibers> FiberIterator<'a, S
     }
 }
 
-impl<'a, I: IteratesAlongFibers> Iterator for FiberIterator<'a, VecStructure, I> {
+impl<'a, I: IteratesAlongFibers<PhysReps>> Iterator for FiberIterator<'a, VecStructure, I> {
     type Item = I::Item;
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next()
     }
 }
 
-impl<'a, I: IteratesAlongFibers<Item = It>, S: TensorStructure, T, It> Iterator
-    for FiberIterator<'a, DenseTensor<T, S>, I>
+impl<
+        'a,
+        I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R, Item = It>,
+        S: TensorStructure,
+        T,
+        It,
+    > Iterator for FiberIterator<'a, DenseTensor<T, S>, I>
 where
     It: FiberIteratorItem,
 {
@@ -1419,8 +1448,13 @@ where
     }
 }
 
-impl<'a, I: IteratesAlongFibers<Item = It>, S: TensorStructure, T, It> Iterator
-    for FiberIterator<'a, SparseTensor<T, S>, I>
+impl<
+        'a,
+        I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R, Item = It>,
+        S: TensorStructure,
+        T,
+        It,
+    > Iterator for FiberIterator<'a, SparseTensor<T, S>, I>
 where
     It: FiberIteratorItem,
 {
@@ -1441,14 +1475,23 @@ where
     }
 }
 
-pub struct MutFiberIterator<'a, S: TensorStructure, I: IteratesAlongFibers> {
+pub struct MutFiberIterator<
+    'a,
+    S: TensorStructure,
+    I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R>,
+> {
     iter: I,
     fiber: FiberMut<'a, S>,
     skipped: usize,
 }
 
-impl<'a, I: IteratesAlongFibers<Item = It>, S: TensorStructure, T, It> LendingIterator
-    for MutFiberIterator<'a, SparseTensor<T, S>, I>
+impl<
+        'a,
+        I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R, Item = It>,
+        S: TensorStructure,
+        T,
+        It,
+    > LendingIterator for MutFiberIterator<'a, SparseTensor<T, S>, I>
 where
     It: FiberIteratorItem,
 {
@@ -1473,8 +1516,13 @@ where
     }
 }
 
-impl<'a, I: IteratesAlongFibers<Item = It>, S: TensorStructure, T, It> LendingIterator
-    for MutFiberIterator<'a, DenseTensor<T, S>, I>
+impl<
+        'a,
+        I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R, Item = It>,
+        S: TensorStructure,
+        T,
+        It,
+    > LendingIterator for MutFiberIterator<'a, DenseTensor<T, S>, I>
 where
     It: FiberIteratorItem,
 {
@@ -1491,7 +1539,9 @@ where
     }
 }
 
-impl<'a, S: TensorStructure, I: IteratesAlongFibers> MutFiberIterator<'a, S, I> {
+impl<'a, S: TensorStructure, I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R>>
+    MutFiberIterator<'a, S, I>
+{
     pub fn new(fiber: FiberMut<'a, S>, conj: bool) -> Self {
         MutFiberIterator {
             iter: I::new(&fiber, conj),
@@ -1510,7 +1560,9 @@ impl<'a, S: TensorStructure, I: IteratesAlongFibers> MutFiberIterator<'a, S, I> 
     }
 }
 
-impl<'a, S: TensorStructure, I: IteratesAlongPermutedFibers> MutFiberIterator<'a, S, I> {
+impl<'a, S: TensorStructure, I: IteratesAlongPermutedFibers<<S::Slot as IsAbstractSlot>::R>>
+    MutFiberIterator<'a, S, I>
+{
     pub fn new_permuted(fiber: FiberMut<'a, S>, permutation: Permutation, conj: bool) -> Self {
         MutFiberIterator {
             iter: I::new_permuted(&fiber, conj, permutation),
@@ -1522,12 +1574,13 @@ impl<'a, S: TensorStructure, I: IteratesAlongPermutedFibers> MutFiberIterator<'a
 
 #[test]
 fn mutiter() {
+    let rep = Euclidean {};
     let structa = VecStructure::new(vec![
-        (0, 4).into(),
-        (4, 4).into(),
-        (1, 5).into(),
-        (3, 7).into(),
-        (2, 8).into(),
+        rep.new_slot(0, 4).into(),
+        rep.new_slot(4, 4).into(),
+        rep.new_slot(1, 5).into(),
+        rep.new_slot(3, 7).into(),
+        rep.new_slot(2, 8).into(),
     ]);
 
     let mut a: DenseTensor<f64> = DenseTensor::zero(structa);
@@ -1546,7 +1599,7 @@ fn mutiter() {
 pub struct FiberClassIterator<
     'b,
     S: TensorStructure,
-    I: IteratesAlongFibers = CoreFlatFiberIterator,
+    I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R> = CoreFlatFiberIterator,
 > {
     pub fiber_iter: FiberIterator<'b, S, I>,
     pub class_iter: CoreFlatFiberIterator,
@@ -1569,15 +1622,19 @@ impl<'b, N: TensorStructure> FiberClassIterator<'b, N, CoreFlatFiberIterator> {
     }
 }
 
-impl<'b, N: TensorStructure, I: IteratesAlongFibers> FiberClassIterator<'b, N, I> {
+impl<'b, N: TensorStructure, I: IteratesAlongFibers<<N::Slot as IsAbstractSlot>::R>>
+    FiberClassIterator<'b, N, I>
+{
     pub fn reset(&mut self) {
-        self.class_iter.reset();
+        IteratesAlongFibers::<<N::Slot as IsAbstractSlot>::R>::reset(&mut self.class_iter);
         self.fiber_iter.reset();
         self.fiber_iter.shift(0);
     }
 }
 
-impl<'b, N: TensorStructure, I: IteratesAlongPermutedFibers> FiberClassIterator<'b, N, I> {
+impl<'b, N: TensorStructure, I: IteratesAlongPermutedFibers<<N::Slot as IsAbstractSlot>::R>>
+    FiberClassIterator<'b, N, I>
+{
     pub fn new_permuted(class: FiberClass<'b, N>, permutation: Permutation) -> Self {
         let iter = CoreFlatFiberIterator::new(&class, false);
 
@@ -1590,8 +1647,11 @@ impl<'b, N: TensorStructure, I: IteratesAlongPermutedFibers> FiberClassIterator<
     }
 }
 
-impl<'a, S: TensorStructure + 'a, I: IteratesAlongFibers + Clone + Debug> Iterator
-    for FiberClassIterator<'a, S, I>
+impl<
+        'a,
+        S: TensorStructure + 'a,
+        I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R> + Clone + Debug,
+    > Iterator for FiberClassIterator<'a, S, I>
 {
     type Item = FiberIterator<'a, S, I>;
 
@@ -1604,8 +1664,8 @@ impl<'a, S: TensorStructure + 'a, I: IteratesAlongFibers + Clone + Debug> Iterat
     }
 }
 
-impl<'a, S: TensorStructure + 'a, I: IteratesAlongFibers> LendingIterator
-    for FiberClassIterator<'a, S, I>
+impl<'a, S: TensorStructure + 'a, I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R>>
+    LendingIterator for FiberClassIterator<'a, S, I>
 {
     type Item<'r> = &'r mut FiberIterator<'a, S, I> where Self: 'r;
 
@@ -1716,7 +1776,7 @@ where
                 .map(|&pos| tensor.get_rep(pos).unwrap())
                 .collect::<Vec<_>>()
                 .iter()
-                .all(|&sig| sig == tensor.external_structure()[trace_indices[0]].representation),
+                .all(|&sig| sig == tensor.get_rep(trace_indices[0]).unwrap()),
             "Trace indices must point to the same dimension"
         );
         SparseTensorTraceIterator {
@@ -1738,7 +1798,7 @@ where
         {
             *index += 1;
             // If the index goes beyond the shape boundary, wrap around to 0
-            if index >= &mut usize::from(self.tensor.shape()[i]) {
+            if index >= &mut usize::try_from(self.tensor.shape()[i]).unwrap() {
                 *index = 0;
                 continue; // carry over to the next dimension
             }
@@ -1759,9 +1819,8 @@ where
             return None;
         }
 
-        let trace_dimension =
-            self.tensor.external_structure()[self.trace_indices[0]].representation;
-        let trace_sign = trace_dimension.negative();
+        let trace_dimension = self.tensor.get_rep(self.trace_indices[0]).unwrap(); //external_structure()[self.trace_indices[0]].representation;
+        let trace_sign = trace_dimension.negative().unwrap();
         let mut iter = trace_sign.iter().enumerate();
         let mut indices = self.current_indices.clone();
         let (i, mut sign) = iter.next().unwrap(); //First element (to eliminate the need for default)
@@ -2020,10 +2079,10 @@ where
         assert!(
             trace_indices
                 .iter()
-                .map(|&pos| tensor.external_structure()[pos].representation)
+                .map(|&pos| tensor.get_rep(pos))
                 .collect::<Vec<_>>()
                 .iter()
-                .all(|&sig| sig == tensor.external_structure()[trace_indices[0]].representation),
+                .all(|&sig| sig == tensor.get_rep(trace_indices[0])),
             "Trace indices must point to the same dimension"
         );
         DenseTensorTraceIterator {
@@ -2044,7 +2103,7 @@ where
         {
             *index += 1;
             // If the index goes beyond the shape boundary, wrap around to 0
-            if index >= &mut self.tensor.shape()[i] {
+            if index >= &mut usize::try_from(self.tensor.shape()[i]).unwrap() {
                 *index = 0;
                 continue; // carry over to the next dimension
             }
@@ -2065,9 +2124,8 @@ where
             return None;
         }
 
-        let trace_dimension =
-            self.tensor.external_structure()[self.trace_indices[0]].representation;
-        let trace_sign = trace_dimension.negative();
+        let trace_dimension = self.tensor.get_rep(self.trace_indices[0]).unwrap();
+        let trace_sign = trace_dimension.negative().unwrap();
 
         let mut iter = trace_sign.iter().enumerate();
         let mut indices = self.current_indices.clone();

@@ -1,4 +1,8 @@
+use crate::ufo::metric_data;
+use crate::SetTensorData;
 use ahash::AHashMap;
+use anyhow::{anyhow, Result};
+use bitvec::order;
 use delegate::delegate;
 use derive_more::Add;
 use derive_more::AddAssign;
@@ -15,16 +19,24 @@ use derive_more::Sub;
 use derive_more::SubAssign;
 use duplicate::duplicate;
 use indexmap::IndexMap;
+use num::One;
+use num::Zero;
 use serde::Deserialize;
 use serde::Serialize;
-
 use smartstring::LazyCompact;
 use smartstring::SmartString;
+use std::fmt::write;
 use std::fmt::Debug;
 #[cfg(feature = "shadowing")]
 use std::fmt::Display;
+use std::hash::Hash;
+use std::io::SeekFrom;
 use std::marker::PhantomData;
 use std::ops::Deref;
+use std::ops::Neg;
+use std::process::Output;
+use std::process::Termination;
+use thiserror::Error;
 
 #[cfg(feature = "shadowing")]
 use symbolica::evaluate::FunctionMap;
@@ -40,6 +52,7 @@ use symbolica::{
 };
 
 use crate::Permutation;
+use crate::SparseTensor;
 #[cfg(feature = "shadowing")]
 use crate::{ExpandedCoefficent, FlatCoefficent, ParamTensor, TensorCoefficient};
 use std::ops::Range;
@@ -50,7 +63,7 @@ use std::{cmp::Ordering, collections::HashMap};
 use super::TensorStructureIndexIterator;
 #[cfg(feature = "shadowing")]
 use super::{ufo, DenseTensor, MixedTensor};
-use smartstring::alias::String;
+// use smartstring::alias::String;
 /// A type that represents the name of an index in a tensor.
 #[derive(
     Debug,
@@ -105,50 +118,133 @@ impl TryFrom<&'_ str> for AbstractIndex {
     }
 }
 
+#[cfg(feature = "shadowing")]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Display)]
+pub struct SerializableSymbol {
+    symbol: Symbol,
+}
+
+#[cfg(feature = "shadowing")]
+impl Serialize for SerializableSymbol {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.symbol.to_string().serialize(serializer)
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<'d> Deserialize<'d> for SerializableSymbol {
+    fn deserialize<D>(deserializer: D) -> Result<SerializableSymbol, D::Error>
+    where
+        D: serde::Deserializer<'d>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Ok(SerializableSymbol {
+            symbol: State::get_symbol(value),
+        })
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl From<Symbol> for SerializableSymbol {
+    fn from(value: Symbol) -> Self {
+        Self { symbol: value }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl From<SerializableSymbol> for Symbol {
+    fn from(value: SerializableSymbol) -> Self {
+        value.symbol
+    }
+}
+
 /// A Dimension
 #[derive(
-    Debug,
-    Copy,
-    Clone,
-    Ord,
-    PartialOrd,
-    Eq,
-    PartialEq,
-    Hash,
-    Serialize,
-    Deserialize,
-    From,
-    Into,
-    Add,
-    Display,
+    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Display, Serialize, Deserialize,
 )]
-#[into(owned, ref, ref_mut)]
-#[display(fmt = "{}", _0)]
-pub struct Dimension(pub usize);
+pub enum Dimension {
+    Concrete(usize),
+    #[cfg(feature = "shadowing")]
+    Symbolic(SerializableSymbol),
+}
+
+impl Dimension {
+    pub fn new_concrete(value: usize) -> Self {
+        Self::Concrete(value)
+    }
+
+    #[cfg(feature = "shadowing")]
+    pub fn to_symbolic(&self) -> Atom {
+        match self {
+            Self::Concrete(c) => Atom::new_num(*c as i64),
+            Self::Symbolic(s) => Atom::new_var((*s).into()),
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum DimensionError {
+    #[error("Dimension is not concrete")]
+    NotConcrete,
+    #[error("Dimension too large")]
+    TooLarge,
+}
+
+impl TryFrom<Dimension> for usize {
+    type Error = DimensionError;
+
+    fn try_from(value: Dimension) -> Result<Self, Self::Error> {
+        match value {
+            Dimension::Concrete(c) => Ok(c),
+            _ => Err(DimensionError::NotConcrete),
+        }
+    }
+}
+
+impl From<usize> for Dimension {
+    fn from(value: usize) -> Self {
+        Dimension::Concrete(value)
+    }
+}
+
+impl From<Symbol> for Dimension {
+    fn from(value: Symbol) -> Self {
+        Dimension::Symbolic(value.into())
+    }
+}
 
 impl PartialEq<usize> for Dimension {
     fn eq(&self, other: &usize) -> bool {
-        self.0 == *other
+        match self {
+            Self::Concrete(c) => c == other,
+            _ => false,
+        }
     }
 }
 
 impl PartialEq<Dimension> for usize {
     fn eq(&self, other: &Dimension) -> bool {
-        *self == other.0
+        match other {
+            Dimension::Concrete(c) => c == self,
+            _ => false,
+        }
     }
 }
 
-impl PartialOrd<usize> for Dimension {
-    fn partial_cmp(&self, other: &usize) -> Option<Ordering> {
-        self.0.partial_cmp(other)
-    }
-}
+// impl PartialOrd<usize> for Dimension {
+//     fn partial_cmp(&self, other: &usize) -> Option<Ordering> {
+//         self.0.partial_cmp(other)
+//     }
+// }
 
-impl PartialOrd<Dimension> for usize {
-    fn partial_cmp(&self, other: &Dimension) -> Option<Ordering> {
-        self.partial_cmp(&other.0)
-    }
-}
+// impl PartialOrd<Dimension> for usize {
+//     fn partial_cmp(&self, other: &Dimension) -> Option<Ordering> {
+//         self.partial_cmp(&other.0)
+//     }
+// }
 
 /// A  concrete index, i.e. the concrete usize/index of the corresponding abstract index
 
@@ -254,118 +350,433 @@ pub const CONCRETEIND: &str = "cind";
 pub const FLATIND: &str = "find";
 pub const ABSTRACTIND: &str = "aind";
 
-/// A Representation/Dimension of the index.
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum Representation {
-    /// Represents a Euclidean space of the given dimension, with metric diag(1,1,1,1,...)
-    Euclidean(Dimension),
-    /// Represents a Minkowski space of the given dimension, with metric diag(1,-1,-1,-1,...)
-    Lorentz(Dimension),
-    Bispinor(Dimension),
-    /// Represents a Spinor Fundamental space of the given dimension
-    SpinFundamental(Dimension),
-    /// Represents a Spinor Adjoint space of the given dimension
-    SpinAntiFundamental(Dimension),
-    /// Represents a Color Fundamental space of the given dimension
-    ColorFundamental(Dimension),
-    /// Represents a Color Anti-Fundamental space of the given dimension
-    ColorAntiFundamental(Dimension),
-    /// Represents a Color Adjoint space of the given dimension
-    ColorAdjoint(Dimension),
-    /// Represents a Color Sextet space of the given dimension
-    ColorSextet(Dimension),
-    /// Represents a Color Anti-Sextet space of the given dimension
-    ColorAntiSextet(Dimension),
-}
+// /// A Representation/Dimension of the index.
+// #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+// pub enum Representation {
+//     /// Represents a Euclidean space of the given dimension, with metric diag(1,1,1,1,...)
+//     Euclidean(Dimension),
+//     /// Represents a Minkowski space of the given dimension, with metric diag(1,-1,-1,-1,...)
+//     Lorentz(Dimension),
+//     Bispinor(Dimension),
+//     /// Represents a Spinor Fundamental space of the given dimension
+//     SpinFundamental(Dimension),
+//     /// Represents a Spinor Adjoint space of the given dimension
+//     SpinAntiFundamental(Dimension),
+//     /// Represents a Color Fundamental space of the given dimension
+//     ColorFundamental(Dimension),
+//     /// Represents a Color Anti-Fundamental space of the given dimension
+//     ColorAntiFundamental(Dimension),
+//     /// Represents a Color Adjoint space of the given dimension
+//     ColorAdjoint(Dimension),
+//     /// Represents a Color Sextet space of the given dimension
+//     ColorSextet(Dimension),
+//     /// Represents a Color Anti-Sextet space of the given dimension
+//     ColorAntiSextet(Dimension),
+// }
 
-pub trait Rep: Copy {
-    type Dual: Rep<Dual = Self>;
-    const NAME: &'static str;
-    fn dual(self) -> Self::Dual;
-
-    fn is_neg(i: usize) -> bool;
-
-    #[allow(clippy::cast_possible_wrap)]
-    #[cfg(feature = "shadowing")]
-    fn to_fnbuilder() -> FunctionBuilder {
-        FunctionBuilder::new(State::get_symbol(&Self::name()))
+pub trait BaseRepName: RepName + Default {
+    fn selfless_name() -> String;
+    fn selfless_base() -> Self::Base;
+    fn selfless_pair() -> DualPair<Self::Base>
+    where
+        Self::Base: BaseRepName<Dual: BaseRepName>;
+    fn selfless_symbol() -> Symbol {
+        State::get_symbol(Self::selfless_name())
     }
-
-    fn name() -> String {
-        Self::NAME.into()
-    }
-
-    fn new_slot<D: Into<Dimension>, A: Into<AbstractIndex>>(self, dim: D, aind: A) -> GenSlot<Self>
+    fn selfless_dual() -> Self::Dual;
+    fn new_dimed_rep_selfless<D: Into<Dimension>>(dim: D) -> Representation<Self>
     where
         Self: Sized,
     {
-        GenSlot {
+        Representation {
+            dim: dim.into(),
+            rep: Self::default(),
+        }
+    }
+
+    fn new_slot_selfless<D: Into<Dimension>, A: Into<AbstractIndex>>(dim: D, aind: A) -> Slot<Self>
+    where
+        Self: Sized,
+    {
+        Slot {
+            rep: Self::new_dimed_rep_selfless(dim),
+            aind: aind.into(),
+        }
+    }
+
+    fn base_metric<S, V: One + Neg<Output = V>>(&self, structure: S) -> SparseTensor<V, S>
+    where
+        S: TensorStructure;
+
+    fn new_slot_from(
+        sym: Symbol,
+        dim: Dimension,
+        aind: AbstractIndex,
+    ) -> Result<Slot<Self>, SlotError> {
+        if sym == Self::selfless_symbol() {
+            Ok(Slot {
+                rep: Representation {
+                    dim,
+                    rep: Self::default(),
+                },
+                aind,
+            })
+        } else {
+            Err(SlotError::NotRepresentation)
+        }
+    }
+}
+
+// impl<B: BaseRepName<Dual = Dual<B>>> BaseRepName for Dual<B> {
+//     type Dual = B;
+//     type Base = B;
+//     fn selfless_name() -> String {
+//         format!("dual{}", B::selfless_name())
+//     }
+
+//     fn selfless_dual() -> Self::Dual {
+//         B::default()
+//     }
+
+//     fn selfless_base() -> Self::Base {
+//         B::default()
+//     }
+
+//     fn selfless_pair() -> DualPair<Self::Base> {
+//         DualPair::DualRep(Dual {
+//             inner: B::default(),
+//         })
+//     }
+// }
+
+// impl<B: BaseRepName> Display for B {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", B::selfless_name())
+//     }
+// }
+
+pub trait RepName: Copy + Clone + Debug + PartialEq + Eq + Hash + Display {
+    type Dual: RepName<Dual = Self, Base = Self::Base>;
+    type Base: RepName;
+    fn dual(self) -> Self::Dual;
+    fn base(&self) -> Self::Base;
+    fn try_from_symbol(sym: Symbol) -> Result<Self>;
+    fn metric<S, V: One + Zero + Neg<Output = V>>(
+        &self,
+        size: usize,
+        aind: [AbstractIndex; 2],
+    ) -> SparseTensor<V, S>
+    where
+        S: TensorStructure + FromIterator<Slot<Self>> + FromIterator<Slot<Self::Dual>>,
+    {
+        let structure: S = [self.new_slot(size, aind[0]), self.new_slot(size, aind[1])]
+            .into_iter()
+            .collect();
+        self.metric_data(structure)
+    }
+
+    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
+        &self,
+        structure: S,
+    ) -> SparseTensor<V, S>;
+
+    // fn try_from<B: BaseRepName>(b: B) -> Result<B, SlotError>;
+
+    /// for the given concrete index, says whether it should have a minus sign during contraction
+    ///
+    /// for example see [`Self::negative`]
+    #[must_use]
+    fn is_neg(self, _i: usize) -> bool {
+        false
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    #[cfg(feature = "shadowing")]
+    /// yields a function builder for the representation, adding a first variable: the dimension.
+    ///
+    fn to_fnbuilder(&self) -> FunctionBuilder {
+        FunctionBuilder::new(State::get_symbol(self.to_string()))
+    }
+
+    #[cfg(feature = "shadowing")]
+    fn to_symbol(&self) -> Symbol {
+        State::get_symbol(self.to_string())
+    }
+
+    fn new_slot<D: Into<Dimension>, A: Into<AbstractIndex>>(self, dim: D, aind: A) -> Slot<Self>
+    where
+        Self: Sized,
+    {
+        Slot {
             rep: self.new_dimed_rep(dim),
             aind: aind.into(),
         }
     }
 
-    fn new_dimed_rep<D: Into<Dimension>>(self, dim: D) -> Repr<Self>
+    fn new_dimed_rep<D: Into<Dimension>>(&self, dim: D) -> Representation<Self>
     where
         Self: Sized,
     {
-        Repr {
+        Representation {
             dim: dim.into(),
-            rep: PhantomData,
+            rep: *self,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
+)]
 pub struct Dual<T> {
     inner: T,
 }
 
-impl<T: Rep<Dual = Dual<T>>> Rep for Dual<T> {
-    type Dual = T;
-    const NAME: &'static str = T::NAME;
-    fn dual(self) -> Self::Dual {
-        self.inner
-    }
-    fn is_neg(i: usize) -> bool {
-        T::is_neg(i)
+impl<T: RepName> Display for Dual<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "dual{}", self.inner.to_string())
     }
 }
 
+// impl<T: BaseRepName<Dual = Dual<T>, Base = T>> BaseRepName for Dual<T> {
+//     fn selfless_name() -> String {
+//         format!("dual{}", T::selfless_name())
+//     }
+
+//     fn selfless_base() -> Self::Base {
+//         T::selfless_base()
+//     }
+
+//     fn selfless_pair() -> DualPair<Self::Base> {
+//         DualPair::DualRep(Dual {
+//             inner: T::selfless_base(),
+//         })
+//     }
+
+//     fn selfless_dual() -> Self::Dual {
+//         T::selfless_base()
+//     }
+// }
+
+// impl<T: BaseRepName<Dual = Dual<T>, Base = T>> RepName for Dual<T> {
+//     type Dual = T;
+//     type Base = T::Base;
+//     fn dual(self) -> Self::Dual {
+//         self.inner
+//     }
+
+//     fn metric<S,V:One+Zero+Neg<Output=V>>
+//     (&self,size:usize,aind:[AbstractIndex;2])-> SparseTensor<V,S> where S:TensorStructure+FromIterator<Slot<Self>>+FromIterator<Slot<Self::Dual>> {
+//         self.inner.metric(size,aind)
+//     }
+
+//     fn base(&self) -> Self::Base {
+//         self.inner.base()
+//     }
+
+//     fn try_from_symbol(sym: Symbol) -> Result<Self> {
+//         if Self::selfless_symbol() == sym {
+//             Ok(Dual {
+//                 inner: T::default(),
+//             })
+//         } else {
+//             Err(anyhow!("Not a dual representation"))
+//         }
+//     }
+
+//     fn is_neg(self, i: usize) -> bool {
+//         self.is_neg(i)
+//     }
+// }
+
 duplicate! {
-   [isnotselfdual isneg constname;
-    [Lorentz] [i > 0] ["lor"];
-    [SpinFundamental] [false] ["spin"];
-    [ColorFundamental] [false] ["cof"];
-    [ColorSextet] [false] ["cos"]]
-    #[derive(Debug, Clone, Copy)]
+   [isnotselfdual isneg constname varname varnamedual;
+    [Lorentz] [i > 0] ["lor"] [LorentzUp] [LorentzDown];
+    [SpinFundamental] [false] ["spin"] [SpinFund] [SpinAntiFund];
+    [ColorFundamental] [false] ["cof"] [ColorFund] [ColorAntiFund];
+    [ColorSextet] [false] ["cos"] [ColorSextet] [ColorAntiSextet]]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 
     pub struct isnotselfdual {}
     #[allow(unused_variables)]
-    impl Rep for isnotselfdual {
-        type Dual = Dual<isnotselfdual>;
-        const NAME: &'static str = constname;
+    impl BaseRepName for isnotselfdual {
+
+
+
+        fn selfless_name() -> String {
+            constname.to_string()
+        }
+
+        fn selfless_base() -> Self::Base {
+            Self::default()
+        }
+
+        fn selfless_pair() -> DualPair<Self::Base> {
+            DualPair::Rep(Self::default())
+        }
+
+        fn selfless_dual() -> Self::Dual {
+            Dual{inner:isnotselfdual::default()}
+        }
+
+
+
+        fn base_metric<S,V:One+Neg<Output=V>>
+        (&self,structure:S)-> SparseTensor<V,S> where S:TensorStructure {
+        let size = usize::try_from(structure.get_dim(0).unwrap()).unwrap();
+        let mut tensor= SparseTensor::empty(structure);
+            for i in 0..size{
+                if self.is_neg(i){
+
+                    tensor.set(&[i,i],V::one().neg());
+                } else {
+                    tensor.set(&[i,i],V::one());
+                }
+            }
+        tensor
+        }
+
+
+    }
+
+    impl RepName for isnotselfdual {
+    type Base = isnotselfdual;
+    type Dual = Dual<isnotselfdual>;
+
+    fn base(&self) -> Self::Base {
+        isnotselfdual::selfless_base()
+    }
+
+    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
+            &self,
+            structure: S,
+        ) -> SparseTensor<V, S> {
+        self.base_metric(structure)
+    }
+
+    fn dual(self) -> Self::Dual {
+        isnotselfdual::selfless_dual()
+    }
+
+    fn is_neg(self,i:usize)->bool{
+        isneg
+    }
+
+    fn try_from_symbol(sym: Symbol) -> Result<Self> {
+        if Self::selfless_symbol() == sym {
+            Ok(isnotselfdual::default())
+        } else {
+            Err(anyhow!("Not a representation"))
+        }
+    }
+
+
+
+}
+
+
+    impl BaseRepName for Dual<isnotselfdual>{
+
+        fn selfless_name() -> String {
+            format!("dual{}",constname)
+        }
+        fn selfless_base() -> Self::Base {
+            isnotselfdual::default()
+        }
+        fn selfless_dual()->Self::Dual{
+            isnotselfdual::default()
+        }
+        fn selfless_pair() -> DualPair<Self::Base> {
+            DualPair::DualRep(Dual{inner:isnotselfdual::default()})
+        }
+
+        fn base_metric<S,V:One+Neg<Output=V>>
+        (&self,structure:S)-> SparseTensor<V,S> where S:TensorStructure {
+ let size = usize::try_from(structure.get_dim(0).unwrap()).unwrap();
+        let mut tensor= SparseTensor::empty(structure);
+            for i in 0..size{
+                if self.is_neg(i){
+
+                    tensor.set(&[i,i],V::one().neg());
+                } else {
+                    tensor.set(&[i,i],V::one());
+                }
+            }
+        tensor
+        }
+    }
+
+    impl RepName for Dual<isnotselfdual>{
+        type Base = isnotselfdual;
+        type Dual = isnotselfdual;
+
         fn dual(self) -> Self::Dual {
-            Dual { inner: self }
+            self.inner
         }
-        fn is_neg(i: usize) -> bool {
-            isneg
+
+       fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
+               &self,
+               structure: S,
+           ) -> SparseTensor<V, S> {
+           self.base_metric(structure)
+       }
+
+        fn base(&self) -> Self::Base {
+            self.inner
         }
+
+        fn try_from_symbol(sym:Symbol)->Result<Self>{
+            if Self::selfless_symbol() == sym {
+            Ok(Dual {
+                inner: isnotselfdual::default(),
+            })
+        } else {
+            Err(anyhow!("Not a dual representation"))
+        }
+        }
+
+        fn is_neg(self, i: usize) -> bool {
+            self.dual().is_neg(i)
+        }
+
+
+
 
     }
 
-
-    impl<B: IsAbstractSlot> From<GenSlot<isnotselfdual>> for RecSlotEnum<DualPair<isnotselfdual>, B> {
-        fn from(value: GenSlot<isnotselfdual>) -> Self {
-            RecSlotEnum::A(value.dual_pair())
+    impl Display for isnotselfdual{
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", constname)
         }
     }
 
 
-    impl<B: IsAbstractSlot> From<GenSlot<Dual<isnotselfdual>>> for RecSlotEnum<DualPair<isnotselfdual>, B> {
-        fn from(value: GenSlot<Dual<isnotselfdual>>) -> Self {
-            RecSlotEnum::A(value.pair())
+    impl Default for isnotselfdual {
+        fn default() -> Self {
+            Self {}
         }
+    }
+
+    impl From<isnotselfdual> for PhysReps {
+        fn from(value: isnotselfdual) -> Self {
+            PhysReps::varname(value)
+        }
+    }
+
+    impl From<Dual<isnotselfdual>> for PhysReps{
+        fn from(value: Dual<isnotselfdual>) -> Self {
+            PhysReps::varnamedual(value)
+        }
+    }
+
+     impl From<Slot<isnotselfdual>> for PhysicalSlots {
+    fn from(value: Slot<isnotselfdual>) -> Self {
+        value.cast() //RecSlotEnum::A(value.dual_pair()).into()
+    }}
+
+    impl From<Slot<Dual<isnotselfdual>>> for PhysicalSlots {
+    fn from(value: Slot<Dual<isnotselfdual>>) -> Self {
+        value.cast() //RecSlotEnum::A(value.dual_pair()).into()
+    }
     }
 }
 
@@ -374,392 +785,303 @@ duplicate! {
     [Euclidean] ["euc"];
     [Bispinor] ["bis"];
     [ColorAdjoint] ["coad"]]
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
     pub struct isselfdual {}
 
-    impl Rep for isselfdual {
-        const NAME: &'static str = constname;
-        type Dual = isselfdual;
-        fn dual(self) -> Self::Dual {
-            self
+    impl BaseRepName for isselfdual {
+
+
+        fn selfless_name() -> String {
+            constname.to_string()
         }
 
-        fn is_neg(i: usize) -> bool {
-            false
+        fn selfless_base() -> Self::Base {
+            Self::default()
+        }
+
+        fn selfless_pair() -> DualPair<Self::Base> {
+            DualPair::Rep(Self::default())
+        }
+
+        fn selfless_dual() -> Self::Dual {
+            Self::default()
+        }
+
+fn base_metric<S,V:One+Neg<Output=V>>
+        (&self,structure:S)-> SparseTensor<V,S> where S:TensorStructure {
+ let size = usize::try_from(structure.get_dim(0).unwrap()).unwrap();
+        let mut tensor= SparseTensor::empty(structure);
+            for i in 0..size{
+                if self.is_neg(i){
+
+                    tensor.set(&[i,i],V::one().neg());
+                } else {
+                    tensor.set(&[i,i],V::one());
+                }
+            }
+        tensor
+        }
+
+    }
+
+    impl RepName for isselfdual {
+    type Base = isselfdual;
+    type Dual = isselfdual;
+
+    fn base(&self) -> Self::Base {
+        isselfdual::selfless_base()
+    }
+
+    fn dual(self) -> Self::Dual {
+        isselfdual::selfless_dual()
+    }
+
+  fn try_from_symbol(sym: Symbol) -> Result<Self> {
+        if Self::selfless_symbol() == sym {
+            Ok(isselfdual::default())
+        } else {
+            Err(anyhow!("Not a representation"))
         }
     }
 
-    impl<B: IsAbstractSlot> From<GenSlot<isselfdual>> for RecSlotEnum<isselfdual, B> {
-        fn from(value: GenSlot<isselfdual>) -> Self {
-            RecSlotEnum::A(value)
+    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
+               &self,
+               structure: S,
+           ) -> SparseTensor<V, S> {
+           self.base_metric(structure)
+       }
+
+}
+
+
+
+    impl Default for isselfdual {
+        fn default() -> Self {
+            Self {}
         }
     }
 
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Repr<T: Rep> {
-    pub dim: Dimension,
-    rep: PhantomData<T>,
-}
-
-impl<T: Rep> Repr<T> {
-    pub fn dual(self) -> Repr<T::Dual> {
-        Repr {
-            dim: self.dim,
-            rep: PhantomData,
+    impl Display for isselfdual{
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", constname)
         }
     }
 
-    pub fn dual_pair(self) -> Repr<DualPair<T>>
-    where
-        T: Rep<Dual = Dual<T>>,
-    {
-        Repr {
-            dim: self.dim,
-            rep: PhantomData,
+    impl From<isselfdual> for PhysReps {
+        fn from(value: isselfdual) -> Self {
+            PhysReps::isselfdual(value)
         }
     }
 
-    pub fn new_slot<A: Into<AbstractIndex>>(&self, aind: A) -> GenSlot<T> {
-        GenSlot {
-            aind: aind.into(),
-            rep: *self,
-        }
-    }
-
-    pub fn negative(&self) -> Vec<bool> {
-        (0..usize::from(self.dim)).map(T::is_neg).collect()
+    impl From<Slot<isselfdual>> for PhysicalSlots {
+    fn from(value: Slot<isselfdual>) -> Self {
+        value.cast() //RecSlotEnum::A(value.dual_pair()).into()
     }
 }
 
-impl From<Dimension> for Repr<Euclidean> {
-    fn from(value: Dimension) -> Self {
-        Repr {
-            dim: value,
-            rep: PhantomData,
-        }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum PhysReps {
+    Euclidean(Euclidean),
+    LorentzUp(Lorentz),
+    LorentzDown(Dual<Lorentz>),
+    SpinFund(SpinFundamental),
+    SpinAntiFund(Dual<SpinFundamental>),
+    ColorFund(ColorFundamental),
+    ColorAntiFund(Dual<ColorFundamental>),
+    ColorSextet(ColorSextet),
+    ColorAntiSextet(Dual<ColorSextet>),
+    Bispinor(Bispinor),
+    ColorAdjoint(ColorAdjoint),
+}
+
+// impl From<Lorentz> for PhysReps {
+//     fn from(value: Lorentz) -> Self {
+//         PhysReps::LorentzUp(value)
+//     }
+// }
+
+impl Default for PhysReps {
+    fn default() -> Self {
+        Self::Euclidean(Euclidean {})
     }
 }
 
-impl<'a, T: Rep> FromIterator<&'a Repr<T>> for Vec<Dimension> {
-    fn from_iter<I: IntoIterator<Item = &'a Repr<T>>>(iter: I) -> Self {
-        iter.into_iter().map(|rep| rep.dim).collect()
-    }
-}
-
-impl<T: Rep<Dual = Dual<T>>> Repr<Dual<T>> {
-    pub fn pair(self) -> Repr<DualPair<T>> {
-        Repr {
-            dim: self.dim,
-            rep: PhantomData,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct GenSlot<T: Rep> {
-    pub aind: AbstractIndex,
-    rep: Repr<T>,
-}
-
-impl<T: Rep> GenSlot<T> {
-    pub fn dual_pair(self) -> GenSlot<DualPair<T>>
-    where
-        T: Rep<Dual = Dual<T>>,
-    {
-        GenSlot {
-            aind: self.aind,
-            rep: self.rep.dual_pair(),
+impl Display for PhysReps {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Bispinor(_) => write!(f, "bis"),
+            Self::Euclidean(_) => write!(f, "euc"),
+            Self::ColorAdjoint(_) => write!(f, "coad"),
+            Self::ColorFund(_) => write!(f, "cof"),
+            Self::ColorAntiFund(_) => write!(f, "coaf"),
+            Self::ColorSextet(_) => write!(f, "cos"),
+            Self::ColorAntiSextet(_) => write!(f, "coas"),
+            Self::SpinFund(_) => write!(f, "spin"),
+            Self::SpinAntiFund(_) => write!(f, "spina"),
+            Self::LorentzUp(_) => write!(f, "loru"),
+            Self::LorentzDown(_) => write!(f, "lord"),
         }
     }
 }
 
-impl<T: Rep<Dual = Dual<T>>> GenSlot<Dual<T>> {
-    pub fn pair(self) -> GenSlot<DualPair<T>> {
-        GenSlot {
-            aind: self.aind,
-            rep: self.rep.pair(),
-        }
-    }
-}
+impl RepName for PhysReps {
+    type Base = PhysReps;
+    type Dual = PhysReps;
 
-pub trait IsAbstractSlot: Copy {
-    fn dim(&self) -> Dimension;
-    fn aind(&self) -> AbstractIndex;
-}
-
-pub trait DualSlotTo: IsAbstractSlot {
-    type Dual: IsAbstractSlot;
-    fn dual(&self) -> Self::Dual;
-    fn matches(&self, other: &Self::Dual) -> bool;
-}
-
-impl<T: Rep> IsAbstractSlot for GenSlot<T> {
-    // type Dual = GenSlot<T::Dual>;
-    fn dim(&self) -> Dimension {
-        self.rep.dim
-    }
-    fn aind(&self) -> AbstractIndex {
-        self.aind
-    }
-}
-
-impl<T: Rep> DualSlotTo for GenSlot<T> {
-    type Dual = GenSlot<T::Dual>;
-    fn dual(&self) -> GenSlot<T::Dual> {
-        GenSlot {
-            rep: self.rep.dual(),
-            aind: self.aind,
-        }
-    }
-    fn matches(&self, other: &Self::Dual) -> bool {
-        self.dim() == other.dim() && self.aind() == other.aind()
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum DualPair<R: Rep> {
-    Rep(R),
-    DualRep(Dual<R>),
-}
-
-impl<R: Rep<Dual = Dual<R>>> Rep for DualPair<R> {
-    type Dual = DualPair<R>;
-    const NAME: &'static str = R::NAME;
     fn dual(self) -> Self::Dual {
         match self {
-            Self::Rep(r) => Self::DualRep(r.dual()),
-            Self::DualRep(d) => Self::Rep(d.dual()),
+            Self::LorentzUp(l) => Self::LorentzDown(l.dual()),
+            Self::LorentzDown(l) => Self::LorentzUp(l.dual()),
+            Self::SpinFund(l) => Self::SpinAntiFund(l.dual()),
+            Self::SpinAntiFund(l) => Self::SpinFund(l.dual()),
+            Self::ColorFund(l) => Self::ColorAntiFund(l.dual()),
+            Self::ColorAntiFund(l) => Self::ColorFund(l.dual()),
+            Self::ColorSextet(l) => Self::ColorAntiSextet(l.dual()),
+            Self::ColorAntiSextet(l) => Self::ColorSextet(l.dual()),
+            x => x,
         }
     }
-    fn is_neg(i: usize) -> bool {
-        R::is_neg(i)
-    }
-}
 
-#[derive(Debug, Clone, Copy)]
-pub enum RecSlotEnum<A: Rep, B: IsAbstractSlot> {
-    A(GenSlot<A>),
-    B(B),
-}
-
-impl<A: Rep, C: Rep, B: IsAbstractSlot> From<RecSlotEnum<A, B>>
-    for RecSlotEnum<C, RecSlotEnum<A, B>>
-{
-    fn from(v: RecSlotEnum<A, B>) -> RecSlotEnum<C, RecSlotEnum<A, B>> {
-        RecSlotEnum::B(v)
-    }
-}
-
-impl<A: Rep, C: Rep, D: Rep, B: IsAbstractSlot> From<RecSlotEnum<A, B>>
-    for RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<A, B>>>
-{
-    fn from(value: RecSlotEnum<A, B>) -> Self {
-        RecSlotEnum::B(value.into())
-    }
-}
-
-impl<A: Rep, B: Rep, C: Rep, D: Rep, Slot: IsAbstractSlot> From<RecSlotEnum<A, Slot>>
-    for RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>
-{
-    fn from(value: RecSlotEnum<A, Slot>) -> Self {
-        RecSlotEnum::B(value.into())
-    }
-}
-
-impl<A: Rep, B: Rep, C: Rep, D: Rep, E: Rep, Slot: IsAbstractSlot> From<RecSlotEnum<A, Slot>>
-    for RecSlotEnum<E, RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>>
-{
-    fn from(value: RecSlotEnum<A, Slot>) -> Self {
-        RecSlotEnum::B(value.into())
-    }
-}
-
-impl<A: Rep, B: Rep, C: Rep, D: Rep, E: Rep, F: Rep, Slot: IsAbstractSlot>
-    From<RecSlotEnum<A, Slot>>
-    for RecSlotEnum<
-        F,
-        RecSlotEnum<E, RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>>,
-    >
-{
-    fn from(value: RecSlotEnum<A, Slot>) -> Self {
-        RecSlotEnum::B(value.into())
-    }
-}
-
-impl<A: Rep, B: Rep, C: Rep, D: Rep, E: Rep, F: Rep, G: Rep, Slot: IsAbstractSlot>
-    From<RecSlotEnum<A, Slot>>
-    for RecSlotEnum<
-        G,
-        RecSlotEnum<
-            F,
-            RecSlotEnum<E, RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>>,
-        >,
-    >
-{
-    fn from(value: RecSlotEnum<A, Slot>) -> Self {
-        RecSlotEnum::B(value.into())
-    }
-}
-
-impl<A: Rep, B: Rep, C: Rep, D: Rep, E: Rep, F: Rep, G: Rep, H: Rep, Slot: IsAbstractSlot>
-    From<RecSlotEnum<A, Slot>>
-    for RecSlotEnum<
-        H,
-        RecSlotEnum<
-            G,
-            RecSlotEnum<
-                F,
-                RecSlotEnum<
-                    E,
-                    RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>,
-                >,
-            >,
-        >,
-    >
-{
-    fn from(value: RecSlotEnum<A, Slot>) -> Self {
-        RecSlotEnum::B(value.into())
-    }
-}
-
-impl<
-        A: Rep,
-        B: Rep,
-        C: Rep,
-        D: Rep,
-        E: Rep,
-        F: Rep,
-        G: Rep,
-        H: Rep,
-        I: Rep,
-        Slot: IsAbstractSlot,
-    > From<RecSlotEnum<A, Slot>>
-    for RecSlotEnum<
-        I,
-        RecSlotEnum<
-            H,
-            RecSlotEnum<
-                G,
-                RecSlotEnum<
-                    F,
-                    RecSlotEnum<
-                        E,
-                        RecSlotEnum<D, RecSlotEnum<C, RecSlotEnum<B, RecSlotEnum<A, Slot>>>>,
-                    >,
-                >,
-            >,
-        >,
-    >
-{
-    fn from(value: RecSlotEnum<A, Slot>) -> Self {
-        RecSlotEnum::B(value.into())
-    }
-}
-
-impl<A: Rep, B: IsAbstractSlot> IsAbstractSlot for RecSlotEnum<A, B> {
-    fn dim(&self) -> Dimension {
+    fn base(&self) -> Self::Base {
         match self {
-            Self::A(a) => a.dim(),
-            Self::B(b) => b.dim(),
-        }
-    }
-    fn aind(&self) -> AbstractIndex {
-        match self {
-            Self::A(a) => a.aind,
-            Self::B(b) => b.aind(),
-        }
-    }
-}
-
-impl<A: Rep<Dual = A>, B: DualSlotTo<Dual = B>> DualSlotTo for RecSlotEnum<A, B> {
-    type Dual = RecSlotEnum<A::Dual, B>;
-    fn dual(&self) -> RecSlotEnum<A::Dual, B> {
-        match self {
-            Self::A(a) => RecSlotEnum::A(a.dual()),
-            Self::B(b) => RecSlotEnum::B(b.dual()),
+            Self::LorentzUp(l) => Self::LorentzUp(l.base()),
+            Self::LorentzDown(l) => Self::LorentzUp(l.base()),
+            Self::SpinFund(l) => Self::SpinFund(l.base()),
+            Self::SpinAntiFund(l) => Self::SpinFund(l.base()),
+            Self::ColorFund(l) => Self::ColorFund(l.base()),
+            Self::ColorAntiFund(l) => Self::ColorFund(l.base()),
+            Self::ColorSextet(l) => Self::ColorSextet(l.base()),
+            Self::ColorAntiSextet(l) => Self::ColorSextet(l.base()),
+            x => *x,
         }
     }
 
-    fn matches(&self, other: &Self::Dual) -> bool {
-        match (self, other) {
-            (RecSlotEnum::A(a), RecSlotEnum::A(b)) => a.dim() == b.dim() && a.aind() == b.aind(),
-            (RecSlotEnum::B(a), RecSlotEnum::B(b)) => a.matches(b),
+    fn try_from_symbol(sym: Symbol) -> Result<Self> {
+        match State::get_name(sym) {
+            EUCLIDEAN => Ok(Self::Euclidean(Euclidean {})),
+            LORENTZ => Ok(Self::LorentzUp(Lorentz {})),
+            "loru" => Ok(Self::LorentzUp(Lorentz {})),
+            "lord" => Ok(Self::LorentzDown(Dual::default())),
+            BISPINOR => Ok(Self::Bispinor(Bispinor {})),
+            SPINFUND => Ok(Self::SpinFund(SpinFundamental {})),
+            SPINANTIFUND => Ok(Self::SpinAntiFund(Dual::default())),
+            COLORADJ => Ok(Self::ColorAdjoint(ColorAdjoint {})),
+            COLORFUND => Ok(Self::ColorFund(ColorFundamental {})),
+            COLORANTIFUND => Ok(Self::ColorAntiFund(Dual::default())),
+            COLORSEXT => Ok(Self::ColorSextet(ColorSextet {})),
+            COLORANTISEXT => Ok(Self::ColorAntiSextet(Dual::default())),
+            _ => Err(anyhow!("Not a representation")),
+        }
+    }
+
+    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
+        &self,
+        structure: S,
+    ) -> SparseTensor<V, S> {
+        match self {
+            Self::Bispinor(s) => s.base_metric(structure),
+            Self::ColorAntiFund(s) => s.base_metric(structure),
+            Self::ColorAntiSextet(s) => s.base_metric(structure),
+            Self::ColorFund(s) => s.base_metric(structure),
+            Self::ColorSextet(s) => s.base_metric(structure),
+            Self::Euclidean(s) => s.base_metric(structure),
+            Self::ColorAdjoint(s) => s.base_metric(structure),
+            Self::LorentzDown(s) => s.base_metric(structure),
+            Self::SpinFund(s) => s.base_metric(structure),
+            Self::SpinAntiFund(s) => s.base_metric(structure),
+            Self::LorentzUp(s) => s.base_metric(structure),
+        }
+    }
+
+    fn is_neg(self, i: usize) -> bool {
+        match self {
+            Self::LorentzUp(l) => l.is_neg(i),
+            Self::LorentzDown(l) => l.is_neg(i),
             _ => false,
         }
     }
 }
 
-pub type NewSlots = RecSlotEnum<
-    DualPair<Lorentz>,
-    RecSlotEnum<
-        DualPair<SpinFundamental>,
-        RecSlotEnum<
-            DualPair<ColorFundamental>,
-            RecSlotEnum<
-                DualPair<ColorSextet>,
-                RecSlotEnum<Euclidean, RecSlotEnum<Bispinor, GenSlot<ColorAdjoint>>>,
-            >,
-        >,
-    >,
->;
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Representation<T: RepName> {
+    pub dim: Dimension,
+    pub rep: T,
+}
 
-impl From<GenSlot<SpinFundamental>> for NewSlots {
-    fn from(value: GenSlot<SpinFundamental>) -> Self {
-        RecSlotEnum::A(value.dual_pair()).into()
+// pub trait HasDimension: RepName {
+//     fn dim(&self) -> Dimension;
+
+//     fn to_fnbuilder(&self) -> FunctionBuilder {
+//         ::to_fnbuilder().add_arg(self.dim().to_symbolic().as_atom_view())
+//     }
+// }
+
+impl<T: BaseRepName<Base: BaseRepName, Dual: BaseRepName>> Representation<T> {
+    pub fn dual_pair(self) -> Representation<DualPair<T::Base>>
+    where
+        <T::Base as RepName>::Dual: RepName<Dual = T::Base, Base = T::Base>,
+        T::Base: RepName<Dual = T::Dual, Base = T::Base>,
+    {
+        Representation {
+            dim: self.dim,
+            rep: T::selfless_pair(),
+        }
     }
 }
 
-impl From<GenSlot<Dual<SpinFundamental>>> for NewSlots {
-    fn from(value: GenSlot<Dual<SpinFundamental>>) -> Self {
-        RecSlotEnum::A(value.pair()).into()
+impl<T: RepName> Representation<T> {
+    #[cfg(feature = "shadowing")]
+    /// yields a function builder for the representation, adding a first variable: the dimension.
+    ///
+    pub fn to_fnbuilder(&self) -> FunctionBuilder {
+        self.rep
+            .to_fnbuilder()
+            .add_arg(self.dim.to_symbolic().as_atom_view())
     }
-}
-
-impl From<GenSlot<ColorFundamental>> for NewSlots {
-    fn from(value: GenSlot<ColorFundamental>) -> Self {
-        RecSlotEnum::A(value.dual_pair()).into()
+    pub fn dual(self) -> Representation<T::Dual> {
+        Representation {
+            dim: self.dim,
+            rep: self.rep.dual(),
+        }
     }
-}
 
-impl From<GenSlot<Dual<ColorFundamental>>> for NewSlots {
-    fn from(value: GenSlot<Dual<ColorFundamental>>) -> Self {
-        RecSlotEnum::A(value.pair()).into()
+    pub fn cast<U: RepName + From<T>>(self) -> Representation<U> {
+        Representation {
+            dim: self.dim,
+            rep: self.rep.into(),
+        }
     }
-}
 
-impl From<GenSlot<ColorSextet>> for NewSlots {
-    fn from(value: GenSlot<ColorSextet>) -> Self {
-        RecSlotEnum::A(value.dual_pair()).into()
+    pub fn metric<S, V: One + Zero + Neg<Output = V>>(
+        &self,
+        aind: [AbstractIndex; 2],
+    ) -> SparseTensor<V, S>
+    where
+        S: TensorStructure + FromIterator<Slot<T>> + FromIterator<Slot<T::Dual>>,
+    {
+        self.rep.metric(self.dim.try_into().unwrap(), aind)
     }
-}
 
-impl From<GenSlot<Dual<ColorSextet>>> for NewSlots {
-    fn from(value: GenSlot<Dual<ColorSextet>>) -> Self {
-        RecSlotEnum::A(value.pair()).into()
+    pub fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
+        &self,
+        structure: S,
+    ) -> SparseTensor<V, S> {
+        self.rep.metric_data(structure)
     }
-}
 
-impl From<GenSlot<Euclidean>> for NewSlots {
-    fn from(value: GenSlot<Euclidean>) -> Self {
-        RecSlotEnum::A(value).into()
+    pub fn is_neg(&self, i: usize) -> bool {
+        self.rep.is_neg(i)
     }
-}
 
-impl From<GenSlot<Bispinor>> for NewSlots {
-    fn from(value: GenSlot<Bispinor>) -> Self {
-        RecSlotEnum::A(value).into()
+    pub fn new_slot<A: Into<AbstractIndex>>(&self, aind: A) -> Slot<T> {
+        Slot {
+            aind: aind.into(),
+            rep: *self,
+        }
     }
-}
 
-impl From<GenSlot<ColorAdjoint>> for NewSlots {
-    fn from(value: GenSlot<ColorAdjoint>) -> Self {
-        RecSlotEnum::B(value).into()
-    }
-}
-
-impl Representation {
     #[inline]
     // this could be implemented directly in the fiberiterator.
     /// gives the vector of booleans, saying which concrete index along a Dimension/Abstract Index should have a minus sign during contraction.
@@ -783,169 +1105,60 @@ impl Representation {
     /// assert!(agree);
     /// ```
     #[must_use]
-    pub fn negative(&self) -> Vec<bool> {
-        match *self {
-            Self::Lorentz(value) => std::iter::once(false)
-                .chain(std::iter::repeat(true).take(value.0 - 1))
-                .collect::<Vec<_>>(),
-            Self::Euclidean(value)
-            | Self::Bispinor(value)
-            | Self::SpinFundamental(value)
-            | Self::SpinAntiFundamental(value) => {
-                vec![false; value.into()]
-            }
-            Self::ColorAdjoint(value)
-            | Self::ColorFundamental(value)
-            | Self::ColorAntiFundamental(value)
-            | Self::ColorSextet(value)
-            | Self::ColorAntiSextet(value) => vec![false; value.into()],
-        }
-    }
-
-    /// for the given concrete index, says whether it should have a minus sign during contraction
-    ///
-    /// for example see [`Self::negative`]
-    #[inline]
-    #[must_use]
-    pub const fn is_neg(&self, i: usize) -> bool {
-        match self {
-            Self::Lorentz(_) => i > 0,
-            _ => false,
-        }
-    }
-
-    /// yields a function builder for the representation, adding a first variable: the dimension.
-    ///
-    /// for example see [`Slot::to_symbolic`]
-    #[allow(clippy::cast_possible_wrap)]
-    #[cfg(feature = "shadowing")]
-    pub fn to_fnbuilder<'a, 'b: 'a>(&'a self) -> FunctionBuilder {
-        let (value, id) = match *self {
-            Self::Euclidean(value) => (value, State::get_symbol(EUCLIDEAN)),
-            Self::Lorentz(value) => (value, State::get_symbol(LORENTZ)),
-            Self::Bispinor(value) => (value, State::get_symbol(BISPINOR)),
-            Self::SpinFundamental(value) => (value, State::get_symbol(SPINFUND)),
-            Self::SpinAntiFundamental(value) => (value, State::get_symbol(SPINANTIFUND)),
-            Self::ColorAdjoint(value) => (value, State::get_symbol(COLORADJ)),
-            Self::ColorFundamental(value) => (value, State::get_symbol(COLORFUND)),
-            Self::ColorAntiFundamental(value) => (value, State::get_symbol(COLORANTIFUND)),
-            Self::ColorSextet(value) => (value, State::get_symbol(COLORSEXT)),
-            Self::ColorAntiSextet(value) => (value, State::get_symbol(COLORANTISEXT)),
-        };
-
-        let mut value_builder = FunctionBuilder::new(id);
-
-        value_builder =
-            value_builder.add_arg(Atom::new_num(usize::from(value) as i64).as_atom_view());
-
-        value_builder
-    }
-
-    /// Finishes the function builder into an Atom
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use symbolica::state::{State, Workspace};
-    /// # use spenso::Representation;
-    /// # use spenso::Dimension;
-    ///
-    /// let mink = Representation::Lorentz(Dimension(4));
-    ///
-    /// assert_eq!("lor(4)",format!("{}",mink.to_symbolic()));
-    /// assert_eq!("lor4",format!("{}",mink));
-    /// ```
-    #[cfg(feature = "shadowing")]
-    pub fn to_symbolic(&self) -> Atom {
-        self.to_fnbuilder().finish()
+    pub fn negative(&self) -> Result<Vec<bool>> {
+        Ok((0..usize::try_from(self.dim)?)
+            .map(|i| self.is_neg(i))
+            .collect())
     }
 }
 
-impl From<Dimension> for Representation {
-    fn from(value: Dimension) -> Self {
-        Self::Euclidean(value)
-    }
-}
-
-impl From<usize> for Representation {
-    fn from(value: usize) -> Self {
-        Self::Euclidean(value.into())
-    }
-}
-
-impl<'a> std::iter::FromIterator<&'a Representation> for Vec<Dimension> {
-    fn from_iter<T: IntoIterator<Item = &'a Representation>>(iter: T) -> Self {
-        iter.into_iter()
-            .map(|&rep| -> Dimension { (&rep).into() })
-            .collect()
-    }
-}
-
-impl From<&Representation> for Dimension {
-    fn from(rep: &Representation) -> Self {
-        match rep {
-            Representation::Euclidean(value)
-            | Representation::Lorentz(value)
-            | Representation::Bispinor(value)
-            | Representation::SpinFundamental(value)
-            | Representation::SpinAntiFundamental(value) => *value,
-            Representation::ColorAdjoint(value) => *value, //Dimension(8),
-            Representation::ColorFundamental(value)
-            | Representation::ColorAntiFundamental(value) => {
-                *value // Dimension(3)
-            }
-            Representation::ColorSextet(value) | Representation::ColorAntiSextet(value) => *value,
-        }
-    }
-}
-
-impl From<&Representation> for usize {
-    fn from(value: &Representation) -> Self {
-        usize::from(Dimension::from(value))
-    }
-}
-
-impl From<Representation> for Dimension {
-    fn from(rep: Representation) -> Self {
-        match rep {
-            Representation::Euclidean(value)
-            | Representation::Lorentz(value)
-            | Representation::Bispinor(value)
-            | Representation::SpinFundamental(value)
-            | Representation::SpinAntiFundamental(value) => value,
-            Representation::ColorAdjoint(value) => value,
-            Representation::ColorFundamental(value)
-            | Representation::ColorAntiFundamental(value) => {
-                value // Dimension(3)
-            }
-            Representation::ColorSextet(value) | Representation::ColorAntiSextet(value) => value, //Dimension(6),
-        }
-    }
-}
-
-impl From<Representation> for usize {
-    fn from(value: Representation) -> Self {
-        usize::from(Dimension::from(value))
-    }
-}
-
-impl std::fmt::Display for Representation {
+impl<T: RepName> Display for Representation<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Euclidean(value) => write!(f, "{EUCLIDEAN}{value}"),
-            Self::Lorentz(value) => write!(f, "{LORENTZ}{value}"),
-            Self::Bispinor(value) => write!(f, "{BISPINOR}{value}"),
-            Self::SpinFundamental(value) => write!(f, "{SPINFUND}{value}"),
-            Self::SpinAntiFundamental(value) => write!(f, "{SPINANTIFUND}{value}"),
-            Self::ColorAdjoint(value) => write!(f, "{COLORADJ}{value}"),
-            Self::ColorFundamental(value) => write!(f, "{COLORFUND}{value}"),
-            Self::ColorAntiFundamental(value) => write!(f, "{COLORANTIFUND}{value}"),
-            Self::ColorSextet(value) => write!(f, "{COLORSEXT}{value}"),
-            Self::ColorAntiSextet(value) => write!(f, "{COLORANTISEXT}{value}"),
+        write!(f, "{}{}", self.rep, self.dim)
+    }
+}
+
+impl From<Dimension> for Representation<Euclidean> {
+    fn from(value: Dimension) -> Self {
+        Representation {
+            dim: value,
+            rep: Euclidean {},
         }
     }
 }
 
+impl<T: RepName> From<Representation<T>> for Dimension {
+    fn from(value: Representation<T>) -> Self {
+        value.dim
+    }
+}
+
+impl<T: RepName> TryFrom<Representation<T>> for usize {
+    type Error = DimensionError;
+    fn try_from(value: Representation<T>) -> std::result::Result<Self, Self::Error> {
+        Ok(usize::try_from(value.dim)?)
+    }
+}
+
+impl<'a, T: RepName> FromIterator<&'a Representation<T>> for Vec<Dimension> {
+    fn from_iter<I: IntoIterator<Item = &'a Representation<T>>>(iter: I) -> Self {
+        iter.into_iter().map(|rep| rep.dim).collect()
+    }
+}
+
+impl<T: BaseRepName<Dual = Dual<T>, Base = T>> Representation<Dual<T>>
+where
+    Dual<T>: BaseRepName<Dual = T, Base = T>,
+{
+    pub fn pair(self) -> Representation<DualPair<T>> {
+        Representation {
+            dim: self.dim,
+            rep: Dual::<T>::selfless_pair(),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 /// A [`Slot`] is an index, identified by a `usize` and a [`Representation`].
 ///
 /// A vector of slots thus identifies the shape and type of the tensor.
@@ -970,12 +1183,46 @@ impl std::fmt::Display for Representation {
 /// let mu = Slot::from((0,4));
 /// assert_eq!("id0euc4",format!("{}",mu));
 /// ```
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Slot {
-    pub index: AbstractIndex,
-    pub representation: Representation,
+pub struct Slot<T: RepName> {
+    pub aind: AbstractIndex,
+    rep: Representation<T>,
 }
 
+impl<T: RepName> Slot<T> {
+    pub fn cast<U: RepName + From<T>>(self) -> Slot<U> {
+        Slot {
+            aind: self.aind,
+            rep: Representation {
+                dim: self.rep.dim,
+                rep: U::from(self.rep.rep),
+            },
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum SlotError {
+    #[error("Dimension is not concrete")]
+    NotConcrete,
+    #[error("Argument is not a natural number")]
+    NotNatural,
+    #[error("Argument is not a number")]
+    NotNumber,
+    #[error("No more arguments")]
+    NoMoreArguments,
+    #[error("Too many arguments")]
+    TooManyArguments,
+    #[error("Not a slot, isn't a representation")]
+    NotRepresentation,
+    #[error("Not a slot, is composite")]
+    Composite,
+    #[error("{0}")]
+    DimErr(#[from] DimensionError),
+    #[error("{0}")]
+    Any(#[from] anyhow::Error),
+}
+
+#[cfg(feature = "shadowing")]
 /// Can possibly constuct a Slot from an `AtomView`, if it is of the form: <representation>(<dimension>,<index>)
 ///
 /// # Example
@@ -991,115 +1238,116 @@ pub struct Slot {
 ///    let slot = Slot::try_from(atom.as_view()).unwrap();
 ///    assert_eq!(slot, mu);
 /// ```
-#[cfg(feature = "shadowing")]
-impl TryFrom<AtomView<'_>> for Slot {
-    type Error = &'static str;
+impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
+    type Error = SlotError;
 
     fn try_from(value: AtomView<'_>) -> Result<Self, Self::Error> {
-        fn extract_num(iter: &mut ListIterator) -> Result<i64, &'static str> {
+        fn extract_num(iter: &mut ListIterator) -> Result<i64, SlotError> {
             if let Some(a) = iter.next() {
                 if let AtomView::Num(n) = a {
                     if let CoefficientView::Natural(n, 1) = n.get_coeff_view() {
                         return Ok(n);
                     }
-                    return Err("Argument is not a natural number");
+                    return Err(SlotError::NotNatural);
                 }
-                Err("Argument is not a number")
+                Err(SlotError::NotNumber)
             } else {
-                Err("No more arguments")
+                Err(SlotError::NoMoreArguments)
             }
         }
 
         let mut iter = if let AtomView::Fun(f) = value {
             f.iter()
         } else {
-            return Err("Not a slot, is composite");
+            return Err(SlotError::Composite);
         };
 
-        let dim: Dimension = usize::try_from(extract_num(&mut iter)?)
-            .or(Err("Dimension too large"))?
-            .into();
+        let dim: Dimension = Dimension::new_concrete(
+            usize::try_from(extract_num(&mut iter)?).or(Err(DimensionError::TooLarge))?,
+        );
         let index: AbstractIndex = usize::try_from(extract_num(&mut iter)?)
-            .or(Err("Dimension too large"))?
+            .or(Err(DimensionError::TooLarge))?
             .into();
 
         if extract_num(&mut iter).is_ok() {
-            return Err("Too many arguments");
+            return Err(SlotError::TooManyArguments);
         }
 
-        let euc = State::get_symbol(EUCLIDEAN);
-
-        let lor = State::get_symbol(LORENTZ);
-        let bis = State::get_symbol(BISPINOR);
-        let spin = State::get_symbol(SPINFUND);
-        let spina = State::get_symbol(SPINANTIFUND);
-        let coad = State::get_symbol(COLORADJ);
-        let cof = State::get_symbol(COLORFUND);
-        let coaf = State::get_symbol(COLORANTIFUND);
-        let cos = State::get_symbol(COLORSEXT);
-        let coas = State::get_symbol(COLORANTISEXT);
-
-        let representation = if let AtomView::Fun(f) = value {
+        if let AtomView::Fun(f) = value {
             let sym = f.get_symbol();
-            match sym {
-                _ if sym == euc => Representation::Euclidean(dim),
-                _ if sym == lor => Representation::Lorentz(dim),
-                _ if sym == bis => Representation::Bispinor(dim),
-                _ if sym == spin => Representation::SpinFundamental(dim),
-                _ if sym == spina => Representation::SpinAntiFundamental(dim),
-                _ if sym == coad => Representation::ColorAdjoint(dim),
-                _ if sym == cof => Representation::ColorFundamental(dim),
-                _ if sym == coaf => Representation::ColorAntiFundamental(dim),
-                _ if sym == cos => Representation::ColorSextet(dim),
-                _ if sym == coas => Representation::ColorAntiSextet(dim),
-                _ => return Err("Not a slot, isn't a representation"),
-            }
+            let rep = T::try_from_symbol(sym)?;
+
+            return Ok(Slot {
+                rep: Representation { dim, rep },
+                aind: index,
+            });
         } else {
-            return Err("Not a slot, is composite");
+            return Err(SlotError::Composite);
         };
-
-        Ok(Slot {
-            index,
-            representation,
-        })
     }
 }
 
-impl PartialOrd for Slot {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Slot {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match self.representation.cmp(&other.representation) {
-            Ordering::Equal => self.index.cmp(&other.index),
-            other => other,
+impl<T: BaseRepName<Base = T>> Slot<T>
+where
+    Dual<T>: BaseRepName<Base = T, Dual = T>,
+{
+    pub fn dual_pair(self) -> Slot<DualPair<T::Base>>
+    where
+        T: RepName<Dual = Dual<T>>,
+    {
+        Slot {
+            aind: self.aind,
+            rep: self.rep.dual_pair(),
         }
     }
 }
 
-impl From<(AbstractIndex, Representation)> for Slot {
-    fn from(value: (AbstractIndex, Representation)) -> Self {
-        Self {
-            index: value.0,
-            representation: value.1,
+impl<T: BaseRepName<Dual = Dual<T>, Base = T>> Slot<Dual<T>>
+where
+    Dual<T>: BaseRepName<Dual = T, Base = T>,
+{
+    pub fn pair(self) -> Slot<DualPair<T>> {
+        Slot {
+            aind: self.aind,
+            rep: self.rep.pair(),
         }
     }
 }
 
-impl From<(usize, usize)> for Slot {
-    fn from(value: (usize, usize)) -> Self {
-        Self {
-            index: value.0.into(),
-            representation: value.1.into(),
+// pub trait SlotFromRep<S:IsAbstractSlot>:Rep{
+
+// }
+
+pub trait ConstructibleSlot<T: RepName> {
+    fn new(rep: T, dim: Dimension, aind: AbstractIndex) -> Self;
+}
+
+impl<T: BaseRepName> ConstructibleSlot<T> for Slot<T> {
+    fn new(_: T, dim: Dimension, aind: AbstractIndex) -> Self {
+        Slot {
+            aind,
+            rep: Representation {
+                dim,
+                rep: T::default(),
+            },
         }
     }
 }
 
-#[allow(clippy::cast_possible_wrap)]
-impl Slot {
+pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash {
+    type R: RepName;
+    fn dim(&self) -> Dimension;
+    fn aind(&self) -> AbstractIndex;
+    fn set_aind(&mut self, aind: AbstractIndex);
+    fn rep_name(&self) -> Self::R;
+    fn rep(&self) -> Representation<Self::R> {
+        Representation {
+            dim: self.dim(),
+            rep: self.rep_name(),
+        }
+    }
+
+    #[cfg(feature = "shadowing")]
     /// using the function builder of the representation add the abstract index as an argument, and finish it to an Atom.
     /// # Example
     ///
@@ -1112,38 +1360,148 @@ impl Slot {
     /// assert_eq!("lor(4,0)",format!("{}",mu.to_symbolic()));
     /// assert_eq!("id0lor4",format!("{}",mu));
     /// ```
+    fn to_symbolic(&self) -> Atom;
     #[cfg(feature = "shadowing")]
-    pub fn to_symbolic(&self) -> Atom {
-        let mut value_builder = self.representation.to_fnbuilder();
-        value_builder =
-            value_builder.add_arg(Atom::new_num(usize::from(self.index) as i64).as_atom_view());
+    fn to_symbolic_wrapped(&self) -> Atom;
+    #[cfg(feature = "shadowing")]
+    fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError>;
+}
+
+pub trait DualSlotTo: IsAbstractSlot {
+    type Dual: IsAbstractSlot;
+    fn dual(&self) -> Self::Dual;
+    fn matches(&self, other: &Self::Dual) -> bool;
+}
+
+impl<T: RepName> IsAbstractSlot for Slot<T> {
+    type R = T;
+    // type Dual = GenSlot<T::Dual>;
+    fn dim(&self) -> Dimension {
+        self.rep.dim
+    }
+    fn aind(&self) -> AbstractIndex {
+        self.aind
+    }
+    fn rep_name(&self) -> Self::R {
+        self.rep.rep
+    }
+
+    fn set_aind(&mut self, aind: AbstractIndex) {
+        self.aind = aind;
+    }
+
+    fn to_symbolic(&self) -> Atom {
+        let mut value_builder = self.rep.to_fnbuilder();
+        value_builder = value_builder.add_arg(Atom::new_num(self.aind.0 as i64).as_atom_view());
         value_builder.finish()
     }
 
-    #[cfg(feature = "shadowing")]
-    pub fn to_symbolic_wrapped(&self) -> Atom {
-        let mut value_builder = self.representation.to_fnbuilder();
-        let id = Atom::parse(&format!("indexid({})", self.index.0)).unwrap();
+    fn to_symbolic_wrapped(&self) -> Atom {
+        let mut value_builder = self.rep.to_fnbuilder();
+        let id = Atom::parse(&format!("indexid({})", self.aind.0)).unwrap();
         value_builder = value_builder.add_arg(&id);
         value_builder.finish()
     }
-}
 
-impl std::fmt::Display for Slot {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.index, self.representation)
+    fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError> {
+        Slot::try_from(v)
     }
 }
 
-/// A trait for a any struct that functions as a tensor structure.
-/// Only three methods are required to be implemented, the rest are default implementations.
-///
-/// The associated type `Structure` is the type of the structure. This is usefull for containers of structures, like a datatensor.
-/// The two methods `structure` and `mut_structure` are used to get a reference to the structure, and a mutable reference to the structure.
-///
-///
-///
-///
+impl<T: RepName> std::fmt::Display for Slot<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.aind, self.rep)
+    }
+}
+
+impl<T: RepName> DualSlotTo for Slot<T> {
+    type Dual = Slot<T::Dual>;
+    fn dual(&self) -> Slot<T::Dual> {
+        Slot {
+            rep: self.rep.dual(),
+            aind: self.aind,
+        }
+    }
+    fn matches(&self, other: &Self::Dual) -> bool {
+        self.dim() == other.dim() && self.aind() == other.aind()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum DualPair<R: BaseRepName<Dual: BaseRepName>> {
+    Rep(R),
+    DualRep(R::Dual),
+}
+
+impl<R: BaseRepName<Dual: BaseRepName>> Default for DualPair<R> {
+    fn default() -> Self {
+        DualPair::Rep(R::default())
+    }
+}
+
+impl<R: BaseRepName<Dual: BaseRepName>> Display for DualPair<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DualPair::DualRep(r) => <R::Dual as Display>::fmt(r, f),
+            DualPair::Rep(r) => <R as Display>::fmt(r, f),
+        }
+    }
+}
+
+impl<R: BaseRepName<Dual: BaseRepName>> RepName for DualPair<R>
+where
+    R::Dual: RepName<Dual = R, Base = R::Base>,
+    R::Base: RepName<Dual = R::Dual, Base = R::Base>,
+{
+    type Dual = DualPair<R>;
+    type Base = R::Base;
+
+    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
+        &self,
+        structure: S,
+    ) -> SparseTensor<V, S> {
+        match self {
+            Self::DualRep(d) => {
+                return d.base_metric(structure);
+            }
+            Self::Rep(r) => {
+                return r.base_metric(structure);
+            }
+        }
+    }
+    fn dual(self) -> Self::Dual {
+        match self {
+            Self::Rep(r) => Self::DualRep(r.dual()),
+            Self::DualRep(d) => Self::Rep(d.dual()),
+        }
+    }
+    fn is_neg(self, i: usize) -> bool {
+        match self {
+            Self::Rep(r) => r.is_neg(i),
+            Self::DualRep(d) => d.is_neg(i),
+        }
+    }
+
+    fn base(&self) -> Self::Base {
+        match self {
+            Self::Rep(r) => r.base(),
+            Self::DualRep(d) => d.base(),
+        }
+    }
+
+    fn try_from_symbol(sym: Symbol) -> Result<Self> {
+        if let Ok(r) = R::try_from_symbol(sym) {
+            Ok(DualPair::Rep(r))
+        } else if let Ok(d) = R::Dual::try_from_symbol(sym) {
+            Ok(DualPair::DualRep(d))
+        } else {
+            Err(anyhow!("Not a representation"))
+        }
+    }
+}
+
+pub type PhysicalSlots = Slot<PhysReps>;
+
 pub trait HasStructure {
     type Structure: TensorStructure;
     type Scalar;
@@ -1200,13 +1558,18 @@ impl<T> TensorStructure for T
 where
     T: HasStructure,
 {
+    // type R = <T::Structure as TensorStructure>::R;
+    type Slot = <T::Structure as TensorStructure>::Slot;
     delegate! {
         to self.structure() {
-            fn external_reps_iter(&self)-> impl Iterator<Item = &Representation>;
-            fn external_indices_iter(&self)-> impl Iterator<Item = &AbstractIndex>;
-            fn get_slot(&self, i: usize)-> Option<Slot>;
-            fn get_rep(&self, i: usize)-> Option<Representation>;
+            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
             fn order(&self)-> usize;
         }
     }
@@ -1254,7 +1617,7 @@ pub trait ToSymbolic: TensorStructure {
         }
     }
 
-    fn to_dense_expanded_labels(self) -> DenseTensor<Atom, Self>
+    fn to_dense_expanded_labels(self) -> Result<DenseTensor<Atom, Self>>
     where
         Self: std::marker::Sized + Clone,
     {
@@ -1264,51 +1627,51 @@ pub trait ToSymbolic: TensorStructure {
     fn to_dense_labeled<T>(
         self,
         index_to_atom: impl Fn(&Self, FlatIndex) -> T,
-    ) -> DenseTensor<Atom, Self>
+    ) -> Result<DenseTensor<Atom, Self>>
     where
         Self: Sized,
         T: TensorCoefficient,
     {
         let mut data = vec![];
-        for index in 0..self.size() {
+        for index in 0..self.size()? {
             data.push(index_to_atom(&self, index.into()).to_atom().unwrap());
         }
 
-        DenseTensor {
+        Ok(DenseTensor {
             data,
             structure: self,
-        }
+        })
     }
 
     fn to_dense_labeled_complex<T>(
         self,
         index_to_atom: impl Fn(&Self, FlatIndex) -> T,
-    ) -> DenseTensor<Atom, Self>
+    ) -> Result<DenseTensor<Atom, Self>>
     where
         Self: Sized,
         T: TensorCoefficient,
     {
         let mut data = vec![];
-        for index in 0..self.size() {
+        for index in 0..self.size()? {
             let re = index_to_atom(&self, index.into()).to_atom_re().unwrap();
             let im = index_to_atom(&self, index.into()).to_atom_im().unwrap();
             let i = Atom::new_var(State::I);
             data.push(&re + i * &im);
         }
 
-        DenseTensor {
+        Ok(DenseTensor {
             data,
             structure: self,
-        }
+        })
     }
 
-    fn to_dense_flat_labels(self) -> DenseTensor<Atom, Self>
+    fn to_dense_flat_labels(self) -> Result<DenseTensor<Atom, Self>>
     where
         Self: std::marker::Sized + Clone,
     {
         self.to_dense_labeled(Self::flat_atom)
     }
-    fn to_explicit_rep(self) -> Option<MixedTensor<f64, Self>>
+    fn to_explicit_rep(self) -> Result<MixedTensor<f64, Self>>
     where
         Self: std::marker::Sized + Clone + HasName,
         Self::Name: IntoSymbol,
@@ -1323,7 +1686,7 @@ pub trait ToSymbolic: TensorStructure {
 
         if let Some(name) = self.name() {
             let name = name.into_symbol();
-            Some(match name {
+            Ok(match name {
                 _ if name == identity => ufo::identity_data::<f64, Self>(self).into(),
 
                 _ if name == gamma => ufo::gamma_data(self).into(),
@@ -1332,10 +1695,10 @@ pub trait ToSymbolic: TensorStructure {
                 _ if name == proj_p => ufo::proj_p_data(self).into(),
                 _ if name == sigma => ufo::sigma_data(self).into(),
                 _ if name == metric => ufo::metric_data::<f64, Self>(self).into(),
-                _ => MixedTensor::param(self.to_dense_expanded_labels().into()),
+                _ => MixedTensor::param(self.to_dense_expanded_labels()?.into()),
             })
         } else {
-            None
+            Err(anyhow!("No name"))
         }
     }
 
@@ -1370,20 +1733,23 @@ pub trait ToSymbolic: TensorStructure {
 }
 
 pub trait TensorStructure {
-    fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
-    fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
-    fn get_slot(&self, i: usize) -> Option<Slot>;
-    fn get_rep(&self, i: usize) -> Option<Representation>;
+    type Slot: IsAbstractSlot + DualSlotTo<Dual = Self::Slot>;
+    // type R: Rep;
+
+    fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
+    fn external_dims_iter(&self) -> impl Iterator<Item = Dimension>;
+    fn external_reps_iter(
+        &self,
+    ) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+    fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+    fn get_aind(&self, i: usize) -> Option<AbstractIndex>;
+    fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
     fn get_dim(&self, i: usize) -> Option<Dimension>;
+    fn get_slot(&self, i: usize) -> Option<Self::Slot>;
     fn order(&self) -> usize;
     /// returns the list of slots that are the external indices of the tensor
-    fn external_structure_iter(&self) -> impl Iterator<Item = Slot> {
-        self.external_indices_iter()
-            .zip(self.external_reps_iter())
-            .map(|(i, r)| Slot::from((*i, *r)))
-    }
 
-    fn external_structure(&self) -> Vec<Slot> {
+    fn external_structure(&self) -> Vec<Self::Slot> {
         self.external_structure_iter().collect()
     }
 
@@ -1394,16 +1760,16 @@ pub trait TensorStructure {
         TensorShell::new(self)
     }
 
-    fn contains(&self, slot: &Slot) -> bool {
-        self.external_structure_iter().any(|s| s == *slot)
+    fn contains_matching(&self, slot: &Self::Slot) -> bool {
+        self.external_structure_iter().any(|s| s.matches(slot))
     }
 
-    fn external_reps(&self) -> Vec<Representation> {
-        self.external_reps_iter().cloned().collect()
+    fn external_reps(&self) -> Vec<Representation<<Self::Slot as IsAbstractSlot>::R>> {
+        self.external_reps_iter().collect()
     }
 
     fn external_indices(&self) -> Vec<AbstractIndex> {
-        self.external_indices_iter().cloned().collect()
+        self.external_indices_iter().collect()
     }
 
     // fn iter_index_along_fiber(&self,fiber_position: &[bool]  )-> TensorStructureMultiFiberIterator where Self: Sized{
@@ -1427,7 +1793,7 @@ pub trait TensorStructure {
         let posmap = self
             .external_structure_iter()
             .enumerate()
-            .map(|(i, slot)| (slot, i))
+            .map(|(i, slot)| (slot.dual(), i))
             .collect::<AHashMap<_, _>>();
 
         let mut first_pair: Option<(usize, usize)> = None;
@@ -1496,11 +1862,11 @@ pub trait TensorStructure {
 
     /// yields the (outwards facing) shape of the tensor as a list of dimensions
     fn shape(&self) -> Vec<Dimension> {
-        self.external_reps_iter().collect()
+        self.external_dims_iter().collect()
     }
 
-    fn reps(&self) -> Vec<Representation> {
-        self.external_reps_iter().map(|r| r.clone()).collect()
+    fn reps(&self) -> Vec<Representation<<Self::Slot as IsAbstractSlot>::R>> {
+        self.external_reps_iter().collect()
     }
 
     /// yields the order/total valence of the tensor, i.e. the number of indices
@@ -1546,36 +1912,36 @@ pub trait TensorStructure {
     }
 
     /// yields the strides of the tensor in column major order
-    fn strides_column_major(&self) -> Vec<usize> {
+    fn strides_column_major(&self) -> Result<Vec<usize>> {
         let mut strides: Vec<usize> = vec![1; self.order()];
 
         if self.order() == 0 {
-            return strides;
+            return Ok(strides);
         }
 
         for i in 0..self.order() - 1 {
-            strides[i + 1] = strides[i] * usize::from((self.shape()[i]).0);
+            strides[i + 1] = strides[i] * usize::try_from(self.shape()[i])?;
         }
 
-        strides
+        Ok(strides)
     }
 
     /// yields the strides of the tensor in row major order
-    fn strides_row_major(&self) -> Vec<usize> {
+    fn strides_row_major(&self) -> Result<Vec<usize>> {
         let mut strides = vec![1; self.order()];
         if self.order() == 0 {
-            return strides;
+            return Ok(strides);
         }
 
         for i in (0..self.order() - 1).rev() {
-            strides[i] = strides[i + 1] * usize::from(self.shape()[i + 1].0);
+            strides[i] = strides[i + 1] * usize::try_from(self.shape()[i + 1])?;
         }
 
-        strides
+        Ok(strides)
     }
 
     /// By default, the strides are row major
-    fn strides(&self) -> Vec<usize> {
+    fn strides(&self) -> Result<Vec<usize>> {
         self.strides_row_major()
     }
 
@@ -1587,22 +1953,22 @@ pub trait TensorStructure {
     ///
     /// `Index out of bounds` = if the index is out of bounds for the dimension of that index   
     ///
-    fn verify_indices(&self, indices: &[ConcreteIndex]) -> Result<(), String> {
+    fn verify_indices(&self, indices: &[ConcreteIndex]) -> Result<()> {
         if indices.len() != self.order() {
-            return Err("Mismatched order".into());
+            return Err(anyhow!("Mismatched order"));
         }
 
         for (i, dim_len) in self
             .external_structure_iter()
-            .map(|slot| slot.representation)
+            .map(|slot| slot.dim())
             .enumerate()
         {
-            if indices[i] >= usize::from(dim_len) {
-                return Err(format!(
+            if indices[i] >= usize::try_from(dim_len)? {
+                return Err(anyhow!(
                     "Index {} out of bounds for dimension {} of size {}",
                     indices[i],
                     i,
-                    usize::from(dim_len)
+                    usize::try_from(dim_len)?
                 )
                 .into());
             }
@@ -1615,8 +1981,8 @@ pub trait TensorStructure {
     /// # Errors
     ///
     /// Same as [`Self::verify_indices`]
-    fn flat_index(&self, indices: &[ConcreteIndex]) -> Result<FlatIndex, String> {
-        let strides = self.strides();
+    fn flat_index(&self, indices: &[ConcreteIndex]) -> Result<FlatIndex> {
+        let strides = self.strides()?;
         self.verify_indices(indices)?;
 
         let mut idx = 0;
@@ -1631,17 +1997,17 @@ pub trait TensorStructure {
     /// # Errors
     ///
     /// `Index out of bounds` = if the flat index is out of bounds for the tensor
-    fn expanded_index(&self, flat_index: FlatIndex) -> Result<ExpandedIndex, String> {
+    fn expanded_index(&self, flat_index: FlatIndex) -> Result<ExpandedIndex> {
         let mut indices = vec![];
         let mut index = flat_index.index;
-        for &stride in &self.strides() {
+        for &stride in &self.strides()? {
             indices.push(index / stride);
             index %= stride;
         }
-        if flat_index.index < self.size() {
+        if flat_index.index < self.size()? {
             Ok(indices.into())
         } else {
-            Err(format!("Index {flat_index} out of bounds").into())
+            Err(anyhow!("Index {flat_index} out of bounds").into())
         }
     }
 
@@ -1658,14 +2024,23 @@ pub trait TensorStructure {
         self.order() == 0
     }
 
-    /// get the metric along the i-th index
-    fn get_ith_metric(&self, i: usize) -> Option<Vec<bool>> {
-        Some(self.get_rep(i)?.negative())
-    }
+    // /// get the metric along the i-th index
+    // fn get_ith_metric(&self, i: usize) -> Result<Vec<bool>> {
+    //     self.get_rep(i)
+    //         .ok_or(anyhow!("out of bounds access"))?
+    //         .negative()
+    // }
 
     /// yields the size of the tensor, i.e. the product of the dimensions. This is the length of the vector of the data in a dense tensor
-    fn size(&self) -> usize {
-        self.shape().iter().map(|x| usize::from(*x)).product()
+    fn size(&self) -> Result<usize> {
+        if self.order() == 0 {
+            return Ok(0);
+        }
+        let mut size = 1;
+        for dim in self.shape() {
+            size *= usize::try_from(dim)?;
+        }
+        Ok(size)
     }
 }
 
@@ -1686,34 +2061,54 @@ pub trait TensorStructure {
 //     }
 // }
 
-impl TensorStructure for Vec<Slot> {
-    fn external_reps_iter(&self) -> impl Iterator<Item = &Representation> {
-        self.iter().map(|s| &s.representation)
+impl<S: IsAbstractSlot<R: RepName> + DualSlotTo<Dual = S>> TensorStructure for Vec<S> {
+    type Slot = S;
+    // type R = S::R;
+
+    fn external_reps_iter(
+        &self,
+    ) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>> {
+        self.iter().map(|s| s.rep())
     }
 
-    fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex> {
-        self.iter().map(|s| &s.index)
+    fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex> {
+        self.iter().map(|s| s.aind())
+    }
+
+    fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot> {
+        self.iter().cloned()
+    }
+
+    fn external_dims_iter(&self) -> impl Iterator<Item = Dimension> {
+        self.iter().map(|s| s.dim())
     }
 
     fn order(&self) -> usize {
         self.len()
     }
 
-    fn get_slot(&self, i: usize) -> Option<Slot> {
+    fn get_slot(&self, i: usize) -> Option<S> {
         self.get(i).cloned()
     }
 
-    fn get_rep(&self, i: usize) -> Option<Representation> {
-        self.get(i).map(|s| s.representation)
+    fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>> {
+        self.get(i).map(|s| s.rep())
     }
 
     fn get_dim(&self, i: usize) -> Option<Dimension> {
-        self.get(i).map(|s| s.representation.into())
+        self.get(i).map(|s| s.dim())
+    }
+
+    fn get_aind(&self, i: usize) -> Option<AbstractIndex> {
+        self.get(i).map(|s| s.aind())
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl ToSymbolic for Vec<Slot> {}
+impl<S: IsAbstractSlot<R: RepName> + ConstructibleSlot<S::R> + DualSlotTo<Dual = S>> ToSymbolic
+    for Vec<S>
+{
+}
 
 /// A trait for a structure that can be traced and merged, during a contraction.
 pub trait StructureContract {
@@ -1727,7 +2122,7 @@ pub trait StructureContract {
     fn merge_at(&self, other: &Self, positions: (usize, usize)) -> Self;
 }
 
-impl StructureContract for Vec<Slot> {
+impl<S: IsAbstractSlot<R: RepName>> StructureContract for Vec<S> {
     fn trace(&mut self, i: usize, j: usize) {
         if i < j {
             self.trace(j, i);
@@ -1828,12 +2223,12 @@ impl StructureContract for Vec<Slot> {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub struct IndexLess {
-    pub structure: Vec<Representation>,
+pub struct IndexLess<T: RepName> {
+    pub structure: Vec<Representation<T>>,
 }
 
-impl IndexLess {
-    pub fn new(structure: Vec<Representation>) -> Self {
+impl<T: RepName> IndexLess<T> {
+    pub fn new(structure: Vec<Representation<T>>) -> Self {
         Self { structure }
     }
 
@@ -1841,30 +2236,50 @@ impl IndexLess {
         Self { structure: vec![] }
     }
 
-    pub fn to_indexed(self, indices: &[AbstractIndex]) -> VecStructure {
+    pub fn to_indexed(self, indices: &[AbstractIndex]) -> Vec<Slot<T>> {
         indices
             .iter()
             .cloned()
             .zip(self.structure.iter().cloned())
-            .map(Slot::from)
+            .map(|(i, r)| Representation::new_slot(&r, i))
             .collect()
     }
 }
 
-impl TensorStructure for IndexLess {
-    fn external_reps_iter(&self) -> impl Iterator<Item = &Representation> {
-        self.structure.iter()
+impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
+// where
+//     T::Base: Rep<Dual = T::Dual, Base = T::Base>,
+{
+    type Slot = Slot<T>;
+    // type R = T;
+
+    fn external_reps_iter(
+        &self,
+    ) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>> {
+        self.structure.iter().map(|s| *s)
     }
 
-    fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex> {
-        [].iter()
+    fn external_dims_iter(&self) -> impl Iterator<Item = Dimension> {
+        self.structure.iter().map(|s| s.dim.into())
+    }
+
+    fn get_aind(&self, _: usize) -> Option<AbstractIndex> {
+        None
+    }
+
+    fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex> {
+        [].iter().cloned()
+    }
+
+    fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot> {
+        [].iter().cloned()
     }
 
     fn order(&self) -> usize {
         self.structure.len()
     }
 
-    fn get_slot(&self, _: usize) -> Option<Slot> {
+    fn get_slot(&self, _: usize) -> Option<Self::Slot> {
         None
     }
 
@@ -1899,26 +2314,40 @@ impl TensorStructure for IndexLess {
         Some(permutation)
     }
 
-    fn get_rep(&self, i: usize) -> Option<Representation> {
-        self.structure.get(i).cloned()
+    fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>> {
+        self.structure.get(i).map(|r| *r)
     }
 
     fn get_dim(&self, i: usize) -> Option<Dimension> {
-        self.structure.get(i).clone().map(|r| r.into())
+        self.structure.get(i).clone().map(|&r| r.into())
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl ToSymbolic for IndexLess {}
+impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {}
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
 pub struct VecStructure {
-    pub structure: Vec<Slot>,
+    pub structure: Vec<PhysicalSlots>,
+}
+
+impl FromIterator<Slot<Lorentz>> for VecStructure {
+    fn from_iter<T: IntoIterator<Item = Slot<Lorentz>>>(iter: T) -> Self {
+        let vec = iter.into_iter().map(Slot::<PhysReps>::from).collect();
+        Self { structure: vec }
+    }
+}
+
+impl FromIterator<Slot<Euclidean>> for VecStructure {
+    fn from_iter<T: IntoIterator<Item = Slot<Euclidean>>>(iter: T) -> Self {
+        let vec = iter.into_iter().map(Slot::<PhysReps>::from).collect();
+        Self { structure: vec }
+    }
 }
 
 #[cfg(feature = "shadowing")]
 impl TryFrom<AtomView<'_>> for VecStructure {
-    type Error = String;
+    type Error = SlotError;
     fn try_from(value: AtomView) -> Result<Self, Self::Error> {
         match value {
             AtomView::Mul(mul) => return mul.try_into(),
@@ -1926,10 +2355,16 @@ impl TryFrom<AtomView<'_>> for VecStructure {
             AtomView::Pow(_) => {
                 return Ok(VecStructure::default()); // powers do not have a structure
             }
-            _ => return Err(format!("Not a structure: {value}").into()), // could check if it
+            _ => return Err(anyhow!("Not a structure: {value}").into()), // could check if it
         }
     }
 }
+
+// impl From<Vec<PhysicalSlots>> for VecStructure {
+//     fn from(value: Vec<PhysicalSlots>) -> Self {
+//         VecStructure { structure: value }
+//     }
+// }
 
 #[cfg(test)]
 #[test]
@@ -1944,16 +2379,16 @@ fn test_from_atom() {
 
 #[cfg(feature = "shadowing")]
 impl TryFrom<FunView<'_>> for VecStructure {
-    type Error = String;
+    type Error = SlotError;
     fn try_from(value: FunView) -> Result<Self, Self::Error> {
         if value.get_symbol() == State::get_symbol(ABSTRACTIND) {
-            let mut structure: Vec<Slot> = vec![];
+            let mut structure: Vec<PhysicalSlots> = vec![];
 
             for arg in value.iter() {
                 structure.push(arg.try_into()?);
             }
 
-            Ok(structure.into())
+            Ok(VecStructure { structure })
         } else {
             let mut structure: Self = vec![].into();
             for arg in value.iter() {
@@ -1966,7 +2401,7 @@ impl TryFrom<FunView<'_>> for VecStructure {
 
 #[cfg(feature = "shadowing")]
 impl TryFrom<MulView<'_>> for VecStructure {
-    type Error = String;
+    type Error = SlotError;
     fn try_from(value: MulView) -> Result<Self, Self::Error> {
         let mut structure: Self = vec![].into();
 
@@ -1977,40 +2412,46 @@ impl TryFrom<MulView<'_>> for VecStructure {
     }
 }
 
-impl FromIterator<Slot> for VecStructure {
-    fn from_iter<T: IntoIterator<Item = Slot>>(iter: T) -> Self {
+impl FromIterator<PhysicalSlots> for VecStructure {
+    fn from_iter<T: IntoIterator<Item = PhysicalSlots>>(iter: T) -> Self {
         Self {
             structure: iter.into_iter().collect(),
         }
     }
 }
 
+impl From<Vec<PhysicalSlots>> for VecStructure {
+    fn from(structure: Vec<PhysicalSlots>) -> Self {
+        Self { structure }
+    }
+}
+
 impl IntoIterator for VecStructure {
-    type Item = Slot;
-    type IntoIter = std::vec::IntoIter<Slot>;
-    fn into_iter(self) -> std::vec::IntoIter<Slot> {
+    type Item = PhysicalSlots;
+    type IntoIter = std::vec::IntoIter<PhysicalSlots>;
+    fn into_iter(self) -> std::vec::IntoIter<PhysicalSlots> {
         self.structure.into_iter()
     }
 }
 
 impl<'a> IntoIterator for &'a VecStructure {
-    type Item = &'a Slot;
-    type IntoIter = std::slice::Iter<'a, Slot>;
-    fn into_iter(self) -> std::slice::Iter<'a, Slot> {
+    type Item = &'a PhysicalSlots;
+    type IntoIter = std::slice::Iter<'a, PhysicalSlots>;
+    fn into_iter(self) -> std::slice::Iter<'a, PhysicalSlots> {
         self.structure.iter()
     }
 }
 
 impl<'a> IntoIterator for &'a mut VecStructure {
-    type Item = &'a mut Slot;
-    type IntoIter = std::slice::IterMut<'a, Slot>;
-    fn into_iter(self) -> std::slice::IterMut<'a, Slot> {
+    type Item = &'a mut PhysicalSlots;
+    type IntoIter = std::slice::IterMut<'a, PhysicalSlots>;
+    fn into_iter(self) -> std::slice::IterMut<'a, PhysicalSlots> {
         self.structure.iter_mut()
     }
 }
 
 impl VecStructure {
-    pub fn new(structure: Vec<Slot>) -> Self {
+    pub fn new(structure: Vec<PhysicalSlots>) -> Self {
         Self { structure }
     }
 
@@ -2060,13 +2501,7 @@ impl From<VecStructure> for ContractionCountStructure {
     }
 }
 
-impl From<Vec<Slot>> for VecStructure {
-    fn from(structure: Vec<Slot>) -> Self {
-        Self { structure }
-    }
-}
-
-impl From<VecStructure> for Vec<Slot> {
+impl From<VecStructure> for Vec<PhysicalSlots> {
     fn from(structure: VecStructure) -> Self {
         structure.structure
     }
@@ -2084,11 +2519,11 @@ impl std::fmt::Display for VecStructure {
             write!(
                 f,
                 "{:<3} ({})",
-                usize::from(item.index),
+                usize::from(item.aind()),
                 // IDPRINTER
                 //     .encode_string(usize::from(item.index) as u64)
                 //     .unwrap(),
-                item.representation
+                item.rep_name()
             )?;
         }
         Ok(())
@@ -2096,13 +2531,19 @@ impl std::fmt::Display for VecStructure {
 }
 
 impl TensorStructure for VecStructure {
+    type Slot = PhysicalSlots;
+    // type R = PhysicalReps;
+
     delegate! {
         to self.structure{
-            fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
-            fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
+            fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
+            fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
             fn order(&self) -> usize;
-            fn get_slot(&self, i: usize) -> Option<Slot>;
-            fn get_rep(&self, i: usize) -> Option<Representation>;
+            fn get_slot(&self, i: usize) -> Option<Self::Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_aind(&self,i:usize)->Option<AbstractIndex>;
             fn get_dim(&self, i: usize) -> Option<Dimension>;
         }
     }
@@ -2144,7 +2585,7 @@ impl<Name, Args> NamedStructure<Name, Args> {
     #[must_use]
     pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> Self
     where
-        I: Into<Slot>,
+        I: Into<PhysicalSlots>,
         T: IntoIterator<Item = I>,
     {
         Self {
@@ -2157,11 +2598,11 @@ impl<Name, Args> NamedStructure<Name, Args> {
 
 #[cfg(feature = "shadowing")]
 impl<'a> TryFrom<FunView<'a>> for NamedStructure<Symbol, Vec<Atom>> {
-    type Error = String;
+    type Error = SlotError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         match value.get_symbol() {
             s if s == State::get_symbol(ABSTRACTIND) => {
-                let mut structure: Vec<Slot> = vec![];
+                let mut structure: Vec<PhysicalSlots> = vec![];
 
                 for arg in value.iter() {
                     structure.push(arg.try_into()?);
@@ -2275,13 +2716,18 @@ pub trait HasName {
 }
 
 impl<N, A> TensorStructure for NamedStructure<N, A> {
+    type Slot = PhysicalSlots;
+    // type R = PhysicalReps;
     delegate! {
-        to self.structure {
-            fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
-            fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
+        to self.structure{
+            fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
+            fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
             fn order(&self) -> usize;
-            fn get_slot(&self, i: usize) -> Option<Slot>;
-            fn get_rep(&self, i: usize) -> Option<Representation>;
+            fn get_slot(&self, i: usize) -> Option<Self::Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_aind(&self,i:usize)->Option<AbstractIndex>;
             fn get_dim(&self, i: usize) -> Option<Dimension>;
         }
     }
@@ -2318,7 +2764,7 @@ pub struct ContractionCountStructure {
     pub contractions: usize,
 }
 
-impl<I: Into<Slot>> FromIterator<I> for ContractionCountStructure {
+impl<I: Into<PhysicalSlots>> FromIterator<I> for ContractionCountStructure {
     fn from_iter<T: IntoIterator<Item = I>>(iter: T) -> Self {
         Self {
             structure: iter.into_iter().map(I::into).collect(),
@@ -2342,13 +2788,18 @@ impl TracksCount for ContractionCountStructure {
 }
 
 impl TensorStructure for ContractionCountStructure {
+    type Slot = PhysicalSlots;
+    // type R = PhysicalReps;
     delegate! {
-        to self.structure {
-            fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
-            fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
+        to self.structure{
+            fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
+            fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
             fn order(&self) -> usize;
-            fn get_slot(&self, i: usize) -> Option<Slot>;
-            fn get_rep(&self, i: usize) -> Option<Representation>;
+            fn get_slot(&self, i: usize) -> Option<Self::Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_aind(&self,i:usize)->Option<AbstractIndex>;
             fn get_dim(&self, i: usize) -> Option<Dimension>;
         }
     }
@@ -2391,7 +2842,7 @@ impl<Name, Args> SmartShadowStructure<Name, Args> {
     #[must_use]
     pub fn from_iter<I, T>(iter: T, name: Option<Name>, args: Option<Args>) -> Self
     where
-        I: Into<Slot>,
+        I: Into<PhysicalSlots>,
         T: IntoIterator<Item = I>,
     {
         Self {
@@ -2439,13 +2890,18 @@ impl<N: IntoSymbol, A: IntoArgs> Display for SmartShadowStructure<N, A> {
 }
 
 impl<N, A> TensorStructure for SmartShadowStructure<N, A> {
+    type Slot = PhysicalSlots;
+    // type R = PhysicalReps;
     delegate! {
-        to self.structure {
-            fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
-            fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
+        to self.structure{
+           fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
+            fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
             fn order(&self) -> usize;
-            fn get_slot(&self, i: usize) -> Option<Slot>;
-            fn get_rep(&self, i: usize) -> Option<Representation>;
+            fn get_slot(&self, i: usize) -> Option<Self::Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_aind(&self,i:usize)->Option<AbstractIndex>;
             fn get_dim(&self, i: usize) -> Option<Dimension>;
         }
     }
@@ -2521,25 +2977,26 @@ impl<N, A> HistoryStructure<N, A> {
     /// make the indices in the internal index list of self independent from the indices in the internal index list of other
     /// This is done by shifting the indices in the internal index list of self by the the maximum index present.
     pub fn independentize_internal(&mut self, other: &Self) {
-        let internal_set: HashSet<Slot> = self
+        let internal_set: HashSet<<Self as TensorStructure>::Slot> = self
             .internal
             .clone()
             .into_iter()
-            .filter(|s| self.external.contains(s))
+            .filter(|s| self.external.contains_matching(s))
             .collect();
 
-        let other_set: HashSet<Slot> = other.internal.clone().into_iter().collect();
+        let other_set: HashSet<<Self as TensorStructure>::Slot> =
+            other.internal.clone().into_iter().collect();
 
         let mut replacement_value = internal_set
             .union(&other_set)
-            .map(|s| s.index)
+            .map(|s| s.aind())
             .max()
             .unwrap_or(0.into())
             + 1.into();
 
         for item in &mut self.internal {
             if other_set.contains(item) {
-                item.index = replacement_value;
+                item.set_aind(replacement_value);
                 replacement_value += 1.into();
             }
         }
@@ -2571,15 +3028,19 @@ impl<N, A> TracksCount for HistoryStructure<N, A> {
 }
 
 impl<N, A> TensorStructure for HistoryStructure<N, A> {
+    type Slot = PhysicalSlots;
+    // type R = PhysicalReps;
     delegate! {
-        to self.external {
-            fn external_reps_iter(&self) -> impl Iterator<Item = &Representation>;
-            fn external_indices_iter(&self) -> impl Iterator<Item = &AbstractIndex>;
+        to self.internal{
+           fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
+            fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
             fn order(&self) -> usize;
-            fn get_slot(&self, i: usize) -> Option<Slot>;
-            fn get_rep(&self, i: usize) -> Option<Representation>;
+            fn get_slot(&self, i: usize) -> Option<Self::Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_aind(&self,i:usize)->Option<AbstractIndex>;
             fn get_dim(&self, i: usize) -> Option<Dimension>;
-
         }
     }
     /// checks if internally, the two tensors are the same. This implies that the external indices are the same
@@ -2817,22 +3278,22 @@ pub trait Shadowable:
     > + Sized
 {
     // type Const;
-    fn expanded_shadow(&self) -> Option<DenseTensor<Atom, Self::Structure>> {
+    fn expanded_shadow(&self) -> Result<DenseTensor<Atom, Self::Structure>> {
         self.shadow(Self::Structure::expanded_coef)
     }
 
-    fn flat_shadow(&self) -> Option<DenseTensor<Atom, Self::Structure>> {
+    fn flat_shadow(&self) -> Result<DenseTensor<Atom, Self::Structure>> {
         self.shadow(Self::Structure::flat_coef)
     }
 
     fn shadow<T>(
         &self,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
-    ) -> Option<DenseTensor<Atom, Self::Structure>>
+    ) -> Result<DenseTensor<Atom, Self::Structure>>
     where
         T: TensorCoefficient,
     {
-        Some(self.structure().clone().to_dense_labeled(index_to_atom))
+        self.structure().clone().to_dense_labeled(index_to_atom)
     }
 
     fn to_explicit(&self) -> Option<MixedTensor<f64, Self::Structure>> {
@@ -2873,7 +3334,7 @@ pub trait ShadowMapping<Const>: Shadowable {
     fn expanded_shadow_with_map<'a>(
         &'a self,
         fn_map: &mut FunctionMap<'a, Const>,
-    ) -> Option<ParamTensor<Self::Structure>> {
+    ) -> Result<ParamTensor<Self::Structure>> {
         self.shadow_with_map(fn_map, Self::Structure::expanded_coef)
     }
 
@@ -2881,7 +3342,7 @@ pub trait ShadowMapping<Const>: Shadowable {
         &'a self,
         fn_map: &mut FunctionMap<'a, Const>,
         index_to_atom: F,
-    ) -> Option<ParamTensor<Self::Structure>>
+    ) -> Result<ParamTensor<Self::Structure>>
     where
         T: TensorCoefficient,
         F: Fn(&Self::Structure, FlatIndex) -> T + Clone,
@@ -2910,7 +3371,7 @@ pub trait ShadowMapping<Const>: Shadowable {
     fn flat_shadow_with_map<'a>(
         &'a self,
         fn_map: &mut FunctionMap<'a, Const>,
-    ) -> Option<ParamTensor<Self::Structure>> {
+    ) -> Result<ParamTensor<Self::Structure>> {
         self.shadow_with_map(fn_map, Self::Structure::flat_coef)
     }
 }

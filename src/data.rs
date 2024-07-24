@@ -104,16 +104,16 @@ pub trait SetTensorData {
     ///
     /// Forwards the error from [`TensorStructure::verify_indices`]
     ///
-    fn set(&mut self, indices: &[ConcreteIndex], value: Self::SetData) -> Result<(), String>;
+    fn set(&mut self, indices: &[ConcreteIndex], value: Self::SetData) -> Result<()>;
 
-    fn set_flat(&mut self, index: FlatIndex, value: Self::SetData) -> Result<(), String>;
+    fn set_flat(&mut self, index: FlatIndex, value: Self::SetData) -> Result<()>;
 }
 
 /// Trait for getting the data of a tensor
 pub trait GetTensorData {
     type GetData;
 
-    fn get(&self, indices: &[ConcreteIndex]) -> Result<&Self::GetData, String>;
+    fn get(&self, indices: &[ConcreteIndex]) -> Result<&Self::GetData>;
 
     fn get_linear(&self, index: FlatIndex) -> Option<&Self::GetData>;
 
@@ -344,6 +344,13 @@ where
     }
 }
 
+// #[derive(Error, Debug)]
+// pub enum DataTensorError {
+//     #[error("Data length does not match shape")]
+//     DataLengthMismatch,
+// }
+use anyhow::{anyhow, Result};
+
 impl<T, I> SetTensorData for SparseTensor<T, I>
 where
     I: TensorStructure,
@@ -351,7 +358,7 @@ where
     type SetData = T;
     /// falible set method, returns an error if the indices are out of bounds.
     /// Does not check if the inserted value is zero.
-    fn set(&mut self, indices: &[ConcreteIndex], value: T) -> Result<(), String> {
+    fn set(&mut self, indices: &[ConcreteIndex], value: T) -> Result<()> {
         self.verify_indices(indices)?;
         self.elements
             .insert(self.flat_index(indices).unwrap(), value);
@@ -359,9 +366,9 @@ where
     }
 
     /// falible set given a flat index, returns an error if the indices are out of bounds.
-    fn set_flat(&mut self, index: FlatIndex, value: T) -> Result<(), String> {
-        if index >= self.size().into() {
-            return Err("Index out of bounds".into());
+    fn set_flat(&mut self, index: FlatIndex, value: T) -> Result<()> {
+        if index >= self.size()?.into() {
+            return Err(anyhow!("Index out of bounds"));
         }
         self.elements.insert(index, value);
         Ok(())
@@ -372,19 +379,19 @@ where
     I: TensorStructure,
 {
     type GetData = T;
-    fn get(&self, indices: &[ConcreteIndex]) -> Result<&T, String> {
+    fn get(&self, indices: &[ConcreteIndex]) -> Result<&T> {
         if let Ok(idx) = self.flat_index(indices) {
             self.elements
                 .get(&idx)
-                .ok_or("No elements at that spot".into())
+                .ok_or(anyhow!("No elements at that spot"))
         } else if self.structure.is_scalar() && indices.is_empty() {
             self.elements
                 .iter()
                 .next()
                 .map(|(_, v)| v)
-                .ok_or("err".into())
+                .ok_or(anyhow!("err"))
         } else {
-            Err("Index out of bounds".into())
+            Err(anyhow!("Index out of bounds"))
         }
     }
 
@@ -479,7 +486,7 @@ where
     }
     /// Calulates how dense the tensor is, i.e. the ratio of non-zero elements to total elements
     pub fn density(&self) -> f64 {
-        f64::from(self.elements.len() as u32) / f64::from(self.size() as u32)
+        f64::from(self.elements.len() as u32) / f64::from(self.size().unwrap() as u32)
     }
 
     /// Converts the sparse tensor to a dense tensor, with the same structure
@@ -497,7 +504,7 @@ where
 
     /// fallible smart set method, returns an error if the indices are out of bounds.
     /// If the value is zero, it removes the element at the given indices.
-    pub fn smart_set(&mut self, indices: &[ConcreteIndex], value: T) -> Result<(), String>
+    pub fn smart_set(&mut self, indices: &[ConcreteIndex], value: T) -> Result<()>
     where
         T: IsZero,
     {
@@ -512,14 +519,14 @@ where
     }
 
     /// Generates a new sparse tensor from the given data and structure
-    pub fn from_data(data: &[(Vec<ConcreteIndex>, T)], structure: I) -> Result<Self, String>
+    pub fn from_data(data: &[(Vec<ConcreteIndex>, T)], structure: I) -> Result<Self>
     where
         T: Clone,
     {
         let mut dimensions = vec![0; structure.order()];
         for (index, _) in data {
             if index.len() != structure.order() {
-                return Err("Mismatched order".into());
+                return Err(anyhow!("Mismatched order"));
             }
             for (i, &idx) in index.iter().enumerate() {
                 if idx >= dimensions[i] {
@@ -540,7 +547,7 @@ where
 
     /// fallible smart get method, returns an error if the indices are out of bounds.
     /// If the index is in the bTree return the value, else return zero.
-    pub fn smart_get(&self, indices: &[ConcreteIndex]) -> Result<Cow<T>, String>
+    pub fn smart_get(&self, indices: &[ConcreteIndex]) -> Result<Cow<T>>
     where
         T: Default + Clone,
     {
@@ -710,7 +717,7 @@ where
         let length = if structure.is_scalar() {
             1
         } else {
-            structure.size()
+            structure.size().unwrap()
         };
         DenseTensor {
             data: vec![T::default(); length],
@@ -727,7 +734,7 @@ impl<T, S: TensorStructure> DenseTensor<T, S> {
         let length = if structure.is_scalar() {
             1
         } else {
-            structure.size()
+            structure.size().unwrap()
         };
         DenseTensor {
             data: vec![r; length],
@@ -744,7 +751,7 @@ where
         let length = if structure.is_scalar() {
             1
         } else {
-            structure.size()
+            structure.size().unwrap()
         };
         DenseTensor {
             data: vec![T::zero(); length],
@@ -786,9 +793,9 @@ where
     I: TensorStructure,
 {
     /// Generates a new dense tensor from the given data and structure
-    pub fn from_data(data: &[T], structure: I) -> Result<Self, String> {
-        if data.len() != structure.size() && !(data.len() == 1 && structure.is_scalar()) {
-            return Err("Data length does not match shape".into());
+    pub fn from_data(data: &[T], structure: I) -> Result<Self> {
+        if data.len() != structure.size()? && !(data.len() == 1 && structure.is_scalar()) {
+            return Err(anyhow!("Data length does not match shape"));
         }
         Ok(DenseTensor {
             data: data.to_vec(),
@@ -809,15 +816,15 @@ where
     }
 
     /// Generates a new dense tensor from the given data and structure, truncating the data if it is too long with respect to the structure
-    pub fn from_data_coerced(data: &[T], structure: I) -> Result<Self, String> {
-        if data.len() < structure.size() {
-            return Err("Data length is too small".into());
+    pub fn from_data_coerced(data: &[T], structure: I) -> Result<Self> {
+        if data.len() < structure.size()? {
+            return Err(anyhow!("Data length is too small"));
         }
         let mut data = data.to_vec();
         if structure.is_scalar() {
             data.truncate(1);
         } else {
-            data.truncate(structure.size());
+            data.truncate(structure.size()?);
         }
         Ok(DenseTensor { data, structure })
     }
@@ -910,7 +917,7 @@ where
 
     fn indices(&self) -> Vec<ExpandedIndex> {
         let mut indices = Vec::new();
-        for i in 0..self.size() {
+        for i in 0..self.size().unwrap() {
             indices.push(self.expanded_index(i.into()).unwrap());
         }
         indices
@@ -983,7 +990,7 @@ where
     I: TensorStructure,
 {
     type SetData = T;
-    fn set(&mut self, indices: &[ConcreteIndex], value: T) -> Result<(), String> {
+    fn set(&mut self, indices: &[ConcreteIndex], value: T) -> Result<()> {
         self.verify_indices(indices)?;
         let idx = self.flat_index(indices);
         if let Ok(i) = idx {
@@ -992,11 +999,11 @@ where
         Ok(())
     }
 
-    fn set_flat(&mut self, index: FlatIndex, value: T) -> Result<(), String> {
-        if index < self.size().into() {
+    fn set_flat(&mut self, index: FlatIndex, value: T) -> Result<()> {
+        if index < self.size()?.into() {
             self[index] = value;
         } else {
-            return Err("Index out of bounds".into());
+            return Err(anyhow!("Index out of bounds"));
         }
         Ok(())
     }
@@ -1012,13 +1019,13 @@ where
         self.data.get(i)
     }
 
-    fn get(&self, indices: &[ConcreteIndex]) -> Result<&T, String> {
+    fn get(&self, indices: &[ConcreteIndex]) -> Result<&T> {
         if let Ok(idx) = self.flat_index(indices) {
             Ok(&self[idx])
         } else if self.structure.is_scalar() && indices.is_empty() {
             Ok(&self.data[0])
         } else {
-            Err("Index out of bounds".into())
+            Err(anyhow!("Index out of bounds"))
         }
     }
 
@@ -1309,14 +1316,14 @@ where
 {
     type SetData = T;
 
-    fn set(&mut self, indices: &[ConcreteIndex], value: Self::SetData) -> Result<(), String> {
+    fn set(&mut self, indices: &[ConcreteIndex], value: Self::SetData) -> Result<()> {
         match self {
             DataTensor::Dense(d) => d.set(indices, value),
             DataTensor::Sparse(s) => s.set(indices, value),
         }
     }
 
-    fn set_flat(&mut self, index: FlatIndex, value: Self::SetData) -> Result<(), String> {
+    fn set_flat(&mut self, index: FlatIndex, value: Self::SetData) -> Result<()> {
         match self {
             DataTensor::Dense(d) => d.set_flat(index, value),
             DataTensor::Sparse(s) => s.set_flat(index, value),
@@ -1330,7 +1337,7 @@ where
 {
     type GetData = T;
 
-    fn get(&self, indices: &[ConcreteIndex]) -> Result<&Self::GetData, String> {
+    fn get(&self, indices: &[ConcreteIndex]) -> Result<&Self::GetData> {
         match self {
             DataTensor::Dense(d) => d.get(indices),
             DataTensor::Sparse(s) => s.get(indices),

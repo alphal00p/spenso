@@ -1667,14 +1667,19 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         }
     }
 
-    pub fn compile(&self, filename: &str, library_name: &str) -> CompiledEvalTensor<S>
+    pub fn compile(
+        &self,
+        filename: &str,
+        function_name: &str,
+        library_name: &str,
+    ) -> CompiledEvalTensor<S>
     where
         T: NumericalFloatLike,
     {
         CompiledEvalTensor {
             eval: self
                 .eval
-                .export_cpp(filename, filename, true)
+                .export_cpp(filename, function_name, true)
                 .unwrap()
                 .compile(library_name, CompileOptions::default())
                 .unwrap()

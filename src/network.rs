@@ -916,18 +916,20 @@ impl<T, S> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
         T: NumericalFloatLike,
         S: Clone,
     {
+        // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
         let new_graph = self.graph.map_nodes_ref(|(n, x)| {
+            let function_name = format!("{filename}_{}", n.data().as_ffi());
             let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
             let library_name = format!("{library_name}_{}.so", n.data().as_ffi());
-            x.compile(&filename, &library_name)
+            x.compile(&filename, &function_name, &library_name)
         });
-
+        let function_name = format!("{filename}_scalar");
         let filename = format!("{filename}_scalar.cpp");
         let library_name = format!("{library_name}_scalar.so");
         TensorNetwork {
             graph: new_graph,
             scalar: self.scalar.as_ref().map(|a| {
-                a.export_cpp(&filename, &filename, true)
+                a.export_cpp(&filename, &function_name, true)
                     .unwrap()
                     .compile(&library_name, CompileOptions::default())
                     .unwrap()

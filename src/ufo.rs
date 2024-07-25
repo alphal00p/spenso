@@ -15,7 +15,7 @@ use crate::{HistoryStructure, NamedStructure};
 use num::{NumCast, One, Zero};
 
 use crate::{
-    BaseRepName, Bispinor, Complex, Dimension, Euclidean, Lorentz, PhysReps, TensorStructure,
+    BaseRepName, Bispinor, Complex, Dimension, Dual, Euclidean, Lorentz, PhysReps, TensorStructure,
 };
 
 #[cfg(feature = "shadowing")]
@@ -430,13 +430,17 @@ where
 pub fn mink_four_vector<T, I>(index: AbstractIndex, p: &[T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
-    I: TensorStructure + FromIterator<Slot<Lorentz>>,
+    I: TensorStructure + FromIterator<Slot<Lorentz>> + FromIterator<Slot<Dual<Lorentz>>>,
 {
-    DenseTensor::from_data(
-        p,
-        [Lorentz::new_slot_selfless(4, index)].into_iter().collect(),
-    )
-    .unwrap_or_else(|_| unreachable!())
+    let structure: I = match index {
+        AbstractIndex::Dualize(d) => {
+            [Lorentz::selfless_dual().new_slot(4, AbstractIndex::Normal(d))]
+                .into_iter()
+                .collect()
+        }
+        AbstractIndex::Normal(_) => [Lorentz::new_slot_selfless(4, index)].into_iter().collect(),
+    };
+    DenseTensor::from_data(p, structure).unwrap_or_else(|_| unreachable!())
 }
 
 #[cfg(feature = "shadowing")]
@@ -556,10 +560,14 @@ where
     I: TensorStructure + FromIterator<Slot<PhysReps>>,
 {
     // Gamma(1,2,3) Dirac matrix (γ^μ1)_s2_s3
+    let mu = match minkindex {
+        AbstractIndex::Dualize(d) => Lorentz::selfless_dual().new_slot(4, d).into(),
+        AbstractIndex::Normal(n) => Lorentz::new_slot_selfless(4, n).into(),
+    };
     let structure = [
         Slot::<PhysReps>::from(Euclidean::new_slot_selfless(4, indices[0])),
         Euclidean::new_slot_selfless(4, indices[1]).into(),
-        Lorentz::new_slot_selfless(4, minkindex).into(),
+        mu, // Lorentz::new_slot_selfless(4, minkindex).into(),
     ]
     .into_iter()
     .map(Slot::from)
@@ -576,12 +584,15 @@ where
     T: One + Zero + Copy + std::ops::Neg<Output = T>,
 {
     use crate::NamedStructure;
-
+    let mu = match minkindex {
+        AbstractIndex::Dualize(d) => Lorentz::selfless_dual().new_slot(4, d).into(),
+        AbstractIndex::Normal(n) => Lorentz::new_slot_selfless(4, n).into(),
+    };
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         [
             Slot::<PhysReps>::from(Euclidean::new_slot_selfless(4, indices[0])),
             Euclidean::new_slot_selfless(4, indices[1]).into(),
-            Lorentz::new_slot_selfless(4, minkindex).into(),
+            mu,
         ],
         State::get_symbol("γ"),
         None,

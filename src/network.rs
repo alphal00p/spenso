@@ -10,8 +10,8 @@ use symbolica::{
 };
 
 use crate::{
-    CastStructure, CompiledEvalTensor, EvalTensor, EvalTreeTensor, FallibleMul, GetTensorData,
-    HasTensorData, IntoSymbol, IsAbstractSlot, TensorStructure,
+    CastStructure, CompiledEvalTensor, DualSlotTo, EvalTensor, EvalTreeTensor, FallibleMul,
+    GetTensorData, HasTensorData, IntoSymbol, IsAbstractSlot, TensorStructure,
 };
 
 #[cfg(feature = "shadowing")]
@@ -264,11 +264,20 @@ impl<N, E> HalfEdgeGraph<N, E> {
     where
         E: Eq + Clone,
     {
+        self.add_node_with_edges_fn(data, edges, |e, eo| *e == *eo)
+    }
+
+    /// Add a node with a list of edget with associated data. Matches edges by equality.
+    fn add_node_with_edges_fn<F>(&mut self, data: N, edges: &[E], f: F) -> NodeId
+    where
+        E: Eq + Clone,
+        F: Fn(&E, &E) -> bool,
+    {
         let idx = self.add_node(data);
         for e in edges {
             let mut found_match = false;
             for (i, other_e) in &self.edges {
-                if *e == *other_e && self.involution[i] == i {
+                if f(e, other_e) && self.involution[i] == i {
                     found_match = true;
                     let eid = self.edges.insert(e.clone());
                     self.involution.insert(eid, i);
@@ -1046,7 +1055,8 @@ where
 
     pub fn push(&mut self, tensor: T) -> NodeId {
         let slots = tensor.external_structure().to_vec();
-        self.graph.add_node_with_edges(tensor, &slots)
+        self.graph
+            .add_node_with_edges_fn(tensor, &slots, |s, so| s.matches(so))
     }
 
     fn generate_network_graph(tensors: Vec<T>) -> HalfEdgeGraph<T, <T as TensorStructure>::Slot> {
@@ -1054,7 +1064,7 @@ where
 
         for tensor in tensors {
             let slots = tensor.external_structure().to_vec();
-            graph.add_node_with_edges(tensor, &slots);
+            graph.add_node_with_edges_fn(tensor, &slots, |s, so| s.matches(so));
         }
 
         graph

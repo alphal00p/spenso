@@ -885,6 +885,15 @@ pub enum RealOrComplex<T> {
     Complex(Complex<T>),
 }
 
+impl<T: Display> Display for RealOrComplex<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RealOrComplex::Complex(c) => c.fmt(f),
+            RealOrComplex::Real(r) => r.fmt(f),
+        }
+    }
+}
+
 pub type MixedTensor<T = f64, S = NamedStructure<Symbol, Vec<Atom>>> =
     ParamOrConcrete<RealOrComplexTensor<T, S>, S>;
 

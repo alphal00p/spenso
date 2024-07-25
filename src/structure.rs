@@ -32,6 +32,7 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::io::SeekFrom;
 use std::marker::PhantomData;
+use std::ops::AddAssign;
 use std::ops::Deref;
 use std::ops::Neg;
 use std::process::Output;
@@ -65,25 +66,80 @@ use super::TensorStructureIndexIterator;
 use super::{ufo, DenseTensor, MixedTensor};
 // use smartstring::alias::String;
 /// A type that represents the name of an index in a tensor.
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    Ord,
-    PartialOrd,
-    Eq,
-    PartialEq,
-    Hash,
-    Serialize,
-    Deserialize,
-    From,
-    Into,
-    Display,
-    Add,
-    AddAssign,
-)]
-#[display(fmt = "id{}", _0)]
-pub struct AbstractIndex(pub usize);
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, Hash, Serialize, Deserialize)]
+pub enum AbstractIndex {
+    Normal(usize),
+    Dualize(usize),
+}
+
+impl PartialEq for AbstractIndex {
+    fn eq(&self, other: &Self) -> bool {
+        usize::from(*self) == usize::from(*other)
+    }
+}
+
+impl std::ops::Add<AbstractIndex> for AbstractIndex {
+    type Output = AbstractIndex;
+    fn add(self, rhs: AbstractIndex) -> Self::Output {
+        match self {
+            AbstractIndex::Normal(l) => match rhs {
+                AbstractIndex::Normal(r) => AbstractIndex::Normal(l + r),
+                AbstractIndex::Dualize(r) => AbstractIndex::Normal(l + r),
+            },
+            AbstractIndex::Dualize(l) => match rhs {
+                AbstractIndex::Normal(r) => AbstractIndex::Normal(l + r),
+                AbstractIndex::Dualize(r) => AbstractIndex::Normal(l + r),
+            },
+        }
+    }
+}
+
+impl AddAssign<AbstractIndex> for AbstractIndex {
+    fn add_assign(&mut self, rhs: AbstractIndex) {
+        *self = *self + rhs;
+    }
+}
+
+impl Display for AbstractIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", usize::from(*self))
+    }
+}
+
+impl From<usize> for AbstractIndex {
+    fn from(value: usize) -> Self {
+        AbstractIndex::Normal(value)
+    }
+}
+
+impl From<AbstractIndex> for usize {
+    fn from(value: AbstractIndex) -> Self {
+        match value {
+            AbstractIndex::Dualize(v) => v,
+            AbstractIndex::Normal(v) => v,
+        }
+    }
+}
+
+impl From<isize> for AbstractIndex {
+    fn from(value: isize) -> Self {
+        if value < 0 {
+            AbstractIndex::Dualize(-value as usize)
+        } else {
+            AbstractIndex::Normal(value as usize)
+        }
+    }
+}
+
+impl From<i32> for AbstractIndex {
+    fn from(value: i32) -> Self {
+        if value < 0 {
+            AbstractIndex::Dualize(-value as usize)
+        } else {
+            AbstractIndex::Normal(value as usize)
+        }
+    }
+}
 
 #[cfg(feature = "shadowing")]
 impl TryFrom<AtomView<'_>> for AbstractIndex {
@@ -91,7 +147,7 @@ impl TryFrom<AtomView<'_>> for AbstractIndex {
 
     fn try_from(view: AtomView<'_>) -> Result<Self, Self::Error> {
         if let AtomView::Var(v) = view {
-            Ok(AbstractIndex(v.get_symbol().get_id() as usize))
+            Ok(AbstractIndex::Normal(v.get_symbol().get_id() as usize))
         } else {
             Err("Not a var".to_string().into())
         }
@@ -374,7 +430,7 @@ pub const ABSTRACTIND: &str = "aind";
 //     ColorAntiSextet(Dimension),
 // }
 
-pub trait BaseRepName: RepName + Default {
+pub trait BaseRepName: RepName<Dual: RepName> + Default {
     fn selfless_name() -> String;
     fn selfless_base() -> Self::Base;
     fn selfless_pair() -> DualPair<Self::Base>
@@ -398,9 +454,10 @@ pub trait BaseRepName: RepName + Default {
     where
         Self: Sized,
     {
+        let aind: AbstractIndex = aind.into();
         Slot {
             rep: Self::new_dimed_rep_selfless(dim),
-            aind: aind.into(),
+            aind,
         }
     }
 
@@ -460,6 +517,7 @@ pub trait RepName: Copy + Clone + Debug + PartialEq + Eq + Hash + Display {
     type Base: RepName;
     fn dual(self) -> Self::Dual;
     fn base(&self) -> Self::Base;
+    fn matches(&self, other: &Self::Dual) -> bool;
     fn try_from_symbol(sym: Symbol) -> Result<Self>;
     fn metric<S, V: One + Zero + Neg<Output = V>>(
         &self,
@@ -646,6 +704,10 @@ duplicate! {
         isnotselfdual::selfless_base()
     }
 
+    fn matches(&self, _: &Self::Dual) -> bool {
+        true
+    }
+
     fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
             &self,
             structure: S,
@@ -723,6 +785,10 @@ duplicate! {
         fn base(&self) -> Self::Base {
             self.inner
         }
+
+        fn matches(&self, _: &Self::Dual) -> bool {
+        true
+    }
 
         fn try_from_symbol(sym:Symbol)->Result<Self>{
             if Self::selfless_symbol() == sym {
@@ -836,6 +902,10 @@ fn base_metric<S,V:One+Neg<Output=V>>
         isselfdual::selfless_dual()
     }
 
+    fn matches(&self, _: &Self::Dual) -> bool {
+        true
+    }
+
   fn try_from_symbol(sym: Symbol) -> Result<Self> {
         if Self::selfless_symbol() == sym {
             Ok(isselfdual::default())
@@ -944,6 +1014,23 @@ impl RepName for PhysReps {
         }
     }
 
+    fn matches(&self, other: &Self::Dual) -> bool {
+        match (self, other) {
+            (PhysReps::Euclidean(_), PhysReps::Euclidean(_)) => true,
+            (PhysReps::LorentzUp(_), PhysReps::LorentzDown(_)) => true,
+            (PhysReps::LorentzDown(_), PhysReps::LorentzUp(_)) => true,
+            (PhysReps::Bispinor(_), PhysReps::Bispinor(_)) => true,
+            (PhysReps::ColorAdjoint(_), PhysReps::ColorAdjoint(_)) => true,
+            (PhysReps::ColorFund(_), PhysReps::ColorAntiFund(_)) => true,
+            (PhysReps::ColorAntiFund(_), PhysReps::ColorFund(_)) => true,
+            (PhysReps::ColorSextet(_), PhysReps::ColorAntiSextet(_)) => true,
+            (PhysReps::ColorAntiSextet(_), PhysReps::ColorSextet(_)) => true,
+            (PhysReps::SpinAntiFund(_), PhysReps::SpinFund(_)) => true,
+            (PhysReps::SpinFund(_), PhysReps::SpinAntiFund(_)) => true,
+            _ => false,
+        }
+    }
+
     fn base(&self) -> Self::Base {
         match self {
             Self::LorentzUp(l) => Self::LorentzUp(l.base()),
@@ -1032,6 +1119,9 @@ impl<T: BaseRepName<Base: BaseRepName, Dual: BaseRepName>> Representation<T> {
 }
 
 impl<T: RepName> Representation<T> {
+    pub fn matches(&self, other: &Representation<T::Dual>) -> bool {
+        self.dim == other.dim && self.rep.matches(&other.rep)
+    }
     #[cfg(feature = "shadowing")]
     /// yields a function builder for the representation, adding a first variable: the dimension.
     ///
@@ -1392,13 +1482,14 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
 
     fn to_symbolic(&self) -> Atom {
         let mut value_builder = self.rep.to_fnbuilder();
-        value_builder = value_builder.add_arg(Atom::new_num(self.aind.0 as i64).as_atom_view());
+        value_builder =
+            value_builder.add_arg(Atom::new_num(usize::from(self.aind) as i64).as_atom_view());
         value_builder.finish()
     }
 
     fn to_symbolic_wrapped(&self) -> Atom {
         let mut value_builder = self.rep.to_fnbuilder();
-        let id = Atom::parse(&format!("indexid({})", self.aind.0)).unwrap();
+        let id = Atom::parse(&format!("indexid({})", self.aind)).unwrap();
         value_builder = value_builder.add_arg(&id);
         value_builder.finish()
     }
@@ -1423,7 +1514,7 @@ impl<T: RepName> DualSlotTo for Slot<T> {
         }
     }
     fn matches(&self, other: &Self::Dual) -> bool {
-        self.dim() == other.dim() && self.aind() == other.aind()
+        self.rep.matches(&other.rep) && self.aind() == other.aind()
     }
 }
 
@@ -1473,6 +1564,13 @@ where
         match self {
             Self::Rep(r) => Self::DualRep(r.dual()),
             Self::DualRep(d) => Self::Rep(d.dual()),
+        }
+    }
+    fn matches(&self, other: &Self::Dual) -> bool {
+        match (self, other) {
+            (Self::DualRep(_), Self::Rep(_)) => true,
+            (Self::Rep(_), Self::DualRep(_)) => true,
+            _ => false,
         }
     }
     fn is_neg(self, i: usize) -> bool {
@@ -1793,13 +1891,13 @@ pub trait TensorStructure {
         let posmap = self
             .external_structure_iter()
             .enumerate()
-            .map(|(i, slot)| (slot.dual(), i))
+            .map(|(i, slot)| (slot, i))
             .collect::<AHashMap<_, _>>();
 
         let mut first_pair: Option<(usize, usize)> = None;
 
         for (j, slot) in other.external_structure_iter().enumerate() {
-            if let Some(&i) = posmap.get(&slot) {
+            if let Some(&i) = posmap.get(&slot.dual()) {
                 if let Some((i, j)) = first_pair {
                     // Found a second match, return early with false indicating non-unique match
                     return Some((false, i, j));
@@ -1824,7 +1922,7 @@ pub trait TensorStructure {
             .collect::<AHashMap<_, _>>();
 
         for (j, slot_other) in other.external_structure_iter().enumerate() {
-            if let Some(&i) = posmap.get(&slot_other) {
+            if let Some(&i) = posmap.get(&slot_other.dual()) {
                 self_matches[i] = true;
                 other_matches[j] = true;
                 perm.push(i);
@@ -1840,11 +1938,15 @@ pub trait TensorStructure {
     }
     /// Identify the repeated slots in the external index list
     fn traces(&self) -> Vec<[usize; 2]> {
-        let mut positions = HashMap::new();
+        let mut positions: HashMap<<Self as TensorStructure>::Slot, Vec<usize>> = HashMap::new();
 
         // Track the positions of each element
-        for (index, value) in self.external_structure_iter().enumerate() {
-            positions.entry(value).or_insert_with(Vec::new).push(index);
+        for (index, key) in self.external_structure_iter().enumerate() {
+            if let Some(v) = positions.get_mut(&key.dual()) {
+                v.push(index);
+            } else {
+                positions.insert(key, vec![index]);
+            }
         }
 
         // Collect only the positions of repeated elements
@@ -1880,9 +1982,13 @@ pub trait TensorStructure {
     }
 
     /// find the permutation of the external indices that would make the two tensors the same. Applying the permutation to other should make it the same as self
-    fn find_permutation(&self, other: &Self) -> Option<Vec<ConcreteIndex>> {
+    fn find_permutation(&self, other: &Self) -> Result<Vec<ConcreteIndex>> {
         if self.order() != other.order() {
-            return None;
+            return Err(anyhow!(
+                "Mismatched order: {} vs {}",
+                self.order(),
+                other.order()
+            ));
         }
 
         let mut index_map = HashMap::new();
@@ -1900,15 +2006,15 @@ pub trait TensorStructure {
                     used_indices.insert(index);
                 } else {
                     // No available index for this item
-                    return None;
+                    return Err(anyhow!("No available index for {:?}", item));
                 }
             } else {
                 // Item not found in other
-                return None;
+                return Err(anyhow!("Item {:?} not found in other", item));
             }
         }
 
-        Some(permutation)
+        Ok(permutation)
     }
 
     /// yields the strides of the tensor in column major order
@@ -1955,7 +2061,11 @@ pub trait TensorStructure {
     ///
     fn verify_indices(&self, indices: &[ConcreteIndex]) -> Result<()> {
         if indices.len() != self.order() {
-            return Err(anyhow!("Mismatched order"));
+            return Err(anyhow!(
+                "Mismatched order: {} indices, vs order {}",
+                indices.len(),
+                self.order()
+            ));
         }
 
         for (i, dim_len) in self
@@ -2034,7 +2144,7 @@ pub trait TensorStructure {
     /// yields the size of the tensor, i.e. the product of the dimensions. This is the length of the vector of the data in a dense tensor
     fn size(&self) -> Result<usize> {
         if self.order() == 0 {
-            return Ok(0);
+            return Ok(1);
         }
         let mut size = 1;
         for dim in self.shape() {
@@ -2122,7 +2232,7 @@ pub trait StructureContract {
     fn merge_at(&self, other: &Self, positions: (usize, usize)) -> Self;
 }
 
-impl<S: IsAbstractSlot<R: RepName>> StructureContract for Vec<S> {
+impl<S: DualSlotTo<Dual = S, R: RepName>> StructureContract for Vec<S> {
     fn trace(&mut self, i: usize, j: usize) {
         if i < j {
             self.trace(j, i);
@@ -2176,9 +2286,9 @@ impl<S: IsAbstractSlot<R: RepName>> StructureContract for Vec<S> {
         }
 
         for (index, &value) in other.iter().enumerate() {
-            let e = positions.get(&value);
+            let e = positions.get(&value.dual());
             if let Some((Some(selfi), None)) = e {
-                positions.insert(value, (Some(*selfi), Some(index)));
+                positions.insert(value.dual(), (Some(*selfi), Some(index)));
             } else {
                 positions.insert(value, (None, Some(index)));
                 self.push(value);
@@ -2283,9 +2393,13 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
         None
     }
 
-    fn find_permutation(&self, other: &Self) -> Option<Vec<ConcreteIndex>> {
+    fn find_permutation(&self, other: &Self) -> Result<Vec<ConcreteIndex>> {
         if self.order() != other.order() {
-            return None;
+            return Err(anyhow!(
+                "Mismatched order: {} vs {}",
+                self.order(),
+                other.order()
+            ));
         }
 
         let mut index_map = HashMap::new();
@@ -2303,15 +2417,15 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
                     used_indices.insert(index);
                 } else {
                     // No available index for this item
-                    return None;
+                    return Err(anyhow!("No available index for {:?}", item));
                 }
             } else {
                 // Item not found in other
-                return None;
+                return Err(anyhow!("Item {:?} not found in other", item));
             }
         }
 
-        Some(permutation)
+        Ok(permutation)
     }
 
     fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>> {
@@ -2333,6 +2447,13 @@ pub struct VecStructure {
 
 impl FromIterator<Slot<Lorentz>> for VecStructure {
     fn from_iter<T: IntoIterator<Item = Slot<Lorentz>>>(iter: T) -> Self {
+        let vec = iter.into_iter().map(Slot::<PhysReps>::from).collect();
+        Self { structure: vec }
+    }
+}
+
+impl FromIterator<Slot<Dual<Lorentz>>> for VecStructure {
+    fn from_iter<T: IntoIterator<Item = Slot<Dual<Lorentz>>>>(iter: T) -> Self {
         let vec = iter.into_iter().map(Slot::<PhysReps>::from).collect();
         Self { structure: vec }
     }
@@ -2523,7 +2644,7 @@ impl std::fmt::Display for VecStructure {
                 // IDPRINTER
                 //     .encode_string(usize::from(item.index) as u64)
                 //     .unwrap(),
-                item.rep_name()
+                item.rep()
             )?;
         }
         Ok(())
@@ -3031,7 +3152,7 @@ impl<N, A> TensorStructure for HistoryStructure<N, A> {
     type Slot = PhysicalSlots;
     // type R = PhysicalReps;
     delegate! {
-        to self.internal{
+        to self.external{
            fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
             fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
@@ -3195,6 +3316,25 @@ impl IntoArgs for usize {
 
 #[cfg(feature = "shadowing")]
 impl IntoArgs for () {
+    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+        std::iter::empty()
+    }
+    fn cooked_name(&self) -> std::string::String {
+        "".into()
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize)]
+pub struct NoArgs;
+
+impl Display for NoArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "")
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl IntoArgs for NoArgs {
     fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
         std::iter::empty()
     }

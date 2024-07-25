@@ -21,6 +21,7 @@ use crate::{
 use super::{ConcreteIndex, DenseTensor, Dimension, GetTensorData, Representation, SparseTensor};
 
 use gat_lending_iterator::LendingIterator;
+use log::trace;
 
 use crate::Permutation;
 use bitvec::vec::BitVec;
@@ -1438,12 +1439,17 @@ where
     type Item = (&'a T, It::OtherData);
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|x| {
-            // println!("dense {}", x.flat_idx());
-            // println!("{}", self.fiber.structure.size());
-            (
-                self.fiber.structure.get_linear(x.flat_idx()).unwrap(),
-                x.other_data(),
-            )
+            // trace!("dense {}", x.flat_idx());
+            // trace!("{}", self.fiber.structure.size().unwrap());
+            if let Some(t) = self.fiber.structure.get_linear(x.flat_idx()) {
+                (t, x.other_data())
+            } else {
+                panic!(
+                    "DenseTensor: Out of bounds {} {}",
+                    x.flat_idx(),
+                    self.fiber.structure.size().unwrap()
+                )
+            }
         })
     }
 }

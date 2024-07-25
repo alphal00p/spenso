@@ -67,8 +67,10 @@ derive_more = "0.99.17"
 disjoint_impls = "0.7.1"
 duplicate = "1.0.0"
 enum-try-as-inner = "0.1.1"
+flexi_logger = "0.28.5"
 gat-lending-iterator = "0.1.5"
 indexmap = { version = "2.2.6", features = ["serde"] }
+log = "0.4.22"
 num = { version = "0.4.3", features = ["serde"] }
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"

@@ -243,7 +243,9 @@ where
     // type Storage = AHashMap<usize, T>;
 
     fn data(&self) -> Vec<T> {
-        self.elements.values().cloned().collect()
+        let mut d: Vec<(FlatIndex, T)> = self.iter_flat().map(|(i, v)| (i, v.clone())).collect();
+        d.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        d.into_iter().map(|(_, v)| v).collect()
     }
 
     fn indices(&self) -> Vec<ExpandedIndex> {

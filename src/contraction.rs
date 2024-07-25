@@ -1,5 +1,6 @@
 use ahash::AHashMap;
 use duplicate::duplicate;
+use log::debug;
 // use num::Zero;
 #[cfg(feature = "shadowing")]
 use symbolica::{atom::Atom, domains::float::Real};
@@ -393,11 +394,12 @@ where
 
         // println!("trace {:?}", trace);
         let mut new_structure = self.structure.clone();
+        // println!("{}", new_structure);
         new_structure.trace(trace[0], trace[1]);
 
         let mut new_result = SparseTensor::empty(new_structure);
         for (idx, t) in self.iter_trace(trace).filter(|(_, t)| !t.is_zero()) {
-            new_result.set(&idx, t).unwrap_or_else(|_| unreachable!());
+            new_result.set(&idx, t).unwrap();
         }
 
         if new_result.traces().is_empty() {
@@ -569,16 +571,16 @@ where
         if let Some((single, i, j)) = self.structure().match_index(other.structure()) {
             if i >= j {
                 if single {
-                    // println!("single");
+                    debug!("single");
                     return self.single_contract(other, i, j);
                 }
-                // println!("multi");
+                debug!("multi");
                 return self.multi_contract(other);
             }
-            // println!("flip");
+            debug!("flip");
             return other.contract(self);
         }
-        // println!("exterior");
+        debug!("exterior");
         self.exterior_product(other)
     }
 }

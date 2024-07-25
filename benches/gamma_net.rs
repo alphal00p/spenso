@@ -1,5 +1,6 @@
-use std::ops::Neg;
+use std::{collections::HashMap, ops::Neg};
 
+use ahash::{HashSet, HashSetExt};
 use spenso::{
     ufo::{
         euclidean_four_vector, euclidean_four_vector_sym, gamma, gammasym, mink_four_vector,
@@ -21,6 +22,7 @@ fn gamma_net_sym(
     let mut contracting_index = 0.into();
     let mut result: Vec<NumTensor<HistoryStructure<Symbol>>> =
         vec![euclidean_four_vector_sym(contracting_index, &vbar).into()];
+    let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;
         contracting_index += 1.into();
@@ -33,16 +35,15 @@ fn gamma_net_sym(
                 Complex::<f64>::new(1.3 + 0.01 * i.to_f64().unwrap(), 0.0),
             ];
             i += 1;
-            result.push(mink_four_vector_sym(usize::try_from(*m).unwrap().into(), &p).into());
-            result.push(gammasym(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
+            result.push(mink_four_vector_sym(AbstractIndex::from(*m), &p).into());
+            result.push(gammasym(AbstractIndex::from(-*m), [ui, uj]).into());
         } else {
-            result.push(
-                gammasym(
-                    AbstractIndex::from(usize::try_from(m.neg()).unwrap() + 10000),
-                    (ui, uj),
-                )
-                .into(),
-            );
+            let mu = if seen.insert(m) {
+                AbstractIndex::from(-*m + 10000)
+            } else {
+                AbstractIndex::from(*m - 10000)
+            };
+            result.push(gammasym(mu, [ui, uj]).into());
         }
     }
     result.push(euclidean_four_vector_sym(contracting_index, &u).into());
@@ -57,6 +58,8 @@ fn gamma_net(
     let mut i = 0;
     let mut contracting_index = 0.into();
     let mut result: Vec<NumTensor> = vec![euclidean_four_vector(contracting_index, &vbar).into()];
+
+    let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;
         contracting_index += 1.into();
@@ -69,16 +72,15 @@ fn gamma_net(
                 Complex::<f64>::new(1.3 + 0.01 * i.to_f64().unwrap(), 0.0),
             ];
             i += 1;
-            result.push(mink_four_vector(usize::try_from(*m).unwrap().into(), &p).into());
-            result.push(gamma(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
+            result.push(mink_four_vector(AbstractIndex::from(*m), &p).into());
+            result.push(gamma(AbstractIndex::from(-*m), [ui, uj]).into());
         } else {
-            result.push(
-                gamma(
-                    AbstractIndex::from(usize::try_from(m.neg()).unwrap() + 10000),
-                    (ui, uj),
-                )
-                .into(),
-            );
+            let mu = if seen.insert(m) {
+                AbstractIndex::from(-*m + 10000)
+            } else {
+                AbstractIndex::from(*m - 10000)
+            };
+            result.push(gamma(mu, [ui, uj]).into());
         }
     }
     result.push(euclidean_four_vector(contracting_index, &u).into());

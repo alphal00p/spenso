@@ -5,24 +5,39 @@ expression: "(a, fciter, fiberclass)"
 (VecStructure(
   structure: [
     Slot(
-      index: AbstractIndex(104),
-      representation: Euclidean(Dimension(4)),
+      aind: Normal(221),
+      rep: Representation(
+        dim: Concrete(4),
+        rep: Euclidean(Euclidean()),
+      ),
     ),
     Slot(
-      index: AbstractIndex(128),
-      representation: Euclidean(Dimension(1)),
+      aind: Normal(61),
+      rep: Representation(
+        dim: Concrete(4),
+        rep: LorentzUp(Lorentz()),
+      ),
     ),
     Slot(
-      index: AbstractIndex(164),
-      representation: Euclidean(Dimension(5)),
+      aind: Normal(152),
+      rep: Representation(
+        dim: Concrete(1),
+        rep: Euclidean(Euclidean()),
+      ),
     ),
     Slot(
-      index: AbstractIndex(88),
-      representation: Lorentz(Dimension(7)),
+      aind: Normal(118),
+      rep: Representation(
+        dim: Concrete(2),
+        rep: LorentzUp(Lorentz()),
+      ),
     ),
     Slot(
-      index: AbstractIndex(145),
-      representation: Lorentz(Dimension(2)),
+      aind: Normal(251),
+      rep: Representation(
+        dim: Concrete(7),
+        rep: Euclidean(Euclidean()),
+      ),
     ),
   ],
 ), [
@@ -30,13 +45,13 @@ expression: "(a, fciter, fiberclass)"
     index: 0,
   ),
   FlatIndex(
-    index: 70,
+    index: 56,
   ),
   FlatIndex(
-    index: 140,
+    index: 112,
   ),
   FlatIndex(
-    index: 210,
+    index: 168,
   ),
 ], [
   FlatIndex(
@@ -206,47 +221,5 @@ expression: "(a, fciter, fiberclass)"
   ),
   FlatIndex(
     index: 55,
-  ),
-  FlatIndex(
-    index: 56,
-  ),
-  FlatIndex(
-    index: 57,
-  ),
-  FlatIndex(
-    index: 58,
-  ),
-  FlatIndex(
-    index: 59,
-  ),
-  FlatIndex(
-    index: 60,
-  ),
-  FlatIndex(
-    index: 61,
-  ),
-  FlatIndex(
-    index: 62,
-  ),
-  FlatIndex(
-    index: 63,
-  ),
-  FlatIndex(
-    index: 64,
-  ),
-  FlatIndex(
-    index: 65,
-  ),
-  FlatIndex(
-    index: 66,
-  ),
-  FlatIndex(
-    index: 67,
-  ),
-  FlatIndex(
-    index: 68,
-  ),
-  FlatIndex(
-    index: 69,
   ),
 ])

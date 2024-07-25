@@ -1,16 +1,31 @@
 ---
 source: src/tests.rs
-expression: structb
+expression: dense_dense.structure()
 ---
 VecStructure(
   structure: [
     Slot(
-      index: AbstractIndex(0),
-      representation: Lorentz(Dimension(4)),
+      aind: Normal(3),
+      rep: Representation(
+        dim: Concrete(4),
+        rep: LorentzDown(Dual(
+          inner: Lorentz(),
+        )),
+      ),
     ),
     Slot(
-      index: AbstractIndex(2),
-      representation: Lorentz(Dimension(4)),
+      aind: Normal(4),
+      rep: Representation(
+        dim: Concrete(5),
+        rep: LorentzUp(Lorentz()),
+      ),
+    ),
+    Slot(
+      aind: Normal(2),
+      rep: Representation(
+        dim: Concrete(4),
+        rep: LorentzUp(Lorentz()),
+      ),
     ),
   ],
 )

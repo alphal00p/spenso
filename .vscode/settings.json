@@ -11,7 +11,8 @@
     "symbolica",
     "clippy",
     "build",
-    "gammaloop"
+    "gammaloop",
+    "structures"
   ],
   "github.copilot.enable": {
     "quarto": false,

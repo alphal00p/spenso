@@ -3,20 +3,23 @@ use crate::{
     GetTensorData, HasTensorData, Representation, SparseTensor, StructureContract,
 };
 use crate::{
-    AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, ExpandedIndex, Fiber,
-    FiberClass, FlatIndex, IteratesAlongFibers, TensorStructure,
+    AbstractFiber, BaseRepName, ColorAdjoint, ColorFundamental, CoreExpandedFiberIterator,
+    CoreFlatFiberIterator, DualSlotTo, Euclidean, ExpandedIndex, Fiber, FiberClass, FlatIndex,
+    HasStructure, IteratesAlongFibers, Lorentz, NoArgs, NodeId, PhysReps, PhysicalSlots,
+    RealOrComplex, RealOrComplexTensor, RepName, TensorStructure,
 };
 #[cfg(feature = "shadowing")]
 use ahash::{HashMap, HashMapExt};
 
+use flexi_logger::Logger;
 use indexmap::{IndexMap, IndexSet};
+use log::{debug, error, info};
+use slotmap::SlotMap;
 
 use crate::Complex;
-use insta::{assert_ron_snapshot, assert_yaml_snapshot};
+use insta::{assert_ron_snapshot, assert_snapshot, assert_yaml_snapshot};
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
-
-use smartstring::alias::String;
 
 #[cfg(feature = "shadowing")]
 use super::{symbolic::SymbolicTensor, MixedTensor, Shadowable, TryIntoUpgrade};
@@ -44,14 +47,14 @@ where
 
     let mut tensor = SparseTensor::empty(structure);
 
-    let density = rng.gen_range(0..tensor.size());
+    let density = rng.gen_range(0..tensor.size().unwrap());
 
     if let Some((low, high)) = range {
         let multipliable = Uniform::new(low, high);
         for _ in 0..density {
             tensor
                 .set_flat(
-                    rng.gen_range(0..tensor.size()).into(),
+                    rng.gen_range(0..tensor.size().unwrap()).into(),
                     rng.sample(multipliable),
                 )
                 .unwrap();
@@ -59,7 +62,7 @@ where
     } else {
         for _ in 0..density {
             tensor
-                .set_flat(rng.gen_range(0..tensor.size()).into(), rng.gen())
+                .set_flat(rng.gen_range(0..tensor.size().unwrap()).into(), rng.gen())
                 .unwrap();
         }
     }
@@ -74,36 +77,49 @@ fn test_structure(length: usize, seed: u64) -> VecStructure {
     let rank = length;
     while s.len() < rank {
         let rep = rng.gen_range(0..=1);
-        let dim = Dimension(rng.gen_range(1..=9));
-        let id = AbstractIndex(rng.gen_range(0..256));
-        let rep = match rep {
-            0 => Representation::Euclidean(dim),
-            _ => Representation::Lorentz(dim),
+        let dim = Dimension::Concrete(rng.gen_range(1..=9));
+        let id = AbstractIndex::from(rng.gen_range(0..256));
+        let rep: Representation<PhysReps> = match rep {
+            0 => Euclidean::new_dimed_rep_selfless(dim).cast(),
+            _ => Lorentz::new_dimed_rep_selfless(dim).cast(),
         };
 
-        s.insert((id, rep).into());
+        s.insert(rep.new_slot(id));
     }
 
     s.into_iter().collect()
 }
 
-fn test_structure_with_dims(dims: &[usize], seed: u64) -> VecStructure {
+fn test_structure_with_dims(dims: &[isize], seed: u64) -> VecStructure {
     let mut s = IndexSet::new();
     let mut rng = Xoroshiro64Star::seed_from_u64(seed);
 
     for d in dims {
         loop {
-            let dim: Dimension = (*d).into();
-            let rep = rng.gen_range(0..=1);
-            let id = AbstractIndex(rng.gen_range(0..256));
+            if *d < 0 {
+                let dim: Dimension = (-*d as usize).into();
+                let rep = rng.gen_range(0..=1);
+                let id = AbstractIndex::from(rng.gen_range(0..256));
 
-            let rep = match rep {
-                0 => Representation::Euclidean(dim),
-                _ => Representation::Lorentz(dim),
-            };
+                let rep: Representation<PhysReps> = match rep {
+                    0 => Euclidean::new_dimed_rep_selfless(dim).cast(),
+                    _ => Lorentz::new_dimed_rep_selfless(dim).cast(),
+                };
+                if s.insert(rep.new_slot(id)) {
+                    break;
+                }
+            } else {
+                let dim: Dimension = (*d as usize).into();
+                let rep = rng.gen_range(0..=1);
+                let id = AbstractIndex::from(rng.gen_range(0..256));
 
-            if s.insert((id, rep).into()) {
-                break;
+                let rep: Representation<PhysReps> = match rep {
+                    0 => Euclidean::new_dimed_rep_selfless(dim).cast(),
+                    _ => Lorentz::selfless_dual().new_dimed_rep(dim).cast(),
+                };
+                if s.insert(rep.new_slot(id)) {
+                    break;
+                }
             }
         }
     }
@@ -113,41 +129,24 @@ fn test_structure_with_dims(dims: &[usize], seed: u64) -> VecStructure {
 
 #[test]
 fn rng_is_deterministic() {
-    let valid = IndexMap::from([
-        (vec![3, 0, 3].into(), 53),
-        (vec![1, 1, 0].into(), 45),
-        (vec![1, 1, 2].into(), -99),
-        (vec![2, 1, 0].into(), -59),
-        (vec![0, 1, 1].into(), -93),
-        (vec![2, 0, 1].into(), 105),
-        (vec![4, 1, 0].into(), 125),
-        (vec![1, 0, 0].into(), -118),
-        (vec![0, 0, 3].into(), -26),
-        (vec![4, 0, 0].into(), 59),
-        (vec![3, 1, 2].into(), 84),
-        (vec![3, 1, 0].into(), -13),
-        (vec![1, 0, 3].into(), 119),
-        (vec![0, 1, 2].into(), 48),
-        (vec![1, 0, 2].into(), 17),
-        (vec![0, 0, 0].into(), 34),
-        (vec![3, 0, 2].into(), 20),
-        (vec![4, 0, 2].into(), -3),
-        (vec![3, 1, 3].into(), 69),
-        (vec![4, 0, 1].into(), 125),
-    ]);
+    let a = test_structure(3, 11);
+
+    let a: SparseTensor<i8> = test_tensor(a, 1, None);
+
+    assert_ron_snapshot!(a.data());
     for _ in 0..10 {
-        let a = test_structure(3, 11);
+        let b = test_structure(3, 11);
 
-        let a: SparseTensor<i8> = test_tensor(a, 1, None);
-
-        assert_eq!(a.hashmap(), valid);
+        let b: SparseTensor<i8> = test_tensor(b, 1, None);
+        assert_eq!(a.data(), b.data());
     }
 }
 
 #[test]
 fn indexflatten() {
-    let a = test_structure(4, 31);
-    let idx = vec![1, 2, 3, 1];
+    let a = test_structure(4, 32);
+    println!("{}", a);
+    let idx = vec![1, 5, 0, 2];
     let flatidx = a.flat_index(&idx).unwrap();
     assert_eq!(ExpandedIndex::from(idx), a.expanded_index(flatidx).unwrap());
 }
@@ -224,7 +223,13 @@ fn fibers() {
 
 #[test]
 fn fiber_from_structure() {
-    let a = test_structure(5, 5);
+    let a = VecStructure::from_iter([
+        PhysReps::new_slot(Euclidean {}.into(), 4, 104),
+        Euclidean::new_slot_selfless(1, 128).into(),
+        Euclidean::new_slot_selfless(5, 164).into(),
+        Lorentz::new_slot_selfless(7, 88).into(),
+        Lorentz::selfless_dual().new_slot(2, 145).into(),
+    ]);
 
     let fiber = Fiber::from(([1u8, 1, 0, 1, 0].as_slice()).into(), &a);
 
@@ -242,17 +247,26 @@ fn fiber_from_structure() {
         .flatten()
         .collect();
 
-    assert_eq!(fiberclass_iter.len(), a.size());
+    assert_eq!(fiberclass_iter.len(), a.size().unwrap());
     assert_yaml_snapshot!((fiberclass_iter, fiber_iter));
 }
 
 #[test]
 fn permutation() {
-    let a: Vec<Slot> = vec![(1, 2).into(), (3, 4).into(), (5, 6).into()];
+    let a: Vec<Slot<PhysReps>> = vec![
+        Euclidean::new_slot_selfless(1, 2).into(),
+        Lorentz::selfless_dual().dual().new_slot(3, 4).into(),
+        Euclidean::new_slot_selfless(5, 6).into(),
+    ];
 
-    let b: Vec<Slot> = vec![(3, 4).into(), (5, 6).into(), (1, 2).into()];
+    let b: Vec<Slot<PhysReps>> = vec![
+        Lorentz {}.new_slot(3, 4).into(),
+        Euclidean::new_slot_selfless(5, 6).into(),
+        Euclidean::new_slot_selfless(1, 2).into(),
+    ];
 
     let permutation = a.find_permutation(&b).unwrap();
+    println!("{:?}", permutation);
 
     let c = permutation.iter().map(|x| b[*x]).collect::<Vec<_>>();
 
@@ -261,8 +275,15 @@ fn permutation() {
 
 #[test]
 fn trace() {
-    let structura: HistoryStructure<&str, ()> =
-        HistoryStructure::from(NamedStructure::from_iter([(1, 5), (1, 5)], "a", None));
+    let structura: HistoryStructure<&str, NoArgs> =
+        HistoryStructure::from(NamedStructure::from_iter(
+            [
+                Euclidean::new_slot_selfless(5, 1),
+                Euclidean::new_slot_selfless(5, 1),
+            ],
+            "a",
+            None,
+        ));
     let a = test_tensor::<i8, _>(structura, 3, None);
     let f = a.internal_contract();
 
@@ -273,7 +294,7 @@ fn trace() {
 #[test]
 fn construct_dense_tensor() {
     let a = test_structure(4, 32);
-    let data = vec![1.0; a.size()];
+    let data = vec![1.0; a.size().unwrap()];
     let tensor = super::DenseTensor::from_data(&data, a).unwrap();
     let num_tensor: NumTensor = tensor.clone().into();
     let data_tensor: DataTensor<f64, _> = tensor.clone().into();
@@ -296,16 +317,17 @@ fn construct_dense_tensor() {
     assert_eq!(num_tensor.try_as_float().unwrap().data(), data);
 }
 
+use anyhow::Result;
 #[test]
-fn construct_sparse_tensor() -> Result<(), String> {
+fn construct_sparse_tensor() -> Result<()> {
     let structure = test_structure(3, 11);
-    println!("{:?}", structure);
+    // println!("{}", structure);
 
     let mut a = SparseTensor::empty(structure);
-    a.set(&[1, 0, 1], 1.)?;
-    a.set(&[0, 0, 2], 2.)?;
-    a.set(&[1, 1, 2], 3.)?;
-    a.set(&[1, 0, 2], 4.)?;
+    a.set(&[1, 2, 1], 1.)?;
+    a.set(&[0, 0, 0], 2.)?;
+    a.set(&[1, 1, 1], 3.)?;
+    a.set(&[1, 2, 1], 4.)?;
 
     let num_tensor: NumTensor = a.clone().into();
     let data_tensor: DataTensor<f64, _> = a.clone().into();
@@ -340,17 +362,21 @@ fn tensor_structure_forwarding() {
     let sparse: SparseTensor<i16> = test_tensor(a.clone(), 1, range);
     let dense: DenseTensor<i16> = test_tensor(a.clone(), 2, range).to_dense();
 
-    assert_eq!(a.strides(), sparse.strides());
+    assert_eq!(a.strides().unwrap(), sparse.strides().unwrap());
     assert_eq!(dense.reps(), a.reps());
 }
 
 #[test]
 fn scalar_and_dim1_conract() {
     let common = test_structure_with_dims(&[1, 3, 1, 2], 6);
+    let commondual = test_structure_with_dims(&[-1, -3, -1, -2], 6);
+    assert_snapshot!(common.to_string());
     let mut structa = test_structure(1, 32);
+    assert_snapshot!(structa.to_string());
     structa.merge(&common);
     let mut structb = test_structure(1, 22);
-    structb.merge(&common);
+    assert_snapshot!(structb.to_string());
+    structb.merge(&commondual);
     let range = Some((-100, 100));
 
     let mut tensor_1: SparseTensor<i16> = test_tensor(structa, 3, range);
@@ -367,27 +393,21 @@ fn scalar_and_dim1_conract() {
     assert_eq!(f.to_dense().data(), h.data());
     assert_eq!(f.to_dense().data(), g.data());
     assert_eq!(f.to_dense().data(), i.data());
+    assert_snapshot!(f.structure().to_string());
 
-    let valid = IndexMap::from([
-        (vec![0, 3].into(), 5908),
-        (vec![2, 1].into(), 2491),
-        (vec![3, 1].into(), -1081),
-        (vec![0, 0].into(), 90),
-        (vec![3, 0].into(), -1200),
-        (vec![3, 3].into(), -788),
-        (vec![1, 1].into(), 2961),
-        (vec![2, 3].into(), -4004),
-        (vec![2, 0].into(), 160),
-        (vec![0, 1].into(), -987),
-    ]);
-
-    assert_eq!(f.hashmap(), valid);
+    assert_ron_snapshot!(f.data());
 }
 
 #[test]
 fn dense_dense_single_contract() {
-    let structura = VecStructure::new(vec![(1, 4).into(), (2, 4).into()]);
-    let structurb = VecStructure::new(vec![(2, 4).into(), (3, 3).into()]);
+    let structura = VecStructure::new(vec![
+        Euclidean::new_slot_selfless(4, 1).into(),
+        Euclidean::new_slot_selfless(4, 2).into(),
+    ]);
+    let structurb = VecStructure::new(vec![
+        Euclidean::new_slot_selfless(4, 2).into(),
+        Euclidean::new_slot_selfless(3, 3).into(),
+    ]);
 
     let a = DenseTensor::from_data(
         &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
@@ -405,8 +425,15 @@ fn dense_dense_single_contract() {
 
 #[test]
 fn sparse_diag_dense_contract() {
-    let structura = VecStructure::new(vec![(1, 4).into(), (2, 4).into()]);
-    let structurb = VecStructure::new(vec![(2, 4).into(), (3, 3).into()]);
+    // Logger::try_with_str("trace").unwrap().start().unwrap();
+    let structura = VecStructure::new(vec![
+        Euclidean::new_slot_selfless(4, 1).into(),
+        Euclidean::new_slot_selfless(4, 2).into(),
+    ]);
+    let structurb = VecStructure::new(vec![
+        Euclidean::new_slot_selfless(4, 2).into(),
+        Euclidean::new_slot_selfless(3, 3).into(),
+    ]);
 
     let a = SparseTensor::from_data(
         &[
@@ -461,38 +488,50 @@ fn contract_with_rank_one_in_middle() {
     assert_eq!(f.data, g.data);
 }
 
-fn test_structure_with_id<T>(ids: T, seed: u64) -> Vec<Slot>
+fn test_structure_with_id<T>(ids: T, seed: u64) -> Vec<Slot<PhysReps>>
 where
-    T: Iterator<Item = usize>,
+    T: IntoIterator<Item = i32>,
 {
     let mut rng = Xoroshiro64Star::seed_from_u64(seed);
     let mut s = Vec::new();
 
     for id in ids {
         let rep = rng.gen_range(0..=1);
-        let dim = Dimension(rng.gen_range(1..=9));
-        let id = AbstractIndex(id);
-        let rep = match rep {
-            0 => Representation::Euclidean(dim),
-            _ => Representation::Lorentz(dim),
+        let dim = Dimension::Concrete(rng.gen_range(1..=9));
+        let (rep, id) = if id > 0 {
+            let id = AbstractIndex::from(id);
+            let rep: Representation<PhysReps> = match rep {
+                0 => Euclidean::new_dimed_rep_selfless(dim).cast(),
+                _ => Lorentz::new_dimed_rep_selfless(dim).cast(),
+            };
+            (rep, id)
+        } else {
+            let id = AbstractIndex::from(-id);
+            let rep: Representation<PhysReps> = match rep {
+                0 => Euclidean::new_dimed_rep_selfless(dim).cast(),
+                _ => Lorentz::selfless_dual().new_dimed_rep(dim).cast(),
+            };
+            (rep, id)
         };
 
-        s.push((id, rep).into());
+        s.push(rep.new_slot(id));
     }
     s
 }
 
 #[test]
 fn single_contract() {
+    // Logger::try_with_str("trace").unwrap().start().unwrap();
     let s = 18;
     let range = Some((-1000, 1000));
-    let common = test_structure_with_id(0..1, s);
-    let mut structa = test_structure_with_id(1..2, s);
-    let mut structb = test_structure_with_id(2..3, s);
+    let common = test_structure_with_id(1..2, s);
+    let commondual = test_structure_with_id([-1], s);
+    let mut structa = test_structure_with_id(2..3, s);
+    let mut structb = test_structure_with_id([-3, 4], s);
     let mut rng = Xoroshiro64Star::seed_from_u64(s);
 
     structa.insert(rng.gen_range(0..structa.len()), common[0]);
-    structb.insert(rng.gen_range(0..structb.len()), common[0]);
+    structb.insert(rng.gen_range(0..structb.len()), commondual[0]);
     structa.sort();
     let structa: VecStructure = structa.into();
 
@@ -508,6 +547,7 @@ fn single_contract() {
     // println!("B={:?}", densor_b);
 
     let dense_dense = densor_b.contract(&densor_a).unwrap();
+    assert_ron_snapshot!(dense_dense.structure());
     // println!("A*B {:?}", dense_dense);
     let sparse_sparse = spensor_b.contract(&spensor_a).unwrap().to_dense();
     let dense_sparse = densor_b.contract(&spensor_a).unwrap();
@@ -532,6 +572,7 @@ fn single_contract() {
 
 #[test]
 fn all_single_contractions() {
+    // Logger::try_with_str("trace").unwrap().start().unwrap();
     let range = Some((-1000, 1000));
 
     let mut dseq = vec![];
@@ -539,13 +580,14 @@ fn all_single_contractions() {
     let mut sdeq = vec![];
 
     for s in 0..1000 {
-        let common = test_structure_with_id(0..1, s);
-        let mut structa = test_structure_with_id(1..2, s);
-        let mut structb = test_structure_with_id(2..3, s);
+        let common = test_structure_with_id(1..2, s);
+        let commondual = test_structure_with_id([-1], s);
+        let mut structa = test_structure_with_id(2..3, s);
+        let mut structb = test_structure_with_id([-3, 4], s);
         let mut rng = Xoroshiro64Star::seed_from_u64(s);
 
         structa.insert(rng.gen_range(0..structa.len()), common[0]);
-        structb.insert(rng.gen_range(0..structb.len()), common[0]);
+        structb.insert(rng.gen_range(0..structb.len()), commondual[0]);
         structa.sort();
         let structa: VecStructure = structa.into();
         let structb: VecStructure = structb.into();
@@ -580,8 +622,17 @@ fn all_single_contractions() {
 
 #[test]
 fn simple_multi_contract() {
-    let structa = VecStructure::new(vec![(1, 3).into(), (2, 4).into(), (3, 4).into()]);
-    let structb = VecStructure::new(vec![(2, 4).into(), (4, 3).into(), (3, 4).into()]);
+    // Logger::try_with_str("trace").unwrap().start().unwrap();
+    let structa = VecStructure::new(vec![
+        Euclidean::new_slot_selfless(3, 1).into(),
+        Euclidean::new_slot_selfless(4, 2).into(),
+        ColorFundamental::new_slot_selfless(4, 3).into(),
+    ]);
+    let structb = VecStructure::new(vec![
+        Euclidean::new_slot_selfless(4, 2).into(),
+        Euclidean::new_slot_selfless(3, 4).into(),
+        ColorFundamental::selfless_dual().new_slot(4, 3).into(),
+    ]);
 
     let a = DenseTensor::from_data(
         &[
@@ -625,25 +676,30 @@ fn simple_multi_contract() {
 
 #[test]
 fn multi_contract_permuted() {
+    // Logger::try_with_str("trace").unwrap().start().unwrap();
     let range = Some((-1000, 1000));
     let s = 18;
     let mut rng = Xoroshiro64Star::seed_from_u64(s);
     let ncommon = rng.gen_range(2..5);
 
-    let common = test_structure_with_id(0..ncommon, s);
-    let mut structa = test_structure_with_id(ncommon..ncommon + 1, s);
-    let mut structb = test_structure_with_id(ncommon + 1..ncommon + 2, s);
+    let common = test_structure_with_id(1..ncommon + 1, s);
 
-    for c in common {
+    let dualcommon = test_structure_with_id((-ncommon..=-1).rev(), s);
+    let mut structa = test_structure_with_id(ncommon + 1..ncommon + 2, s);
+    let mut structb = test_structure_with_id(ncommon + 2..ncommon + 3, s);
+
+    for (c, dualc) in common.into_iter().zip(dualcommon.into_iter()) {
         structa.insert(rng.gen_range(0..structa.len()), c);
-        structb.insert(rng.gen_range(0..structb.len()), c);
+        info!("inserting {c} into structa");
+        structb.insert(rng.gen_range(0..structb.len()), dualc);
+        info!("inserting {dualc} into structb");
     }
     structa.sort();
     let structa: VecStructure = structa.into();
     let structb: VecStructure = structb.into();
 
-    println!("structa = {}", structa);
-    println!("structb = {}", structb);
+    println!("structa = \n{}", structa);
+    println!("structb = \n{}", structb);
 
     let spensor_a: SparseTensor<i32, VecStructure> = test_tensor(structa.clone(), s + 3, range);
     let densor_a: DenseTensor<i32, VecStructure> = spensor_a.to_dense();
@@ -679,15 +735,18 @@ fn multi_contract() {
     let s = 18;
     let mut rng = Xoroshiro64Star::seed_from_u64(s);
     let ncommon = rng.gen_range(2..5);
+    let common = test_structure_with_id(1..ncommon + 1, s);
 
-    let common = test_structure_with_id(0..ncommon, s);
-    let mut structa = test_structure_with_id(ncommon..ncommon + 1, s);
-    let mut structb = test_structure_with_id(ncommon + 1..ncommon + 2, s);
+    let dualcommon = test_structure_with_id((-ncommon..=-1).rev(), s);
+    let mut structa = test_structure_with_id(ncommon + 1..ncommon + 2, s);
+    let mut structb = test_structure_with_id(ncommon + 2..ncommon + 3, s);
 
-    for c in common {
+    for (c, dualc) in common.into_iter().zip(dualcommon.into_iter()) {
         structa.insert(rng.gen_range(0..structa.len()), c);
-        structb.insert(rng.gen_range(0..structb.len()), c);
+
+        structb.insert(rng.gen_range(0..structb.len()), dualc);
     }
+
     let structa: VecStructure = structa.into();
     let structb: VecStructure = structb.into();
 
@@ -695,8 +754,10 @@ fn multi_contract() {
     println!("structb = {}", structb);
 
     let spensor_a: SparseTensor<i32, VecStructure> = test_tensor(structa.clone(), s + 3, range);
+    // insta::assert_ron_snapshot!(spensor_a);
     let densor_a: DenseTensor<i32, VecStructure> = spensor_a.to_dense();
     let spensor_b: SparseTensor<i32, VecStructure> = test_tensor(structb.clone(), s + 4, range);
+    // insta::assert_ron_snapshot!(spensor_b);
     let densor_b: DenseTensor<i32, VecStructure> = spensor_b.to_dense();
 
     let dense_dense = densor_b.contract(&densor_a).unwrap();
@@ -726,6 +787,7 @@ fn multi_contract() {
 
 #[test]
 fn all_multi_contractions() {
+    // Logger::try_with_str("trace").unwrap().start().unwrap();
     let _seeds = [48, 50, 118, 225, 234, 310];
     let range = Some((-1000, 1000));
 
@@ -734,15 +796,18 @@ fn all_multi_contractions() {
     let mut sdeq = vec![];
     for s in 0..1000 {
         let mut rng = Xoroshiro64Star::seed_from_u64(s);
+        // let ncommon = rng.gen_range(2..5);
         let ncommon = rng.gen_range(2..5);
+        let common = test_structure_with_id(1..ncommon + 1, s);
 
-        let common = test_structure_with_id(0..ncommon, s);
-        let mut structa = test_structure_with_id(ncommon..ncommon + 1, s);
-        let mut structb = test_structure_with_id(ncommon + 1..ncommon + 2, s);
+        let dualcommon = test_structure_with_id((-ncommon..=-1).rev(), s);
+        let mut structa = test_structure_with_id(ncommon + 1..ncommon + 2, s);
+        let mut structb = test_structure_with_id(ncommon + 2..ncommon + 3, s);
 
-        for c in common {
+        for (c, dualc) in common.into_iter().zip(dualcommon.into_iter()) {
             structa.insert(rng.gen_range(0..structa.len()), c);
-            structb.insert(rng.gen_range(0..structb.len()), c);
+
+            structb.insert(rng.gen_range(0..structb.len()), dualc);
         }
         structa.sort();
         let structa: VecStructure = structa.into();
@@ -777,9 +842,9 @@ fn all_multi_contractions() {
 
 #[test]
 fn gamma() {
-    let g1: SparseTensor<Complex<f64>> = ufo::gamma(0.into(), (0.into(), 1.into()));
-    let g2: SparseTensor<Complex<f64>> = ufo::gamma(1.into(), (1.into(), 2.into()));
-    let g3: SparseTensor<Complex<f64>> = ufo::gamma(2.into(), (2.into(), 0.into()));
+    let g1: SparseTensor<Complex<f64>> = ufo::gamma(0.into(), [0.into(), 1.into()]);
+    let g2: SparseTensor<Complex<f64>> = ufo::gamma(1.into(), [1.into(), 2.into()]);
+    let g3: SparseTensor<Complex<f64>> = ufo::gamma(2.into(), [2.into(), 0.into()]);
 
     let c = g1.contract(&g2).unwrap().contract(&g3).unwrap();
     assert_eq!(
@@ -789,7 +854,7 @@ fn gamma() {
     );
 
     let d: SparseTensor<Complex<f64>> =
-        ufo::gamma(0.into(), (0.into(), 0.into())).internal_contract();
+        ufo::gamma(0.into(), [0.into(), 0.into()]).internal_contract();
 
     assert_eq!(Vec::<Complex<f64>>::new(), d.data(), "Gammas are traceless");
 }
@@ -798,20 +863,20 @@ fn gamma() {
 fn matches() {
     let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
         [
-            (3.into(), Representation::Lorentz(2.into())),
-            (2.into(), Representation::Lorentz(3.into())),
-            (2.into(), Representation::Euclidean(2.into())),
-            (1.into(), Representation::Lorentz(2.into())),
+            Slot::<PhysReps>::from(Lorentz::new_slot_selfless(2, 3)),
+            Lorentz::new_slot_selfless(3, 2).into(),
+            Euclidean::new_slot_selfless(2, 2).into(),
+            Lorentz::new_slot_selfless(2, 1).into(),
         ],
         "a",
         None,
     ));
     let structur_b = HistoryStructure::from(NamedStructure::from_iter(
         [
-            (1.into(), Representation::Lorentz(2.into())),
-            (3.into(), Representation::Lorentz(2.into())),
-            (2.into(), Representation::Lorentz(2.into())),
-            (1.into(), Representation::Euclidean(2.into())),
+            Slot::<PhysReps>::from(Lorentz::selfless_dual().new_slot(2, 1)),
+            Lorentz::selfless_dual().new_slot(2, 3).into(),
+            Lorentz::selfless_dual().new_slot(2, 2).into(),
+            Euclidean::new_slot_selfless(2, 1).into(),
         ],
         "b",
         None,
@@ -827,12 +892,25 @@ fn mixed_tensor_contraction() {
     let im = Complex::new(1.5, 1.25);
     let data_a = [(vec![0, 0], 1.0), (vec![1, 1], 2.0)];
 
-    let structur_a: HistoryStructure<&str, ()> =
-        HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
+    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
+        [
+            Slot::<PhysReps>::from(Euclidean::new_slot_selfless(2, 2)),
+            Slot::<PhysReps>::from(Euclidean::new_slot_selfless(2, 1)),
+        ],
+        "a",
+        None,
+    ));
 
     let a = SparseTensor::from_data(&data_a, structur_a.clone()).unwrap();
 
-    let structur_b = HistoryStructure::from(NamedStructure::from_iter([(2, 2), (4, 2)], "b", None));
+    let structur_b = HistoryStructure::from(NamedStructure::from_iter(
+        [
+            Slot::<PhysReps>::from(Euclidean::new_slot_selfless(2, 2)),
+            Slot::<PhysReps>::from(Euclidean::new_slot_selfless(2, 4)),
+        ],
+        "b",
+        None,
+    ));
 
     let b = DenseTensor::from_data(
         &[
@@ -880,23 +958,48 @@ fn mixed_tensor_contraction() {
 
 #[test]
 fn tensor_net() {
-    let a: NumTensor = ufo::gamma(1.into(), (2.into(), 3.into())).into();
-    let b: NumTensor = ufo::gamma(2.into(), (3.into(), 4.into())).into();
-    let c: NumTensor = ufo::gamma(3.into(), (4.into(), 5.into())).into();
-    let d: NumTensor = ufo::gamma(4.into(), (5.into(), 2.into())).into();
-    let p: NumTensor = mink_four_vector(1.into(), &[2., 3., 2., 1.]).into();
-    let q: NumTensor = mink_four_vector(2.into(), &[2., 3., 2., 1.]).into();
-    let r: NumTensor = mink_four_vector(3.into(), &[2., 3., 2., 1.]).into();
-    let s: NumTensor = mink_four_vector(4.into(), &[2., 3., 2., 1.]).into();
+    let a: RealOrComplexTensor<f64, VecStructure> =
+        RealOrComplexTensor::Complex(DataTensor::from(ufo::gamma(1.into(), [2.into(), 3.into()])));
+    let b: RealOrComplexTensor<f64, _> =
+        RealOrComplexTensor::Complex(DataTensor::from(ufo::gamma(2.into(), [3.into(), 4.into()])));
+    let c: RealOrComplexTensor<f64, _> =
+        RealOrComplexTensor::Complex(DataTensor::from(ufo::gamma(3.into(), [4.into(), 5.into()])));
+    let d: RealOrComplexTensor<f64, _> =
+        RealOrComplexTensor::Complex(DataTensor::from(ufo::gamma(4.into(), [5.into(), 2.into()])));
+    let p: RealOrComplexTensor<f64, _> = RealOrComplexTensor::Real(DataTensor::from(
+        mink_four_vector(AbstractIndex::from(-1), &[2., 3., 2., 1.]),
+    ));
+    let q: RealOrComplexTensor<f64, _> = RealOrComplexTensor::Real(DataTensor::from(
+        mink_four_vector(AbstractIndex::from(-2), &[2., 3., 2., 1.]),
+    ));
+    let r: RealOrComplexTensor<f64, _> = RealOrComplexTensor::Real(DataTensor::from(
+        mink_four_vector(AbstractIndex::from(-3), &[2., 3., 2., 1.]),
+    ));
+    let s: RealOrComplexTensor<f64, _> = RealOrComplexTensor::Real(DataTensor::from(
+        mink_four_vector(AbstractIndex::from(-4), &[2., 3., 2., 1.]),
+    ));
 
-    a.contract(&b)
+    let pslash = a.contract(&p).unwrap();
+    let qslash = b.contract(&q).unwrap();
+    let rslash = c.contract(&r).unwrap();
+    let sslash = d.contract(&s).unwrap();
+
+    let e = pslash
+        .contract(&qslash)
         .unwrap()
-        .contract(&c)
+        .contract(&rslash)
         .unwrap()
-        .contract(&d)
+        .contract(&sslash)
         .unwrap();
+    // .contract(&s)
+    // .unwrap();
 
-    let mut n: TensorNetwork<NumTensor, Complex<f64>> =
+    assert_eq!(
+        Complex::new(400., 0.),
+        e.scalar().unwrap().try_into_complex().unwrap()
+    ); //.scalar().unwrap());
+
+    let mut n: TensorNetwork<RealOrComplexTensor<f64, _>, Complex<f64>> =
         TensorNetwork::from(vec![a, b, c, p, q, d, r, s]);
 
     assert!(n.graph.validate_neighbors());
@@ -915,15 +1018,34 @@ fn tensor_net() {
 }
 
 #[test]
+fn matchslot() {
+    let a: Slot<PhysReps> = Lorentz::selfless_dual().new_slot(4, 2).into();
+    let b: Slot<PhysReps> = Lorentz::new_slot_selfless(4, 2).into();
+    assert!(a.matches(&b))
+}
+#[test]
 fn contract_spensor() {
     let data_a = [(vec![0, 0], 1.0), (vec![1, 1], 2.0)];
-    let structur_a: HistoryStructure<&str, ()> =
-        HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
+    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
+        [
+            PhysReps::new_slot(Euclidean {}.into(), 2, 2),
+            Euclidean::new_slot_selfless(2, 1).into(),
+        ],
+        "a",
+        None,
+    ));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
     let data_b = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
-    let structur_b = HistoryStructure::from(NamedStructure::from_iter([(1, 2), (3, 2)], "b", None));
+    let structur_b = HistoryStructure::from(NamedStructure::from_iter(
+        [
+            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+            Euclidean::new_slot_selfless(2, 3).into(),
+        ],
+        "b",
+        None,
+    ));
 
     let b = SparseTensor::from_data(&data_b, structur_b).unwrap();
 
@@ -937,13 +1059,26 @@ fn contract_spensor() {
 #[test]
 fn sparse_addition() {
     let data_a = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
-    let structur_a: HistoryStructure<&str, ()> =
-        HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
+    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
+        [
+            PhysReps::new_slot(Euclidean {}.into(), 2, 2),
+            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+        ],
+        "a",
+        None,
+    ));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
     let data_b = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
-    let structur_b = HistoryStructure::from(NamedStructure::from_iter([(1, 2), (2, 2)], "b", None));
+    let structur_b = HistoryStructure::from(NamedStructure::from_iter(
+        [
+            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+            PhysReps::new_slot(Euclidean {}.into(), 2, 2),
+        ],
+        "b",
+        None,
+    ));
 
     let b = SparseTensor::from_data(&data_b, structur_b).unwrap();
 
@@ -957,14 +1092,27 @@ fn sparse_addition() {
 #[test]
 fn sparse_sub() {
     let data_a = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
-    let structur_a: HistoryStructure<&str, ()> =
-        HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
+    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
+        [
+            PhysReps::new_slot(Euclidean {}.into(), 2, 2),
+            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+        ],
+        "a",
+        None,
+    ));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
     let data_b = [(vec![1, 0], 1.0), (vec![0, 1], 3.0)];
 
-    let structur_b = HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
+    let structur_b = HistoryStructure::from(NamedStructure::from_iter(
+        [
+            PhysReps::new_slot(Euclidean {}.into(), 2, 2),
+            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+        ],
+        "a",
+        None,
+    ));
 
     let b = SparseTensor::from_data(&data_b, structur_b).unwrap();
 
@@ -989,10 +1137,7 @@ fn arithmetic_data() {
 
     let c = a.add_fallible(&b).unwrap();
 
-    assert_eq!(
-        vec![-267, 634, 0, 0, 650, 0, 520, 326, 0, 0, -120, -294, -907, 0, 0],
-        c.to_dense().data()
-    );
+    assert_ron_snapshot!(c.to_dense().data());
 
     // let syma = sa.clone().shadow_with("a".into_id());
     // let symb = sa.clone().shadow_with("b".into_id());
@@ -1004,13 +1149,26 @@ fn arithmetic_data() {
 fn contract_densor_with_spensor() {
     let data_a = [(vec![0, 0], 1.0), (vec![1, 1], 2.0)];
 
-    let structur_a: HistoryStructure<&str, ()> =
-        HistoryStructure::from(NamedStructure::from_iter([(2, 2), (1, 2)], "a", None));
+    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
+        [
+            PhysReps::new_slot(Euclidean {}.into(), 2, 2),
+            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+        ],
+        "a",
+        None,
+    ));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
     let data_b = [1.0, 2.0, 3.0, 4.0];
-    let structur_b = HistoryStructure::from(NamedStructure::from_iter([(1, 2), (4, 2)], "b", None));
+    let structur_b = HistoryStructure::from(NamedStructure::from_iter(
+        [
+            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+            PhysReps::new_slot(Euclidean {}.into(), 2, 4),
+        ],
+        "b",
+        None,
+    ));
 
     let b = DenseTensor::from_data(&data_b, structur_b).unwrap();
 
@@ -1065,8 +1223,14 @@ fn convert_sym() {
             .map(|x| Complex::from(*x))
             .collect::<Vec<_>>(),
     );
-    let structur_b: HistoryStructure<&str, ()> =
-        HistoryStructure::from(NamedStructure::from_iter([(1, 2), (4, 3)], "b", None));
+    let structur_b: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
+        [
+            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+            PhysReps::new_slot(Euclidean {}.into(), 3, 4),
+        ],
+        "b",
+        None,
+    ));
     let b = DenseTensor::from_data(&data_b, structur_b).unwrap();
 
     let symb: DenseTensor<Atom, _> = b.try_into_upgrade().unwrap();
@@ -1096,9 +1260,17 @@ fn convert_sym() {
 fn simple_multi_contract_sym() {
     use crate::ToSymbolic;
 
-    let structa = VecStructure::new(vec![(1, 3).into(), (2, 4).into(), (3, 4).into()]);
+    let structa = VecStructure::new(vec![
+        Euclidean::new_slot_selfless(3, 1).into(),
+        Euclidean::new_slot_selfless(4, 2).into(),
+        Euclidean::new_slot_selfless(4, 3).into(),
+    ]);
     // let structa = structa.to_named("a");
-    let structb = VecStructure::new(vec![(2, 4).into(), (4, 3).into(), (3, 4).into()]);
+    let structb = VecStructure::new(vec![
+        Euclidean::new_slot_selfless(4, 2).into(),
+        Euclidean::new_slot_selfless(3, 4).into(),
+        Euclidean::new_slot_selfless(4, 3).into(),
+    ]);
     // let structb = structb.to_named("b");
 
     let _a = DenseTensor::from_data(
@@ -1122,10 +1294,12 @@ fn simple_multi_contract_sym() {
     let a: DataTensor<Atom, NamedStructure<&str, ()>> = structa
         .to_named("a", None)
         .to_dense_expanded_labels()
+        .unwrap()
         .into();
     let b: DataTensor<Atom, NamedStructure<&str, ()>> = structb
         .to_named("b", None)
         .to_dense_expanded_labels()
+        .unwrap()
         .into();
 
     let _f = a.contract(&b).unwrap();
@@ -1133,7 +1307,7 @@ fn simple_multi_contract_sym() {
 
 #[test]
 fn empty_densor() {
-    let empty_structure = Vec::<Slot>::new();
+    let empty_structure = Vec::<Slot<_>>::new();
 
     let empty: DenseTensor<f64> = DenseTensor::default(empty_structure.into());
 
@@ -1151,18 +1325,33 @@ fn complex() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn symbolic_contract() {
-    let structura: NamedStructure<&str, ()> =
-        NamedStructure::from(NamedStructure::from_iter([(1, 2), (4, 3)], "T", None));
+    use crate::Bispinor;
 
-    let structurb: NamedStructure<&str, ()> =
-        NamedStructure::from_iter([(3, 2), (2, 3)], "P", None);
+    let structura: NamedStructure<&str, ()> = NamedStructure::from(NamedStructure::from_iter(
+        [
+            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+            PhysReps::new_slot(Euclidean {}.into(), 3, 4),
+        ],
+        "T",
+        None,
+    ));
 
-    let mink = Representation::Lorentz(Dimension(4));
-    let mu = Slot::from((AbstractIndex(0), mink));
-    let bis = Representation::Bispinor(Dimension(4));
-    let i = Slot::from((AbstractIndex(1), bis));
-    let j = Slot::from((AbstractIndex(2), bis));
-    let k = Slot::from((9.into(), bis));
+    let structurb: NamedStructure<&str, ()> = NamedStructure::from_iter(
+        [
+            PhysReps::new_slot(Euclidean {}.into(), 2, 3),
+            PhysReps::new_slot(Euclidean {}.into(), 3, 2),
+        ],
+        "P",
+        None,
+    );
+
+    let mink = Lorentz {}.new_dimed_rep(4);
+    let mu: Slot<PhysReps> = mink.new_slot(0).into();
+    let bis = Bispinor {}.new_dimed_rep(4);
+
+    let i = bis.new_slot(1).into();
+    let j = bis.new_slot(2).into();
+    let k = bis.new_slot(9).into();
 
     let _structure: NamedStructure<&str, ()> = NamedStructure::from_iter([mu, i, j], "γ", None);
     let _p_struct: NamedStructure<&str, ()> = NamedStructure::from_iter([mu], "p", None);
@@ -1247,7 +1436,89 @@ fn test_fallible_mul() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn get_license_key() {
+    use gat_lending_iterator::Enumerate;
+    use serde::de::IntoDeserializer;
     use symbolica::LicenseManager;
 
+    use crate::{
+        ColorAdjoint, ColorFundamental, DualSlotTo, Euclidean, IsAbstractSlot, Lorentz,
+        PhysicalSlots, RepName, Slot,
+    };
+
     LicenseManager::new();
+
+    let a = Lorentz {}.dual().dual().dual().dual().new_dimed_rep(4);
+
+    let b: PhysicalSlots = Lorentz {}.dual().new_slot(4, 4).into();
+    let aslot: PhysicalSlots = a.new_slot(4).into();
+    let c = a.new_slot(4);
+    let domatchdisp = aslot.matches(&PhysicalSlots::from(c));
+    let domatch = b.matches(&aslot);
+
+    let mu: PhysicalSlots = a.new_slot(34).into();
+    let nu: PhysicalSlots = Lorentz {}.dual().dual().new_slot(5, 45645).into();
+    let matches = mu.matches(&nu);
+    let e = Euclidean {}.dual();
+
+    // let adual = a; //.dual();
+    // let b = Euclidean {}.new(4.into());
+
+    // let matches = a.matches(&adual);
+}
+
+#[test]
+fn duals() {
+    let a = Lorentz {}.dual().new_dimed_rep(4);
+    let mu = a.new_slot(1);
+    let nu = a.dual().new_slot(1);
+
+    assert!(mu.matches(&nu));
+
+    let mu: PhysicalSlots = mu.into();
+
+    assert!(mu.matches(&PhysicalSlots::from(nu)));
+
+    let rho: PhysicalSlots = ColorAdjoint {}.dual().new_slot(4, 1).into();
+
+    assert!(!mu.matches(&rho))
+}
+
+#[test]
+fn parsing_scalar_mul() {
+    let expr = "MT*id(aind(bis(4,105),bis(4,175)))";
+    let atom = Atom::parse(expr).unwrap();
+
+    let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
+
+    let mut network = sym_tensor.to_network().unwrap();
+
+    network.contract();
+    println!("Network res: {}", network.result_tensor().unwrap());
+}
+
+#[test]
+fn parsing_single_contract() {
+    let expr = "Q(15,aind(loru(4,192)))*γ(aind(lord(4,192),bis(4,105),bis(4,175)))";
+    let atom = Atom::parse(expr).unwrap();
+
+    let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
+
+    let mut network = sym_tensor.to_network().unwrap();
+
+    println!("{}", network.dot());
+    network.contract();
+    println!("Network res: {}", network.result_tensor().unwrap());
+}
+
+#[test]
+fn parsing_addition_and_mul() {
+    let expr = "(MT*id(aind(bis(4,105),bis(4,175)))+Q(15,aind(loru(4,192)))*γ(aind(lord(4,192),bis(4,105),bis(4,175))))";
+    let atom = Atom::parse(expr).unwrap();
+
+    let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
+
+    let mut network = sym_tensor.to_network().unwrap();
+
+    network.contract();
+    println!("Network res: {}", network.result_tensor().unwrap());
 }

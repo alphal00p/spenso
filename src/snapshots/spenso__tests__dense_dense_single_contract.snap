@@ -17,9 +17,17 @@ data:
   - 450
 structure:
   structure:
-    - index: 1
-      representation:
-        Euclidean: 4
-    - index: 3
-      representation:
-        Euclidean: 3
+    - aind:
+        Normal: 1
+      rep:
+        dim:
+          Concrete: 4
+        rep:
+          Euclidean: {}
+    - aind:
+        Normal: 3
+      rep:
+        dim:
+          Concrete: 3
+        rep:
+          Euclidean: {}

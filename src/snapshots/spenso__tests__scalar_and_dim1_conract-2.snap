@@ -1,0 +1,5 @@
+---
+source: src/tests.rs
+expression: structa.to_string()
+---
+102 (loru4)

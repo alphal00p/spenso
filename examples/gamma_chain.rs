@@ -1,9 +1,9 @@
 // Gamma chain example
 
-use std::time::Instant;
+use std::{collections::HashSet, time::Instant};
 
 use spenso::{
-    ufo::{euclidean_four_vector, mink_four_vector},
+    ufo::{euclidean_four_vector, gamma, mink_four_vector},
     Complex, Contract, DenseTensor, FallibleMul, SparseTensor,
 };
 
@@ -22,7 +22,8 @@ use spenso::{
         euclidean_four_vector_sym, gammasym, mink_four_vector_sym, param_euclidean_four_vector,
         param_mink_four_vector,
     },
-    AbstractIndex, HasTensorData, HistoryStructure, IntoSymbol, NumTensor, TensorNetwork,
+    AbstractIndex, ContractionCountStructure, HasTensorData, HistoryStructure, IntoSymbol,
+    NumTensor, TensorNetwork,
 };
 
 // #[allow(dead_code)]
@@ -108,15 +109,19 @@ use spenso::{
 
 #[allow(dead_code)]
 #[cfg(feature = "shadowing")]
-fn gamma_net(
+
+fn gamma_net_sym(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
 ) -> TensorNetwork<NumTensor<HistoryStructure<Symbol>>, Complex<f64>> {
+    use std::collections::HashSet;
+
     let mut i = 0;
-    let mut contracting_index: AbstractIndex = 0.into();
+    let mut contracting_index = 0.into();
     let mut result: Vec<NumTensor<HistoryStructure<Symbol>>> =
         vec![euclidean_four_vector_sym(contracting_index, &vbar).into()];
+    let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;
         contracting_index += 1.into();
@@ -129,19 +134,55 @@ fn gamma_net(
                 Complex::<f64>::new(1.3 + 0.01 * i.to_f64().unwrap(), 0.0),
             ];
             i += 1;
-            result.push(mink_four_vector_sym(usize::try_from(*m).unwrap().into(), &p).into());
-            result.push(gammasym(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
+            result.push(mink_four_vector_sym(AbstractIndex::from(*m), &p).into());
+            result.push(gammasym(AbstractIndex::from(-*m), [ui, uj]).into());
         } else {
-            result.push(
-                gammasym(
-                    AbstractIndex::from(usize::try_from(m.neg()).unwrap() + 10000),
-                    (ui, uj),
-                )
-                .into(),
-            );
+            let mu = if seen.insert(m) {
+                AbstractIndex::from(-*m + 10000)
+            } else {
+                AbstractIndex::from(*m - 10000)
+            };
+            result.push(gammasym(mu, [ui, uj]).into());
         }
     }
     result.push(euclidean_four_vector_sym(contracting_index, &u).into());
+    TensorNetwork::from(result)
+}
+
+fn gamma_net(
+    minkindices: &[i32],
+    vbar: [Complex<f64>; 4],
+    u: [Complex<f64>; 4],
+) -> TensorNetwork<NumTensor, Complex<f64>> {
+    let mut i = 0;
+    let mut contracting_index = 0.into();
+    let mut result: Vec<NumTensor> = vec![euclidean_four_vector(contracting_index, &vbar).into()];
+
+    let mut seen = HashSet::new();
+    for m in minkindices {
+        let ui = contracting_index;
+        contracting_index += 1.into();
+        let uj = contracting_index;
+        if *m > 0 {
+            let p = [
+                Complex::<f64>::new(1.0 + 0.01 * i.to_f64().unwrap(), 0.0),
+                Complex::<f64>::new(1.1 + 0.01 * i.to_f64().unwrap(), 0.0),
+                Complex::<f64>::new(1.2 + 0.01 * i.to_f64().unwrap(), 0.0),
+                Complex::<f64>::new(1.3 + 0.01 * i.to_f64().unwrap(), 0.0),
+            ];
+            i += 1;
+            result.push(mink_four_vector(AbstractIndex::from(*m), &p).into());
+            result.push(gamma(AbstractIndex::from(-*m), [ui, uj]).into());
+        } else {
+            let mu = if seen.insert(m) {
+                AbstractIndex::from(-*m + 10000)
+            } else {
+                AbstractIndex::from(*m - 10000)
+            };
+            result.push(gamma(mu, [ui, uj]).into());
+        }
+    }
+    result.push(euclidean_four_vector(contracting_index, &u).into());
     TensorNetwork::from(result)
 }
 
@@ -177,38 +218,64 @@ fn defered_chain(
 
 #[allow(dead_code)]
 #[cfg(feature = "shadowing")]
+
 fn gamma_net_param(
     minkindices: &[i32],
-) -> TensorNetwork<MixedTensor<f64, HistoryStructure<Symbol>>, Atom> {
-    let mut i = 0;
-    let mut contracting_index: AbstractIndex = 0.into();
-    let mut result: Vec<MixedTensor<f64, HistoryStructure<Symbol>>> = vec![MixedTensor::param(
-        param_euclidean_four_vector(contracting_index, "vbar".into_symbol()).into(),
-    )];
+    vbar: [Complex<f64>; 4],
+    u: [Complex<f64>; 4],
+) -> TensorNetwork<MixedTensor<f64, ContractionCountStructure>, Atom> {
+    use spenso::{
+        ContractionCountStructure, FlatCoefficent, Lorentz, PhysReps, RepName, ToSymbolic,
+    };
+    use symbolica::state::State;
+
+    let mut i: i32 = 0;
+    let mut contracting_index = 0.into();
+    let mut result: Vec<MixedTensor<f64, ContractionCountStructure>> =
+        vec![euclidean_four_vector(contracting_index, &vbar).into()];
+    let lor_fouru = PhysReps::new_dimed_rep(&Lorentz {}.into(), 4);
+    let lor_fourd = lor_fouru.dual();
+    let p = State::get_symbol(&"p");
+    let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;
         contracting_index += 1.into();
         let uj = contracting_index;
         if *m > 0 {
-            let pname = format!("p{}", i).into_symbol();
+            let ps = ContractionCountStructure::from_iter([
+                lor_fourd.new_slot(usize::try_from(*m).unwrap())
+            ]);
+            // let ps: ContractionCountStructure = vec![
+            //     lor_fourd.new_slot() Slot::from((
+            //     usize::try_from(*m).unwrap().into(),
+            //     Lorentz(4.into()),
+            // ))]
+            // .into_iter()
+            // .collect();
             i += 1;
+            let id = Atom::new_num(i);
+
             result.push(MixedTensor::param(
-                param_mink_four_vector(usize::try_from(*m).unwrap().into(), pname, None).into(),
-            ));
-            result.push(gammasym(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
-        } else {
-            result.push(
-                gammasym(
-                    AbstractIndex::from(usize::try_from(m.neg()).unwrap() + 10000),
-                    (ui, uj),
-                )
+                ps.to_dense_labeled(|_, index| FlatCoefficent {
+                    name: Some(p),
+                    index,
+                    args: Some([id.clone()]),
+                })
+                .unwrap()
                 .into(),
-            );
+            ));
+
+            result.push(gamma(AbstractIndex::from(-*m).into(), [ui, uj]).into());
+        } else {
+            let mu = if seen.insert(m) {
+                AbstractIndex::from(-*m + 10000)
+            } else {
+                AbstractIndex::from(*m - 10000)
+            };
+            result.push(gamma(mu, [ui, uj]).into());
         }
     }
-    result.push(MixedTensor::param(
-        param_euclidean_four_vector(contracting_index, "u".into_symbol()).into(),
-    ));
+    result.push(euclidean_four_vector(contracting_index, &u).into());
     TensorNetwork::from(result)
 }
 
@@ -275,7 +342,21 @@ fn main() {
 
     #[cfg(feature = "shadowing")]
     {
-        let mut chain = gamma_net_param(&vec);
+        let mut chain = gamma_net_param(
+            &vec,
+            [
+                Complex::<f64>::i(),
+                Complex::i(),
+                Complex::i(),
+                Complex::i(),
+            ],
+            [
+                Complex::<f64>::i(),
+                Complex::i(),
+                Complex::i(),
+                Complex::i(),
+            ],
+        );
         println!("{}", chain.graph.edges.len());
         println!("{}", chain.graph.nodes.len());
         println!("{}", chain.graph.involution.len());

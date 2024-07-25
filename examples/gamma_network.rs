@@ -28,12 +28,12 @@ fn gamma_net_num(
             ];
             i += 1;
             result.push(mink_four_vector(usize::try_from(*m).unwrap().into(), &p).into());
-            result.push(gamma(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
+            result.push(gamma(AbstractIndex::from(-*m), [ui, uj]).into());
         } else {
             result.push(
                 gamma(
                     AbstractIndex::from(usize::try_from(m.neg()).unwrap() + 10000),
-                    (ui, uj),
+                    [ui, uj],
                 )
                 .into(),
             );

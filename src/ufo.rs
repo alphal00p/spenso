@@ -1,9 +1,7 @@
 use std::ops::Neg;
 
 use super::{
-    AbstractIndex, DenseTensor,
-    Representation::{self, Euclidean, Lorentz},
-    SetTensorData, Slot, SparseTensor,
+    AbstractIndex, DenseTensor, RepName, Representation, SetTensorData, Slot, SparseTensor,
 };
 
 #[cfg(feature = "shadowing")]
@@ -16,7 +14,9 @@ use crate::{
 use crate::{HistoryStructure, NamedStructure};
 use num::{NumCast, One, Zero};
 
-use crate::{Complex, Dimension, TensorStructure};
+use crate::{
+    BaseRepName, Bispinor, Complex, Dimension, Dual, Euclidean, Lorentz, PhysReps, TensorStructure,
+};
 
 #[cfg(feature = "shadowing")]
 use super::{IntoArgs, IntoSymbol, Shadowable};
@@ -47,21 +47,21 @@ use symbolica::{
 
 #[allow(dead_code)]
 #[must_use]
-pub fn identity<T, I>(
-    indices: (AbstractIndex, AbstractIndex),
-    signature: Representation,
+pub fn identity<T, I, Rep: RepName>(
+    indices: [AbstractIndex; 2],
+    signature: Representation<Rep>,
 ) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero,
-    I: TensorStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot<Rep>>,
 {
     //TODO: make it just swap indices
-    let structure = [(indices.0, signature), (indices.1, signature)]
+    let structure = indices
         .into_iter()
-        .map(Slot::from)
+        .map(|i| Representation::new_slot(&signature, i))
         .collect();
     let mut identity = SparseTensor::empty(structure);
-    for i in 0..signature.into() {
+    for i in 0..signature.try_into().unwrap() {
         identity
             .set(&[i, i], Complex::<T>::new(T::one(), T::zero()))
             .unwrap_or_else(|_| unreachable!());
@@ -96,7 +96,7 @@ where
 
     let mut identity = SparseTensor::empty(structure);
 
-    for i in 0..identity.shape()[0].into() {
+    for i in 0..identity.shape()[0].try_into().unwrap() {
         identity
             .set(&[i, i], T::one())
             .unwrap_or_else(|_| unreachable!());
@@ -417,30 +417,30 @@ pub fn preprocess_ufo_spin_wrapped(atom: Atom) -> Atom {
 
 #[allow(dead_code)]
 #[must_use]
-pub fn lorentz_identity<T, I>(
-    indices: (AbstractIndex, AbstractIndex),
-) -> SparseTensor<Complex<T>, I>
+pub fn lorentz_identity<T, I>(indices: [AbstractIndex; 2]) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero,
-    I: TensorStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot<Lorentz>>,
 {
     // IdentityL(1,2) (Lorentz) Kronecker delta δ^μ1_μ1
-    let signature = Lorentz(4.into());
+    let signature = Lorentz::new_dimed_rep_selfless(4);
     identity(indices, signature)
 }
 
 pub fn mink_four_vector<T, I>(index: AbstractIndex, p: &[T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
-    I: TensorStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot<Lorentz>> + FromIterator<Slot<Dual<Lorentz>>>,
 {
-    DenseTensor::from_data(
-        p,
-        [Slot::from((index, Lorentz(4.into())))]
-            .into_iter()
-            .collect(),
-    )
-    .unwrap_or_else(|_| unreachable!())
+    let structure: I = match index {
+        AbstractIndex::Dualize(d) => {
+            [Lorentz::selfless_dual().new_slot(4, AbstractIndex::Normal(d))]
+                .into_iter()
+                .collect()
+        }
+        AbstractIndex::Normal(_) => [Lorentz::new_slot_selfless(4, index)].into_iter().collect(),
+    };
+    DenseTensor::from_data(p, structure).unwrap_or_else(|_| unreachable!())
 }
 
 #[cfg(feature = "shadowing")]
@@ -456,7 +456,7 @@ where
     DenseTensor::from_data(
         p,
         HistoryStructure::from(NamedStructure::from_iter(
-            [(index, Lorentz(4.into()))],
+            [Lorentz::new_slot_selfless(4, index)],
             State::get_symbol("p"),
             None,
         )),
@@ -467,11 +467,11 @@ where
 pub fn euclidean_four_vector<T, I>(index: AbstractIndex, p: &[T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
-    I: TensorStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot<Euclidean>>,
 {
     DenseTensor::from_data(
         p,
-        [Slot::from((index, Euclidean(4.into())))]
+        [Euclidean::new_slot_selfless(4, index)]
             .into_iter()
             .collect(),
     )
@@ -491,7 +491,7 @@ where
     DenseTensor::from_data(
         p,
         HistoryStructure::from(NamedStructure::from_iter(
-            [(index, Euclidean(4.into()))],
+            [Euclidean::new_slot_selfless(4, index)],
             State::get_symbol("p"),
             None,
         )),
@@ -510,13 +510,13 @@ where
     A: Clone + IntoArgs,
 {
     HistoryStructure::from(NamedStructure::from_iter(
-        [(index, Lorentz(4.into()))],
+        [Lorentz::new_slot_selfless(4, index)],
         name,
         args,
     ))
     .to_shell()
     .expanded_shadow()
-    .unwrap_or_else(|| unreachable!())
+    .unwrap_or_else(|_| unreachable!())
 }
 
 #[cfg(feature = "shadowing")]
@@ -529,43 +529,45 @@ where
     A: Clone + IntoArgs,
 {
     HistoryStructure::from(NamedStructure::from_iter(
-        [(index, Euclidean(4.into()))],
+        [Euclidean::new_slot_selfless(4, index)],
         name,
         None,
     ))
     .to_shell()
     .expanded_shadow()
-    .unwrap_or_else(|| unreachable!())
+    .unwrap_or_else(|_| unreachable!())
 }
 
 #[allow(dead_code)]
 #[must_use]
-pub fn euclidean_identity<T, I>(
-    indices: (AbstractIndex, AbstractIndex),
-) -> SparseTensor<Complex<T>, I>
+pub fn euclidean_identity<T, I>(indices: [AbstractIndex; 2]) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero,
-    I: TensorStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot<Euclidean>>,
 {
     // Identity(1,2) (Spinorial) Kronecker delta δ_s1_s2
-    let signature = Euclidean(4.into());
+    let signature = Euclidean::new_dimed_rep_selfless(4);
     identity(indices, signature)
 }
 
 #[allow(dead_code)]
 pub fn gamma<T, I>(
     minkindex: AbstractIndex,
-    indices: (AbstractIndex, AbstractIndex),
+    indices: [AbstractIndex; 2],
 ) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero + Copy + std::ops::Neg<Output = T>,
-    I: TensorStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot<PhysReps>>,
 {
     // Gamma(1,2,3) Dirac matrix (γ^μ1)_s2_s3
+    let mu = match minkindex {
+        AbstractIndex::Dualize(d) => Lorentz::selfless_dual().new_slot(4, d).into(),
+        AbstractIndex::Normal(n) => Lorentz::new_slot_selfless(4, n).into(),
+    };
     let structure = [
-        (indices.0, Euclidean(4.into())),
-        (indices.1, Euclidean(4.into())),
-        (minkindex, Lorentz(4.into())),
+        Slot::<PhysReps>::from(Euclidean::new_slot_selfless(4, indices[0])),
+        Euclidean::new_slot_selfless(4, indices[1]).into(),
+        mu, // Lorentz::new_slot_selfless(4, minkindex).into(),
     ]
     .into_iter()
     .map(Slot::from)
@@ -576,18 +578,21 @@ where
 #[cfg(feature = "shadowing")]
 pub fn gammasym<T>(
     minkindex: AbstractIndex,
-    indices: (AbstractIndex, AbstractIndex),
+    indices: [AbstractIndex; 2],
 ) -> SparseTensor<Complex<T>, HistoryStructure<Symbol, ()>>
 where
     T: One + Zero + Copy + std::ops::Neg<Output = T>,
 {
     use crate::NamedStructure;
-
+    let mu = match minkindex {
+        AbstractIndex::Dualize(d) => Lorentz::selfless_dual().new_slot(4, d).into(),
+        AbstractIndex::Normal(n) => Lorentz::new_slot_selfless(4, n).into(),
+    };
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         [
-            (indices.0, Euclidean(4.into())),
-            (indices.1, Euclidean(4.into())),
-            (minkindex, Lorentz(4.into())),
+            Slot::<PhysReps>::from(Euclidean::new_slot_selfless(4, indices[0])),
+            Euclidean::new_slot_selfless(4, indices[1]).into(),
+            mu,
         ],
         State::get_symbol("γ"),
         None,
@@ -633,34 +638,30 @@ where
     gamma //.to_dense()
 }
 
-pub fn gamma5<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
+pub fn gamma5<T, I>(indices: [AbstractIndex; 2]) -> SparseTensor<Complex<T>, I>
 where
     T: One + Zero + Copy,
-    I: TensorStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot<Euclidean>>,
 {
-    let structure = [
-        (indices.0, Euclidean(4.into())),
-        (indices.1, Euclidean(4.into())),
-    ]
-    .into_iter()
-    .map(Slot::from)
-    .collect();
+    let structure = indices
+        .into_iter()
+        .map(|i| Euclidean::new_slot_selfless(4, i))
+        .collect();
 
     gamma5_data(structure)
 }
 
 #[cfg(feature = "shadowing")]
 pub fn gamma5sym<T>(
-    indices: (AbstractIndex, AbstractIndex),
+    indices: [AbstractIndex; 2],
 ) -> SparseTensor<Complex<T>, HistoryStructure<Symbol, ()>>
 where
     T: One + Zero + Copy,
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
-        [
-            (indices.0, Euclidean(4.into())),
-            (indices.1, Euclidean(4.into())),
-        ],
+        indices
+            .into_iter()
+            .map(|i| Euclidean::new_slot_selfless(4, i)),
         State::get_symbol("γ5"),
         None,
     ));
@@ -685,35 +686,31 @@ where
     gamma5
 }
 
-pub fn proj_m<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
+pub fn proj_m<T, I>(indices: [AbstractIndex; 2]) -> SparseTensor<Complex<T>, I>
 where
     T: Zero + One + NumCast + Clone,
-    I: TensorStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot<Euclidean>>,
 {
     // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
-    let structure = [
-        (indices.0, Euclidean(4.into())),
-        (indices.1, Euclidean(4.into())),
-    ]
-    .into_iter()
-    .map(Slot::from)
-    .collect();
+    let structure = indices
+        .into_iter()
+        .map(|i| Euclidean::new_slot_selfless(4, i))
+        .collect();
 
     proj_m_data(structure)
 }
 
 #[cfg(feature = "shadowing")]
 pub fn proj_msym<T>(
-    indices: (AbstractIndex, AbstractIndex),
+    indices: [AbstractIndex; 2],
 ) -> SparseTensor<Complex<T>, HistoryStructure<Symbol, ()>>
 where
     T: Zero + One + NumCast + Clone,
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
-        [
-            (indices.0, Euclidean(4.into())),
-            (indices.1, Euclidean(4.into())),
-        ],
+        indices
+            .into_iter()
+            .map(|i| Euclidean::new_slot_selfless(4, i)),
         State::get_symbol("ProjM"),
         None,
     ));
@@ -746,35 +743,31 @@ where
     proj_m
 }
 
-pub fn proj_p<T, I>(indices: (AbstractIndex, AbstractIndex)) -> SparseTensor<Complex<T>, I>
+pub fn proj_p<T, I>(indices: [AbstractIndex; 2]) -> SparseTensor<Complex<T>, I>
 where
     T: NumCast + Zero + Clone,
-    I: TensorStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot<Bispinor>>,
 {
     // ProjP(1,2) Right chirality projector (( 1+γ5)/ 2 )_s1_s2
-    let structure = [
-        (indices.0, Euclidean(4.into())),
-        (indices.1, Euclidean(4.into())),
-    ]
-    .into_iter()
-    .map(Slot::from)
-    .collect();
+    let structure = indices
+        .into_iter()
+        .map(|i| Bispinor::new_slot_selfless(4, i))
+        .collect();
 
     proj_p_data(structure)
 }
 
 #[cfg(feature = "shadowing")]
 pub fn proj_psym<T>(
-    indices: (AbstractIndex, AbstractIndex),
+    indices: [AbstractIndex; 2],
 ) -> SparseTensor<Complex<T>, HistoryStructure<Symbol, ()>>
 where
     T: Zero + Clone + NumCast,
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
-        [
-            (indices.0, Euclidean(4.into())),
-            (indices.1, Euclidean(4.into())),
-        ],
+        indices
+            .into_iter()
+            .map(|i| Bispinor::new_slot_selfless(4, i)),
         State::get_symbol("ProjP"),
         None,
     ));
@@ -822,18 +815,18 @@ where
 }
 
 pub fn sigma<T, I>(
-    indices: (AbstractIndex, AbstractIndex),
-    minkdices: (AbstractIndex, AbstractIndex),
+    indices: [AbstractIndex; 2],
+    minkdices: [AbstractIndex; 2],
 ) -> SparseTensor<Complex<T>, I>
 where
     T: Copy + Zero + One + Neg<Output = T>,
-    I: TensorStructure + FromIterator<Slot>,
+    I: TensorStructure + FromIterator<Slot<PhysReps>>,
 {
     let structure = [
-        (indices.0, Euclidean(4.into())),
-        (indices.1, Euclidean(4.into())),
-        (minkdices.0, Lorentz(4.into())),
-        (minkdices.1, Lorentz(4.into())),
+        Slot::<PhysReps>::from(Bispinor::new_slot_selfless(4, indices[0])),
+        Bispinor::new_slot_selfless(4, indices[1]).into(),
+        Lorentz::new_slot_selfless(4, minkdices[0]).into(),
+        Lorentz::new_slot_selfless(4, minkdices[1]).into(),
     ]
     .into_iter()
     .map(Slot::from)
@@ -844,18 +837,18 @@ where
 
 #[cfg(feature = "shadowing")]
 pub fn sigmasym<T>(
-    indices: (AbstractIndex, AbstractIndex),
-    minkdices: (AbstractIndex, AbstractIndex),
+    indices: [AbstractIndex; 2],
+    minkdices: [AbstractIndex; 2],
 ) -> SparseTensor<Complex<T>, HistoryStructure<Symbol, ()>>
 where
     T: Copy + Zero + Clone + One + Neg<Output = T>,
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         [
-            (indices.0, Euclidean(4.into())),
-            (indices.1, Euclidean(4.into())),
-            (minkdices.0, Lorentz(4.into())),
-            (minkdices.1, Lorentz(4.into())),
+            Slot::<PhysReps>::from(Bispinor::new_slot_selfless(4, indices[0])),
+            Bispinor::new_slot_selfless(4, indices[1]).into(),
+            Lorentz::new_slot_selfless(4, minkdices[0]).into(),
+            Lorentz::new_slot_selfless(4, minkdices[1]).into(),
         ],
         State::get_symbol("σ"),
         None,
@@ -936,24 +929,7 @@ where
     let reps = structure.reps();
 
     if reps[0] == reps[1] && reps.len() == 2 {
-        match reps[0] {
-            Lorentz(d) => {
-                let mut metric = SparseTensor::empty(structure);
-
-                for i in 1..d.into() {
-                    metric
-                        .set(&[i, i], -T::one())
-                        .unwrap_or_else(|_| unreachable!());
-                }
-
-                metric
-                    .set(&[0, 0], T::one())
-                    .unwrap_or_else(|_| unreachable!());
-
-                metric
-            }
-            _ => panic!("Metric tensor must have Lorentz indices not {}", reps[0]),
-        }
+        reps[0].metric_data(structure)
     } else {
         panic!("Metric tensor must have equal indices")
     }

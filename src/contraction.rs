@@ -1,10 +1,11 @@
 use ahash::AHashMap;
 use duplicate::duplicate;
+use log::debug;
 // use num::Zero;
 #[cfg(feature = "shadowing")]
 use symbolica::{atom::Atom, domains::float::Real};
 
-use crate::{IteratableTensor, TensorStructure, TrySmallestUpgrade};
+use crate::{IsAbstractSlot, IteratableTensor, TensorStructure, TrySmallestUpgrade};
 
 use super::{
     DataIterator, DataTensor, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSubAssign,
@@ -128,11 +129,11 @@ where
         final_structure.merge(other.structure());
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let mut out = DenseTensor {
-            data: vec![zero.clone(); final_structure.size()],
+            data: vec![zero.clone(); final_structure.size()?],
             structure: final_structure,
         };
 
-        let stride = other.size();
+        let stride = other.size()?;
 
         for (i, u) in self.flat_iter() {
             for (j, t) in other.flat_iter() {
@@ -158,11 +159,11 @@ where
 //         final_structure.merge(other.structure());
 //         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
 //         let mut out = DenseTensor {
-//             data: vec![zero.clone(); final_structure.size()],
+//             data: vec![zero.clone(); final_structure.size()?],
 //             structure: final_structure,
 //         };
 
-//         let stride = other.size();
+//         let stride = other.size()?]
 
 //         for (i, u) in self.flat_iter() {
 //             for (j, t) in other.flat_iter() {
@@ -190,11 +191,11 @@ where
         if let Some((_, s)) = self.flat_iter().next() {
             let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
             let mut out = DenseTensor {
-                data: vec![zero.clone(); final_structure.size()],
+                data: vec![zero.clone(); final_structure.size()?],
                 structure: final_structure,
             };
 
-            let stride = other.size();
+            let stride = other.size()?;
 
             for (i, u) in self.flat_iter() {
                 for (j, t) in other.flat_iter() {
@@ -224,10 +225,10 @@ where
         final_structure.merge(other.structure());
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let mut out = DenseTensor {
-            data: vec![zero.clone(); final_structure.size()],
+            data: vec![zero.clone(); final_structure.size()?],
             structure: final_structure,
         };
-        let stride = other.size();
+        let stride = other.size()?;
 
         for (i, u) in self.flat_iter() {
             for (j, t) in other.flat_iter() {
@@ -254,7 +255,7 @@ where
         final_structure.merge(other.structure());
 
         let mut out = SparseTensor::empty(final_structure);
-        let stride = other.size();
+        let stride = other.size()?;
 
         for (i, u) in self.flat_iter() {
             for (j, t) in other.flat_iter() {
@@ -393,11 +394,12 @@ where
 
         // println!("trace {:?}", trace);
         let mut new_structure = self.structure.clone();
+        // println!("{}", new_structure);
         new_structure.trace(trace[0], trace[1]);
 
         let mut new_result = SparseTensor::empty(new_structure);
         for (idx, t) in self.iter_trace(trace).filter(|(_, t)| !t.is_zero()) {
-            new_result.set(&idx, t).unwrap_or_else(|_| unreachable!());
+            new_result.set(&idx, t).unwrap();
         }
 
         if new_result.traces().is_empty() {
@@ -465,13 +467,13 @@ where
         // println!("single contract dense dense");
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
-        let mut result_data = vec![zero.clone(); final_structure.size()];
+        let mut result_data = vec![zero.clone(); final_structure.size()?];
         let mut result_index = 0;
 
         let mut self_iter = self.fiber_class(i.into()).iter();
         let mut other_iter = other.fiber_class(j.into()).iter();
 
-        let fiber_representation: Representation = self.reps()[i];
+        let fiber_representation = self.reps()[i];
 
         for mut fiber_a in self_iter.by_ref() {
             for fiber_b in other_iter.by_ref() {
@@ -516,7 +518,7 @@ where
         final_structure.merge(&other.structure);
 
         // Initialize result tensor with default values
-        let mut result_data = vec![zero.clone(); final_structure.size()];
+        let mut result_data = vec![zero.clone(); final_structure.size()?];
         let mut result_index = 0;
 
         let selfiter = self
@@ -569,16 +571,16 @@ where
         if let Some((single, i, j)) = self.structure().match_index(other.structure()) {
             if i >= j {
                 if single {
-                    // println!("single");
+                    debug!("single");
                     return self.single_contract(other, i, j);
                 }
-                // println!("multi");
+                debug!("multi");
                 return self.multi_contract(other);
             }
-            // println!("flip");
+            debug!("flip");
             return other.contract(self);
         }
-        // println!("exterior");
+        debug!("exterior");
         self.exterior_product(other)
     }
 }
@@ -603,13 +605,13 @@ where
         if let Some((_, s)) = self.flat_iter().next() {
             let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
             let final_structure = self.structure.merge_at(&other.structure, (i, j));
-            let mut result_data = vec![zero.clone(); final_structure.size()];
+            let mut result_data = vec![zero.clone(); final_structure.size()?];
             let mut result_index = 0;
 
             let mut self_iter = self.fiber_class(i.into()).iter();
             let mut other_iter = other.fiber_class(j.into()).iter();
 
-            let fiber_representation: Representation = self.reps()[i];
+            let fiber_representation = self.reps()[i];
 
             for mut fiber_a in self_iter.by_ref() {
                 for mut fiber_b in other_iter.by_ref() {
@@ -661,13 +663,13 @@ where
         // println!("single contract dense sparse");
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
-        let mut result_data = vec![zero.clone(); final_structure.size()];
+        let mut result_data = vec![zero.clone(); final_structure.size()?];
         let mut result_index = 0;
 
         let mut self_iter = self.fiber_class(i.into()).iter();
         let mut other_iter = other.fiber_class(j.into()).iter();
 
-        let fiber_representation: Representation = self.reps()[i];
+        let fiber_representation = self.reps()[i];
 
         for mut fiber_a in self_iter.by_ref() {
             for mut fiber_b in other_iter.by_ref() {
@@ -717,7 +719,7 @@ where
             let mut final_structure = self.structure.clone();
             let _ = final_structure.merge(&other.structure);
 
-            let mut result_data = vec![zero.clone(); final_structure.size()];
+            let mut result_data = vec![zero.clone(); final_structure.size()?];
             let mut result_index = 0;
 
             let selfiter = self
@@ -775,7 +777,7 @@ where
         let mut final_structure = self.structure.clone();
         final_structure.merge(&other.structure);
 
-        let mut result_data = vec![zero.clone(); final_structure.size()];
+        let mut result_data = vec![zero.clone(); final_structure.size()?];
         let mut result_index = 0;
 
         let selfiter = self
@@ -838,7 +840,7 @@ where
             let self_iter = self.fiber_class(i.into()).iter();
             let mut other_iter = other.fiber_class(j.into()).iter();
 
-            let metric = self.external_structure()[i].representation.negative();
+            let metric = self.external_structure()[i].rep().negative()?;
 
             for mut fiber_a in self_iter {
                 for mut fiber_b in other_iter.by_ref() {

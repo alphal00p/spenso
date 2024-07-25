@@ -4,14 +4,16 @@ use std::fmt::{Debug, Display};
 
 use ahash::{AHashMap, HashMap};
 
+use anyhow::{Error, Result};
+
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
 
 use crate::{
     CastStructure, Complex, ContractableWith, ContractionError, ExpandedIndex, FallibleAddAssign,
     FallibleMul, FallibleSubAssign, FlatIndex, HasName, IntoArgs, IntoSymbol, IsZero,
-    IteratableTensor, NamedStructure, RefZero, ShadowMapping, Shadowable, TensorStructure,
-    ToSymbolic, TrySmallestUpgrade,
+    IteratableTensor, NamedStructure, PhysicalSlots, RefZero, ShadowMapping, Shadowable,
+    TensorStructure, ToSymbolic, TrySmallestUpgrade,
 };
 use symbolica::{
     atom::{representation::FunView, Atom, AtomOrView, AtomView, FunctionBuilder, Symbol},
@@ -227,10 +229,10 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
 }
 
 impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<Atom>>> {
-    type Error = String;
+    type Error = Error;
 
-    fn try_from(f: FunView<'a>) -> Result<Self, Self::Error> {
-        let mut structure: Vec<Slot> = vec![];
+    fn try_from(f: FunView<'a>) -> Result<Self> {
+        let mut structure: Vec<PhysicalSlots> = vec![];
         let f_id = f.get_symbol();
         let mut args = vec![];
 
@@ -242,7 +244,7 @@ impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<A
             }
         }
         let s = NamedStructure::from_iter(structure, f_id, Some(args));
-        Ok(s.to_dense_expanded_labels())
+        Ok(s.to_dense_expanded_labels()?)
     }
 }
 
@@ -814,17 +816,16 @@ where
     fn shadow<C>(
         &self,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
-    ) -> Option<DenseTensor<Atom, Self::Structure>>
+    ) -> Result<DenseTensor<Atom, Self::Structure>>
     where
         C: TensorCoefficient,
     {
         match self {
             RealOrComplexTensor::Real(r) => r.shadow(index_to_atom),
-            RealOrComplexTensor::Complex(r) => Some(
-                r.structure()
-                    .clone()
-                    .to_dense_labeled_complex(index_to_atom),
-            ),
+            RealOrComplexTensor::Complex(r) => Ok(r
+                .structure()
+                .clone()
+                .to_dense_labeled_complex(index_to_atom)?),
         }
         // Some(self.structure().clone().to_dense_labeled(index_to_atom))
     }
@@ -882,6 +883,15 @@ pub enum RealOrComplexRef<'a, T> {
 pub enum RealOrComplex<T> {
     Real(T),
     Complex(Complex<T>),
+}
+
+impl<T: Display> Display for RealOrComplex<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RealOrComplex::Complex(c) => c.fmt(f),
+            RealOrComplex::Real(r) => r.fmt(f),
+        }
+    }
 }
 
 pub type MixedTensor<T = f64, S = NamedStructure<Symbol, Vec<Atom>>> =
@@ -995,10 +1005,10 @@ impl<T: Clone, S: TensorStructure> IteratableTensor for RealOrComplexTensor<T, S
 // }
 
 impl<'a> TryFrom<FunView<'a>> for MixedTensor {
-    type Error = String;
+    type Error = anyhow::Error;
 
-    fn try_from(f: FunView<'a>) -> Result<Self, Self::Error> {
-        let mut structure: Vec<Slot> = vec![];
+    fn try_from(f: FunView<'a>) -> Result<Self> {
+        let mut structure: Vec<PhysicalSlots> = vec![];
         let f_id = f.get_symbol();
         let mut args = vec![];
 
@@ -1010,7 +1020,7 @@ impl<'a> TryFrom<FunView<'a>> for MixedTensor {
             }
         }
         let s = NamedStructure::from_iter(structure, f_id, Some(args));
-        s.to_explicit_rep().ok_or("not found".into())
+        s.to_explicit_rep()
     }
 }
 
@@ -1697,6 +1707,27 @@ pub struct EvalTensor<T, S> {
     structure: S,
 }
 
+impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
+    type Scalar = ExpressionEvaluator<T>;
+    type Structure = S;
+
+    fn structure<'a>(&'a self) -> &'a Self::Structure {
+        &self.structure
+    }
+
+    fn mut_structure(&mut self) -> &mut Self::Structure {
+        &mut self.structure
+    }
+
+    fn scalar(self) -> Option<Self::Scalar> {
+        if self.is_scalar() {
+            Some(self.eval)
+        } else {
+            None
+        }
+    }
+}
+
 impl<T, S> EvalTensor<T, S> {
     pub fn evaluate(&mut self, params: &[T]) -> DataTensor<T, S>
     where
@@ -1724,6 +1755,27 @@ pub struct CompiledEvalTensor<S> {
     eval: CompiledEvaluator,
     indexmap: Option<Vec<FlatIndex>>,
     structure: S,
+}
+
+impl<S: TensorStructure> HasStructure for CompiledEvalTensor<S> {
+    type Scalar = CompiledEvaluator;
+    type Structure = S;
+
+    fn structure<'a>(&'a self) -> &'a Self::Structure {
+        &self.structure
+    }
+
+    fn mut_structure(&mut self) -> &mut Self::Structure {
+        &mut self.structure
+    }
+
+    fn scalar(self) -> Option<Self::Scalar> {
+        if self.is_scalar() {
+            Some(self.eval)
+        } else {
+            None
+        }
+    }
 }
 
 impl<S> CompiledEvalTensor<S> {

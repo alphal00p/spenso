@@ -1,10 +1,10 @@
-use std::ops::Neg;
+use std::{collections::HashSet, ops::Neg};
 
 use ahash::{AHashMap, AHashSet, HashMap};
 use spenso::{
     ufo::{euclidean_four_vector, gamma},
-    AbstractIndex, ContractionCountStructure, FallibleMul, HasTensorData, MixedTensor,
-    Representation, Slot, TensorNetwork, ToSymbolic,
+    AbstractIndex, ContractionCountStructure, FallibleMul, HasTensorData, Lorentz, MixedTensor,
+    PhysReps, RepName, Representation, Slot, TensorNetwork, ToSymbolic,
 };
 use spenso::{Complex, FlatCoefficent};
 
@@ -14,7 +14,6 @@ use symbolica::{
     atom::{Atom, AtomView},
     state::State,
 };
-
 fn gamma_net_param(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
@@ -24,18 +23,25 @@ fn gamma_net_param(
     let mut contracting_index = 0.into();
     let mut result: Vec<MixedTensor<f64, ContractionCountStructure>> =
         vec![euclidean_four_vector(contracting_index, &vbar).into()];
+    let lor_fouru = PhysReps::new_dimed_rep(&Lorentz {}.into(), 4);
+    let lor_fourd = lor_fouru.dual();
     let p = State::get_symbol(&"p");
+    let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;
         contracting_index += 1.into();
         let uj = contracting_index;
         if *m > 0 {
-            let ps: ContractionCountStructure = vec![Slot::from((
-                usize::try_from(*m).unwrap().into(),
-                Representation::Lorentz(4.into()),
-            ))]
-            .into_iter()
-            .collect();
+            let ps = ContractionCountStructure::from_iter([
+                lor_fourd.new_slot(usize::try_from(*m).unwrap())
+            ]);
+            // let ps: ContractionCountStructure = vec![
+            //     lor_fourd.new_slot() Slot::from((
+            //     usize::try_from(*m).unwrap().into(),
+            //     Lorentz(4.into()),
+            // ))]
+            // .into_iter()
+            // .collect();
             i += 1;
             let id = Atom::new_num(i);
 
@@ -45,17 +51,18 @@ fn gamma_net_param(
                     index,
                     args: Some([id.clone()]),
                 })
+                .unwrap()
                 .into(),
             ));
-            result.push(gamma(usize::try_from(*m).unwrap().into(), (ui, uj)).into());
+
+            result.push(gamma(AbstractIndex::from(-*m).into(), [ui, uj]).into());
         } else {
-            result.push(
-                gamma(
-                    AbstractIndex::from(usize::try_from(m.neg()).unwrap() + 10000),
-                    (ui, uj),
-                )
-                .into(),
-            );
+            let mu = if seen.insert(m) {
+                AbstractIndex::from(-*m + 10000)
+            } else {
+                AbstractIndex::from(*m - 10000)
+            };
+            result.push(gamma(mu, [ui, uj]).into());
         }
     }
     result.push(euclidean_four_vector(contracting_index, &u).into());

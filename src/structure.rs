@@ -589,11 +589,11 @@ pub struct Dual<T> {
     inner: T,
 }
 
-impl<T: RepName<Dual: RepName>> Display for Dual<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner.dual())
-    }
-}
+// impl<T: RepName<Dual: RepName>> Display for Dual<T> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.inner.dual())
+//     }
+// }
 
 // impl<T: BaseRepName<Dual = Dual<T>, Base = T>> BaseRepName for Dual<T> {
 //     fn selfless_name() -> String {
@@ -816,6 +816,13 @@ duplicate! {
             write!(f, "{}", constname)
         }
     }
+
+    impl Display for Dual<isnotselfdual>{
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", dualconstname)
+        }
+    }
+
 
 
 

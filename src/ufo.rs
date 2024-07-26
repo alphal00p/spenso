@@ -7,7 +7,7 @@ use super::{
 #[cfg(feature = "shadowing")]
 use crate::{
     ABSTRACTIND, BISPINOR, COLORADJ, COLORANTIFUND, COLORANTISEXT, COLORFUND, COLORSEXT, EUCLIDEAN,
-    LORENTZ, SPINFUND,
+    SPINFUND,
 };
 
 #[cfg(feature = "shadowing")]
@@ -105,7 +105,7 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool) -> Atom {
+pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool, up: bool) -> Atom {
     let replacements = [
         (
             "Identity(i_,j_)",
@@ -122,8 +122,16 @@ pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool) -> Atom {
             named_tensor(
                 "id".into(),
                 &[
-                    &lor(wrapped_to_four("mu_", wrapped)),
-                    &lor(wrapped_to_four("nu_", wrapped)),
+                    &if up {
+                        Dual::<Lorentz>::rep_string(wrapped_to_four("mu_", wrapped))
+                    } else {
+                        Lorentz::rep_string(wrapped_to_four("mu_", wrapped))
+                    },
+                    &if up {
+                        Lorentz::rep_string(wrapped_to_four("nu_", wrapped))
+                    } else {
+                        Dual::<Lorentz>::rep_string(wrapped_to_four("nu_", wrapped))
+                    },
                 ],
             ),
         ),
@@ -132,7 +140,11 @@ pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool) -> Atom {
             named_tensor(
                 "γ".into(),
                 &[
-                    &lor(wrapped_to_four("mu_", wrapped)),
+                    &if up {
+                        Dual::<Lorentz>::rep_string(wrapped_to_four("mu_", wrapped))
+                    } else {
+                        Lorentz::rep_string(wrapped_to_four("mu_", wrapped))
+                    },
                     &bis(wrapped_to_four("i_", wrapped)),
                     &bis(wrapped_to_four("j_", wrapped)),
                 ],
@@ -173,8 +185,16 @@ pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool) -> Atom {
             named_tensor(
                 "σ".into(),
                 &[
-                    &lor(wrapped_to_four("mu_", wrapped)),
-                    &lor(wrapped_to_four("nu_", wrapped)),
+                    &if up {
+                        Dual::<Lorentz>::rep_string(wrapped_to_four("mu_", wrapped))
+                    } else {
+                        Lorentz::rep_string(wrapped_to_four("mu_", wrapped))
+                    },
+                    &if up {
+                        Dual::<Lorentz>::rep_string(wrapped_to_four("nu_", wrapped))
+                    } else {
+                        Lorentz::rep_string(wrapped_to_four("nu_", wrapped))
+                    },
                     &bis(wrapped_to_four("i_", wrapped)),
                     &bis(wrapped_to_four("j_", wrapped)),
                 ],
@@ -195,8 +215,16 @@ pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool) -> Atom {
             named_tensor(
                 "Metric".into(),
                 &[
-                    &lor(wrapped_to_four("mu_", wrapped)),
-                    &lor(wrapped_to_four("nu_", wrapped)),
+                    &if up {
+                        Dual::<Lorentz>::rep_string(wrapped_to_four("mu_", wrapped))
+                    } else {
+                        Lorentz::rep_string(wrapped_to_four("mu_", wrapped))
+                    },
+                    &if up {
+                        Dual::<Lorentz>::rep_string(wrapped_to_four("nu_", wrapped))
+                    } else {
+                        Lorentz::rep_string(wrapped_to_four("nu_", wrapped))
+                    },
                 ],
             ),
         ),
@@ -231,13 +259,20 @@ fn rep_string(rep: &str, rep_args: ReplacementArgs) -> String {
 fn euc(rep_args: ReplacementArgs) -> String {
     rep_string(EUCLIDEAN, rep_args)
 }
-#[cfg(feature = "shadowing")]
-fn lor(rep_args: ReplacementArgs) -> String {
-    rep_string(LORENTZ, rep_args)
-}
+
 #[cfg(feature = "shadowing")]
 fn bis(rep_args: ReplacementArgs) -> String {
     rep_string(BISPINOR, rep_args)
+}
+
+trait ReprRepl {
+    fn rep_string(rep_args: ReplacementArgs) -> String;
+}
+
+impl<R: BaseRepName> ReprRepl for R {
+    fn rep_string(rep_args: ReplacementArgs) -> String {
+        rep_string(&R::selfless_name(), rep_args)
+    }
 }
 
 #[allow(dead_code)]
@@ -411,8 +446,8 @@ pub fn preprocess_ufo_color_wrapped(atom: Atom) -> Atom {
 }
 
 #[cfg(feature = "shadowing")]
-pub fn preprocess_ufo_spin_wrapped(atom: Atom) -> Atom {
-    preprocess_ufo_spin(atom, true)
+pub fn preprocess_ufo_spin_wrapped(atom: Atom, up: bool) -> Atom {
+    preprocess_ufo_spin(atom, true, up)
 }
 
 #[allow(dead_code)]

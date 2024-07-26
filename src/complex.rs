@@ -402,7 +402,7 @@ where
     }
 }
 
-impl<'a, 'b, T> Add<T> for &'b Complex<T>
+impl<'b, T> Add<T> for &'b Complex<T>
 where
     T: RefAdd<T, Output = T> + Clone,
 {

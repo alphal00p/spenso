@@ -67,7 +67,7 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> FallibleAdd<SparseTensor<T, I>> for DenseTensor<U, I>
+impl<T, U, I, Out> FallibleAdd<SparseTensor<T, I>> for DenseTensor<U, I>
 where
     U: FallibleAdd<T, Output = Out> + TrySmallestUpgrade<T, LCM = Out>,
     I: TensorStructure + Clone,
@@ -87,7 +87,7 @@ where
                     permutation.iter().map(|&index| indices[index]).collect();
                 let t = rhs.get(&permuted_indices);
                 if let Ok(t) = t {
-                    u.add_fallible(&t)
+                    u.add_fallible(t)
                 } else {
                     Some(u.try_upgrade().unwrap().into_owned())
                 }
@@ -98,7 +98,7 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> FallibleAdd<DenseTensor<T, I>> for SparseTensor<U, I>
+impl<T, U, I, Out> FallibleAdd<DenseTensor<T, I>> for SparseTensor<U, I>
 where
     U: FallibleAdd<T, Output = Out>,
     I: TensorStructure + Clone,
@@ -130,7 +130,7 @@ where
     }
 }
 
-impl<'a, T, U, I, Out> FallibleAdd<SparseTensor<T, I>> for SparseTensor<U, I>
+impl<T, U, I, Out> FallibleAdd<SparseTensor<T, I>> for SparseTensor<U, I>
 where
     I: TensorStructure + Clone,
     U: FallibleAdd<T, Output = Out> + TrySmallestUpgrade<T, LCM = Out>,
@@ -398,7 +398,7 @@ where
                     permutation.iter().map(|&index| indices[index]).collect();
                 let t = rhs.get(&permuted_indices);
                 if let Ok(t) = t {
-                    u.sub_fallible(&t)
+                    u.sub_fallible(t)
                 } else {
                     Some(u.try_upgrade().unwrap().into_owned())
                 }

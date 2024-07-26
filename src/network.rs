@@ -11,7 +11,7 @@ use symbolica::{
 
 use crate::{
     CastStructure, CompiledEvalTensor, DualSlotTo, EvalTensor, EvalTreeTensor, FallibleMul,
-    GetTensorData, HasTensorData, IntoSymbol, IsAbstractSlot, TensorStructure,
+    GetTensorData, HasTensorData, IntoSymbol, TensorStructure,
 };
 
 #[cfg(feature = "shadowing")]
@@ -36,7 +36,7 @@ use symbolica::{
 #[cfg(feature = "shadowing")]
 use ahash::AHashMap;
 
-use super::{Contract, HasName, HasStructure, Slot, TracksCount};
+use super::{Contract, HasName, HasStructure, TracksCount};
 use smartstring::alias::String;
 use std::fmt::{Debug, Display};
 
@@ -705,9 +705,7 @@ where
         self.graph
             .nodes
             .drain()
-            .into_iter()
-            .map(|(_, n)| n.try_into_parametric()) //filters out all parametric tensors
-            .flatten()
+            .flat_map(|(_, n)| n.try_into_parametric()) //filters out all parametric tensors
             .collect()
     }
 
@@ -883,9 +881,9 @@ impl<T, S: TensorStructure> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
     {
         self.graph
             .map_nodes_mut(|(_, x)| x.common_subexpression_elimination());
-        self.scalar
-            .as_mut()
-            .map(|a| a.common_subexpression_elimination());
+        if let Some(a) = self.scalar.as_mut() {
+            a.common_subexpression_elimination()
+        }
     }
 
     pub fn common_pair_elimination(&mut self)
@@ -895,7 +893,9 @@ impl<T, S: TensorStructure> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
     {
         self.graph
             .map_nodes_mut(|(_, x)| x.common_pair_elimination());
-        self.scalar.as_mut().map(|a| a.common_pair_elimination());
+        if let Some(a) = self.scalar.as_mut() {
+            a.common_pair_elimination()
+        }
     }
 
     pub fn evaluate(&mut self, params: &[T]) -> TensorNetwork<DataTensor<T, S>, T>
@@ -1017,7 +1017,9 @@ impl<S: TensorStructure> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator>
 impl<S: Clone + TensorStructure> TensorNetwork<EvalTreeTensor<Rational, S>, EvalTree<Rational>> {
     pub fn horner_scheme(&mut self) {
         self.graph.map_nodes_mut(|(_, x)| x.horner_scheme());
-        self.scalar.as_mut().map(|a| a.horner_scheme());
+        if let Some(a) = self.scalar.as_mut() {
+            a.horner_scheme()
+        }
     }
 }
 
@@ -1168,7 +1170,7 @@ impl<T, S> TensorNetwork<T, S>
 where
     T: Clone + TensorStructure,
 {
-    pub fn result_tensor_ref<'a>(&'a self) -> Result<&'a T, TensorNetworkError> {
+    pub fn result_tensor_ref(&self) -> Result<&T, TensorNetworkError> {
         match self.graph.nodes.len() {
             0 => Err(TensorNetworkError::NoNodes),
             1 => Ok(self.graph.nodes.iter().next().unwrap().1),
@@ -1193,7 +1195,7 @@ impl<T: HasName<Name: IntoSymbol> + TensorStructure<Slot: Display>, S> TensorNet
                 "\n {} [label=\"{}\"] ",
                 i.data().as_ffi(),
                 n.name()
-                    .map(|x| x.into_symbol().to_string())
+                    .map(|x| x.ref_into_symbol().to_string())
                     .unwrap_or("".into())
             ));
         }
@@ -1653,7 +1655,7 @@ where
 
         self.initial.namesym("L0");
         if self.initial.graph.nodes.len() > 1 {
-            let mut new_level = (*self).initial.shadow();
+            let mut new_level = self.initial.shadow();
             new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
             self.levels.push(new_level);
 

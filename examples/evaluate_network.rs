@@ -1,10 +1,10 @@
-use std::{collections::HashSet, ops::Neg};
+use std::collections::HashSet;
 
 use ahash::{AHashMap, AHashSet, HashMap};
 use spenso::{
     ufo::{euclidean_four_vector, gamma},
     AbstractIndex, ContractionCountStructure, FallibleMul, HasTensorData, Lorentz, MixedTensor,
-    PhysReps, RepName, Representation, Slot, TensorNetwork, ToSymbolic,
+    PhysReps, RepName, TensorNetwork, ToSymbolic,
 };
 use spenso::{Complex, FlatCoefficent};
 
@@ -25,7 +25,7 @@ fn gamma_net_param(
         vec![euclidean_four_vector(contracting_index, &vbar).into()];
     let lor_fouru = PhysReps::new_dimed_rep(&Lorentz {}.into(), 4);
     let lor_fourd = lor_fouru.dual();
-    let p = State::get_symbol(&"p");
+    let p = State::get_symbol("p");
     let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;
@@ -55,7 +55,7 @@ fn gamma_net_param(
                 .into(),
             ));
 
-            result.push(gamma(AbstractIndex::from(-*m).into(), [ui, uj]).into());
+            result.push(gamma(AbstractIndex::from(-*m), [ui, uj]).into());
         } else {
             let mu = if seen.insert(m) {
                 AbstractIndex::from(-*m + 10000)
@@ -78,7 +78,7 @@ fn const_map_gen<'a, 'b>(
     let mut rng: Xoroshiro64Star = Xoroshiro64Star::from_entropy();
     let multipliable = Uniform::new(1., 10.);
 
-    for (_i, p) in params.iter().enumerate() {
+    for p in params.iter() {
         let p = p.as_view();
         const_map.insert(
             p,

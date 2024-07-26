@@ -1,8 +1,6 @@
-use crate::ufo::metric_data;
 use crate::SetTensorData;
 use ahash::AHashMap;
 use anyhow::{anyhow, Result};
-use bitvec::order;
 use delegate::delegate;
 use derive_more::Add;
 use derive_more::AddAssign;
@@ -25,18 +23,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use smartstring::LazyCompact;
 use smartstring::SmartString;
-use std::fmt::write;
 use std::fmt::Debug;
 #[cfg(feature = "shadowing")]
 use std::fmt::Display;
 use std::hash::Hash;
-use std::io::SeekFrom;
-use std::marker::PhantomData;
 use std::ops::AddAssign;
 use std::ops::Deref;
 use std::ops::Neg;
-use std::process::Output;
-use std::process::Termination;
 use thiserror::Error;
 
 #[cfg(feature = "shadowing")]
@@ -58,15 +51,15 @@ use crate::SparseTensor;
 use crate::{ExpandedCoefficent, FlatCoefficent, ParamTensor, TensorCoefficient};
 use std::ops::Range;
 
+use std::collections::HashMap;
 use std::collections::HashSet;
-use std::{cmp::Ordering, collections::HashMap};
 
 use super::TensorStructureIndexIterator;
 #[cfg(feature = "shadowing")]
 use super::{ufo, DenseTensor, MixedTensor};
 // use smartstring::alias::String;
 /// A type that represents the name of an index in a tensor.
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, Serialize, Deserialize)]
 pub enum AbstractIndex {
     Normal(usize),
     Dualize(usize),
@@ -75,6 +68,12 @@ pub enum AbstractIndex {
 impl PartialEq for AbstractIndex {
     fn eq(&self, other: &Self) -> bool {
         usize::from(*self) == usize::from(*other)
+    }
+}
+
+impl Hash for AbstractIndex {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        usize::from(*self).hash(state)
     }
 }
 
@@ -149,7 +148,7 @@ impl TryFrom<AtomView<'_>> for AbstractIndex {
         if let AtomView::Var(v) = view {
             Ok(AbstractIndex::Normal(v.get_symbol().get_id() as usize))
         } else {
-            Err("Not a var".to_string().into())
+            Err("Not a var".to_string())
         }
     }
 }
@@ -591,7 +590,7 @@ pub struct Dual<T> {
 
 impl<T: RepName> Display for Dual<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "dual{}", self.inner.to_string())
+        write!(f, "dual{}", self.inner)
     }
 }
 
@@ -648,11 +647,11 @@ impl<T: RepName> Display for Dual<T> {
 
 duplicate! {
    [isnotselfdual isneg constname varname varnamedual;
-    [Lorentz] [i > 0] ["lor"] [LorentzUp] [LorentzDown];
+    [Lorentz] [_i > 0] ["lor"] [LorentzUp] [LorentzDown];
     [SpinFundamental] [false] ["spin"] [SpinFund] [SpinAntiFund];
     [ColorFundamental] [false] ["cof"] [ColorFund] [ColorAntiFund];
     [ColorSextet] [false] ["cos"] [ColorSextet] [ColorAntiSextet]]
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,Default)]
 
     pub struct isnotselfdual {}
     #[allow(unused_variables)]
@@ -685,9 +684,9 @@ duplicate! {
             for i in 0..size{
                 if self.is_neg(i){
 
-                    tensor.set(&[i,i],V::one().neg());
+                    tensor.set(&[i,i],V::one().neg()).unwrap();
                 } else {
-                    tensor.set(&[i,i],V::one());
+                    tensor.set(&[i,i],V::one()).unwrap();
                 }
             }
         tensor
@@ -719,7 +718,7 @@ duplicate! {
         isnotselfdual::selfless_dual()
     }
 
-    fn is_neg(self,i:usize)->bool{
+    fn is_neg(self,_i:usize)->bool{
         isneg
     }
 
@@ -758,9 +757,9 @@ duplicate! {
             for i in 0..size{
                 if self.is_neg(i){
 
-                    tensor.set(&[i,i],V::one().neg());
+                    tensor.set(&[i,i],V::one().neg()).unwrap();
                 } else {
-                    tensor.set(&[i,i],V::one());
+                    tensor.set(&[i,i],V::one()).unwrap();
                 }
             }
         tensor
@@ -816,11 +815,6 @@ duplicate! {
     }
 
 
-    impl Default for isnotselfdual {
-        fn default() -> Self {
-            Self {}
-        }
-    }
 
     impl From<isnotselfdual> for PhysReps {
         fn from(value: isnotselfdual) -> Self {
@@ -851,7 +845,7 @@ duplicate! {
     [Euclidean] ["euc"];
     [Bispinor] ["bis"];
     [ColorAdjoint] ["coad"]]
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,Default)]
     pub struct isselfdual {}
 
     impl BaseRepName for isselfdual {
@@ -880,9 +874,9 @@ fn base_metric<S,V:One+Neg<Output=V>>
             for i in 0..size{
                 if self.is_neg(i){
 
-                    tensor.set(&[i,i],V::one().neg());
+                    tensor.set(&[i,i],V::one().neg()).unwrap();
                 } else {
-                    tensor.set(&[i,i],V::one());
+                    tensor.set(&[i,i],V::one()).unwrap();
                 }
             }
         tensor
@@ -925,11 +919,7 @@ fn base_metric<S,V:One+Neg<Output=V>>
 
 
 
-    impl Default for isselfdual {
-        fn default() -> Self {
-            Self {}
-        }
-    }
+
 
     impl Display for isselfdual{
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1015,20 +1005,20 @@ impl RepName for PhysReps {
     }
 
     fn matches(&self, other: &Self::Dual) -> bool {
-        match (self, other) {
-            (PhysReps::Euclidean(_), PhysReps::Euclidean(_)) => true,
-            (PhysReps::LorentzUp(_), PhysReps::LorentzDown(_)) => true,
-            (PhysReps::LorentzDown(_), PhysReps::LorentzUp(_)) => true,
-            (PhysReps::Bispinor(_), PhysReps::Bispinor(_)) => true,
-            (PhysReps::ColorAdjoint(_), PhysReps::ColorAdjoint(_)) => true,
-            (PhysReps::ColorFund(_), PhysReps::ColorAntiFund(_)) => true,
-            (PhysReps::ColorAntiFund(_), PhysReps::ColorFund(_)) => true,
-            (PhysReps::ColorSextet(_), PhysReps::ColorAntiSextet(_)) => true,
-            (PhysReps::ColorAntiSextet(_), PhysReps::ColorSextet(_)) => true,
-            (PhysReps::SpinAntiFund(_), PhysReps::SpinFund(_)) => true,
-            (PhysReps::SpinFund(_), PhysReps::SpinAntiFund(_)) => true,
-            _ => false,
-        }
+        matches!(
+            (self, other),
+            (PhysReps::Euclidean(_), PhysReps::Euclidean(_))
+                | (PhysReps::LorentzUp(_), PhysReps::LorentzDown(_))
+                | (PhysReps::LorentzDown(_), PhysReps::LorentzUp(_))
+                | (PhysReps::Bispinor(_), PhysReps::Bispinor(_))
+                | (PhysReps::ColorAdjoint(_), PhysReps::ColorAdjoint(_))
+                | (PhysReps::ColorFund(_), PhysReps::ColorAntiFund(_))
+                | (PhysReps::ColorAntiFund(_), PhysReps::ColorFund(_))
+                | (PhysReps::ColorSextet(_), PhysReps::ColorAntiSextet(_))
+                | (PhysReps::ColorAntiSextet(_), PhysReps::ColorSextet(_))
+                | (PhysReps::SpinAntiFund(_), PhysReps::SpinFund(_))
+                | (PhysReps::SpinFund(_), PhysReps::SpinAntiFund(_))
+        )
     }
 
     fn base(&self) -> Self::Base {
@@ -1194,7 +1184,6 @@ impl<T: RepName> Representation<T> {
     ///
     /// assert!(agree);
     /// ```
-    #[must_use]
     pub fn negative(&self) -> Result<Vec<bool>> {
         Ok((0..usize::try_from(self.dim)?)
             .map(|i| self.is_neg(i))
@@ -1226,7 +1215,7 @@ impl<T: RepName> From<Representation<T>> for Dimension {
 impl<T: RepName> TryFrom<Representation<T>> for usize {
     type Error = DimensionError;
     fn try_from(value: Representation<T>) -> std::result::Result<Self, Self::Error> {
-        Ok(usize::try_from(value.dim)?)
+        usize::try_from(value.dim)
     }
 }
 
@@ -1367,13 +1356,13 @@ impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
             let sym = f.get_symbol();
             let rep = T::try_from_symbol(sym)?;
 
-            return Ok(Slot {
+            Ok(Slot {
                 rep: Representation { dim, rep },
                 aind: index,
-            });
+            })
         } else {
-            return Err(SlotError::Composite);
-        };
+            Err(SlotError::Composite)
+        }
     }
 }
 
@@ -1552,12 +1541,8 @@ where
         structure: S,
     ) -> SparseTensor<V, S> {
         match self {
-            Self::DualRep(d) => {
-                return d.base_metric(structure);
-            }
-            Self::Rep(r) => {
-                return r.base_metric(structure);
-            }
+            Self::DualRep(d) => d.base_metric(structure),
+            Self::Rep(r) => r.base_metric(structure),
         }
     }
     fn dual(self) -> Self::Dual {
@@ -1567,11 +1552,10 @@ where
         }
     }
     fn matches(&self, other: &Self::Dual) -> bool {
-        match (self, other) {
-            (Self::DualRep(_), Self::Rep(_)) => true,
-            (Self::Rep(_), Self::DualRep(_)) => true,
-            _ => false,
-        }
+        matches!(
+            (self, other),
+            (Self::DualRep(_), Self::Rep(_)) | (Self::Rep(_), Self::DualRep(_))
+        )
     }
     fn is_neg(self, i: usize) -> bool {
         match self {
@@ -1603,7 +1587,7 @@ pub type PhysicalSlots = Slot<PhysReps>;
 pub trait HasStructure {
     type Structure: TensorStructure;
     type Scalar;
-    fn structure<'a>(&'a self) -> &'a Self::Structure;
+    fn structure(&self) -> &Self::Structure;
     fn mut_structure(&mut self) -> &mut Self::Structure;
     fn scalar(self) -> Option<Self::Scalar>;
     fn set_structure_name<N>(&mut self, name: N)
@@ -1682,7 +1666,7 @@ where
 {
     fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
         ExpandedCoefficent {
-            name: self.name().map(|n| n.into_symbol()),
+            name: self.name().map(|n| n.ref_into_symbol()),
             index: self.expanded_index(id).unwrap(),
             args: None,
         }
@@ -1690,7 +1674,7 @@ where
 
     fn flat_atom(&self, id: FlatIndex) -> FlatCoefficent<()> {
         FlatCoefficent {
-            name: self.name().map(|n| n.into_symbol()),
+            name: self.name().map(|n| n.ref_into_symbol()),
             index: id,
             args: None,
         }
@@ -1783,7 +1767,7 @@ pub trait ToSymbolic: TensorStructure {
         let metric = State::get_symbol("Metric");
 
         if let Some(name) = self.name() {
-            let name = name.into_symbol();
+            let name = name.ref_into_symbol();
             Ok(match name {
                 _ if name == identity => ufo::identity_data::<f64, Self>(self).into(),
 
@@ -1804,9 +1788,9 @@ pub trait ToSymbolic: TensorStructure {
     where
         Self: HasName<Name: IntoSymbol, Args: IntoArgs>,
     {
-        let args = self.args().map(|s| s.args()).unwrap_or(vec![]);
+        let args = self.args().map(|s| s.args()).unwrap_or_default();
 
-        Some(self.to_symbolic_with(self.name()?.into_symbol(), &args))
+        Some(self.to_symbolic_with(self.name()?.ref_into_symbol(), &args))
     }
 
     fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
@@ -1815,7 +1799,7 @@ pub trait ToSymbolic: TensorStructure {
             .map(|slot| slot.to_symbolic())
             .collect::<Vec<_>>();
 
-        let mut value_builder = FunctionBuilder::new(name.into_symbol());
+        let mut value_builder = FunctionBuilder::new(name.ref_into_symbol());
 
         let mut index_func = FunctionBuilder::new(State::get_symbol("aind"));
         for arg in args {
@@ -2079,8 +2063,7 @@ pub trait TensorStructure {
                     indices[i],
                     i,
                     usize::try_from(dim_len)?
-                )
-                .into());
+                ));
             }
         }
         Ok(())
@@ -2117,7 +2100,7 @@ pub trait TensorStructure {
         if flat_index.index < self.size()? {
             Ok(indices.into())
         } else {
-            Err(anyhow!("Index {flat_index} out of bounds").into())
+            Err(anyhow!("Index {flat_index} out of bounds"))
         }
     }
 
@@ -2366,11 +2349,11 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
     fn external_reps_iter(
         &self,
     ) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>> {
-        self.structure.iter().map(|s| *s)
+        self.structure.iter().copied()
     }
 
     fn external_dims_iter(&self) -> impl Iterator<Item = Dimension> {
-        self.structure.iter().map(|s| s.dim.into())
+        self.structure.iter().map(|s| s.dim)
     }
 
     fn get_aind(&self, _: usize) -> Option<AbstractIndex> {
@@ -2429,11 +2412,11 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
     }
 
     fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>> {
-        self.structure.get(i).map(|r| *r)
+        self.structure.get(i).copied()
     }
 
     fn get_dim(&self, i: usize) -> Option<Dimension> {
-        self.structure.get(i).clone().map(|&r| r.into())
+        self.structure.get(i).map(|&r| r.into())
     }
 }
 
@@ -2471,12 +2454,12 @@ impl TryFrom<AtomView<'_>> for VecStructure {
     type Error = SlotError;
     fn try_from(value: AtomView) -> Result<Self, Self::Error> {
         match value {
-            AtomView::Mul(mul) => return mul.try_into(),
-            AtomView::Fun(fun) => return fun.try_into(),
+            AtomView::Mul(mul) => mul.try_into(),
+            AtomView::Fun(fun) => fun.try_into(),
             AtomView::Pow(_) => {
-                return Ok(VecStructure::default()); // powers do not have a structure
+                Ok(VecStructure::default()) // powers do not have a structure
             }
-            _ => return Err(anyhow!("Not a structure: {value}").into()), // could check if it
+            _ => Err(anyhow!("Not a structure: {value}").into()), // could check if it
         }
     }
 }
@@ -2529,7 +2512,7 @@ impl TryFrom<MulView<'_>> for VecStructure {
         for arg in value.iter() {
             structure.extend(arg.try_into()?);
         }
-        Ok(structure.into())
+        Ok(structure)
     }
 }
 
@@ -2577,11 +2560,11 @@ impl VecStructure {
     }
 
     fn extend(&mut self, other: Self) {
-        self.structure.extend(other.structure.into_iter())
+        self.structure.extend(other.structure)
     }
 
     pub fn to_named<N, A>(self, name: N, args: Option<A>) -> NamedStructure<N, A> {
-        NamedStructure::from_iter(self.into_iter(), name, args)
+        NamedStructure::from_iter(self, name, args)
     }
 
     pub fn empty() -> Self {
@@ -2815,7 +2798,7 @@ pub trait HasName {
         Self::Args: IntoArgs,
     {
         ExpandedCoefficent {
-            name: self.name().map(|n| n.into_symbol()),
+            name: self.name().map(|n| n.ref_into_symbol()),
             index: self.expanded_index(id).unwrap(),
             args: self.args(),
         }
@@ -2829,7 +2812,7 @@ pub trait HasName {
         Self::Args: IntoArgs,
     {
         FlatCoefficent {
-            name: self.name().map(|n| n.into_symbol()),
+            name: self.name().map(|n| n.ref_into_symbol()),
             index: id,
             args: self.args(),
         }
@@ -2997,11 +2980,12 @@ where
 impl<N: IntoSymbol, A: IntoArgs> Display for SmartShadowStructure<N, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(ref name) = self.global_name {
-            write!(f, "{}", name.into_symbol().to_string())?
+            write!(f, "{}", name.ref_into_symbol())?
         }
         write!(f, "(")?;
         if let Some(ref args) = self.additional_args {
-            let args: Vec<std::string::String> = args.into_args().map(|s| s.to_string()).collect();
+            let args: Vec<std::string::String> =
+                args.ref_into_args().map(|s| s.to_string()).collect();
             write!(f, "{},", args.join(","))?
         }
 
@@ -3191,7 +3175,7 @@ where
         let mut positions = IndexMap::new();
 
         // Track the positions of each element
-        for (index, value) in (&self.external).external_structure_iter().enumerate() {
+        for (index, value) in (self.external).external_structure_iter().enumerate() {
             positions.entry(value).or_insert_with(Vec::new).push(index);
         }
         // Collect only the positions of non- repeated elements
@@ -3258,12 +3242,12 @@ where
 }
 #[cfg(feature = "shadowing")]
 pub fn atomic_expanded_label<I: IntoSymbol>(indices: &[ConcreteIndex], name: I) -> Atom {
-    let id = name.into_symbol();
+    let id = name.ref_into_symbol();
     atomic_expanded_label_id(indices, id, &[])
 }
 #[cfg(feature = "shadowing")]
 pub fn atomic_flat_label<I: IntoSymbol>(index: usize, name: I) -> Atom {
-    let id = name.into_symbol();
+    let id = name.ref_into_symbol();
     atomic_flat_label_id(index, id)
 }
 
@@ -3292,21 +3276,21 @@ pub fn atomic_expanded_label_id(indices: &[ConcreteIndex], name: Symbol, args: &
 
 #[cfg(feature = "shadowing")]
 pub trait IntoSymbol {
-    fn into_symbol(&self) -> Symbol;
+    fn ref_into_symbol(&self) -> Symbol;
 }
 
 #[cfg(feature = "shadowing")]
 pub trait IntoArgs {
-    fn into_args<'a>(&self) -> impl Iterator<Item = Atom>;
+    fn ref_into_args(&self) -> impl Iterator<Item = Atom>;
     fn args(&self) -> Vec<Atom> {
-        self.into_args().collect()
+        self.ref_into_args().collect()
     }
     fn cooked_name(&self) -> std::string::String;
 }
 
 #[cfg(feature = "shadowing")]
 impl IntoArgs for usize {
-    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+    fn ref_into_args(&self) -> impl Iterator<Item = Atom> {
         std::iter::once(Atom::new_num(*self as i64))
     }
     fn cooked_name(&self) -> std::string::String {
@@ -3316,7 +3300,7 @@ impl IntoArgs for usize {
 
 #[cfg(feature = "shadowing")]
 impl IntoArgs for () {
-    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+    fn ref_into_args(&self) -> impl Iterator<Item = Atom> {
         std::iter::empty()
     }
     fn cooked_name(&self) -> std::string::String {
@@ -3335,7 +3319,7 @@ impl Display for NoArgs {
 
 #[cfg(feature = "shadowing")]
 impl IntoArgs for NoArgs {
-    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+    fn ref_into_args(&self) -> impl Iterator<Item = Atom> {
         std::iter::empty()
     }
     fn cooked_name(&self) -> std::string::String {
@@ -3345,7 +3329,7 @@ impl IntoArgs for NoArgs {
 
 #[cfg(feature = "shadowing")]
 impl IntoArgs for Atom {
-    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+    fn ref_into_args(&self) -> impl Iterator<Item = Atom> {
         std::iter::once(self.clone())
     }
 
@@ -3356,7 +3340,7 @@ impl IntoArgs for Atom {
 
 #[cfg(feature = "shadowing")]
 impl IntoArgs for Vec<Atom> {
-    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+    fn ref_into_args(&self) -> impl Iterator<Item = Atom> {
         self.iter().cloned()
     }
 
@@ -3369,7 +3353,7 @@ impl IntoArgs for Vec<Atom> {
 
 #[cfg(feature = "shadowing")]
 impl<const N: usize> IntoArgs for [Atom; N] {
-    fn into_args<'a>(&self) -> impl Iterator<Item = Atom> {
+    fn ref_into_args(&self) -> impl Iterator<Item = Atom> {
         self.iter().cloned()
     }
 
@@ -3382,28 +3366,28 @@ impl<const N: usize> IntoArgs for [Atom; N] {
 
 #[cfg(feature = "shadowing")]
 impl IntoSymbol for SmartString<LazyCompact> {
-    fn into_symbol(&self) -> Symbol {
+    fn ref_into_symbol(&self) -> Symbol {
         State::get_symbol(self)
     }
 }
 
 #[cfg(feature = "shadowing")]
 impl IntoSymbol for Symbol {
-    fn into_symbol(&self) -> Symbol {
-        self.clone()
+    fn ref_into_symbol(&self) -> Symbol {
+        *self
     }
 }
 
 #[cfg(feature = "shadowing")]
 impl IntoSymbol for &str {
-    fn into_symbol(&self) -> Symbol {
+    fn ref_into_symbol(&self) -> Symbol {
         State::get_symbol(self)
     }
 }
 
 #[cfg(feature = "shadowing")]
 impl IntoSymbol for std::string::String {
-    fn into_symbol(&self) -> Symbol {
+    fn ref_into_symbol(&self) -> Symbol {
         State::get_symbol(self)
     }
 }
@@ -3446,7 +3430,7 @@ pub trait Shadowable:
         let metric = State::get_symbol("Metric");
 
         if let Some(name) = self.structure().name() {
-            let name = name.into_symbol();
+            let name = name.ref_into_symbol();
             Some(match name {
                 _ if name == identity => {
                     ufo::identity_data::<f64, Self::Structure>(self.structure().clone()).into()

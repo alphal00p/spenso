@@ -61,7 +61,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let mut const_atom_map: AHashMap<Symbol, Complex<f64>> = const_string_map
         .into_iter()
-        .map(|(k, v)| (State::get_symbol(&k), v))
+        .map(|(k, v)| (State::get_symbol(k), v))
         .collect();
 
     const_atom_map.insert(State::I, Complex::i());
@@ -99,7 +99,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let reps: Vec<Replacement> = replacements
         .iter()
-        .map(|(pat, rhs)| Replacement::new(&pat, &rhs))
+        .map(|(pat, rhs)| Replacement::new(pat, rhs))
         .collect();
 
     let mut params = data_atom_map.0.clone();

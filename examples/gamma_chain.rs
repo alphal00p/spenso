@@ -13,17 +13,11 @@ use num::traits::ToPrimitive;
 use symbolica::atom::{Atom, Symbol};
 
 #[cfg(feature = "shadowing")]
-use std::ops::Neg;
-
-#[cfg(feature = "shadowing")]
 use spenso::{
     parametric::MixedTensor,
-    ufo::{
-        euclidean_four_vector_sym, gammasym, mink_four_vector_sym, param_euclidean_four_vector,
-        param_mink_four_vector,
-    },
-    AbstractIndex, ContractionCountStructure, HasTensorData, HistoryStructure, IntoSymbol,
-    NumTensor, TensorNetwork,
+    ufo::{euclidean_four_vector_sym, gammasym, mink_four_vector_sym},
+    AbstractIndex, ContractionCountStructure, HasTensorData, HistoryStructure, NumTensor,
+    TensorNetwork,
 };
 
 // #[allow(dead_code)]
@@ -148,7 +142,7 @@ fn gamma_net_sym(
     result.push(euclidean_four_vector_sym(contracting_index, &u).into());
     TensorNetwork::from(result)
 }
-
+#[allow(dead_code)]
 fn gamma_net(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
@@ -235,7 +229,7 @@ fn gamma_net_param(
         vec![euclidean_four_vector(contracting_index, &vbar).into()];
     let lor_fouru = PhysReps::new_dimed_rep(&Lorentz {}.into(), 4);
     let lor_fourd = lor_fouru.dual();
-    let p = State::get_symbol(&"p");
+    let p = State::get_symbol("p");
     let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;
@@ -265,7 +259,7 @@ fn gamma_net_param(
                 .into(),
             ));
 
-            result.push(gamma(AbstractIndex::from(-*m).into(), [ui, uj]).into());
+            result.push(gamma(AbstractIndex::from(-*m), [ui, uj]).into());
         } else {
             let mu = if seen.insert(m) {
                 AbstractIndex::from(-*m + 10000)

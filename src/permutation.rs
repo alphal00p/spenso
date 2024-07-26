@@ -161,7 +161,7 @@ impl Permutation {
     pub fn myrvold_ruskey_unrank2(n: usize, mut rank: usize) -> Self {
         let mut p = (0..n).collect::<Vec<_>>();
         for i in (1..=n).rev() {
-            let s = &rank / (Self::factorial(i - 1));
+            let s = rank / (Self::factorial(i - 1));
             p.swap(i - 1, s);
             rank %= Self::factorial(i - 1);
         }
@@ -202,7 +202,7 @@ mod tests {
     fn test_apply_slice() {
         let p = Permutation::from_map(vec![2, 1, 3, 0]);
         let data = vec![10, 20, 30, 40];
-        let permuted = p.apply_slice(&data);
+        let permuted = p.apply_slice(data);
         assert_eq!(permuted, vec![30, 20, 40, 10]);
     }
 
@@ -210,7 +210,7 @@ mod tests {
     fn test_apply_slice_inv() {
         let p = Permutation::from_map(vec![2, 1, 3, 0]);
         let data = vec![10, 20, 30, 40];
-        let permuted = p.apply_slice_inv(&data);
+        let permuted = p.apply_slice_inv(data);
         assert_eq!(permuted, vec![40, 20, 10, 30]);
     }
 

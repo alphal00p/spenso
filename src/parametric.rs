@@ -31,8 +31,8 @@ use symbolica::{
 use std::hash::Hash;
 
 use super::{
-    Contract, DataIterator, DataTensor, DenseTensor, HasStructure, Slot, SparseTensor,
-    StructureContract, TracksCount,
+    Contract, DataIterator, DataTensor, DenseTensor, HasStructure, SparseTensor, StructureContract,
+    TracksCount,
 };
 use symbolica::domains::float::Complex as SymComplex;
 
@@ -78,7 +78,7 @@ impl<Arg: IntoArgs> Display for FlatCoefficent<Arg> {
         }
         write!(f, "(")?;
         if let Some(ref args) = self.args {
-            let args: Vec<String> = args.into_args().map(|s| s.to_string()).collect();
+            let args: Vec<String> = args.ref_into_args().map(|s| s.to_string()).collect();
             write!(f, "{},", args.join(","))?
         }
 
@@ -113,7 +113,7 @@ impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
     fn to_atom(&self) -> Option<Atom> {
         let mut fn_builder = FunctionBuilder::new(self.name?);
         if let Some(ref args) = self.args {
-            for arg in args.into_args() {
+            for arg in args.ref_into_args() {
                 fn_builder = fn_builder.add_arg(arg.as_view());
             }
         }
@@ -126,7 +126,7 @@ impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
-            for arg in args.into_args() {
+            for arg in args.ref_into_args() {
                 fn_builder = fn_builder.add_arg(arg.as_view());
             }
         }
@@ -139,7 +139,7 @@ impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
-            for arg in args.into_args() {
+            for arg in args.ref_into_args() {
                 fn_builder = fn_builder.add_arg(arg.as_view());
             }
         }
@@ -161,7 +161,7 @@ impl<Arg: IntoArgs> Display for ExpandedCoefficent<Arg> {
         }
         write!(f, "(")?;
         if let Some(ref args) = self.args {
-            let args: Vec<String> = args.into_args().map(|s| s.to_string()).collect();
+            let args: Vec<String> = args.ref_into_args().map(|s| s.to_string()).collect();
             write!(f, "{},", args.join(","))?
         }
         write!(f, "{})", self.index)?;
@@ -194,7 +194,7 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
     fn to_atom(&self) -> Option<Atom> {
         let mut fn_builder = FunctionBuilder::new(self.name?);
         if let Some(ref args) = self.args {
-            for arg in args.into_args() {
+            for arg in args.ref_into_args() {
                 fn_builder = fn_builder.add_arg(arg.as_view());
             }
         }
@@ -206,7 +206,7 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
-            for arg in args.into_args() {
+            for arg in args.ref_into_args() {
                 fn_builder = fn_builder.add_arg(arg.as_view());
             }
         }
@@ -219,7 +219,7 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
-            for arg in args.into_args() {
+            for arg in args.ref_into_args() {
                 fn_builder = fn_builder.add_arg(arg.as_view());
             }
         }
@@ -244,7 +244,7 @@ impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<A
             }
         }
         let s = NamedStructure::from_iter(structure, f_id, Some(args));
-        Ok(s.to_dense_expanded_labels()?)
+        s.to_dense_expanded_labels()
     }
 }
 
@@ -438,7 +438,7 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
 impl<S: TensorStructure> IteratableTensor for ParamTensor<S> {
     type Data<'a> =  AtomView<'a> where Self: 'a;
 
-    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'a>)> {
+    fn iter_expanded(&self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'_>)> {
         match self {
             ParamTensor::Composite(x) => {
                 IteratorEnum::A(x.iter_expanded().map(|(i, x)| (i, x.as_view())))
@@ -449,7 +449,7 @@ impl<S: TensorStructure> IteratableTensor for ParamTensor<S> {
         }
     }
 
-    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)> {
+    fn iter_flat(&self) -> impl Iterator<Item = (FlatIndex, Self::Data<'_>)> {
         match self {
             ParamTensor::Composite(x) => {
                 IteratorEnum::A(x.iter_flat().map(|(i, x)| (i, x.as_view())))
@@ -629,10 +629,7 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure> ParamOrConcrete
     }
 
     pub fn is_parametric(&self) -> bool {
-        match self {
-            ParamOrConcrete::Param(_) => true,
-            _ => false,
-        }
+        matches!(self, ParamOrConcrete::Param(_))
     }
 
     pub fn try_into_parametric(self) -> Result<ParamTensor<S>, Self> {
@@ -681,8 +678,8 @@ where
 
     fn scalar(self) -> Option<Self::Scalar> {
         match self {
-            ParamOrConcrete::Concrete(x) => x.scalar().map(|x| ConcreteOrParam::Concrete(x)),
-            ParamOrConcrete::Param(x) => x.scalar().map(|x| ConcreteOrParam::Param(x)),
+            ParamOrConcrete::Concrete(x) => x.scalar().map(ConcreteOrParam::Concrete),
+            ParamOrConcrete::Param(x) => x.scalar().map(ConcreteOrParam::Param),
         }
     }
 }
@@ -755,7 +752,7 @@ where
 {
     type Data<'a> = AtomViewOrConcrete<'a, C::Data<'a>> where Self:'a ;
 
-    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)> {
+    fn iter_flat(&self) -> impl Iterator<Item = (FlatIndex, Self::Data<'_>)> {
         match self {
             ParamOrConcrete::Concrete(x) => IteratorEnum::A(
                 x.iter_flat()
@@ -767,7 +764,7 @@ where
         }
     }
 
-    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'a>)> {
+    fn iter_expanded(&self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'_>)> {
         match self {
             ParamOrConcrete::Concrete(x) => IteratorEnum::A(
                 x.iter_expanded()
@@ -970,7 +967,7 @@ impl<T: Clone, S: TensorStructure> IteratableTensor for RealOrComplexTensor<T, S
         where
             Self: 'a;
 
-    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'a>)> {
+    fn iter_expanded(&self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'_>)> {
         match self {
             RealOrComplexTensor::Real(x) => IteratorEnum::A(
                 x.iter_expanded()
@@ -983,7 +980,7 @@ impl<T: Clone, S: TensorStructure> IteratableTensor for RealOrComplexTensor<T, S
         }
     }
 
-    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)> {
+    fn iter_flat(&self) -> impl Iterator<Item = (FlatIndex, Self::Data<'_>)> {
         match self {
             RealOrComplexTensor::Real(x) => {
                 IteratorEnum::A(x.iter_flat().map(|(i, x)| (i, RealOrComplexRef::Real(x))))
@@ -1026,18 +1023,16 @@ impl<'a> TryFrom<FunView<'a>> for MixedTensor {
 
 impl<T: Clone, S: TensorStructure + Clone> PartialEq<MixedTensor<T, S>> for MixedTensor<T, S> {
     fn eq(&self, other: &MixedTensor<T, S>) -> bool {
-        match (self, other) {
+        matches!(
+            (self, other),
             (
                 MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
                 MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
-            ) => true,
-            (
+            ) | (
                 MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
                 MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
-            ) => true,
-            (MixedTensor::Param(_), MixedTensor::Param(_)) => true,
-            _ => false,
-        }
+            ) | (MixedTensor::Param(_), MixedTensor::Param(_))
+        )
     }
 }
 
@@ -1045,43 +1040,43 @@ impl<T: Clone, S: TensorStructure + Clone> Eq for MixedTensor<T, S> {}
 
 impl<T: Clone, S: TensorStructure + Clone> PartialOrd<MixedTensor<T, S>> for MixedTensor<T, S> {
     fn partial_cmp(&self, other: &MixedTensor<T, S>) -> Option<std::cmp::Ordering> {
-        match (self, other) {
-            (
-                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
-                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
-            ) => Some(std::cmp::Ordering::Equal),
-            (
-                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
-                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
-            ) => Some(std::cmp::Ordering::Less),
-            (MixedTensor::Concrete(RealOrComplexTensor::Real(_)), MixedTensor::Param(_)) => {
-                Some(std::cmp::Ordering::Less)
-            }
-            (
-                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
-                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
-            ) => Some(std::cmp::Ordering::Greater),
-            (
-                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
-                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
-            ) => Some(std::cmp::Ordering::Equal),
-            (MixedTensor::Concrete(RealOrComplexTensor::Complex(_)), MixedTensor::Param(_)) => {
-                Some(std::cmp::Ordering::Less)
-            }
-            (MixedTensor::Param(_), MixedTensor::Concrete(RealOrComplexTensor::Real(_))) => {
-                Some(std::cmp::Ordering::Greater)
-            }
-            (MixedTensor::Param(_), MixedTensor::Concrete(RealOrComplexTensor::Complex(_))) => {
-                Some(std::cmp::Ordering::Greater)
-            }
-            (MixedTensor::Param(_), MixedTensor::Param(_)) => Some(std::cmp::Ordering::Equal),
-        }
+        Some(self.cmp(other))
     }
 }
 
 impl<T: Clone, S: TensorStructure + Clone> Ord for MixedTensor<T, S> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+    fn cmp(&self, other: &MixedTensor<T, S>) -> std::cmp::Ordering {
+        match (self, other) {
+            (
+                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
+                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
+            ) => std::cmp::Ordering::Equal,
+            (
+                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
+            ) => std::cmp::Ordering::Less,
+            (MixedTensor::Concrete(RealOrComplexTensor::Real(_)), MixedTensor::Param(_)) => {
+                std::cmp::Ordering::Less
+            }
+            (
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
+                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
+            ) => std::cmp::Ordering::Greater,
+            (
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
+            ) => std::cmp::Ordering::Equal,
+            (MixedTensor::Concrete(RealOrComplexTensor::Complex(_)), MixedTensor::Param(_)) => {
+                std::cmp::Ordering::Less
+            }
+            (MixedTensor::Param(_), MixedTensor::Concrete(RealOrComplexTensor::Real(_))) => {
+                std::cmp::Ordering::Greater
+            }
+            (MixedTensor::Param(_), MixedTensor::Concrete(RealOrComplexTensor::Complex(_))) => {
+                std::cmp::Ordering::Greater
+            }
+            (MixedTensor::Param(_), MixedTensor::Param(_)) => std::cmp::Ordering::Equal,
+        }
     }
 }
 
@@ -1541,7 +1536,7 @@ impl<T, S: TensorStructure> HasStructure for EvalTreeTensor<T, S> {
         &mut self.structure
     }
 
-    fn structure<'a>(&'a self) -> &'a Self::Structure {
+    fn structure(&self) -> &Self::Structure {
         &self.structure
     }
 
@@ -1711,7 +1706,7 @@ impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
     type Scalar = ExpressionEvaluator<T>;
     type Structure = S;
 
-    fn structure<'a>(&'a self) -> &'a Self::Structure {
+    fn structure(&self) -> &Self::Structure {
         &self.structure
     }
 
@@ -1761,7 +1756,7 @@ impl<S: TensorStructure> HasStructure for CompiledEvalTensor<S> {
     type Scalar = CompiledEvaluator;
     type Structure = S;
 
-    fn structure<'a>(&'a self) -> &'a Self::Structure {
+    fn structure(&self) -> &Self::Structure {
         &self.structure
     }
 

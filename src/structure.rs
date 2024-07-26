@@ -430,13 +430,14 @@ pub const ABSTRACTIND: &str = "aind";
 // }
 
 pub trait BaseRepName: RepName<Dual: RepName> + Default {
-    fn selfless_name() -> String;
+    const NAME: &'static str;
+    // fn selfless_name() -> String;
     fn selfless_base() -> Self::Base;
     fn selfless_pair() -> DualPair<Self::Base>
     where
         Self::Base: BaseRepName<Dual: BaseRepName>;
     fn selfless_symbol() -> Symbol {
-        State::get_symbol(Self::selfless_name())
+        State::get_symbol(Self::NAME)
     }
     fn selfless_dual() -> Self::Dual;
     fn new_dimed_rep_selfless<D: Into<Dimension>>(dim: D) -> Representation<Self>
@@ -646,22 +647,22 @@ impl<T: RepName> Display for Dual<T> {
 // }
 
 duplicate! {
-   [isnotselfdual isneg constname varname varnamedual;
-    [Lorentz] [_i > 0] ["lor"] [LorentzUp] [LorentzDown];
-    [SpinFundamental] [false] ["spin"] [SpinFund] [SpinAntiFund];
-    [ColorFundamental] [false] ["cof"] [ColorFund] [ColorAntiFund];
-    [ColorSextet] [false] ["cos"] [ColorSextet] [ColorAntiSextet]]
+   [isnotselfdual isneg constname varname varnamedual dualconstname;
+    [Lorentz] [_i > 0] ["lor"] [LorentzUp] [LorentzDown] ["lord"];
+    [SpinFundamental] [false] ["spin"] [SpinFund] [SpinAntiFund] ["spina"];
+    [ColorFundamental] [false] ["cof"] [ColorFund] [ColorAntiFund] ["coaf"];
+    [ColorSextet] [false] ["cos"] [ColorSextet] [ColorAntiSextet]["coas"]]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,Default)]
 
     pub struct isnotselfdual {}
     #[allow(unused_variables)]
     impl BaseRepName for isnotselfdual {
+        const NAME: &'static str = constname;
 
 
-
-        fn selfless_name() -> String {
-            constname.to_string()
-        }
+        // fn selfless_name() -> String {
+        //     constname.to_string()
+        // }
 
         fn selfless_base() -> Self::Base {
             Self::default()
@@ -737,9 +738,11 @@ duplicate! {
 
     impl BaseRepName for Dual<isnotselfdual>{
 
-        fn selfless_name() -> String {
-            format!("dual{}",constname)
-        }
+        const NAME: &'static str = dualconstname;
+
+        // fn selfless_name() -> String {
+        //     format!("dual{}",constname)
+        // }
         fn selfless_base() -> Self::Base {
             isnotselfdual::default()
         }
@@ -849,11 +852,11 @@ duplicate! {
     pub struct isselfdual {}
 
     impl BaseRepName for isselfdual {
+        const NAME: &'static str = constname;
 
-
-        fn selfless_name() -> String {
-            constname.to_string()
-        }
+        // fn selfless_name() -> String {
+        //     constname.to_string()
+        // }
 
         fn selfless_base() -> Self::Base {
             Self::default()

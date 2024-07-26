@@ -271,7 +271,7 @@ trait ReprRepl {
 
 impl<R: BaseRepName> ReprRepl for R {
     fn rep_string(rep_args: ReplacementArgs) -> String {
-        rep_string(&R::selfless_name(), rep_args)
+        rep_string(R::NAME, rep_args)
     }
 }
 

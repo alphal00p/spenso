@@ -589,9 +589,9 @@ pub struct Dual<T> {
     inner: T,
 }
 
-impl<T: RepName> Display for Dual<T> {
+impl<T: RepName<Dual: RepName>> Display for Dual<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "dual{}", self.inner)
+        write!(f, "{}", self.inner.dual())
     }
 }
 
@@ -648,7 +648,7 @@ impl<T: RepName> Display for Dual<T> {
 
 duplicate! {
    [isnotselfdual isneg constname varname varnamedual dualconstname;
-    [Lorentz] [_i > 0] ["lor"] [LorentzUp] [LorentzDown] ["lord"];
+    [Lorentz] [_i > 0] ["loru"] [LorentzUp] [LorentzDown] ["lord"];
     [SpinFundamental] [false] ["spin"] [SpinFund] [SpinAntiFund] ["spina"];
     [ColorFundamental] [false] ["cof"] [ColorFund] [ColorAntiFund] ["coaf"];
     [ColorSextet] [false] ["cos"] [ColorSextet] [ColorAntiSextet]["coas"]]

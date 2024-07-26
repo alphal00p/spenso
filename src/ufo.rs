@@ -105,7 +105,7 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool, up: bool) -> Atom {
+pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool, down: bool) -> Atom {
     let replacements = [
         (
             "Identity(i_,j_)",
@@ -122,12 +122,12 @@ pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool, up: bool) -> Atom {
             named_tensor(
                 "id".into(),
                 &[
-                    &if up {
+                    &if down {
                         Dual::<Lorentz>::rep_string(wrapped_to_four("mu_", wrapped))
                     } else {
                         Lorentz::rep_string(wrapped_to_four("mu_", wrapped))
                     },
-                    &if up {
+                    &if down {
                         Lorentz::rep_string(wrapped_to_four("nu_", wrapped))
                     } else {
                         Dual::<Lorentz>::rep_string(wrapped_to_four("nu_", wrapped))
@@ -140,7 +140,7 @@ pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool, up: bool) -> Atom {
             named_tensor(
                 "γ".into(),
                 &[
-                    &if up {
+                    &if down {
                         Dual::<Lorentz>::rep_string(wrapped_to_four("mu_", wrapped))
                     } else {
                         Lorentz::rep_string(wrapped_to_four("mu_", wrapped))
@@ -185,12 +185,12 @@ pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool, up: bool) -> Atom {
             named_tensor(
                 "σ".into(),
                 &[
-                    &if up {
+                    &if down {
                         Dual::<Lorentz>::rep_string(wrapped_to_four("mu_", wrapped))
                     } else {
                         Lorentz::rep_string(wrapped_to_four("mu_", wrapped))
                     },
-                    &if up {
+                    &if down {
                         Dual::<Lorentz>::rep_string(wrapped_to_four("nu_", wrapped))
                     } else {
                         Lorentz::rep_string(wrapped_to_four("nu_", wrapped))
@@ -215,12 +215,12 @@ pub fn preprocess_ufo_spin(atom: Atom, wrapped: bool, up: bool) -> Atom {
             named_tensor(
                 "Metric".into(),
                 &[
-                    &if up {
+                    &if down {
                         Dual::<Lorentz>::rep_string(wrapped_to_four("mu_", wrapped))
                     } else {
                         Lorentz::rep_string(wrapped_to_four("mu_", wrapped))
                     },
-                    &if up {
+                    &if down {
                         Dual::<Lorentz>::rep_string(wrapped_to_four("nu_", wrapped))
                     } else {
                         Lorentz::rep_string(wrapped_to_four("nu_", wrapped))
@@ -446,8 +446,8 @@ pub fn preprocess_ufo_color_wrapped(atom: Atom) -> Atom {
 }
 
 #[cfg(feature = "shadowing")]
-pub fn preprocess_ufo_spin_wrapped(atom: Atom, up: bool) -> Atom {
-    preprocess_ufo_spin(atom, true, up)
+pub fn preprocess_ufo_spin_wrapped(atom: Atom, down: bool) -> Atom {
+    preprocess_ufo_spin(atom, true, down)
 }
 
 #[allow(dead_code)]

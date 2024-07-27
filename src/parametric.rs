@@ -8,11 +8,12 @@ use anyhow::{Error, Result};
 
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     CastStructure, Complex, ContractableWith, ContractionError, ExpandedIndex, FallibleAddAssign,
     FallibleMul, FallibleSubAssign, FlatIndex, HasName, IntoArgs, IntoSymbol, IsZero,
-    IteratableTensor, NamedStructure, PhysicalSlots, RefZero, ShadowMapping, Shadowable,
+    IteratableTensor, NamedStructure, PhysicalSlots, RefZero, ShadowMapping, Shadowable, Tensor,
     TensorStructure, ToSymbolic, TrySmallestUpgrade,
 };
 use symbolica::{
@@ -248,21 +249,44 @@ impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<A
     }
 }
 
-#[derive(Clone, Debug, EnumTryAsInner)]
-#[derive_err(Debug)]
-pub enum ParamTensor<S: TensorStructure> {
-    Param(DataTensor<Atom, S>),
-    // Concrete(DataTensor<T, S>),
-    Composite(DataTensor<Atom, S>),
+#[derive(Clone, Debug)]
+pub struct ParamTensor<S: TensorStructure> {
+    pub tensor: DataTensor<Atom, S>,
+    pub param_type: ParamOrComposite,
+    // Param(DataTensor<Atom, S>),
+    // // Concrete(DataTensor<T, S>),
+    // Composite(DataTensor<Atom, S>),
+}
+
+impl<S: TensorStructure> ParamTensor<S> {
+    pub fn param(tensor: DataTensor<Atom, S>) -> Self {
+        ParamTensor {
+            tensor,
+            param_type: ParamOrComposite::Param,
+        }
+    }
+
+    pub fn composite(tensor: DataTensor<Atom, S>) -> Self {
+        ParamTensor {
+            tensor,
+            param_type: ParamOrComposite::Composite,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Copy, PartialEq, Eq)]
+pub enum ParamOrComposite {
+    Param,
+    Composite,
 }
 
 impl<S: TensorStructure, O: From<S> + TensorStructure> CastStructure<ParamTensor<O>>
     for ParamTensor<S>
 {
     fn cast(self) -> ParamTensor<O> {
-        match self {
-            ParamTensor::Param(d) => ParamTensor::Param(d.cast()),
-            ParamTensor::Composite(d) => ParamTensor::Composite(d.cast()),
+        ParamTensor {
+            tensor: self.tensor.cast(),
+            param_type: self.param_type,
         }
     }
 }
@@ -335,9 +359,9 @@ where
     ) where
         T: TensorCoefficient,
     {
-        match self {
-            ParamTensor::Param(_) => {}
-            ParamTensor::Composite(c) => match c {
+        match self.param_type {
+            ParamOrComposite::Param => {}
+            ParamOrComposite::Composite => match &self.tensor {
                 DataTensor::Dense(d) => {
                     for (i, a) in d.flat_iter() {
                         let labeled_coef = index_to_atom(self.structure(), i);
@@ -384,25 +408,37 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
         conditions: Option<&Condition<WildcardAndRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self {
-        match self {
-            ParamTensor::Composite(c) => ParamTensor::Composite(
-                c.map_data_ref(|a| a.replace_all(pattern, rhs, conditions, settings)),
-            ),
-            ParamTensor::Param(c) => ParamTensor::Composite(
-                c.map_data_ref(|a| a.replace_all(pattern, rhs, conditions, settings)),
-            ),
+        let tensor = self
+            .tensor
+            .map_data_ref(|a| a.replace_all(pattern, rhs, conditions, settings));
+        ParamTensor {
+            tensor,
+            param_type: ParamOrComposite::Composite,
         }
     }
 
     pub fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
-        match self {
-            ParamTensor::Composite(c) => {
-                ParamTensor::Composite(c.map_data_ref(|a| a.replace_all_multiple(replacements)))
-            }
-            ParamTensor::Param(c) => {
-                ParamTensor::Composite(c.map_data_ref(|a| a.replace_all_multiple(replacements)))
-            }
+        let tensor = self
+            .tensor
+            .map_data_ref(|a| a.replace_all_multiple(replacements));
+        ParamTensor {
+            tensor,
+            param_type: ParamOrComposite::Composite,
         }
+    }
+
+    fn replace_repeat_multiple_atom(expr: &mut Atom, reps: &[Replacement<'_>]) {
+        let atom = expr.replace_all_multiple(reps);
+        if atom != *expr {
+            *expr = atom;
+            Self::replace_repeat_multiple_atom(expr, reps)
+        }
+    }
+
+    pub fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]) {
+        self.tensor
+            .map_data_mut(|a| Self::replace_repeat_multiple_atom(a, replacements));
+        self.param_type = ParamOrComposite::Composite;
     }
     pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
         &'a self,
@@ -410,10 +446,7 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
     ) -> Result<EvalTreeTensor<T, S>, String> {
-        match self {
-            ParamTensor::Composite(x) => x.eval_tree(coeff_map, fn_map, params),
-            ParamTensor::Param(x) => x.eval_tree(coeff_map, fn_map, params),
-        }
+        self.tensor.eval_tree(coeff_map, fn_map, params)
     }
 
     pub fn evaluate<'a, 'b, T, F: Fn(&Rational) -> T + Copy, U>(
@@ -428,10 +461,7 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
 
         'a: 'b,
     {
-        match self {
-            ParamTensor::Composite(x) => x.evaluate(coeff_map, const_map),
-            ParamTensor::Param(x) => x.evaluate(coeff_map, const_map),
-        }
+        self.tensor.evaluate(coeff_map, const_map)
     }
 }
 
@@ -439,23 +469,11 @@ impl<S: TensorStructure> IteratableTensor for ParamTensor<S> {
     type Data<'a> =  AtomView<'a> where Self: 'a;
 
     fn iter_expanded(&self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'_>)> {
-        match self {
-            ParamTensor::Composite(x) => {
-                IteratorEnum::A(x.iter_expanded().map(|(i, x)| (i, x.as_view())))
-            }
-            ParamTensor::Param(x) => {
-                IteratorEnum::B(x.iter_expanded().map(|(i, x)| (i, x.as_view())))
-            }
-        }
+        self.tensor.iter_expanded().map(|(i, x)| (i, x.as_view()))
     }
 
     fn iter_flat(&self) -> impl Iterator<Item = (FlatIndex, Self::Data<'_>)> {
-        match self {
-            ParamTensor::Composite(x) => {
-                IteratorEnum::A(x.iter_flat().map(|(i, x)| (i, x.as_view())))
-            }
-            ParamTensor::Param(x) => IteratorEnum::B(x.iter_flat().map(|(i, x)| (i, x.as_view()))),
-        }
+        self.tensor.iter_flat().map(|(i, x)| (i, x.as_view()))
     }
 }
 
@@ -464,10 +482,7 @@ where
     S: TensorStructure,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ParamTensor::Composite(x) => write!(f, "{}", x),
-            ParamTensor::Param(x) => write!(f, "{}", x),
-        }
+        write!(f, "{}", self.tensor)
     }
 }
 
@@ -479,22 +494,16 @@ where
     type Name = S::Name;
 
     fn args(&self) -> Option<Self::Args> {
-        match self {
-            ParamTensor::Composite(x) => x.args(),
-            ParamTensor::Param(x) => x.args(),
-        }
+        self.tensor.args()
     }
 
     fn name(&self) -> Option<Self::Name> {
-        match self {
-            ParamTensor::Composite(x) => x.name(),
-            ParamTensor::Param(x) => x.name(),
-        }
+        self.tensor.name()
     }
 
     fn set_name(&mut self, name: Self::Name) {
-        if let ParamTensor::Composite(x) = self {
-            x.set_name(name);
+        if let ParamOrComposite::Composite = self.param_type {
+            self.tensor.set_name(name);
         } // never set the name of a param tensor, it is always set by construction
     }
 }
@@ -1263,24 +1272,15 @@ where
     type Structure = S;
     type Scalar = Atom;
     fn structure(&self) -> &Self::Structure {
-        match self {
-            ParamTensor::Param(t) => t.structure(),
-            ParamTensor::Composite(t) => t.structure(),
-        }
+        self.tensor.structure()
     }
 
     fn mut_structure(&mut self) -> &mut Self::Structure {
-        match self {
-            ParamTensor::Param(t) => t.mut_structure(),
-            ParamTensor::Composite(t) => t.mut_structure(),
-        }
+        self.tensor.mut_structure()
     }
 
     fn scalar(self) -> Option<Self::Scalar> {
-        match self {
-            ParamTensor::Param(t) => t.scalar(),
-            ParamTensor::Composite(t) => t.scalar(),
-        }
+        self.tensor.scalar()
     }
 }
 
@@ -1289,10 +1289,7 @@ where
     S: TensorStructure + TracksCount,
 {
     fn contractions_num(&self) -> usize {
-        match self {
-            ParamTensor::Param(t) => t.contractions_num(),
-            ParamTensor::Composite(t) => t.contractions_num(),
-        }
+        self.tensor.contractions_num()
     }
 }
 
@@ -1339,11 +1336,11 @@ where
     I: TensorStructure + Clone,
 {
     pub fn param(other: DataTensor<Atom, I>) -> Self {
-        MixedTensor::Param(ParamTensor::Param(other))
+        MixedTensor::Param(ParamTensor::param(other))
     }
 
     pub fn composite(other: DataTensor<Atom, I>) -> Self {
-        MixedTensor::Param(ParamTensor::Composite(other))
+        MixedTensor::Param(ParamTensor::composite(other))
     }
 }
 
@@ -1353,19 +1350,15 @@ where
 {
     type LCM = ParamTensor<I>;
     fn contract(&self, other: &ParamTensor<I>) -> Result<Self::LCM, ContractionError> {
-        match (self, other) {
-            (ParamTensor::<I>::Param(s), ParamTensor::<I>::Param(o)) => {
-                Ok(ParamTensor::<I>::Composite(s.contract(o)?))
+        let s = self.tensor.contract(&other.tensor)?;
+
+        match (self.param_type, other.param_type) {
+            (ParamOrComposite::Param, ParamOrComposite::Param) => Ok(ParamTensor::param(s)),
+            (ParamOrComposite::Composite, ParamOrComposite::Composite) => {
+                Ok(ParamTensor::composite(s))
             }
-            (ParamTensor::<I>::Param(s), ParamTensor::<I>::Composite(o)) => {
-                Ok(ParamTensor::<I>::Composite(s.contract(o)?))
-            }
-            (ParamTensor::<I>::Composite(s), ParamTensor::<I>::Param(o)) => {
-                Ok(ParamTensor::<I>::Composite(s.contract(o)?))
-            }
-            (ParamTensor::<I>::Composite(s), ParamTensor::<I>::Composite(o)) => {
-                Ok(ParamTensor::<I>::Composite(s.contract(o)?))
-            }
+            (ParamOrComposite::Param, ParamOrComposite::Composite) => Ok(ParamTensor::composite(s)),
+            (ParamOrComposite::Composite, ParamOrComposite::Param) => Ok(ParamTensor::composite(s)),
         }
     }
 }
@@ -1392,20 +1385,20 @@ where
             (ParamOrConcrete::Param(s), ParamOrConcrete::Param(o)) => {
                 Ok(ParamOrConcrete::Param(s.contract(o)?))
             }
-            (ParamOrConcrete::Param(s), ParamOrConcrete::Concrete(o)) => match s {
-                ParamTensor::Composite(s) => Ok(ParamOrConcrete::Param(ParamTensor::Composite(
-                    s.contract(o)?,
+            (ParamOrConcrete::Param(s), ParamOrConcrete::Concrete(o)) => match s.param_type {
+                ParamOrComposite::Composite => Ok(ParamOrConcrete::Param(ParamTensor::composite(
+                    s.tensor.contract(o)?,
                 ))),
-                ParamTensor::Param(s) => Ok(ParamOrConcrete::Param(ParamTensor::Composite(
-                    s.contract(o)?,
+                ParamOrComposite::Param => Ok(ParamOrConcrete::Param(ParamTensor::composite(
+                    s.tensor.contract(o)?,
                 ))),
             },
-            (ParamOrConcrete::Concrete(s), ParamOrConcrete::Param(o)) => match o {
-                ParamTensor::Composite(o) => Ok(ParamOrConcrete::Param(ParamTensor::Composite(
-                    s.contract(o)?,
+            (ParamOrConcrete::Concrete(s), ParamOrConcrete::Param(o)) => match o.param_type {
+                ParamOrComposite::Composite => Ok(ParamOrConcrete::Param(ParamTensor::composite(
+                    s.contract(&o.tensor)?,
                 ))),
-                ParamTensor::Param(o) => Ok(ParamOrConcrete::Param(ParamTensor::Composite(
-                    s.contract(o)?,
+                ParamOrComposite::Param => Ok(ParamOrConcrete::Param(ParamTensor::composite(
+                    s.contract(&o.tensor)?,
                 ))),
             },
             (ParamOrConcrete::Concrete(s), ParamOrConcrete::Concrete(o)) => {
@@ -1487,32 +1480,32 @@ where
             (ParamOrConcrete::Param(s), ParamOrConcrete::Param(o)) => {
                 Ok(ParamOrConcrete::Param(s.contract(o)?))
             }
-            (ParamOrConcrete::Param(s), ParamOrConcrete::Concrete(o)) => match (s, o) {
-                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Ok(
-                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+            (ParamOrConcrete::Param(s), ParamOrConcrete::Concrete(o)) => match (s.param_type, o) {
+                (ParamOrComposite::Composite, RealOrComplexTensor::Real(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::composite(s.tensor.contract(o)?)),
                 ),
-                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Ok(
-                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                (ParamOrComposite::Composite, RealOrComplexTensor::Complex(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::composite(s.tensor.contract(o)?)),
                 ),
-                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Ok(
-                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                (ParamOrComposite::Param, RealOrComplexTensor::Real(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::composite(s.tensor.contract(o)?)),
                 ),
-                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Ok(
-                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                (ParamOrComposite::Param, RealOrComplexTensor::Complex(o)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::composite(s.tensor.contract(o)?)),
                 ),
             },
-            (ParamOrConcrete::Concrete(s), ParamOrConcrete::Param(o)) => match (o, s) {
-                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Ok(
-                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+            (ParamOrConcrete::Concrete(s), ParamOrConcrete::Param(o)) => match (o.param_type, s) {
+                (ParamOrComposite::Composite, RealOrComplexTensor::Real(s)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::composite(o.tensor.contract(s)?)),
                 ),
-                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Ok(
-                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                (ParamOrComposite::Composite, RealOrComplexTensor::Complex(s)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::composite(o.tensor.contract(s)?)),
                 ),
-                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Ok(
-                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                (ParamOrComposite::Param, RealOrComplexTensor::Real(s)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::composite(o.tensor.contract(s)?)),
                 ),
-                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Ok(
-                    ParamOrConcrete::Param(ParamTensor::Composite(s.contract(o)?)),
+                (ParamOrComposite::Param, RealOrComplexTensor::Complex(s)) => Ok(
+                    ParamOrConcrete::Param(ParamTensor::composite(o.tensor.contract(s)?)),
                 ),
             },
             (ParamOrConcrete::Concrete(s), ParamOrConcrete::Concrete(o)) => {

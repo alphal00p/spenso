@@ -3484,7 +3484,7 @@ pub trait ShadowMapping<Const>: Shadowable {
         // Some(ParamTensor::Param(self.shadow(index_to_atom)?.into()))
         self.append_map(fn_map, index_to_atom.clone());
         self.shadow(index_to_atom)
-            .map(|x| ParamTensor::Param(x.into()))
+            .map(|x| ParamTensor::param(x.into()))
     }
 
     fn append_map<'a, T>(

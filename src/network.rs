@@ -768,10 +768,10 @@ where
         for n in self.graph.nodes.values() {
             tensors.push(match n {
                 MixedTensor::Concrete(RealOrComplexTensor::Real(t)) => {
-                    ParamTensor::Composite(t.try_upgrade::<Atom>().unwrap().into_owned())
+                    ParamTensor::composite(t.try_upgrade::<Atom>().unwrap().into_owned())
                 }
                 MixedTensor::Concrete(RealOrComplexTensor::Complex(t)) => {
-                    ParamTensor::Composite(t.try_upgrade::<Atom>().unwrap().into_owned())
+                    ParamTensor::composite(t.try_upgrade::<Atom>().unwrap().into_owned())
                 }
                 MixedTensor::Param(t) => t.clone(),
             });
@@ -1415,7 +1415,7 @@ where
         for (i, n) in &self.graph.nodes {
             let node = n.expanded_shadow().unwrap();
 
-            let nid = nodes.insert(ParamTensor::<T::Structure>::Param(node.clone().into()));
+            let nid = nodes.insert(ParamTensor::<T::Structure>::param(node.clone().into()));
 
             for (_, a) in node.flat_iter() {
                 params.insert(a.clone());
@@ -1496,7 +1496,7 @@ where
         for (i, n) in &self.graph.nodes {
             let node = n.expanded_shadow().unwrap();
 
-            let nid = nodes.insert(ParamTensor::<T::Structure>::Param(node.clone().into()));
+            let nid = nodes.insert(ParamTensor::<T::Structure>::param(node.clone().into()));
 
             let mut first = true;
             for e in self.graph.edges_incident(i) {

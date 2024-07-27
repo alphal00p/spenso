@@ -239,20 +239,8 @@ where
 impl<S: TensorStructure + Clone> FallibleAdd<ParamTensor<S>> for ParamTensor<S> {
     type Output = ParamTensor<S>;
     fn add_fallible(&self, rhs: &ParamTensor<S>) -> Option<Self::Output> {
-        match (self, rhs) {
-            (ParamTensor::Composite(s), ParamTensor::Composite(r)) => {
-                Some(ParamTensor::Composite(s.add_fallible(r)?))
-            }
-            (ParamTensor::Composite(s), ParamTensor::Param(r)) => {
-                Some(ParamTensor::Composite(s.add_fallible(r)?))
-            }
-            (ParamTensor::Param(s), ParamTensor::Composite(r)) => {
-                Some(ParamTensor::Composite(s.add_fallible(r)?))
-            }
-            (ParamTensor::Param(s), ParamTensor::Param(r)) => {
-                Some(ParamTensor::Composite(s.add_fallible(r)?))
-            }
-        }
+        let t = self.tensor.add_fallible(&rhs.tensor)?;
+        Some(ParamTensor::composite(t))
     }
 }
 
@@ -287,33 +275,21 @@ where
             (MixedTensor::Param(a), MixedTensor::Param(b)) => {
                 Some(MixedTensor::Param(a.add_fallible(b)?))
             }
-            (MixedTensor::Param(s), MixedTensor::Concrete(o)) => match (s, o) {
-                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
-                ),
-                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
-                ),
-                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Some(MixedTensor::Param(
-                    ParamTensor::Composite(s.add_fallible(o)?),
+            (MixedTensor::Param(s), MixedTensor::Concrete(o)) => match o {
+                RealOrComplexTensor::Real(o) => Some(MixedTensor::Param(ParamTensor::composite(
+                    s.tensor.add_fallible(o)?,
+                ))),
+                RealOrComplexTensor::Complex(o) => Some(MixedTensor::Param(
+                    ParamTensor::composite(s.tensor.add_fallible(o)?),
                 )),
-                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
-                ),
             },
-            (MixedTensor::Concrete(s), MixedTensor::Param(o)) => match (o, s) {
-                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
-                ),
-                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
-                ),
-                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Some(MixedTensor::Param(
-                    ParamTensor::Composite(s.add_fallible(o)?),
+            (MixedTensor::Concrete(s), MixedTensor::Param(o)) => match s {
+                RealOrComplexTensor::Real(s) => Some(MixedTensor::Param(ParamTensor::composite(
+                    s.add_fallible(&o.tensor)?,
+                ))),
+                RealOrComplexTensor::Complex(s) => Some(MixedTensor::Param(
+                    ParamTensor::composite(s.add_fallible(&o.tensor)?),
                 )),
-                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.add_fallible(o)?)),
-                ),
             },
             (MixedTensor::Concrete(s), MixedTensor::Concrete(o)) => {
                 Some(MixedTensor::Concrete(s.add_fallible(o)?))
@@ -516,20 +492,8 @@ where
 impl<S: TensorStructure + Clone> FallibleSub<ParamTensor<S>> for ParamTensor<S> {
     type Output = ParamTensor<S>;
     fn sub_fallible(&self, rhs: &ParamTensor<S>) -> Option<Self::Output> {
-        match (self, rhs) {
-            (ParamTensor::Composite(s), ParamTensor::Composite(r)) => {
-                Some(ParamTensor::Composite(s.sub_fallible(r)?))
-            }
-            (ParamTensor::Composite(s), ParamTensor::Param(r)) => {
-                Some(ParamTensor::Composite(s.sub_fallible(r)?))
-            }
-            (ParamTensor::Param(s), ParamTensor::Composite(r)) => {
-                Some(ParamTensor::Composite(s.sub_fallible(r)?))
-            }
-            (ParamTensor::Param(s), ParamTensor::Param(r)) => {
-                Some(ParamTensor::Composite(s.sub_fallible(r)?))
-            }
-        }
+        let t = self.tensor.sub_fallible(&rhs.tensor)?;
+        Some(ParamTensor::composite(t))
     }
 }
 
@@ -566,33 +530,21 @@ where
             (MixedTensor::Param(a), MixedTensor::Param(b)) => {
                 Some(MixedTensor::Param(a.sub_fallible(b)?))
             }
-            (MixedTensor::Param(s), MixedTensor::Concrete(o)) => match (s, o) {
-                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
-                ),
-                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
-                ),
-                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Some(MixedTensor::Param(
-                    ParamTensor::Composite(s.sub_fallible(o)?),
+            (MixedTensor::Param(s), MixedTensor::Concrete(o)) => match o {
+                RealOrComplexTensor::Real(o) => Some(MixedTensor::Param(ParamTensor::composite(
+                    s.tensor.sub_fallible(o)?,
+                ))),
+                RealOrComplexTensor::Complex(o) => Some(MixedTensor::Param(
+                    ParamTensor::composite(s.tensor.sub_fallible(o)?),
                 )),
-                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
-                ),
             },
-            (MixedTensor::Concrete(s), MixedTensor::Param(o)) => match (o, s) {
-                (ParamTensor::Composite(s), RealOrComplexTensor::Real(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
-                ),
-                (ParamTensor::Composite(s), RealOrComplexTensor::Complex(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
-                ),
-                (ParamTensor::Param(s), RealOrComplexTensor::Real(o)) => Some(MixedTensor::Param(
-                    ParamTensor::Composite(s.sub_fallible(o)?),
+            (MixedTensor::Concrete(s), MixedTensor::Param(o)) => match s {
+                RealOrComplexTensor::Real(s) => Some(MixedTensor::Param(ParamTensor::composite(
+                    s.sub_fallible(&o.tensor)?,
+                ))),
+                RealOrComplexTensor::Complex(s) => Some(MixedTensor::Param(
+                    ParamTensor::composite(s.sub_fallible(&o.tensor)?),
                 )),
-                (ParamTensor::Param(s), RealOrComplexTensor::Complex(o)) => Some(
-                    MixedTensor::Param(ParamTensor::Composite(s.sub_fallible(o)?)),
-                ),
             },
             (MixedTensor::Concrete(s), MixedTensor::Concrete(o)) => {
                 Some(MixedTensor::Concrete(s.sub_fallible(o)?))
@@ -662,12 +614,9 @@ where
     type Output = MixedTensor<T, I>;
     fn scalar_mul(&self, rhs: &T) -> Option<Self::Output> {
         match self {
-            MixedTensor::Param(ParamTensor::Composite(a)) => Some(MixedTensor::Param(
-                ParamTensor::Composite(a.scalar_mul(rhs)?),
-            )),
-            MixedTensor::Param(ParamTensor::Param(a)) => Some(MixedTensor::Param(
-                ParamTensor::Composite(a.scalar_mul(rhs)?),
-            )),
+            MixedTensor::Param(a) => Some(MixedTensor::Param(ParamTensor::composite(
+                a.tensor.scalar_mul(rhs)?,
+            ))),
             MixedTensor::Concrete(RealOrComplexTensor::Real(a)) => Some(MixedTensor::Concrete(
                 RealOrComplexTensor::Real(a.scalar_mul(rhs)?),
             )),
@@ -689,12 +638,9 @@ where
     type Output = MixedTensor<T, I>;
     fn scalar_mul(&self, rhs: &Complex<T>) -> Option<Self::Output> {
         match self {
-            MixedTensor::Param(ParamTensor::Composite(a)) => Some(MixedTensor::Param(
-                ParamTensor::Composite(a.scalar_mul(rhs)?),
-            )),
-            MixedTensor::Param(ParamTensor::Param(a)) => Some(MixedTensor::Param(
-                ParamTensor::Composite(a.scalar_mul(rhs)?),
-            )),
+            MixedTensor::Param(a) => Some(MixedTensor::Param(ParamTensor::composite(
+                a.tensor.scalar_mul(rhs)?,
+            ))),
             MixedTensor::Concrete(RealOrComplexTensor::Real(a)) => Some(MixedTensor::Concrete(
                 RealOrComplexTensor::Complex(a.scalar_mul(rhs)?),
             )),
@@ -712,10 +658,7 @@ where
 {
     type Output = ParamTensor<I>;
     fn scalar_mul(&self, rhs: &Atom) -> Option<Self::Output> {
-        match self {
-            ParamTensor::Composite(a) => Some(ParamTensor::Composite(a.scalar_mul(rhs)?)),
-            ParamTensor::Param(a) => Some(ParamTensor::Composite(a.scalar_mul(rhs)?)),
-        }
+        Some(ParamTensor::composite(self.tensor.scalar_mul(rhs)?))
     }
 }
 
@@ -732,10 +675,10 @@ where
             MixedTensor::Param(a) => Some(MixedTensor::Param(a.scalar_mul(rhs)?)),
 
             MixedTensor::Concrete(RealOrComplexTensor::Real(a)) => Some(MixedTensor::Param(
-                ParamTensor::Composite(a.scalar_mul(rhs)?),
+                ParamTensor::composite(a.scalar_mul(rhs)?),
             )),
             MixedTensor::Concrete(RealOrComplexTensor::Complex(a)) => Some(MixedTensor::Param(
-                ParamTensor::Composite(a.scalar_mul(rhs)?),
+                ParamTensor::composite(a.scalar_mul(rhs)?),
             )),
         }
     }

@@ -111,7 +111,7 @@ impl SymbolicTensor {
     pub fn to_mixed(self) -> MixedTensor {
         self.to_named().to_shell().to_explicit().unwrap()
     }
-
+    #[allow(clippy::type_complexity)]
     pub fn to_network(
         &self,
     ) -> Result<

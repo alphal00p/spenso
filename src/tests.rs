@@ -5,16 +5,16 @@ use crate::{
 use crate::{
     AbstractFiber, BaseRepName, ColorAdjoint, ColorFundamental, CoreExpandedFiberIterator,
     CoreFlatFiberIterator, DualSlotTo, Euclidean, ExpandedIndex, Fiber, FiberClass, FlatIndex,
-    HasStructure, IteratesAlongFibers, Lorentz, NoArgs, NodeId, PhysReps, PhysicalSlots,
-    RealOrComplex, RealOrComplexTensor, RepName, TensorStructure,
+    HasStructure, IteratesAlongFibers, Lorentz, NoArgs, PhysReps, PhysicalSlots,
+    RealOrComplexTensor, RepName, TensorStructure,
 };
 #[cfg(feature = "shadowing")]
 use ahash::{HashMap, HashMapExt};
 
-use flexi_logger::Logger;
+// use flexi_logger::Logger;
 use indexmap::{IndexMap, IndexSet};
-use log::{debug, error, info};
-use slotmap::SlotMap;
+use log::info;
+// use slotmap::SlotMap;
 
 use crate::Complex;
 use insta::{assert_ron_snapshot, assert_snapshot, assert_yaml_snapshot};
@@ -243,8 +243,7 @@ fn fiber_from_structure() {
 
     let fiberclass_iter: Vec<ExpandedIndex> = fiberclass
         .iter()
-        .map(|i| i.map(|f| a.expanded_index(f).unwrap()).collect::<Vec<_>>())
-        .flatten()
+        .flat_map(|i| i.map(|f| a.expanded_index(f).unwrap()).collect::<Vec<_>>())
         .collect();
 
     assert_eq!(fiberclass_iter.len(), a.size().unwrap());
@@ -437,10 +436,10 @@ fn sparse_diag_dense_contract() {
 
     let a = SparseTensor::from_data(
         &[
-            (vec![0, 0].into(), 1),
-            (vec![1, 1].into(), 2),
-            (vec![2, 2].into(), 3),
-            (vec![3, 3].into(), 4),
+            (vec![0, 0], 1),
+            (vec![1, 1], 2),
+            (vec![2, 2], 3),
+            (vec![3, 3], 4),
         ],
         structura.clone(),
     )
@@ -1327,14 +1326,14 @@ fn complex() {
 fn symbolic_contract() {
     use crate::Bispinor;
 
-    let structura: NamedStructure<&str, ()> = NamedStructure::from(NamedStructure::from_iter(
+    let structura: NamedStructure<&str, ()> = NamedStructure::from_iter(
         [
             PhysReps::new_slot(Euclidean {}.into(), 2, 1),
             PhysReps::new_slot(Euclidean {}.into(), 3, 4),
         ],
         "T",
         None,
-    ));
+    );
 
     let structurb: NamedStructure<&str, ()> = NamedStructure::from_iter(
         [
@@ -1447,20 +1446,6 @@ fn get_license_key() {
 
     LicenseManager::new();
 
-    let a = Lorentz {}.dual().dual().dual().dual().new_dimed_rep(4);
-
-    let b: PhysicalSlots = Lorentz {}.dual().new_slot(4, 4).into();
-    let aslot: PhysicalSlots = a.new_slot(4).into();
-    let c = a.new_slot(4);
-    let domatchdisp = aslot.matches(&PhysicalSlots::from(c));
-    let domatch = b.matches(&aslot);
-
-    let mu: PhysicalSlots = a.new_slot(34).into();
-    let nu: PhysicalSlots = Lorentz {}.dual().dual().new_slot(5, 45645).into();
-    let matches = mu.matches(&nu);
-    let e = Euclidean {}.dual();
-
-    // let adual = a; //.dual();
     // let b = Euclidean {}.new(4.into());
 
     // let matches = a.matches(&adual);

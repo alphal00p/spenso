@@ -9,7 +9,7 @@ use crate::{IsAbstractSlot, IteratableTensor, TensorStructure, TrySmallestUpgrad
 
 use super::{
     DataIterator, DataTensor, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSubAssign,
-    HasStructure, NumTensor, Representation, SetTensorData, SparseTensor, StructureContract,
+    HasStructure, NumTensor, SetTensorData, SparseTensor, StructureContract,
 };
 
 use std::iter::Iterator;
@@ -480,7 +480,7 @@ where
                 for (k, ((a, _), (b, _))) in (fiber_a.by_ref()).zip(fiber_b).enumerate() {
                     if fiber_representation.is_neg(k) {
                         result_data[result_index]
-                            .sub_assign_fallible(&(a.mul_fallible(&b).unwrap()));
+                            .sub_assign_fallible(&(a.mul_fallible(b).unwrap()));
                     } else {
                         result_data[result_index].add_assign_fallible(&a.mul_fallible(b).unwrap());
                     }
@@ -637,7 +637,7 @@ where
                 structure: final_structure,
             };
 
-            return Ok(result);
+            Ok(result)
         } else {
             Err(ContractionError::EmptySparse)
         }
@@ -822,7 +822,7 @@ where
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = SparseTensor<U::Out, I>;
-
+    #[allow(clippy::comparison_chain)]
     fn single_contract(
         &self,
         other: &SparseTensor<T, I>,
@@ -910,7 +910,7 @@ where
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = SparseTensor<U::Out, I>;
-
+    #[allow(clippy::comparison_chain)]
     fn multi_contract(&self, other: &SparseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         // println!("multi contract sparse sparse");
         let (permutation, self_matches, other_matches) =

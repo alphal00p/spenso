@@ -11,7 +11,7 @@ use symbolica::{
 
 use crate::{
     CastStructure, CompiledEvalTensor, DualSlotTo, EvalTensor, EvalTreeTensor, FallibleMul,
-    GetTensorData, HasTensorData, IntoSymbol, IsAbstractSlot, TensorStructure,
+    GetTensorData, HasTensorData, IntoSymbol, TensorStructure,
 };
 
 #[cfg(feature = "shadowing")]
@@ -36,7 +36,7 @@ use symbolica::{
 #[cfg(feature = "shadowing")]
 use ahash::AHashMap;
 
-use super::{Contract, HasName, HasStructure, Slot, TracksCount};
+use super::{Contract, HasName, HasStructure, TracksCount};
 use smartstring::alias::String;
 use std::fmt::{Debug, Display};
 
@@ -705,9 +705,7 @@ where
         self.graph
             .nodes
             .drain()
-            .into_iter()
-            .map(|(_, n)| n.try_into_parametric()) //filters out all parametric tensors
-            .flatten()
+            .flat_map(|(_, n)| n.try_into_parametric()) //filters out all parametric tensors
             .collect()
     }
 
@@ -770,10 +768,10 @@ where
         for n in self.graph.nodes.values() {
             tensors.push(match n {
                 MixedTensor::Concrete(RealOrComplexTensor::Real(t)) => {
-                    ParamTensor::Composite(t.try_upgrade::<Atom>().unwrap().into_owned())
+                    ParamTensor::composite(t.try_upgrade::<Atom>().unwrap().into_owned())
                 }
                 MixedTensor::Concrete(RealOrComplexTensor::Complex(t)) => {
-                    ParamTensor::Composite(t.try_upgrade::<Atom>().unwrap().into_owned())
+                    ParamTensor::composite(t.try_upgrade::<Atom>().unwrap().into_owned())
                 }
                 MixedTensor::Param(t) => t.clone(),
             });
@@ -861,31 +859,28 @@ impl<T, S: TensorStructure> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(
-        self,
-        param_len: usize,
-    ) -> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<T>>
+    pub fn linearize(self) -> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<T>>
     where
         T: Clone + Default + PartialEq,
         S: Clone,
     {
-        let new_graph = self.graph.map_nodes(|(_, x)| x.linearize(param_len));
+        let new_graph = self.graph.map_nodes(|(_, x)| x.linearize());
         TensorNetwork {
             graph: new_graph,
-            scalar: self.scalar.map(|a| a.linearize(param_len)),
+            scalar: self.scalar.map(|a| a.linearize()),
         }
     }
 
-    pub fn common_subexpression_elimination(&mut self)
+    pub fn common_subexpression_elimination(&mut self, max_subexpr_len: usize)
     where
         T: Debug + Hash + Eq + Ord + Clone + Default,
         S: Clone,
     {
         self.graph
-            .map_nodes_mut(|(_, x)| x.common_subexpression_elimination());
-        self.scalar
-            .as_mut()
-            .map(|a| a.common_subexpression_elimination());
+            .map_nodes_mut(|(_, x)| x.common_subexpression_elimination(max_subexpr_len));
+        if let Some(a) = self.scalar.as_mut() {
+            a.common_subexpression_elimination(max_subexpr_len)
+        }
     }
 
     pub fn common_pair_elimination(&mut self)
@@ -895,7 +890,9 @@ impl<T, S: TensorStructure> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
     {
         self.graph
             .map_nodes_mut(|(_, x)| x.common_pair_elimination());
-        self.scalar.as_mut().map(|a| a.common_pair_elimination());
+        if let Some(a) = self.scalar.as_mut() {
+            a.common_pair_elimination()
+        }
     }
 
     pub fn evaluate(&mut self, params: &[T]) -> TensorNetwork<DataTensor<T, S>, T>
@@ -925,18 +922,20 @@ impl<T, S: TensorStructure> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
         T: NumericalFloatLike,
         S: Clone,
     {
+        // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
         let new_graph = self.graph.map_nodes_ref(|(n, x)| {
+            let function_name = format!("{filename}_{}", n.data().as_ffi());
             let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
             let library_name = format!("{library_name}_{}.so", n.data().as_ffi());
-            x.compile(&filename, &library_name)
+            x.compile(&filename, &function_name, &library_name)
         });
-
+        let function_name = format!("{filename}_scalar");
         let filename = format!("{filename}_scalar.cpp");
         let library_name = format!("{library_name}_scalar.so");
         TensorNetwork {
             graph: new_graph,
             scalar: self.scalar.as_ref().map(|a| {
-                a.export_cpp(&filename)
+                a.export_cpp(&filename, &function_name, true)
                     .unwrap()
                     .compile(&library_name, CompileOptions::default())
                     .unwrap()
@@ -963,6 +962,69 @@ impl<T, S: TensorStructure> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<
                 a.evaluate_multiple(params, &mut out);
                 let [o] = out;
                 o
+            }),
+        }
+    }
+    pub fn compile_asm(
+        &self,
+        filename: &str,
+        library_name: &str,
+    ) -> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator>
+    where
+        T: NumericalFloatLike,
+        S: Clone,
+    {
+        // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
+        let new_graph = self.graph.map_nodes_ref(|(n, x)| {
+            let function_name = format!("{filename}_{}", n.data().as_ffi());
+            let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
+            let library_name = format!("{library_name}_{}.so", n.data().as_ffi());
+            x.compile(&filename, &function_name, &library_name)
+        });
+        let function_name = format!("{filename}_scalar");
+        let filename = format!("{filename}_scalar.cpp");
+        let library_name = format!("{library_name}_scalar.so");
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self.scalar.as_ref().map(|a| {
+                a.export_asm(&filename, &function_name, true)
+                    .unwrap()
+                    .compile(&library_name, CompileOptions::default())
+                    .unwrap()
+                    .load()
+                    .unwrap()
+            }),
+        }
+    }
+
+    pub fn compile(
+        &self,
+        filename: &str,
+        library_name: &str,
+    ) -> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator>
+    where
+        T: NumericalFloatLike,
+        S: Clone,
+    {
+        // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
+        let new_graph = self.graph.map_nodes_ref(|(n, x)| {
+            let function_name = format!("{filename}_{}", n.data().as_ffi());
+            let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
+            let library_name = format!("{library_name}_{}.so", n.data().as_ffi());
+            x.compile(&filename, &function_name, &library_name)
+        });
+        let function_name = format!("{filename}_scalar");
+        let filename = format!("{filename}_scalar.cpp");
+        let library_name = format!("{library_name}_scalar.so");
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self.scalar.as_ref().map(|a| {
+                a.export_cpp(&filename, &function_name, true)
+                    .unwrap()
+                    .compile(&library_name, CompileOptions::default())
+                    .unwrap()
+                    .load()
+                    .unwrap()
             }),
         }
     }
@@ -1015,7 +1077,9 @@ impl<S: TensorStructure> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator>
 impl<S: Clone + TensorStructure> TensorNetwork<EvalTreeTensor<Rational, S>, EvalTree<Rational>> {
     pub fn horner_scheme(&mut self) {
         self.graph.map_nodes_mut(|(_, x)| x.horner_scheme());
-        self.scalar.as_mut().map(|a| a.horner_scheme());
+        if let Some(a) = self.scalar.as_mut() {
+            a.horner_scheme()
+        }
     }
 }
 
@@ -1166,7 +1230,7 @@ impl<T, S> TensorNetwork<T, S>
 where
     T: Clone + TensorStructure,
 {
-    pub fn result_tensor_ref<'a>(&'a self) -> Result<&'a T, TensorNetworkError> {
+    pub fn result_tensor_ref(&self) -> Result<&T, TensorNetworkError> {
         match self.graph.nodes.len() {
             0 => Err(TensorNetworkError::NoNodes),
             1 => Ok(self.graph.nodes.iter().next().unwrap().1),
@@ -1191,7 +1255,7 @@ impl<T: HasName<Name: IntoSymbol> + TensorStructure<Slot: Display>, S> TensorNet
                 "\n {} [label=\"{}\"] ",
                 i.data().as_ffi(),
                 n.name()
-                    .map(|x| x.into_symbol().to_string())
+                    .map(|x| x.ref_into_symbol().to_string())
                     .unwrap_or("".into())
             ));
         }
@@ -1366,15 +1430,21 @@ impl<'a> TryFrom<AddView<'a>>
                 Ok(t) => {
                     tensors.push(t);
                 }
-                Err(TensorNetworkError::NoNodes) => {}
+                Err(TensorNetworkError::NoNodes) => {
+                    // println!("{:?}", net);
+                }
                 Err(e) => return Err(e),
             }
         }
-        let mut net: TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom> =
-            TensorNetwork::from(vec![tensors
-                .into_iter()
-                .reduce(|a, b| a.add_fallible(&b).unwrap())
-                .unwrap()]);
+
+        let mut net: TensorNetwork<_, _> = if let Some(sum) = tensors
+            .into_iter()
+            .reduce(|a, b| a.add_fallible(&b).unwrap())
+        {
+            TensorNetwork::from(vec![sum])
+        } else {
+            TensorNetwork::new()
+        };
         net.scalar = Some(scalars);
         Ok(net)
     }
@@ -1405,7 +1475,7 @@ where
         for (i, n) in &self.graph.nodes {
             let node = n.expanded_shadow().unwrap();
 
-            let nid = nodes.insert(ParamTensor::<T::Structure>::Param(node.clone().into()));
+            let nid = nodes.insert(ParamTensor::<T::Structure>::param(node.clone().into()));
 
             for (_, a) in node.flat_iter() {
                 params.insert(a.clone());
@@ -1486,7 +1556,7 @@ where
         for (i, n) in &self.graph.nodes {
             let node = n.expanded_shadow().unwrap();
 
-            let nid = nodes.insert(ParamTensor::<T::Structure>::Param(node.clone().into()));
+            let nid = nodes.insert(ParamTensor::<T::Structure>::param(node.clone().into()));
 
             let mut first = true;
             for e in self.graph.edges_incident(i) {
@@ -1651,7 +1721,7 @@ where
 
         self.initial.namesym("L0");
         if self.initial.graph.nodes.len() > 1 {
-            let mut new_level = (*self).initial.shadow();
+            let mut new_level = self.initial.shadow();
             new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
             self.levels.push(new_level);
 
@@ -1676,5 +1746,74 @@ where
         for l in &self.levels {
             l.append_map(fn_map);
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use constcat::concat;
+
+    use super::*;
+    use crate::SymbolicTensor;
+
+    #[test]
+    fn pslash_parse() {
+        let expr = "Q(15,aind(loru(4,75257)))    *γ(aind(loru(4,75257),bis(4,1),bis(4,18)))";
+        let atom = Atom::parse(expr).unwrap();
+
+        let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
+
+        let network = sym_tensor.to_network().unwrap();
+
+        println!("{}", network.dot());
+    }
+
+    #[test]
+    fn three_loop_photon_parse() {
+        let expr=concat!("-64/729*ee^6*G^4",
+        "*(MT*id(aind(bis(4,1),bis(4,18)))  )",//+Q(15,aind(loru(4,75257)))    *γ(aind(loru(4,75257),bis(4,1),bis(4,18))))",
+        "*(MT*id(aind(bis(4,3),bis(4,0)))   )",//+Q(6,aind(loru(4,17)))        *γ(aind(loru(4,17),bis(4,3),bis(4,0))))",
+        "*(MT*id(aind(bis(4,5),bis(4,2)))   )",//+Q(7,aind(loru(4,35)))        *γ(aind(loru(4,35),bis(4,5),bis(4,2))))",
+        "*(MT*id(aind(bis(4,7),bis(4,4)))   )",//+Q(8,aind(loru(4,89)))        *γ(aind(loru(4,89),bis(4,7),bis(4,4))))",
+        "*(MT*id(aind(bis(4,9),bis(4,6)))   )",//+Q(9,aind(loru(4,233)))       *γ(aind(loru(4,233),bis(4,9),bis(4,6))))",
+        "*(MT*id(aind(bis(4,11),bis(4,8)))  )",//+Q(10,aind(loru(4,611)))      *γ(aind(loru(4,611),bis(4,11),bis(4,8))))",
+        "*(MT*id(aind(bis(4,13),bis(4,10))) )",//+Q(11,aind(loru(4,1601)))    *γ(aind(loru(4,1601),bis(4,13),bis(4,10))))",
+        "*(MT*id(aind(bis(4,15),bis(4,12))) )",//+Q(12,aind(loru(4,4193)))    *γ(aind(loru(4,4193),bis(4,15),bis(4,12))))",
+        "*(MT*id(aind(bis(4,17),bis(4,14))) )",//+Q(13,aind(loru(4,10979)))   *γ(aind(loru(4,10979),bis(4,17),bis(4,14))))",
+        "*(MT*id(aind(bis(4,19),bis(4,16))) )",//+Q(14,aind(loru(4,28745)))   *γ(aind(loru(4,28745),bis(4,19),bis(4,16))))",
+        "*Metric(aind(loru(4,13),loru(4,8)))",
+        "*Metric(aind(loru(4,15),loru(4,10)))",
+        "*T(aind(coad(8,9),cof(3,8),coaf(3,7)))",
+        "*T(aind(coad(8,14),cof(3,13),coaf(3,12)))",
+        "*T(aind(coad(8,21),cof(3,20),coaf(3,19)))",
+        "*T(aind(coad(8,26),cof(3,25),coaf(3,24)))",
+        "*id(aind(coaf(3,3),cof(3,4)))*id(aind(coaf(3,4),cof(3,24)))*id(aind(coaf(3,5),cof(3,6)))*id(aind(coaf(3,6),cof(3,3)))",
+        "*id(aind(coaf(3,8),cof(3,5)))*id(aind(coaf(3,10),cof(3,11)))*id(aind(coaf(3,11),cof(3,7)))*id(aind(coaf(3,13),cof(3,10)))",
+        "*id(aind(coaf(3,15),cof(3,16)))*id(aind(coaf(3,16),cof(3,12)))*id(aind(coaf(3,17),cof(3,18)))*id(aind(coaf(3,18),cof(3,15)))",
+        "*id(aind(coaf(3,20),cof(3,17)))*id(aind(coaf(3,22),cof(3,23)))*id(aind(coaf(3,23),cof(3,19)))*id(aind(coaf(3,25),cof(3,22)))*id(aind(coad(8,21),coad(8,9)))*id(aind(coad(8,26),coad(8,14)))",
+        "*γ(aind(lord(4,6),bis(4,1),bis(4,0)))",
+        "*γ(aind(lord(4,7),bis(4,3),bis(4,2)))",
+        "*γ(aind(lord(4,8),bis(4,5),bis(4,4)))",
+        "*γ(aind(lord(4,9),bis(4,7),bis(4,6)))",
+        "*γ(aind(lord(4,10),bis(4,9),bis(4,8)))",
+        "*γ(aind(lord(4,11),bis(4,11),bis(4,10)))",
+        "*γ(aind(lord(4,12),bis(4,13),bis(4,12)))",
+        "*γ(aind(lord(4,13),bis(4,15),bis(4,14)))",
+        "*γ(aind(lord(4,14),bis(4,17),bis(4,16)))",
+        "*γ(aind(lord(4,15),bis(4,19),bis(4,18)))",
+        "*ϵ(0,aind(loru(4,6)))",
+        "*ϵ(1,aind(loru(4,7)))",
+        "*ϵbar(2,aind(loru(4,14)))",
+        "*ϵbar(3,aind(loru(4,12)))",
+        "*ϵbar(4,aind(loru(4,11)))",
+        "*ϵbar(5,aind(loru(4,9)))");
+
+        let atom = Atom::parse(expr).unwrap();
+
+        let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
+
+        let network = sym_tensor.to_network().unwrap();
+
+        println!("{}", network.dot());
     }
 }

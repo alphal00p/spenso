@@ -61,7 +61,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let mut const_atom_map: AHashMap<Symbol, Complex<f64>> = const_string_map
         .into_iter()
-        .map(|(k, v)| (State::get_symbol(&k), v))
+        .map(|(k, v)| (State::get_symbol(k), v))
         .collect();
 
     const_atom_map.insert(State::I, Complex::i());
@@ -93,13 +93,13 @@ fn criterion_benchmark(c: &mut Criterion) {
         let pat = &name_re + i * &name_im;
         replacements.push((Atom::new_var(*k).into_pattern(), pat.into_pattern()));
 
-        fn_map.add_constant(name_re.into(), Rational::from_f64(v.re));
-        fn_map.add_constant(name_im.into(), Rational::from_f64(v.im));
+        fn_map.add_constant(name_re.into(), Rational::from(v.re));
+        fn_map.add_constant(name_im.into(), Rational::from(v.im));
     }
 
     let reps: Vec<Replacement> = replacements
         .iter()
-        .map(|(pat, rhs)| Replacement::new(&pat, &rhs))
+        .map(|(pat, rhs)| Replacement::new(pat, rhs))
         .collect();
 
     let mut params = data_atom_map.0.clone();
@@ -156,7 +156,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     postcontracted_eval_tree_tensor.horner_scheme();
     // postcontracted_eval_tree_tensor.common_pair_elimination();
-    postcontracted_eval_tree_tensor.common_subexpression_elimination();
+    postcontracted_eval_tree_tensor.common_subexpression_elimination(10);
 
     let mut mapped_postcontracted_eval_tree_tensor =
         postcontracted_eval_tree_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
@@ -182,7 +182,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .unwrap();
 
     eval_tree_leveled_tensor.horner_scheme();
-    eval_tree_leveled_tensor.common_subexpression_elimination();
+    // eval_tree_leveled_tensor.common_subexpression_elimination(10);
     // evaluator_tensor.common_pair_elimination();
 
     let mut eval_tree_leveled_tensor_depth2 = levels2
@@ -191,7 +191,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .unwrap();
 
     eval_tree_leveled_tensor_depth2.horner_scheme();
-    eval_tree_leveled_tensor_depth2.common_subexpression_elimination();
+    // eval_tree_leveled_tensor_depth2.common_subexpression_elimination(10);
     // eval_tree_leveled_tensor_depth2.common_pair_elimination();
     // evaluator_tensor.evaluate(&values);
     let mut neet = eval_tree_leveled_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
@@ -244,7 +244,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .eval_tree(|a| a.clone(), &fn_map, &params)
         .unwrap();
     precontracted_eval_tree_net.horner_scheme();
-    precontracted_eval_tree_net.common_subexpression_elimination();
+    // precontracted_eval_tree_net.common_subexpression_elimination(10);
     // precontracted_eval_tree_net.common_pair_elimination();
 
     let mut mapped_precontracted_eval_tree_net =
@@ -261,8 +261,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    let mut mapped_precontracted_eval_net =
-        mapped_precontracted_eval_tree_net.linearize(params.len());
+    let mut mapped_precontracted_eval_net = mapped_precontracted_eval_tree_net.linearize();
 
     group.bench_function("3LPhysical precontracted new lin", |b| {
         b.iter(|| {
@@ -275,11 +274,22 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    let mut neeet = precontracted_eval_tree_net
-        .map_coeff::<f64, _>(&|r| r.into())
-        .compile("nested_evaluation", "libneval");
+    let mut neeet = mapped_precontracted_eval_net.compile("nested_evaluation", "libneval");
 
     group.bench_function("3LPhysical precontracted new compiled", |b| {
+        b.iter(|| {
+            let out = neeet.evaluate_complex(&values);
+            assert!(truth.relative_eq(
+                &(out.result_tensor().unwrap().scalar().unwrap()).into(),
+                0.1,
+                1.
+            ),);
+        })
+    });
+
+    let mut neeet = mapped_precontracted_eval_net.compile_asm("nested_evaluation_asm", "libneval");
+
+    group.bench_function("3LPhysical precontracted new compiled asm", |b| {
         b.iter(|| {
             let out = neeet.evaluate_complex(&values);
             assert!(truth.relative_eq(

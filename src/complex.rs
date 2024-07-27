@@ -93,7 +93,7 @@ impl RefZero for Rational {
 impl From<f64> for Complex<Rational> {
     fn from(re: f64) -> Self {
         Complex {
-            re: Rational::from_f64(re),
+            re: Rational::from(re),
             im: Rational::zero(),
         }
     }
@@ -103,8 +103,8 @@ impl From<f64> for Complex<Rational> {
 impl From<Complex<f64>> for Complex<Rational> {
     fn from(value: Complex<f64>) -> Self {
         Complex {
-            re: Rational::from_f64(value.re),
-            im: Rational::from_f64(value.im),
+            re: Rational::from(value.re),
+            im: Rational::from(value.im),
         }
     }
 }
@@ -402,7 +402,7 @@ where
     }
 }
 
-impl<'a, 'b, T> Add<T> for &'b Complex<T>
+impl<'b, T> Add<T> for &'b Complex<T>
 where
     T: RefAdd<T, Output = T> + Clone,
 {

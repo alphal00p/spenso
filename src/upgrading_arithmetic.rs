@@ -814,7 +814,7 @@ where
     U: TryFromUpgrade<T>,
 {
     fn try_into_upgrade(&self) -> Option<U> {
-        U::try_from_upgrade(&self)
+        U::try_from_upgrade(self)
     }
 }
 
@@ -984,7 +984,7 @@ impl TrySmallestUpgrade<Atom> for f64 {
     type LCM = Atom;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
-        let natrat = symbolica::domains::rational::Rational::from_f64(*self);
+        let natrat = symbolica::domains::rational::Rational::from(*self);
         let symrat = Atom::new_num(symbolica::coefficient::Coefficient::from(natrat));
 
         Some(Cow::Owned(symrat))
@@ -996,7 +996,7 @@ impl TrySmallestUpgrade<Atom> for i32 {
     type LCM = Atom;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
-        let symnum = Atom::new_num(*self as i32);
+        let symnum = Atom::new_num(*self);
 
         Some(Cow::Owned(symnum))
     }

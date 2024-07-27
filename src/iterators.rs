@@ -13,9 +13,8 @@ use std::{
 };
 
 use crate::{
-    ContractableWith, DataTensor, Euclidean, ExpandedIndex, FallibleAddAssign, FallibleSubAssign,
-    FlatIndex, HasStructure, IsAbstractSlot, PhysReps, RefZero, RepName, TensorStructure,
-    VecStructure,
+    ContractableWith, DataTensor, ExpandedIndex, FallibleAddAssign, FallibleSubAssign, FlatIndex,
+    HasStructure, IsAbstractSlot, PhysReps, RefZero, RepName, TensorStructure, VecStructure,
 };
 
 use super::{ConcreteIndex, DenseTensor, Dimension, GetTensorData, Representation, SparseTensor};
@@ -43,11 +42,7 @@ pub enum FiberClassIndex {
 
 impl AbstractFiberIndex for FiberClassIndex {
     fn is_free(&self) -> bool {
-        if let FiberClassIndex::Free = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, FiberClassIndex::Free)
     }
 }
 
@@ -59,11 +54,7 @@ pub enum FiberIndex {
 
 impl AbstractFiberIndex for FiberIndex {
     fn is_free(&self) -> bool {
-        if let FiberIndex::Free = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, FiberIndex::Free)
     }
 }
 
@@ -1166,55 +1157,85 @@ impl<R: RepName> Iterator for CoreExpandedFiberIterator<R> {
     }
 }
 
-#[test]
-fn test() {
-    use std::collections::HashSet;
+#[cfg(test)]
+mod iteratortests {
+    use super::*;
+    use crate::structure::Euclidean;
 
-    let rep = Euclidean {};
+    #[test]
+    fn test() {
+        use std::collections::HashSet;
 
-    let structura = VecStructure::new(vec![
-        rep.new_slot(0, 4).into(),
-        rep.new_slot(4, 4).into(),
-        rep.new_slot(1, 5).into(),
-        rep.new_slot(3, 7).into(),
-        rep.new_slot(2, 8).into(),
-    ]);
+        let rep = Euclidean {};
 
-    let structurb = VecStructure::new(vec![
-        rep.new_slot(2, 8).into(),
-        rep.new_slot(3, 7).into(),
-        rep.new_slot(0, 4).into(),
-        rep.new_slot(1, 5).into(),
-        rep.new_slot(5, 4).into(),
-    ]);
+        let structura = VecStructure::new(vec![
+            rep.new_slot(0, 4).into(),
+            rep.new_slot(4, 4).into(),
+            rep.new_slot(1, 5).into(),
+            rep.new_slot(3, 7).into(),
+            rep.new_slot(2, 8).into(),
+        ]);
 
-    let fibera = Fiber::from(
-        [true, false, true, true, true].as_slice().into(),
-        &structura,
-    );
-    let fiberb = Fiber::from(
-        [true, true, true, true, false].as_slice().into(),
-        &structurb,
-    );
+        let structurb = VecStructure::new(vec![
+            rep.new_slot(2, 8).into(),
+            rep.new_slot(3, 7).into(),
+            rep.new_slot(0, 4).into(),
+            rep.new_slot(1, 5).into(),
+            rep.new_slot(5, 4).into(),
+        ]);
 
-    let (permuta, _filter_a, _filter_b) = structura.match_indices(&structurb).unwrap();
-    let itera = CoreExpandedFiberIterator::new_permuted(&fibera, false, permuta.clone());
-    let iterb = CoreExpandedFiberIterator::new(&fiberb, false);
+        let fibera = Fiber::from(
+            [true, false, true, true, true].as_slice().into(),
+            &structura,
+        );
+        let fiberb = Fiber::from(
+            [true, true, true, true, false].as_slice().into(),
+            &structurb,
+        );
 
-    let collecteda: Vec<HashSet<usize>> = itera
-        .map(|f| HashSet::from_iter(structura.expanded_index(f).unwrap().into_iter()))
-        .collect::<Vec<_>>();
-    let collectedb: Vec<HashSet<usize>> = iterb
-        .map(|f| HashSet::from_iter(structurb.expanded_index(f).unwrap().into_iter()))
-        .collect::<Vec<_>>();
+        let (permuta, _filter_a, _filter_b) = structura.match_indices(&structurb).unwrap();
+        let itera = CoreExpandedFiberIterator::new_permuted(&fibera, false, permuta.clone());
+        let iterb = CoreExpandedFiberIterator::new(&fiberb, false);
 
-    for (k, i) in collecteda.iter().zip(collectedb.iter()).enumerate() {
-        assert_eq!(i.0, i.1, "Error at index {}", k)
+        let collecteda: Vec<HashSet<usize>> = itera
+            .map(|f| HashSet::from_iter(structura.expanded_index(f).unwrap()))
+            .collect::<Vec<_>>();
+        let collectedb: Vec<HashSet<usize>> = iterb
+            .map(|f| HashSet::from_iter(structurb.expanded_index(f).unwrap()))
+            .collect::<Vec<_>>();
+
+        for (k, i) in collecteda.iter().zip(collectedb.iter()).enumerate() {
+            assert_eq!(i.0, i.1, "Error at index {}", k)
+        }
+
+        // assert_eq!(collecteda, collectedb);
+
+        // assert_ron_snapshot!(collecteda);
     }
 
-    // assert_eq!(collecteda, collectedb);
+    #[test]
+    fn mutiter() {
+        let rep = Euclidean {};
+        let structa = VecStructure::new(vec![
+            rep.new_slot(0, 4).into(),
+            rep.new_slot(4, 4).into(),
+            rep.new_slot(1, 5).into(),
+            rep.new_slot(3, 7).into(),
+            rep.new_slot(2, 8).into(),
+        ]);
 
-    // assert_ron_snapshot!(collecteda);
+        let mut a: DenseTensor<f64> = DenseTensor::zero(structa);
+
+        let fiber = a.fiber_mut([1u8, 0, 1, 1, 1].as_slice().into());
+
+        let mut iter = fiber.iter();
+
+        while let Some(i) = iter.next() {
+            *i.0 = 1.0;
+        }
+
+        println!("{:?}", a);
+    }
 }
 
 impl<R: RepName> IteratesAlongFibers<R> for CoreExpandedFiberIterator<R> {
@@ -1578,30 +1599,6 @@ impl<'a, S: TensorStructure, I: IteratesAlongPermutedFibers<<S::Slot as IsAbstra
     }
 }
 
-#[test]
-fn mutiter() {
-    let rep = Euclidean {};
-    let structa = VecStructure::new(vec![
-        rep.new_slot(0, 4).into(),
-        rep.new_slot(4, 4).into(),
-        rep.new_slot(1, 5).into(),
-        rep.new_slot(3, 7).into(),
-        rep.new_slot(2, 8).into(),
-    ]);
-
-    let mut a: DenseTensor<f64> = DenseTensor::zero(structa);
-
-    let fiber = a.fiber_mut([1u8, 0, 1, 1, 1].as_slice().into());
-
-    let mut iter = fiber.iter();
-
-    while let Some(i) = iter.next() {
-        *i.0 = 1.0;
-    }
-
-    println!("{:?}", a);
-}
-
 pub struct FiberClassIterator<
     'b,
     S: TensorStructure,
@@ -1904,11 +1901,11 @@ impl<T, S: TensorStructure> IteratableTensor for SparseTensor<T, S> {
         FiberMut::from(fiber_data, self).into()
     }
 
-    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'a>)> {
+    fn iter_expanded(&self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'_>)> {
         SparseTensorIterator::new(self)
     }
 
-    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)> {
+    fn iter_flat(&self) -> impl Iterator<Item = (FlatIndex, Self::Data<'_>)> {
         SparseTensorLinearIterator::new(self)
     }
 }
@@ -2187,9 +2184,9 @@ pub trait IteratableTensor: HasStructure + Sized {
     where
         Self: 'a;
 
-    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'a>)>;
+    fn iter_expanded(&self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'_>)>;
 
-    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)>;
+    fn iter_flat(&self) -> impl Iterator<Item = (FlatIndex, Self::Data<'_>)>;
 
     fn fiber<'a>(&'a self, fiber_data: FiberData<'_>) -> Fiber<'a, Self> {
         Fiber::from(fiber_data, self)
@@ -2214,11 +2211,11 @@ where
 {
     type Data<'a> = &'a T where Self: 'a;
 
-    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (ExpandedIndex, &'a T)> {
+    fn iter_expanded(&self) -> impl Iterator<Item = (ExpandedIndex, &T)> {
         DenseTensorIterator::new(self)
     }
 
-    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, &'a T)> {
+    fn iter_flat(&self) -> impl Iterator<Item = (FlatIndex, &T)> {
         DenseTensorLinearIterator::new(self)
     }
 }
@@ -2282,7 +2279,7 @@ impl<'a, T, S: TensorStructure> Iterator for DataTensorExpandedIterator<'a, T, S
 impl<T: Clone, S: TensorStructure> IteratableTensor for DataTensor<T, S> {
     type Data<'a> = &'a T where Self: 'a;
 
-    fn iter_expanded<'a>(&'a self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'a>)> {
+    fn iter_expanded(&self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'_>)> {
         match self {
             DataTensor::Dense(tensor) => {
                 DataTensorExpandedIterator::Dense(DenseTensorIterator::new(tensor))
@@ -2293,7 +2290,7 @@ impl<T: Clone, S: TensorStructure> IteratableTensor for DataTensor<T, S> {
         }
     }
 
-    fn iter_flat<'a>(&'a self) -> impl Iterator<Item = (FlatIndex, Self::Data<'a>)> {
+    fn iter_flat(&self) -> impl Iterator<Item = (FlatIndex, Self::Data<'_>)> {
         match self {
             DataTensor::Dense(tensor) => {
                 DataTensorLinearIterator::Dense(DenseTensorLinearIterator::new(tensor))

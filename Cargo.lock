@@ -1216,7 +1216,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "symbolica"
 version = "0.8.0"
-source = "git+https://github.com/benruijl/symbolica?branch=nested_evaluate#9bafdb04029a03b2e000218ff6f4ab35fe42c37c"
+source = "git+https://github.com/benruijl/symbolica?branch=nested_evaluate#c22578f7149965e7eb525a8ab44547018e5ba2f6"
 dependencies = [
  "ahash",
  "append-only-vec",
@@ -1358,9 +1358,9 @@ checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
 
 [[package]]
 name = "version_check"
-version = "0.9.4"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "walkdir"

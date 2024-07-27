@@ -859,30 +859,27 @@ impl<T, S: TensorStructure> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(
-        self,
-        param_len: usize,
-    ) -> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<T>>
+    pub fn linearize(self) -> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<T>>
     where
         T: Clone + Default + PartialEq,
         S: Clone,
     {
-        let new_graph = self.graph.map_nodes(|(_, x)| x.linearize(param_len));
+        let new_graph = self.graph.map_nodes(|(_, x)| x.linearize());
         TensorNetwork {
             graph: new_graph,
-            scalar: self.scalar.map(|a| a.linearize(param_len)),
+            scalar: self.scalar.map(|a| a.linearize()),
         }
     }
 
-    pub fn common_subexpression_elimination(&mut self)
+    pub fn common_subexpression_elimination(&mut self, max_subexpr_len: usize)
     where
         T: Debug + Hash + Eq + Ord + Clone + Default,
         S: Clone,
     {
         self.graph
-            .map_nodes_mut(|(_, x)| x.common_subexpression_elimination());
+            .map_nodes_mut(|(_, x)| x.common_subexpression_elimination(max_subexpr_len));
         if let Some(a) = self.scalar.as_mut() {
-            a.common_subexpression_elimination()
+            a.common_subexpression_elimination(max_subexpr_len)
         }
     }
 
@@ -965,6 +962,69 @@ impl<T, S: TensorStructure> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<
                 a.evaluate_multiple(params, &mut out);
                 let [o] = out;
                 o
+            }),
+        }
+    }
+    pub fn compile_asm(
+        &self,
+        filename: &str,
+        library_name: &str,
+    ) -> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator>
+    where
+        T: NumericalFloatLike,
+        S: Clone,
+    {
+        // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
+        let new_graph = self.graph.map_nodes_ref(|(n, x)| {
+            let function_name = format!("{filename}_{}", n.data().as_ffi());
+            let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
+            let library_name = format!("{library_name}_{}.so", n.data().as_ffi());
+            x.compile(&filename, &function_name, &library_name)
+        });
+        let function_name = format!("{filename}_scalar");
+        let filename = format!("{filename}_scalar.cpp");
+        let library_name = format!("{library_name}_scalar.so");
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self.scalar.as_ref().map(|a| {
+                a.export_asm(&filename, &function_name, true)
+                    .unwrap()
+                    .compile(&library_name, CompileOptions::default())
+                    .unwrap()
+                    .load()
+                    .unwrap()
+            }),
+        }
+    }
+
+    pub fn compile(
+        &self,
+        filename: &str,
+        library_name: &str,
+    ) -> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator>
+    where
+        T: NumericalFloatLike,
+        S: Clone,
+    {
+        // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
+        let new_graph = self.graph.map_nodes_ref(|(n, x)| {
+            let function_name = format!("{filename}_{}", n.data().as_ffi());
+            let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
+            let library_name = format!("{library_name}_{}.so", n.data().as_ffi());
+            x.compile(&filename, &function_name, &library_name)
+        });
+        let function_name = format!("{filename}_scalar");
+        let filename = format!("{filename}_scalar.cpp");
+        let library_name = format!("{library_name}_scalar.so");
+        TensorNetwork {
+            graph: new_graph,
+            scalar: self.scalar.as_ref().map(|a| {
+                a.export_cpp(&filename, &function_name, true)
+                    .unwrap()
+                    .compile(&library_name, CompileOptions::default())
+                    .unwrap()
+                    .load()
+                    .unwrap()
             }),
         }
     }
@@ -1703,7 +1763,7 @@ mod test {
 
         let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-        let mut network = sym_tensor.to_network().unwrap();
+        let network = sym_tensor.to_network().unwrap();
 
         println!("{}", network.dot());
     }
@@ -1752,7 +1812,7 @@ mod test {
 
         let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-        let mut network = sym_tensor.to_network().unwrap();
+        let network = sym_tensor.to_network().unwrap();
 
         println!("{}", network.dot());
     }

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     CastStructure, Complex, ContractableWith, ContractionError, ExpandedIndex, FallibleAddAssign,
     FallibleMul, FallibleSubAssign, FlatIndex, HasName, IntoArgs, IntoSymbol, IsZero,
-    IteratableTensor, NamedStructure, PhysicalSlots, RefZero, ShadowMapping, Shadowable, Tensor,
+    IteratableTensor, NamedStructure, PhysicalSlots, RefZero, ShadowMapping, Shadowable,
     TensorStructure, ToSymbolic, TrySmallestUpgrade,
 };
 use symbolica::{
@@ -417,6 +417,16 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
         }
     }
 
+    pub fn replace_all_mut(
+        &mut self,
+        pattern: &Pattern,
+        rhs: &Pattern,
+        conditions: Option<&Condition<WildcardAndRestriction>>,
+        settings: Option<&MatchSettings>,
+    ) {
+        *self = self.replace_all(pattern, rhs, conditions, settings)
+    }
+
     pub fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
         let tensor = self
             .tensor
@@ -425,6 +435,10 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
             tensor,
             param_type: ParamOrComposite::Composite,
         }
+    }
+
+    pub fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]) {
+        *self = self.replace_all_multiple(replacements)
     }
 
     fn replace_repeat_multiple_atom(expr: &mut Atom, reps: &[Replacement<'_>]) {
@@ -440,6 +454,7 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
             .map_data_mut(|a| Self::replace_repeat_multiple_atom(a, replacements));
         self.param_type = ParamOrComposite::Composite;
     }
+
     pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
         &'a self,
         coeff_map: F,
@@ -1619,22 +1634,22 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self, param_len: usize) -> EvalTensor<T, S>
+    pub fn linearize(self) -> EvalTensor<T, S>
     where
         T: Clone + Default + PartialEq,
     {
         EvalTensor {
-            eval: self.eval.linearize(param_len),
+            eval: self.eval.linearize(),
             structure: self.structure,
             indexmap: self.indexmap,
         }
     }
 
-    pub fn common_subexpression_elimination(&mut self)
+    pub fn common_subexpression_elimination(&mut self, max_subexpr_len: usize)
     where
         T: Debug + Hash + Eq + Ord + Clone + Default,
     {
-        self.eval.common_subexpression_elimination()
+        self.eval.common_subexpression_elimination(max_subexpr_len)
     }
 
     pub fn common_pair_elimination(&mut self)
@@ -1717,6 +1732,55 @@ impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
 }
 
 impl<T, S> EvalTensor<T, S> {
+    pub fn compile(
+        &self,
+        filename: &str,
+        function_name: &str,
+        library_name: &str,
+    ) -> CompiledEvalTensor<S>
+    where
+        T: NumericalFloatLike,
+        S: Clone,
+    {
+        CompiledEvalTensor {
+            eval: self
+                .eval
+                .export_cpp(filename, function_name, true)
+                .unwrap()
+                .compile(library_name, CompileOptions::default())
+                .unwrap()
+                .load()
+                .unwrap(),
+            indexmap: self.indexmap.clone(),
+            structure: self.structure.clone(),
+        }
+    }
+
+    pub fn compile_asm(
+        &self,
+        filename: &str,
+        function_name: &str,
+        library_name: &str,
+        include_header: bool,
+    ) -> CompiledEvalTensor<S>
+    where
+        T: NumericalFloatLike,
+        S: Clone,
+    {
+        CompiledEvalTensor {
+            eval: self
+                .eval
+                .export_asm(filename, function_name, include_header)
+                .unwrap()
+                .compile(library_name, CompileOptions::default())
+                .unwrap()
+                .load()
+                .unwrap(),
+            indexmap: self.indexmap.clone(),
+            structure: self.structure.clone(),
+        }
+    }
+
     pub fn evaluate(&mut self, params: &[T]) -> DataTensor<T, S>
     where
         T: Real,

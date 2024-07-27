@@ -12,7 +12,8 @@
     "clippy",
     "build",
     "gammaloop",
-    "structures"
+    "structures",
+    "benchmarks"
   ],
   "github.copilot.enable": {
     "quarto": false,

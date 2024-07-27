@@ -274,8 +274,10 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    let mut neeet = mapped_precontracted_eval_net.compile("nested_evaluation", "libneval");
-
+    let mut neeet = precontracted_eval_tree_net
+        .map_coeff::<f64, _>(&|r| r.into())
+        .linearize()
+        .compile("nested_evaluation", "libneval");
     group.bench_function("3LPhysical precontracted new compiled", |b| {
         b.iter(|| {
             let out = neeet.evaluate_complex(&values);
@@ -287,8 +289,10 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    let mut neeet = mapped_precontracted_eval_net.compile_asm("nested_evaluation_asm", "libneval");
-
+    let mut neeet = precontracted_eval_tree_net
+        .map_coeff::<f64, _>(&|r| r.into())
+        .linearize()
+        .compile_asm("nested_evaluation", "libneval");
     group.bench_function("3LPhysical precontracted new compiled asm", |b| {
         b.iter(|| {
             let out = neeet.evaluate_complex(&values);

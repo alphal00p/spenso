@@ -979,7 +979,7 @@ impl<T, S: TensorStructure> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<
             let function_name = format!("{filename}_{}", n.data().as_ffi());
             let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
             let library_name = format!("{library_name}_{}.so", n.data().as_ffi());
-            x.compile(&filename, &function_name, &library_name)
+            x.compile_asm(&filename, &function_name, &library_name, true)
         });
         let function_name = format!("{filename}_scalar");
         let filename = format!("{filename}_scalar.cpp");

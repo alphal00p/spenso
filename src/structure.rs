@@ -23,7 +23,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use smartstring::LazyCompact;
 use smartstring::SmartString;
-use std::fmt::write;
+// use std::fmt::write;
 use std::fmt::Debug;
 #[cfg(feature = "shadowing")]
 use std::fmt::Display;

@@ -20,7 +20,7 @@ use crate::{
 use super::{ConcreteIndex, DenseTensor, Dimension, GetTensorData, Representation, SparseTensor};
 
 use gat_lending_iterator::LendingIterator;
-use log::trace;
+// use log::trace;
 
 use crate::Permutation;
 use bitvec::vec::BitVec;

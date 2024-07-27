@@ -1435,14 +1435,7 @@ fn test_fallible_mul() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn get_license_key() {
-    use gat_lending_iterator::Enumerate;
-    use serde::de::IntoDeserializer;
     use symbolica::LicenseManager;
-
-    use crate::{
-        ColorAdjoint, ColorFundamental, DualSlotTo, Euclidean, IsAbstractSlot, Lorentz,
-        PhysicalSlots, RepName, Slot,
-    };
 
     LicenseManager::new();
 

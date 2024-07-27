@@ -1370,15 +1370,21 @@ impl<'a> TryFrom<AddView<'a>>
                 Ok(t) => {
                     tensors.push(t);
                 }
-                Err(TensorNetworkError::NoNodes) => {}
+                Err(TensorNetworkError::NoNodes) => {
+                    // println!("{:?}", net);
+                }
                 Err(e) => return Err(e),
             }
         }
-        let mut net: TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom> =
-            TensorNetwork::from(vec![tensors
-                .into_iter()
-                .reduce(|a, b| a.add_fallible(&b).unwrap())
-                .unwrap()]);
+
+        let mut net: TensorNetwork<_, _> = if let Some(sum) = tensors
+            .into_iter()
+            .reduce(|a, b| a.add_fallible(&b).unwrap())
+        {
+            TensorNetwork::from(vec![sum])
+        } else {
+            TensorNetwork::new()
+        };
         net.scalar = Some(scalars);
         Ok(net)
     }
@@ -1680,5 +1686,74 @@ where
         for l in &self.levels {
             l.append_map(fn_map);
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use constcat::concat;
+
+    use super::*;
+    use crate::SymbolicTensor;
+
+    #[test]
+    fn pslash_parse() {
+        let expr = "Q(15,aind(loru(4,75257)))    *γ(aind(loru(4,75257),bis(4,1),bis(4,18)))";
+        let atom = Atom::parse(expr).unwrap();
+
+        let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
+
+        let mut network = sym_tensor.to_network().unwrap();
+
+        println!("{}", network.dot());
+    }
+
+    #[test]
+    fn three_loop_photon_parse() {
+        let expr=concat!("-64/729*ee^6*G^4",
+        "*(MT*id(aind(bis(4,1),bis(4,18)))  )",//+Q(15,aind(loru(4,75257)))    *γ(aind(loru(4,75257),bis(4,1),bis(4,18))))",
+        "*(MT*id(aind(bis(4,3),bis(4,0)))   )",//+Q(6,aind(loru(4,17)))        *γ(aind(loru(4,17),bis(4,3),bis(4,0))))",
+        "*(MT*id(aind(bis(4,5),bis(4,2)))   )",//+Q(7,aind(loru(4,35)))        *γ(aind(loru(4,35),bis(4,5),bis(4,2))))",
+        "*(MT*id(aind(bis(4,7),bis(4,4)))   )",//+Q(8,aind(loru(4,89)))        *γ(aind(loru(4,89),bis(4,7),bis(4,4))))",
+        "*(MT*id(aind(bis(4,9),bis(4,6)))   )",//+Q(9,aind(loru(4,233)))       *γ(aind(loru(4,233),bis(4,9),bis(4,6))))",
+        "*(MT*id(aind(bis(4,11),bis(4,8)))  )",//+Q(10,aind(loru(4,611)))      *γ(aind(loru(4,611),bis(4,11),bis(4,8))))",
+        "*(MT*id(aind(bis(4,13),bis(4,10))) )",//+Q(11,aind(loru(4,1601)))    *γ(aind(loru(4,1601),bis(4,13),bis(4,10))))",
+        "*(MT*id(aind(bis(4,15),bis(4,12))) )",//+Q(12,aind(loru(4,4193)))    *γ(aind(loru(4,4193),bis(4,15),bis(4,12))))",
+        "*(MT*id(aind(bis(4,17),bis(4,14))) )",//+Q(13,aind(loru(4,10979)))   *γ(aind(loru(4,10979),bis(4,17),bis(4,14))))",
+        "*(MT*id(aind(bis(4,19),bis(4,16))) )",//+Q(14,aind(loru(4,28745)))   *γ(aind(loru(4,28745),bis(4,19),bis(4,16))))",
+        "*Metric(aind(loru(4,13),loru(4,8)))",
+        "*Metric(aind(loru(4,15),loru(4,10)))",
+        "*T(aind(coad(8,9),cof(3,8),coaf(3,7)))",
+        "*T(aind(coad(8,14),cof(3,13),coaf(3,12)))",
+        "*T(aind(coad(8,21),cof(3,20),coaf(3,19)))",
+        "*T(aind(coad(8,26),cof(3,25),coaf(3,24)))",
+        "*id(aind(coaf(3,3),cof(3,4)))*id(aind(coaf(3,4),cof(3,24)))*id(aind(coaf(3,5),cof(3,6)))*id(aind(coaf(3,6),cof(3,3)))",
+        "*id(aind(coaf(3,8),cof(3,5)))*id(aind(coaf(3,10),cof(3,11)))*id(aind(coaf(3,11),cof(3,7)))*id(aind(coaf(3,13),cof(3,10)))",
+        "*id(aind(coaf(3,15),cof(3,16)))*id(aind(coaf(3,16),cof(3,12)))*id(aind(coaf(3,17),cof(3,18)))*id(aind(coaf(3,18),cof(3,15)))",
+        "*id(aind(coaf(3,20),cof(3,17)))*id(aind(coaf(3,22),cof(3,23)))*id(aind(coaf(3,23),cof(3,19)))*id(aind(coaf(3,25),cof(3,22)))*id(aind(coad(8,21),coad(8,9)))*id(aind(coad(8,26),coad(8,14)))",
+        "*γ(aind(lord(4,6),bis(4,1),bis(4,0)))",
+        "*γ(aind(lord(4,7),bis(4,3),bis(4,2)))",
+        "*γ(aind(lord(4,8),bis(4,5),bis(4,4)))",
+        "*γ(aind(lord(4,9),bis(4,7),bis(4,6)))",
+        "*γ(aind(lord(4,10),bis(4,9),bis(4,8)))",
+        "*γ(aind(lord(4,11),bis(4,11),bis(4,10)))",
+        "*γ(aind(lord(4,12),bis(4,13),bis(4,12)))",
+        "*γ(aind(lord(4,13),bis(4,15),bis(4,14)))",
+        "*γ(aind(lord(4,14),bis(4,17),bis(4,16)))",
+        "*γ(aind(lord(4,15),bis(4,19),bis(4,18)))",
+        "*ϵ(0,aind(loru(4,6)))",
+        "*ϵ(1,aind(loru(4,7)))",
+        "*ϵbar(2,aind(loru(4,14)))",
+        "*ϵbar(3,aind(loru(4,12)))",
+        "*ϵbar(4,aind(loru(4,11)))",
+        "*ϵbar(5,aind(loru(4,9)))");
+
+        let atom = Atom::parse(expr).unwrap();
+
+        let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
+
+        let mut network = sym_tensor.to_network().unwrap();
+
+        println!("{}", network.dot());
     }
 }

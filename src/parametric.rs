@@ -400,8 +400,38 @@ impl DataTensor<EvalTree<Rational>> {
     }
 }
 
-impl<S: TensorStructure + Clone> ParamTensor<S> {
-    pub fn replace_all(
+pub trait PatternReplacement {
+    fn replace_repeat_multiple_atom(expr: &mut Atom, reps: &[Replacement<'_>]) {
+        let atom = expr.replace_all_multiple(reps);
+        if atom != *expr {
+            *expr = atom;
+            Self::replace_repeat_multiple_atom(expr, reps)
+        }
+    }
+
+    fn replace_all(
+        &self,
+        pattern: &Pattern,
+        rhs: &Pattern,
+        conditions: Option<&Condition<WildcardAndRestriction>>,
+        settings: Option<&MatchSettings>,
+    ) -> Self;
+
+    fn replace_all_mut(
+        &mut self,
+        pattern: &Pattern,
+        rhs: &Pattern,
+        conditions: Option<&Condition<WildcardAndRestriction>>,
+        settings: Option<&MatchSettings>,
+    );
+
+    fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self;
+    fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]);
+    fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]);
+}
+
+impl<S: TensorStructure + Clone> PatternReplacement for ParamTensor<S> {
+    fn replace_all(
         &self,
         pattern: &Pattern,
         rhs: &Pattern,
@@ -417,7 +447,7 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
         }
     }
 
-    pub fn replace_all_mut(
+    fn replace_all_mut(
         &mut self,
         pattern: &Pattern,
         rhs: &Pattern,
@@ -427,7 +457,7 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
         *self = self.replace_all(pattern, rhs, conditions, settings)
     }
 
-    pub fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
+    fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
         let tensor = self
             .tensor
             .map_data_ref(|a| a.replace_all_multiple(replacements));
@@ -437,24 +467,18 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
         }
     }
 
-    pub fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]) {
+    fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]) {
         *self = self.replace_all_multiple(replacements)
     }
 
-    fn replace_repeat_multiple_atom(expr: &mut Atom, reps: &[Replacement<'_>]) {
-        let atom = expr.replace_all_multiple(reps);
-        if atom != *expr {
-            *expr = atom;
-            Self::replace_repeat_multiple_atom(expr, reps)
-        }
-    }
-
-    pub fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]) {
+    fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]) {
         self.tensor
             .map_data_mut(|a| Self::replace_repeat_multiple_atom(a, replacements));
         self.param_type = ParamOrComposite::Composite;
     }
+}
 
+impl<S: TensorStructure + Clone> ParamTensor<S> {
     pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
         &'a self,
         coeff_map: F,
@@ -621,17 +645,16 @@ impl<T: Concrete> From<T> for AtomOrConcrete<T> {
     }
 }
 
-impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure> ParamOrConcrete<C, S> {
-    pub fn replace_all(
+impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> PatternReplacement
+    for ParamOrConcrete<C, S>
+{
+    fn replace_all(
         &self,
         pattern: &Pattern,
         rhs: &Pattern,
         conditions: Option<&Condition<WildcardAndRestriction>>,
         settings: Option<&MatchSettings>,
-    ) -> Self
-    where
-        S: Clone,
-    {
+    ) -> Self {
         match self {
             ParamOrConcrete::Param(p) => {
                 ParamOrConcrete::Param(p.replace_all(pattern, rhs, conditions, settings))
@@ -640,10 +663,7 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure> ParamOrConcrete
         }
     }
 
-    pub fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self
-    where
-        S: Clone,
-    {
+    fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
         match self {
             ParamOrConcrete::Param(p) => {
                 ParamOrConcrete::Param(p.replace_all_multiple(replacements))
@@ -652,6 +672,32 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure> ParamOrConcrete
         }
     }
 
+    fn replace_all_mut(
+        &mut self,
+        pattern: &Pattern,
+        rhs: &Pattern,
+        conditions: Option<&Condition<WildcardAndRestriction>>,
+        settings: Option<&MatchSettings>,
+    ) {
+        if let ParamOrConcrete::Param(p) = self {
+            p.replace_all_mut(pattern, rhs, conditions, settings);
+        }
+    }
+
+    fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]) {
+        if let ParamOrConcrete::Param(p) = self {
+            p.replace_all_multiple_mut(replacements);
+        }
+    }
+
+    fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]) {
+        if let ParamOrConcrete::Param(p) = self {
+            p.replace_all_multiple_repeat_mut(replacements);
+        }
+    }
+}
+
+impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure> ParamOrConcrete<C, S> {
     pub fn is_parametric(&self) -> bool {
         matches!(self, ParamOrConcrete::Param(_))
     }

@@ -11,7 +11,7 @@ use symbolica::{
 
 use crate::{
     CastStructure, CompiledEvalTensor, DualSlotTo, EvalTensor, EvalTreeTensor, FallibleMul,
-    GetTensorData, HasTensorData, IntoSymbol, TensorStructure,
+    GetTensorData, HasTensorData, IntoSymbol, PatternReplacement, TensorStructure,
 };
 
 #[cfg(feature = "shadowing")]
@@ -788,6 +788,73 @@ where
 #[cfg(feature = "shadowing")]
 use std::hash::Hash;
 
+impl<P: PatternReplacement + HasStructure> PatternReplacement for TensorNetwork<P, Atom>
+where
+    P::Structure: Clone,
+{
+    fn replace_all(
+        &self,
+        pattern: &Pattern,
+        rhs: &Pattern,
+        conditions: Option<&Condition<WildcardAndRestriction>>,
+        settings: Option<&MatchSettings>,
+    ) -> Self {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.replace_all(pattern, rhs, conditions, settings));
+        TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.replace_all(pattern, rhs, conditions, settings)),
+        }
+    }
+
+    fn replace_all_mut(
+        &mut self,
+        pattern: &Pattern,
+        rhs: &Pattern,
+        conditions: Option<&Condition<WildcardAndRestriction>>,
+        settings: Option<&MatchSettings>,
+    ) {
+        self.graph
+            .map_nodes_mut(|(_, a)| a.replace_all_mut(pattern, rhs, conditions, settings));
+
+        if let Some(a) = self.scalar.as_mut() {
+            *a = a.replace_all(pattern, rhs, conditions, settings);
+        }
+    }
+
+    fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.replace_all_multiple(replacements));
+        TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.replace_all_multiple(replacements)),
+        }
+    }
+
+    fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]) {
+        self.graph
+            .map_nodes_mut(|(_, a)| a.replace_all_multiple_mut(replacements));
+        if let Some(a) = self.scalar.as_mut() {
+            *a = a.replace_all_multiple(replacements);
+        }
+    }
+
+    fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]) {
+        self.graph
+            .map_nodes_mut(|(_, a)| a.replace_all_multiple_repeat_mut(replacements));
+        if let Some(a) = self.scalar.as_mut() {
+            Self::replace_repeat_multiple_atom(a, replacements);
+        }
+    }
+}
 #[cfg(feature = "shadowing")]
 impl<S: TensorStructure + Clone> TensorNetwork<ParamTensor<S>, Atom> {
     pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(

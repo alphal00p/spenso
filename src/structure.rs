@@ -2703,6 +2703,8 @@ pub struct NamedStructure<Name = SmartString<LazyCompact>, Args = usize> {
     pub additional_args: Option<Args>,
 }
 
+pub type AtomStructure = NamedStructure<Symbol, Vec<Atom>>;
+
 impl<Name, Args> NamedStructure<Name, Args> {
     #[must_use]
     pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> Self

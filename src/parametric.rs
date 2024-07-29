@@ -11,11 +11,18 @@ use enum_try_as_inner::EnumTryAsInner;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    CastStructure, Complex, ContractableWith, ContractionError, ExpandedIndex, FallibleAddAssign,
-    FallibleMul, FallibleSubAssign, FlatIndex, HasName, IntoArgs, IntoSymbol, IsZero,
-    IteratableTensor, NamedStructure, PhysicalSlots, RefZero, ShadowMapping, Shadowable,
-    TensorStructure, ToSymbolic, TrySmallestUpgrade,
+    complex::{Complex, RealOrComplexTensor},
+    contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero},
+    data::{DataIterator, DataTensor, DenseTensor, SparseTensor},
+    iterators::IteratableTensor,
+    structure::{
+        CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, IntoArgs, IntoSymbol,
+        NamedStructure, PhysicalSlots, ShadowMapping, Shadowable, StructureContract,
+        TensorStructure, ToSymbolic, TracksCount,
+    },
+    upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade},
 };
+
 use symbolica::{
     atom::{representation::FunView, Atom, AtomOrView, AtomView, FunctionBuilder, Symbol},
     domains::{
@@ -31,10 +38,6 @@ use symbolica::{
 
 use std::hash::Hash;
 
-use super::{
-    Contract, DataIterator, DataTensor, DenseTensor, HasStructure, SparseTensor, StructureContract,
-    TracksCount,
-};
 use symbolica::domains::float::Complex as SymComplex;
 
 // impl RefZero for Atom {
@@ -507,7 +510,7 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
 impl<S: TensorStructure> IteratableTensor for ParamTensor<S> {
     type Data<'a> =  AtomView<'a> where Self: 'a;
 
-    fn iter_expanded(&self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'_>)> {
+    fn iter_expanded(&self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'_>)> {
         self.tensor.iter_expanded().map(|(i, x)| (i, x.as_view()))
     }
 
@@ -834,7 +837,7 @@ where
         }
     }
 
-    fn iter_expanded(&self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'_>)> {
+    fn iter_expanded(&self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'_>)> {
         match self {
             ParamOrConcrete::Concrete(x) => IteratorEnum::A(
                 x.iter_expanded()
@@ -848,220 +851,8 @@ where
     }
 }
 
-#[derive(Clone, Debug, EnumTryAsInner)]
-#[derive_err(Debug)]
-pub enum RealOrComplexTensor<T, S: TensorStructure> {
-    Real(DataTensor<T, S>),
-    Complex(DataTensor<Complex<T>, S>),
-}
-
-impl<T: Display, S: TensorStructure> Display for RealOrComplexTensor<T, S> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RealOrComplexTensor::Real(d) => d.fmt(f),
-            RealOrComplexTensor::Complex(d) => d.fmt(f),
-        }
-    }
-}
-
-impl<T: Clone, S: TensorStructure, O: From<S> + TensorStructure>
-    CastStructure<RealOrComplexTensor<T, O>> for RealOrComplexTensor<T, S>
-{
-    fn cast(self) -> RealOrComplexTensor<T, O> {
-        match self {
-            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.cast()),
-            RealOrComplexTensor::Complex(d) => RealOrComplexTensor::Complex(d.cast()),
-        }
-    }
-}
-impl<T: Clone, S: TensorStructure> Shadowable for RealOrComplexTensor<T, S>
-where
-    S: HasName + Clone,
-    S::Name: IntoSymbol,
-    S::Args: IntoArgs,
-{
-    fn shadow<C>(
-        &self,
-        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
-    ) -> Result<DenseTensor<Atom, Self::Structure>>
-    where
-        C: TensorCoefficient,
-    {
-        match self {
-            RealOrComplexTensor::Real(r) => r.shadow(index_to_atom),
-            RealOrComplexTensor::Complex(r) => Ok(r
-                .structure()
-                .clone()
-                .to_dense_labeled_complex(index_to_atom)?),
-        }
-        // Some(self.structure().clone().to_dense_labeled(index_to_atom))
-    }
-}
-
-impl<T: Clone + RefZero, S: TensorStructure, R> ShadowMapping<R> for RealOrComplexTensor<T, S>
-where
-    S: HasName + Clone,
-    S::Name: IntoSymbol,
-    S::Args: IntoArgs,
-    R: From<T>,
-{
-    fn append_map<'a, C>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, R>,
-        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
-    ) where
-        C: TensorCoefficient,
-    {
-        match self {
-            RealOrComplexTensor::Real(c) => c.append_map(fn_map, index_to_atom),
-            RealOrComplexTensor::Complex(p) => match p {
-                DataTensor::Dense(d) => {
-                    for (i, c) in d.flat_iter() {
-                        let labeled_coef_re =
-                            index_to_atom(self.structure(), i).to_atom_re().unwrap();
-                        let labeled_coef_im =
-                            index_to_atom(self.structure(), i).to_atom_im().unwrap();
-                        fn_map.add_constant(labeled_coef_re.clone().into(), c.re.clone().into());
-                        fn_map.add_constant(labeled_coef_im.clone().into(), c.re.clone().into());
-                    }
-                }
-                DataTensor::Sparse(d) => {
-                    for (i, c) in d.flat_iter() {
-                        let labeled_coef_re =
-                            index_to_atom(self.structure(), i).to_atom_re().unwrap();
-                        let labeled_coef_im =
-                            index_to_atom(self.structure(), i).to_atom_im().unwrap();
-                        fn_map.add_constant(labeled_coef_re.clone().into(), c.re.clone().into());
-                        fn_map.add_constant(labeled_coef_im.clone().into(), c.re.clone().into());
-                    }
-                }
-            }, // p.append_map(fn_map, index_to_atom),
-        }
-    }
-}
-
-pub enum RealOrComplexRef<'a, T> {
-    Real(&'a T),
-    Complex(&'a Complex<T>),
-}
-
-#[derive(Clone, Debug, EnumTryAsInner)]
-#[derive_err(Debug)]
-pub enum RealOrComplex<T> {
-    Real(T),
-    Complex(Complex<T>),
-}
-
-impl<T: Display> Display for RealOrComplex<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RealOrComplex::Complex(c) => c.fmt(f),
-            RealOrComplex::Real(r) => r.fmt(f),
-        }
-    }
-}
-
 pub type MixedTensor<T = f64, S = NamedStructure<Symbol, Vec<Atom>>> =
     ParamOrConcrete<RealOrComplexTensor<T, S>, S>;
-
-impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
-    type Scalar = RealOrComplex<T>;
-    type Structure = S;
-    fn structure(&self) -> &Self::Structure {
-        match self {
-            RealOrComplexTensor::Real(r) => r.structure(),
-            RealOrComplexTensor::Complex(r) => r.structure(),
-        }
-    }
-
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        match self {
-            RealOrComplexTensor::Real(r) => r.mut_structure(),
-            RealOrComplexTensor::Complex(r) => r.mut_structure(),
-        }
-    }
-
-    fn scalar(self) -> Option<Self::Scalar> {
-        match self {
-            RealOrComplexTensor::Real(r) => r.scalar().map(|x| RealOrComplex::Real(x)),
-            RealOrComplexTensor::Complex(r) => r.scalar().map(|x| RealOrComplex::Complex(x)),
-        }
-    }
-}
-
-impl<T, S> TracksCount for RealOrComplexTensor<T, S>
-where
-    S: TensorStructure + TracksCount,
-    T: Clone,
-{
-    fn contractions_num(&self) -> usize {
-        match self {
-            RealOrComplexTensor::Real(r) => r.contractions_num(),
-            RealOrComplexTensor::Complex(r) => r.contractions_num(),
-        }
-    }
-}
-
-impl<T, S> HasName for RealOrComplexTensor<T, S>
-where
-    S: TensorStructure + HasName,
-    T: Clone,
-{
-    type Args = S::Args;
-    type Name = S::Name;
-
-    fn name(&self) -> Option<S::Name> {
-        match self {
-            RealOrComplexTensor::Real(r) => r.name(),
-            RealOrComplexTensor::Complex(r) => r.name(),
-        }
-    }
-
-    fn set_name(&mut self, name: Self::Name) {
-        match self {
-            RealOrComplexTensor::Real(r) => r.set_name(name),
-            RealOrComplexTensor::Complex(r) => r.set_name(name),
-        }
-    }
-
-    fn args(&self) -> Option<S::Args> {
-        match self {
-            RealOrComplexTensor::Real(r) => r.args(),
-            RealOrComplexTensor::Complex(r) => r.args(),
-        }
-    }
-}
-
-impl<T: Clone, S: TensorStructure> IteratableTensor for RealOrComplexTensor<T, S> {
-    type Data<'a>=  RealOrComplexRef<'a,T>
-        where
-            Self: 'a;
-
-    fn iter_expanded(&self) -> impl Iterator<Item = (crate::ExpandedIndex, Self::Data<'_>)> {
-        match self {
-            RealOrComplexTensor::Real(x) => IteratorEnum::A(
-                x.iter_expanded()
-                    .map(|(i, x)| (i, RealOrComplexRef::Real(x))),
-            ),
-            RealOrComplexTensor::Complex(x) => IteratorEnum::B(
-                x.iter_expanded()
-                    .map(|(i, x)| (i, RealOrComplexRef::Complex(x))),
-            ),
-        }
-    }
-
-    fn iter_flat(&self) -> impl Iterator<Item = (FlatIndex, Self::Data<'_>)> {
-        match self {
-            RealOrComplexTensor::Real(x) => {
-                IteratorEnum::A(x.iter_flat().map(|(i, x)| (i, RealOrComplexRef::Real(x))))
-            }
-            RealOrComplexTensor::Complex(x) => IteratorEnum::B(
-                x.iter_flat()
-                    .map(|(i, x)| (i, RealOrComplexRef::Complex(x))),
-            ),
-        }
-    }
-}
 
 // #[derive(Clone, Debug, EnumTryAsInner)]
 // #[derive_err(Debug)]
@@ -1464,45 +1255,6 @@ where
             },
             (ParamOrConcrete::Concrete(s), ParamOrConcrete::Concrete(o)) => {
                 Ok(ParamOrConcrete::Concrete(s.contract(o)?))
-            }
-        }
-    }
-}
-
-impl<S, T> Contract<RealOrComplexTensor<T, S>> for RealOrComplexTensor<T, S>
-where
-    S: TensorStructure + Clone + StructureContract,
-    T: ContractableWith<T, Out = T>
-        + ContractableWith<Complex<T>, Out = Complex<T>>
-        + Clone
-        + FallibleMul<Output = T>
-        + FallibleAddAssign<T>
-        + FallibleSubAssign<T>
-        + RefZero
-        + IsZero,
-    Complex<T>: ContractableWith<T, Out = Complex<T>>
-        + ContractableWith<Complex<T>, Out = Complex<T>>
-        + Clone
-        + FallibleMul<Output = Complex<T>>
-        + FallibleAddAssign<Complex<T>>
-        + FallibleSubAssign<Complex<T>>
-        + RefZero
-        + IsZero,
-{
-    type LCM = RealOrComplexTensor<T, S>;
-    fn contract(&self, other: &RealOrComplexTensor<T, S>) -> Result<Self::LCM, ContractionError> {
-        match (self, other) {
-            (RealOrComplexTensor::Real(s), RealOrComplexTensor::Real(o)) => {
-                Ok(RealOrComplexTensor::Real(s.contract(o)?))
-            }
-            (RealOrComplexTensor::Real(s), RealOrComplexTensor::Complex(o)) => {
-                Ok(RealOrComplexTensor::Complex(s.contract(o)?))
-            }
-            (RealOrComplexTensor::Complex(s), RealOrComplexTensor::Real(o)) => {
-                Ok(RealOrComplexTensor::Complex(s.contract(o)?))
-            }
-            (RealOrComplexTensor::Complex(s), RealOrComplexTensor::Complex(o)) => {
-                Ok(RealOrComplexTensor::Complex(s.contract(o)?))
             }
         }
     }

@@ -5,11 +5,11 @@ use log::debug;
 #[cfg(feature = "shadowing")]
 use symbolica::{atom::Atom, domains::float::Real};
 
-use crate::{IsAbstractSlot, IteratableTensor, TensorStructure, TrySmallestUpgrade};
-
-use super::{
-    DataIterator, DataTensor, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSubAssign,
-    HasStructure, NumTensor, SetTensorData, SparseTensor, StructureContract,
+use crate::{
+    data::{DataIterator, DataTensor, DenseTensor, NumTensor, SetTensorData, SparseTensor},
+    iterators::IteratableTensor,
+    structure::{HasStructure, IsAbstractSlot, StructureContract, TensorStructure},
+    upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade},
 };
 
 use std::iter::Iterator;

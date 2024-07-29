@@ -13,16 +13,19 @@ use std::{
 };
 
 use crate::{
-    ContractableWith, DataTensor, ExpandedIndex, FallibleAddAssign, FallibleSubAssign, FlatIndex,
-    HasStructure, IsAbstractSlot, PhysReps, RefZero, RepName, TensorStructure, VecStructure,
+    contraction::{ContractableWith, RefZero},
+    data::{DataTensor, DenseTensor, GetTensorData, SparseTensor},
+    permutation::Permutation,
+    structure::{
+        ConcreteIndex, Dimension, ExpandedIndex, FlatIndex, HasStructure, IsAbstractSlot, PhysReps,
+        RepName, Representation, TensorStructure, VecStructure,
+    },
+    upgrading_arithmetic::{FallibleAddAssign, FallibleSubAssign},
 };
-
-use super::{ConcreteIndex, DenseTensor, Dimension, GetTensorData, Representation, SparseTensor};
 
 use gat_lending_iterator::LendingIterator;
 // use log::trace;
 
-use crate::Permutation;
 use bitvec::vec::BitVec;
 use serde::{Deserialize, Serialize};
 

@@ -1,49 +1,24 @@
 use std::ops::Neg;
 
-use super::{
-    AbstractIndex, DenseTensor, RepName, Representation, SetTensorData, Slot, SparseTensor,
-};
-
-#[cfg(feature = "shadowing")]
-use crate::{
-    ABSTRACTIND, BISPINOR, COLORADJ, COLORANTIFUND, COLORANTISEXT, COLORFUND, COLORSEXT, EUCLIDEAN,
-    SPINFUND,
-};
-
-#[cfg(feature = "shadowing")]
-use crate::{HistoryStructure, NamedStructure};
 use num::{NumCast, One, Zero};
 
 use crate::{
-    BaseRepName, Bispinor, Complex, Dimension, Dual, Euclidean, Lorentz, PhysReps, TensorStructure,
+    complex::Complex,
+    data::{DenseTensor, SetTensorData, SparseTensor},
+    structure::{
+        AbstractIndex, BaseRepName, Bispinor, Dimension, Dual, Euclidean, HistoryStructure,
+        IntoArgs, IntoSymbol, Lorentz, NamedStructure, PhysReps, RepName, Representation,
+        Shadowable, Slot, TensorStructure, ABSTRACTIND, BISPINOR, COLORADJ, COLORANTIFUND,
+        COLORANTISEXT, COLORFUND, COLORSEXT, EUCLIDEAN, SPINFUND,
+    },
 };
 
-#[cfg(feature = "shadowing")]
-use super::{IntoArgs, IntoSymbol, Shadowable};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, Symbol},
     id::Pattern,
     state::State,
 };
-
-// pub fn init_state() {
-//     assert!(EUC == State::get_symbol("euc", None).unwrap());
-//     assert!(LOR == State::get_symbol("lor", None).unwrap());
-//     assert!(SPIN == State::get_symbol("spin", None).unwrap());
-//     assert!(CADJ == State::get_symbol("CAdj", None).unwrap());
-//     assert!(CF == State::get_symbol("CF", None).unwrap());
-//     assert!(CAF == State::get_symbol("CAF", None).unwrap());
-//     assert!(CS == State::get_symbol("CS", None).unwrap());
-//     assert!(CAS == State::get_symbol("CAS", None).unwrap());
-
-//     assert!(ID == State::get_symbol("id", None).unwrap());
-//     assert!(GAMMA == State::get_symbol("γ", None).unwrap());
-//     assert!(GAMMA5 == State::get_symbol("γ5", None).unwrap());
-//     assert!(PROJM == State::get_symbol("ProjM", None).unwrap());
-//     assert!(PROJP == State::get_symbol("ProjP", None).unwrap());
-//     assert!(SIGMA == State::get_symbol("σ", None).unwrap());
-// }
 
 #[allow(dead_code)]
 #[must_use]
@@ -486,8 +461,6 @@ pub fn mink_four_vector_sym<T>(
 where
     T: Clone,
 {
-    use crate::NamedStructure;
-
     DenseTensor::from_data(
         p,
         HistoryStructure::from(NamedStructure::from_iter(
@@ -521,8 +494,6 @@ pub fn euclidean_four_vector_sym<T>(
 where
     T: Clone,
 {
-    use crate::NamedStructure;
-
     DenseTensor::from_data(
         p,
         HistoryStructure::from(NamedStructure::from_iter(
@@ -618,7 +589,6 @@ pub fn gammasym<T>(
 where
     T: One + Zero + Copy + std::ops::Neg<Output = T>,
 {
-    use crate::NamedStructure;
     let mu = match minkindex {
         AbstractIndex::Dualize(d) => Lorentz::selfless_dual().new_slot(4, d).into(),
         AbstractIndex::Normal(n) => Lorentz::new_slot_selfless(4, n).into(),

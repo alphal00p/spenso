@@ -2,11 +2,6 @@
 
 use std::{collections::HashSet, time::Instant};
 
-use spenso::{
-    ufo::{euclidean_four_vector, gamma, mink_four_vector},
-    Complex, Contract, DenseTensor, FallibleMul, SparseTensor,
-};
-
 use num::traits::ToPrimitive;
 
 #[cfg(feature = "shadowing")]
@@ -14,10 +9,20 @@ use symbolica::atom::{Atom, Symbol};
 
 #[cfg(feature = "shadowing")]
 use spenso::{
-    parametric::MixedTensor,
-    ufo::{euclidean_four_vector_sym, gammasym, mink_four_vector_sym},
-    AbstractIndex, ContractionCountStructure, HasTensorData, HistoryStructure, NumTensor,
-    TensorNetwork,
+    complex::Complex,
+    contraction::Contract,
+    data::{DenseTensor, HasTensorData, NumTensor, SparseTensor},
+    network::TensorNetwork,
+    parametric::{FlatCoefficent, MixedTensor},
+    structure::{
+        AbstractIndex, ContractionCountStructure, HistoryStructure, Lorentz, PhysReps, RepName,
+        ToSymbolic,
+    },
+    ufo::{
+        euclidean_four_vector, euclidean_four_vector_sym, gamma, gammasym, mink_four_vector,
+        mink_four_vector_sym,
+    },
+    upgrading_arithmetic::FallibleMul,
 };
 
 // #[allow(dead_code)]
@@ -218,9 +223,6 @@ fn gamma_net_param(
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
 ) -> TensorNetwork<MixedTensor<f64, ContractionCountStructure>, Atom> {
-    use spenso::{
-        ContractionCountStructure, FlatCoefficent, Lorentz, PhysReps, RepName, ToSymbolic,
-    };
     use symbolica::state::State;
 
     let mut i: i32 = 0;

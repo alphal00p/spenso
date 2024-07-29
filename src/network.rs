@@ -3,6 +3,7 @@ use ahash::{AHashSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
+#[cfg(feature = "shadowing")]
 use symbolica::{
     domains::float::NumericalFloatLike,
     evaluate::{CompileOptions, CompiledEvaluator, EvalTree, ExpressionEvaluator},
@@ -10,15 +11,20 @@ use symbolica::{
 };
 
 use crate::{
-    CastStructure, CompiledEvalTensor, DualSlotTo, EvalTensor, EvalTreeTensor, FallibleMul,
-    GetTensorData, HasTensorData, IntoSymbol, PatternReplacement, TensorStructure,
-};
-
-#[cfg(feature = "shadowing")]
-use crate::{
-    AtomViewOrConcrete, Complex, DataIterator, DataTensor, FallibleAdd, IntoArgs, IteratableTensor,
-    MixedTensor, NamedStructure, ParamTensor, RealOrComplexTensor, RefZero, ShadowMapping,
-    Shadowable, StructureContract, ToSymbolic, TrySmallestUpgrade,
+    complex::{Complex, RealOrComplexTensor},
+    contraction::Contract,
+    contraction::RefZero,
+    data::{DataIterator, DataTensor, GetTensorData, HasTensorData},
+    iterators::IteratableTensor,
+    parametric::{
+        AtomViewOrConcrete, CompiledEvalTensor, EvalTensor, EvalTreeTensor, MixedTensor,
+        ParamTensor, PatternReplacement,
+    },
+    structure::{
+        CastStructure, DualSlotTo, HasName, HasStructure, IntoArgs, IntoSymbol, NamedStructure,
+        ShadowMapping, Shadowable, StructureContract, TensorStructure, ToSymbolic, TracksCount,
+    },
+    upgrading_arithmetic::{FallibleAdd, FallibleMul, TrySmallestUpgrade},
 };
 
 #[cfg(feature = "shadowing")]
@@ -36,7 +42,6 @@ use symbolica::{
 #[cfg(feature = "shadowing")]
 use ahash::AHashMap;
 
-use super::{Contract, HasName, HasStructure, TracksCount};
 use smartstring::alias::String;
 use std::fmt::{Debug, Display};
 
@@ -788,6 +793,7 @@ where
 #[cfg(feature = "shadowing")]
 use std::hash::Hash;
 
+#[cfg(feature = "shadowing")]
 impl<P: PatternReplacement + HasStructure> PatternReplacement for TensorNetwork<P, Atom>
 where
     P::Structure: Clone,
@@ -1141,6 +1147,7 @@ impl<S: TensorStructure> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator>
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<S: Clone + TensorStructure> TensorNetwork<EvalTreeTensor<Rational, S>, EvalTree<Rational>> {
     pub fn horner_scheme(&mut self) {
         self.graph.map_nodes_mut(|(_, x)| x.horner_scheme());
@@ -1312,6 +1319,7 @@ impl<T: TensorStructure<Slot: Display>, S> TensorNetwork<T, S> {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: HasName<Name: IntoSymbol> + TensorStructure<Slot: Display>, S> TensorNetwork<T, S> {
     pub fn dot_nodes(&self) -> std::string::String {
         let mut out = "graph {\n".to_string();
@@ -1821,8 +1829,9 @@ mod test {
     use constcat::concat;
 
     use super::*;
-    use crate::SymbolicTensor;
-
+    #[cfg(feature = "shadowing")]
+    use crate::symbolic::SymbolicTensor;
+    #[cfg(feature = "shadowing")]
     #[test]
     fn pslash_parse() {
         let expr = "Q(15,aind(loru(4,75257)))    *γ(aind(loru(4,75257),bis(4,1),bis(4,18)))";
@@ -1835,6 +1844,7 @@ mod test {
         println!("{}", network.dot());
     }
 
+    #[cfg(feature = "shadowing")]
     #[test]
     fn three_loop_photon_parse() {
         let expr=concat!("-64/729*ee^6*G^4",

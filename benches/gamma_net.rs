@@ -1,10 +1,14 @@
 use ahash::{HashSet, HashSetExt};
 use spenso::{
+    complex::Complex,
+    data::NumTensor,
+    network::TensorNetwork,
+    structure::{AbstractIndex, HistoryStructure},
     ufo::{
         euclidean_four_vector, euclidean_four_vector_sym, gamma, gammasym, mink_four_vector,
         mink_four_vector_sym,
     },
-    AbstractIndex, Complex, FallibleMul, HistoryStructure, NumTensor, TensorNetwork,
+    upgrading_arithmetic::FallibleMul,
 };
 
 use criterion::{criterion_group, criterion_main, Criterion};

@@ -4,7 +4,12 @@ use ahash::AHashMap;
 
 use approx::{assert_relative_eq, RelativeEq};
 use spenso::{
-    Complex, HasStructure, Levels, MixedTensor, SmartShadowStructure, SymbolicTensor, TensorNetwork,
+    complex::Complex,
+    network::Levels,
+    network::TensorNetwork,
+    parametric::MixedTensor,
+    structure::{HasStructure, SmartShadowStructure},
+    symbolic::SymbolicTensor,
 };
 use symbolica::{
     atom::{Atom, AtomView, Symbol},

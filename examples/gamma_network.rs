@@ -2,8 +2,12 @@ use std::ops::Neg;
 
 use num::ToPrimitive;
 use spenso::{
+    complex::Complex,
+    data::NumTensor,
+    network::TensorNetwork,
+    structure::{AbstractIndex, ContractionCountStructure},
     ufo::{euclidean_four_vector, gamma, mink_four_vector},
-    AbstractIndex, Complex, ContractionCountStructure, FallibleMul, NumTensor, TensorNetwork,
+    upgrading_arithmetic::FallibleMul,
 };
 
 fn gamma_net_num(

@@ -1,38 +1,46 @@
-use crate::{
-    ufo::mink_four_vector, Contract, DenseTensor, FallibleAddAssign, FallibleMul, FallibleSub,
-    GetTensorData, HasTensorData, Representation, SparseTensor, StructureContract,
-};
-use crate::{
-    AbstractFiber, BaseRepName, ColorAdjoint, ColorFundamental, CoreExpandedFiberIterator,
-    CoreFlatFiberIterator, DualSlotTo, Euclidean, ExpandedIndex, Fiber, FiberClass, FlatIndex,
-    HasStructure, IteratesAlongFibers, Lorentz, NoArgs, PhysReps, PhysicalSlots,
-    RealOrComplexTensor, RepName, TensorStructure,
-};
 #[cfg(feature = "shadowing")]
 use ahash::{HashMap, HashMapExt};
-
+#[cfg(feature = "shadowing")]
 // use flexi_logger::Logger;
 use indexmap::{IndexMap, IndexSet};
 use log::info;
 // use slotmap::SlotMap;
 
-use crate::Complex;
 use insta::{assert_ron_snapshot, assert_snapshot, assert_yaml_snapshot};
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 
-#[cfg(feature = "shadowing")]
-use super::{symbolic::SymbolicTensor, MixedTensor, Shadowable, TryIntoUpgrade};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView},
     state::State,
 };
 
-use super::FallibleAdd;
-use super::{
-    ufo, AbstractIndex, DataTensor, Dimension, HistoryStructure, NamedStructure, NumTensor,
-    SetTensorData, Slot, TensorNetwork, VecStructure,
+use crate::{
+    complex::{Complex, RealOrComplexTensor},
+    contraction::Contract,
+    data::{
+        DataTensor, DenseTensor, GetTensorData, HasTensorData, NumTensor, SetTensorData,
+        SparseTensor,
+    },
+    iterators::{
+        AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, Fiber, FiberClass,
+    },
+    iterators::{IteratableTensor, IteratesAlongFibers},
+    network::TensorNetwork,
+    parametric::MixedTensor,
+    structure::{
+        AbstractIndex, BaseRepName, Bispinor, ColorAdjoint, ColorFundamental, Dimension,
+        DualSlotTo, Euclidean, ExpandedIndex, FlatIndex, HasStructure, HistoryStructure, Lorentz,
+        NamedStructure, NoArgs, PhysReps, PhysicalSlots, RepName, Representation, Shadowable, Slot,
+        StructureContract, TensorShell, TensorStructure, ToSymbolic, VecStructure,
+    },
+    symbolic::SymbolicTensor,
+    ufo,
+    ufo::mink_four_vector,
+    upgrading_arithmetic::{
+        FallibleAdd, FallibleAddAssign, FallibleMul, FallibleSub, TryIntoUpgrade,
+    },
 };
 
 fn test_tensor<D, S>(structure: S, seed: u64, range: Option<(D, D)>) -> SparseTensor<D, S>
@@ -294,7 +302,7 @@ fn trace() {
 fn construct_dense_tensor() {
     let a = test_structure(4, 32);
     let data = vec![1.0; a.size().unwrap()];
-    let tensor = super::DenseTensor::from_data(&data, a).unwrap();
+    let tensor = DenseTensor::from_data(&data, a).unwrap();
     let num_tensor: NumTensor = tensor.clone().into();
     let data_tensor: DataTensor<f64, _> = tensor.clone().into();
 
@@ -1190,8 +1198,6 @@ fn contract_densor_with_spensor() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn evaluate() {
-    use crate::TensorShell;
-
     let structure: NamedStructure<&str, ()> = test_structure(3, 1).to_named("a", None);
 
     let a: TensorShell<_> = structure.clone().into();
@@ -1212,8 +1218,6 @@ fn evaluate() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn convert_sym() {
-    use crate::IteratableTensor;
-
     let i: Complex<f64> = Complex::new(0.0, 1.0);
     let mut data_b: Vec<Complex<f64>> = vec![i * Complex::from(5.0), Complex::<f64>::from(2.6) + i];
     data_b.append(
@@ -1257,8 +1261,6 @@ fn convert_sym() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn simple_multi_contract_sym() {
-    use crate::ToSymbolic;
-
     let structa = VecStructure::new(vec![
         Euclidean::new_slot_selfless(3, 1).into(),
         Euclidean::new_slot_selfless(4, 2).into(),
@@ -1324,8 +1326,6 @@ fn complex() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn symbolic_contract() {
-    use crate::Bispinor;
-
     let structura: NamedStructure<&str, ()> = NamedStructure::from_iter(
         [
             PhysReps::new_slot(Euclidean {}.into(), 2, 1),

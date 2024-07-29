@@ -1,11 +1,13 @@
 use std::collections::HashSet;
 
 use spenso::{
+    complex::Complex,
+    network::TensorNetwork,
+    parametric::{FlatCoefficent, MixedTensor},
+    structure::{AbstractIndex, ContractionCountStructure, Lorentz, PhysReps, RepName, ToSymbolic},
     ufo::{euclidean_four_vector, gamma},
-    AbstractIndex, ContractionCountStructure, FallibleMul, Lorentz, MixedTensor, PhysReps, RepName,
-    TensorNetwork, ToSymbolic,
+    upgrading_arithmetic::FallibleMul,
 };
-use spenso::{Complex, FlatCoefficent};
 
 use ahash::{AHashMap, AHashSet, HashMap};
 use criterion::{criterion_group, criterion_main, Criterion};

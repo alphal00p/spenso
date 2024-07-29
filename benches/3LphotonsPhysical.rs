@@ -4,7 +4,12 @@ use ahash::AHashMap;
 use approx::{assert_relative_eq, RelativeEq};
 use criterion::{criterion_group, criterion_main, Criterion};
 use spenso::{
-    Complex, HasStructure, Levels, MixedTensor, SmartShadowStructure, SymbolicTensor, TensorNetwork,
+    complex::Complex,
+    network::Levels,
+    network::TensorNetwork,
+    parametric::MixedTensor,
+    structure::{HasStructure, SmartShadowStructure},
+    symbolic::SymbolicTensor,
 };
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
@@ -309,11 +314,11 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.bench_function("3LPhysical precontracted new compiled asm", |b| {
         b.iter(|| {
             let out = neeet.evaluate_complex(&values);
-            // assert!(truth.relative_eq(
-            //     &(out.result_tensor().unwrap().scalar().unwrap()).into(),
-            //     0.1,
-            //     1.
-            // ),);
+            assert!(truth.relative_eq(
+                &(out.result_tensor().unwrap().scalar().unwrap()).into(),
+                0.1,
+                1.
+            ),);
         })
     });
 }

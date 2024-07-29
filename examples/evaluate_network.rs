@@ -2,11 +2,14 @@ use std::collections::HashSet;
 
 use ahash::{AHashMap, AHashSet, HashMap};
 use spenso::{
+    complex::Complex,
+    data::HasTensorData,
+    network::TensorNetwork,
+    parametric::{FlatCoefficent, MixedTensor},
+    structure::{AbstractIndex, ContractionCountStructure, Lorentz, PhysReps, RepName, ToSymbolic},
     ufo::{euclidean_four_vector, gamma},
-    AbstractIndex, ContractionCountStructure, FallibleMul, HasTensorData, Lorentz, MixedTensor,
-    PhysReps, RepName, TensorNetwork, ToSymbolic,
+    upgrading_arithmetic::FallibleMul,
 };
-use spenso::{Complex, FlatCoefficent};
 
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;

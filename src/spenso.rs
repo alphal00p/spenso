@@ -24,52 +24,51 @@ Namely
 
 /// All tooling for tensor structures, indices and representations
 pub mod structure;
-pub use structure::*;
+// pub use structure::*;
 
 /// More ergonomic, and smart arithmatic with symbolic types
 pub mod upgrading_arithmetic;
-pub use upgrading_arithmetic::*;
+// pub use upgrading_arithmetic::*;
 
 /// Tensors with data
 pub mod data;
-pub use data::*;
+// pub use data::*;
 
+/// complex numbers
+pub mod complex;
+// pub use complex::*;
+#[cfg(feature = "shadowing")]
+// pub use symbolic::*;
+/// Iterators on fibers of tensors
+pub mod iterators;
 /// Parametric tensor contraction
 #[cfg(feature = "shadowing")]
 pub mod parametric;
-#[cfg(feature = "shadowing")]
-pub use parametric::*;
+
+// pub use parametric::*;
 
 /// Symbolic tensors
 #[cfg(feature = "shadowing")]
 pub mod symbolic;
-#[cfg(feature = "shadowing")]
-pub use symbolic::*;
-/// Iterators on fibers of tensors
-pub mod iterators;
-pub use iterators::*;
+// pub use iterators::*;
 
 /// Tensor contraction
 pub mod contraction;
-pub use contraction::*;
+// pub use contraction::*;
 
 /// Tensor networks
 pub mod network;
-pub use network::*;
+// pub use network::*;
 /// Adding, subtracting, scalar multiplication of tensors
 pub mod arithmetic;
 
 /// data types for tensors
 pub mod scalar;
-pub use scalar::*;
-
-/// complex numbers
-pub mod complex;
-pub use complex::*;
+// pub use scalar::*;
 
 /// Permutation
 pub mod permutation;
-pub use permutation::*;
+// pub use permutation::*;
 
 /// Tensors as defined in the UFO format
 pub mod ufo;

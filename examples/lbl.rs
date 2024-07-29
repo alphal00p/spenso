@@ -1,4 +1,4 @@
-use spenso::SymbolicTensor;
+use spenso::symbolic::SymbolicTensor;
 use symbolica::atom::Atom;
 
 fn main() {

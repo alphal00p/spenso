@@ -1,12 +1,16 @@
 use crate::{
-    CastStructure, Complex, ExpandedIndex, FlatIndex, HasName, IsZero, IteratableTensor,
-    TensorStructure, TryFromUpgrade,
+    complex::Complex,
+    contraction::IsZero,
+    iterators::{DenseTensorLinearIterator, IteratableTensor, SparseTensorLinearIterator},
+    parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
+    structure::{
+        atomic_expanded_label_id, CastStructure, ConcreteIndex, ExpandedIndex, FlatIndex, HasName,
+        HasStructure, IntoArgs, IntoSymbol, ShadowMapping, Shadowable, TensorStructure,
+        TracksCount, VecStructure,
+    },
+    upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
 };
 
-use super::{
-    ConcreteIndex, DenseTensorLinearIterator, HasStructure, SparseTensorLinearIterator,
-    TracksCount, TrySmallestUpgrade, VecStructure,
-};
 use ahash::AHashMap;
 use derive_more::From;
 use enum_try_as_inner::EnumTryAsInner;
@@ -21,11 +25,6 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-#[cfg(feature = "shadowing")]
-use crate::{
-    atomic_expanded_label_id, ExpandedCoefficent, FlatCoefficent, IntoArgs, IntoSymbol,
-    ShadowMapping, Shadowable,
-};
 #[cfg(feature = "shadowing")]
 use std::collections::HashMap;
 #[cfg(feature = "shadowing")]
@@ -164,7 +163,7 @@ where
     //     index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
     // ) -> Option<ParamTensor<Self::Structure>>
     // where
-    //     C: crate::TensorCoefficient,
+    //     C: TensorCoefficient,
     // {
     //     let mut data = vec![];
     //     for (i, d) in self.flat_iter() {
@@ -186,7 +185,7 @@ where
         fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
     ) where
-        U: crate::TensorCoefficient,
+        U: TensorCoefficient,
     {
         for (i, d) in self.flat_iter() {
             let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
@@ -604,7 +603,7 @@ where
     //     index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
     // ) -> Option<ParamTensor<Self::Structure>>
     // where
-    //     U: crate::TensorCoefficient,
+    //     U: TensorCoefficient,
     //     R: From<T>,
     // {
     //     let mut data = vec![];
@@ -627,7 +626,7 @@ where
         fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
     ) where
-        U: crate::TensorCoefficient,
+        U: TensorCoefficient,
     {
         for (i, d) in self.flat_iter() {
             let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
@@ -1079,7 +1078,7 @@ where
     //     index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
     // ) -> Option<ParamTensor<Self::Structure>>
     // where
-    //     U: crate::TensorCoefficient,
+    //     U: TensorCoefficient,
     // {
     //     match self {
     //         DataTensor::Dense(d) => d.shadow_with_map(fn_map, index_to_atom),
@@ -1092,7 +1091,7 @@ where
         fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
     ) where
-        U: crate::TensorCoefficient,
+        U: TensorCoefficient,
     {
         match self {
             DataTensor::Dense(d) => d.append_map(fn_map, index_to_atom),

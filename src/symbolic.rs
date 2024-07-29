@@ -1,11 +1,11 @@
 use crate::{
-    ContractionError, HasStructure, IntoArgs, NamedStructure, PhysicalSlots, TensorNetworkError,
-    TensorStructure, ToSymbolic, ABSTRACTIND,
-};
-
-use super::{
-    Contract, HasName, IntoSymbol, MixedTensor, Shadowable, StructureContract, TensorNetwork,
-    VecStructure,
+    contraction::{Contract, ContractionError},
+    network::{TensorNetwork, TensorNetworkError},
+    parametric::MixedTensor,
+    structure::{
+        HasName, HasStructure, IntoArgs, IntoSymbol, NamedStructure, PhysicalSlots, Shadowable,
+        StructureContract, TensorStructure, ToSymbolic, VecStructure, ABSTRACTIND,
+    },
 };
 
 use symbolica::{

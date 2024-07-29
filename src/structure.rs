@@ -1,4 +1,3 @@
-use crate::SetTensorData;
 use ahash::AHashMap;
 use anyhow::{anyhow, Result};
 use delegate::delegate;
@@ -25,7 +24,6 @@ use smartstring::LazyCompact;
 use smartstring::SmartString;
 // use std::fmt::write;
 use std::fmt::Debug;
-#[cfg(feature = "shadowing")]
 use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::AddAssign;
@@ -46,18 +44,20 @@ use symbolica::{
     state::State,
 };
 
-use crate::Permutation;
-use crate::SparseTensor;
+use crate::data::SparseTensor;
 #[cfg(feature = "shadowing")]
-use crate::{ExpandedCoefficent, FlatCoefficent, ParamTensor, TensorCoefficient};
+use crate::parametric::{ExpandedCoefficent, FlatCoefficent, ParamTensor, TensorCoefficient};
+use crate::permutation::Permutation;
 use std::ops::Range;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use super::TensorStructureIndexIterator;
+use crate::data::{DenseTensor, SetTensorData};
+use crate::iterators::TensorStructureIndexIterator;
+use crate::parametric::MixedTensor;
 #[cfg(feature = "shadowing")]
-use super::{ufo, DenseTensor, MixedTensor};
+use crate::ufo;
 // use smartstring::alias::String;
 /// A type that represents the name of an index in a tensor.
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, Serialize, Deserialize)]
@@ -100,7 +100,7 @@ impl AddAssign<AbstractIndex> for AbstractIndex {
     }
 }
 
-impl Display for AbstractIndex {
+impl std::fmt::Display for AbstractIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", usize::from(*self))
     }
@@ -266,6 +266,7 @@ impl From<usize> for Dimension {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl From<Symbol> for Dimension {
     fn from(value: Symbol) -> Self {
         Dimension::Symbolic(value.into())
@@ -437,6 +438,8 @@ pub trait BaseRepName: RepName<Dual: RepName> + Default {
     fn selfless_pair() -> DualPair<Self::Base>
     where
         Self::Base: BaseRepName<Dual: BaseRepName>;
+
+    #[cfg(feature = "shadowing")]
     fn selfless_symbol() -> Symbol {
         State::get_symbol(Self::NAME)
     }
@@ -466,6 +469,7 @@ pub trait BaseRepName: RepName<Dual: RepName> + Default {
     where
         S: TensorStructure;
 
+    #[cfg(feature = "shadowing")]
     fn new_slot_from(
         sym: Symbol,
         dim: Dimension,
@@ -519,6 +523,7 @@ pub trait RepName: Copy + Clone + Debug + PartialEq + Eq + Hash + Display {
     fn dual(self) -> Self::Dual;
     fn base(&self) -> Self::Base;
     fn matches(&self, other: &Self::Dual) -> bool;
+    #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol) -> Result<Self>;
     fn metric<S, V: One + Zero + Neg<Output = V>>(
         &self,
@@ -723,7 +728,7 @@ duplicate! {
     fn is_neg(self,_i:usize)->bool{
         isneg
     }
-
+    #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol) -> Result<Self> {
         if Self::selfless_symbol() == sym {
             Ok(isnotselfdual::default())
@@ -792,7 +797,7 @@ duplicate! {
         fn matches(&self, _: &Self::Dual) -> bool {
         true
     }
-
+        #[cfg(feature = "shadowing")]
         fn try_from_symbol(sym:Symbol)->Result<Self>{
             if Self::selfless_symbol() == sym {
             Ok(Dual {
@@ -911,6 +916,7 @@ fn base_metric<S,V:One+Neg<Output=V>>
         true
     }
 
+    #[cfg(feature = "shadowing")]
   fn try_from_symbol(sym: Symbol) -> Result<Self> {
         if Self::selfless_symbol() == sym {
             Ok(isselfdual::default())
@@ -1046,6 +1052,7 @@ impl RepName for PhysReps {
         }
     }
 
+    #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol) -> Result<Self> {
         match State::get_name(sym) {
             EUCLIDEAN => Ok(Self::Euclidean(Euclidean {})),
@@ -1479,21 +1486,21 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
     fn set_aind(&mut self, aind: AbstractIndex) {
         self.aind = aind;
     }
-
+    #[cfg(feature = "shadowing")]
     fn to_symbolic(&self) -> Atom {
         let mut value_builder = self.rep.to_fnbuilder();
         value_builder =
             value_builder.add_arg(Atom::new_num(usize::from(self.aind) as i64).as_atom_view());
         value_builder.finish()
     }
-
+    #[cfg(feature = "shadowing")]
     fn to_symbolic_wrapped(&self) -> Atom {
         let mut value_builder = self.rep.to_fnbuilder();
         let id = Atom::parse(&format!("indexid({})", self.aind)).unwrap();
         value_builder = value_builder.add_arg(&id);
         value_builder.finish()
     }
-
+    #[cfg(feature = "shadowing")]
     fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError> {
         Slot::try_from(v)
     }
@@ -1581,7 +1588,7 @@ where
             Self::DualRep(d) => d.base(),
         }
     }
-
+    #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol) -> Result<Self> {
         if let Ok(r) = R::try_from_symbol(sym) {
             Ok(DualPair::Rep(r))
@@ -2988,6 +2995,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<N: IntoSymbol, A: IntoArgs> Display for SmartShadowStructure<N, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(ref name) = self.global_name {

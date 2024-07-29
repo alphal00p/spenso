@@ -1,17 +1,17 @@
-use crate::{
-    ConcreteIndex, GetTensorData, IsZero, IteratableTensor, RefZero, SetTensorData,
-    TensorStructure, TrySmallestUpgrade,
-};
 use std::ops::Neg;
 
-use super::{
-    DataTensor, DenseTensor, FallibleAdd, FallibleMul, FallibleSub, HasStructure, SparseTensor,
-};
-
-#[cfg(feature = "shadowing")]
-use super::{Complex, MixedTensor, ParamTensor, RealOrComplexTensor, R};
 #[cfg(feature = "shadowing")]
 use symbolica::atom::Atom;
+
+use crate::{
+    complex::{Complex, RealOrComplexTensor, R},
+    contraction::{IsZero, RefZero},
+    data::{DataTensor, DenseTensor, GetTensorData, SetTensorData, SparseTensor},
+    iterators::IteratableTensor,
+    parametric::{MixedTensor, ParamTensor},
+    structure::{ConcreteIndex, HasStructure, TensorStructure},
+    upgrading_arithmetic::{FallibleAdd, FallibleMul, FallibleSub, TrySmallestUpgrade},
+};
 
 impl<T, S> RefZero for DenseTensor<T, S>
 where

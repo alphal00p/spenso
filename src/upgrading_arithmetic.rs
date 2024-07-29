@@ -10,8 +10,10 @@ use symbolica::{
     state::State,
 };
 
-use crate::{Complex, RefZero, R};
-
+use crate::{
+    complex::{Complex, R},
+    contraction::RefZero,
+};
 // #[derive(Copy, Clone, PartialEq)]
 // pub struct Complex<T: Scalar> {
 //     re: T,
@@ -1170,9 +1172,9 @@ mod test {
     use symbolica::{atom::Atom, state::State};
 
     #[cfg(feature = "shadowing")]
-    use crate::Complex;
+    use crate::complex::Complex;
 
-    use crate::{FallibleAdd, FallibleAddAssign, FallibleMul, FallibleSub, FallibleSubAssign};
+    use super::*;
 
     #[test]
     fn i32_arithmetic() {

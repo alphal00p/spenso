@@ -1,6 +1,6 @@
 use ahash::AHashMap;
 use duplicate::duplicate;
-use log::debug;
+use log::trace;
 // use num::Zero;
 #[cfg(feature = "shadowing")]
 use symbolica::{atom::Atom, domains::float::Real};
@@ -571,16 +571,16 @@ where
         if let Some((single, i, j)) = self.structure().match_index(other.structure()) {
             if i >= j {
                 if single {
-                    debug!("single");
+                    trace!("single");
                     return self.single_contract(other, i, j);
                 }
-                debug!("multi");
+                trace!("multi");
                 return self.multi_contract(other);
             }
-            debug!("flip");
+            trace!("flip");
             return other.contract(self);
         }
-        debug!("exterior");
+        trace!("exterior");
         self.exterior_product(other)
     }
 }

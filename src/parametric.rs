@@ -30,7 +30,8 @@ use symbolica::{
         rational::Rational,
     },
     evaluate::{
-        CompileOptions, CompiledEvaluator, EvalTree, EvaluationFn, ExpressionEvaluator, FunctionMap,
+        CompileOptions, CompiledEvaluator, CompiledEvaluatorFloat, EvalTree, EvaluationFn,
+        ExpressionEvaluator, FunctionMap,
     },
     id::{Condition, MatchSettings, Pattern, Replacement, WildcardAndRestriction},
     state::State,
@@ -1328,6 +1329,7 @@ where
     }
 }
 
+
 pub struct EvalTreeTensor<T, S> {
     eval: EvalTree<T>,
     indexmap: Option<Vec<FlatIndex>>,
@@ -1601,6 +1603,7 @@ impl<T, S> EvalTensor<T, S> {
     }
 }
 
+#[derive(Debug)]
 pub struct CompiledEvalTensor<S> {
     eval: CompiledEvaluator,
     indexmap: Option<Vec<FlatIndex>>,
@@ -1663,6 +1666,28 @@ impl<S> CompiledEvalTensor<S> {
         } else {
             let mut out_data = DenseTensor::repeat(self.structure.clone(), SymComplex::new_zero());
             self.eval.evaluate_complex(params, &mut out_data.data);
+            DataTensor::Dense(out_data)
+        }
+    }
+
+    pub fn evaluate<T: CompiledEvaluatorFloat + Default + Clone>(
+        &self,
+        params: &[T],
+    ) -> DataTensor<T, S>
+    where
+        S: TensorStructure + Clone,
+    {
+        if let Some(ref indexmap) = self.indexmap {
+            let mut elements: Vec<T> = vec![T::default(); indexmap.len()];
+            self.eval.evaluate(params, &mut elements);
+            let s = SparseTensor {
+                elements: indexmap.iter().cloned().zip(elements.drain(0..)).collect(),
+                structure: self.structure.clone(),
+            };
+            DataTensor::Sparse(s)
+        } else {
+            let mut out_data = DenseTensor::repeat(self.structure.clone(), T::default());
+            self.eval.evaluate(params, &mut out_data.data);
             DataTensor::Dense(out_data)
         }
     }

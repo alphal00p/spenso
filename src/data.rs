@@ -129,6 +129,25 @@ pub struct SparseTensor<T, I = VecStructure> {
     pub structure: I,
 }
 
+pub trait CastData<O: HasTensorData>: HasStructure<Structure = O::Structure> {
+    fn cast_data(self) -> O;
+}
+
+impl<T, U: From<T> + Clone, I: TensorStructure + Clone> CastData<SparseTensor<U, I>>
+    for SparseTensor<T, I>
+{
+    fn cast_data(self) -> SparseTensor<U, I> {
+        SparseTensor {
+            elements: self
+                .elements
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+            structure: self.structure,
+        }
+    }
+}
+
 impl<T, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<SparseTensor<T, O>>
     for SparseTensor<T, S>
 {
@@ -567,6 +586,17 @@ where
 pub struct DenseTensor<T, S = VecStructure> {
     pub data: Vec<T>,
     pub structure: S,
+}
+
+impl<T, U: From<T> + Clone, I: TensorStructure + Clone> CastData<DenseTensor<U, I>>
+    for DenseTensor<T, I>
+{
+    fn cast_data(self) -> DenseTensor<U, I> {
+        DenseTensor {
+            data: self.data.into_iter().map(|v| v.into()).collect(),
+            structure: self.structure,
+        }
+    }
 }
 
 impl<T, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<DenseTensor<T, O>>
@@ -1042,6 +1072,18 @@ where
 pub enum DataTensor<T, I: TensorStructure = VecStructure> {
     Dense(DenseTensor<T, I>),
     Sparse(SparseTensor<T, I>),
+}
+
+impl<T: Clone, U: From<T> + Clone, I: TensorStructure + Clone> CastData<DataTensor<U, I>>
+    for DataTensor<T, I>
+{
+    fn cast_data(self) -> DataTensor<U, I> {
+        match self {
+            Self::Dense(d) => DataTensor::Dense(d.cast_data()),
+
+            Self::Sparse(d) => DataTensor::Sparse(d.cast_data()),
+        }
+    }
 }
 
 impl<T: Clone, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<DataTensor<T, O>>

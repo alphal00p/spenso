@@ -297,6 +297,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     //     })
     // });
 
+    let values: Vec<Complex<f64>> = values.into_iter().map(|c| c.into()).collect();
     let time = std::time::Instant::now();
     let mut precontracted_eval_tree_net = contracted_counting_network
         .clone()
@@ -305,7 +306,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .unwrap();
     precontracted_eval_tree_net.horner_scheme();
     precontracted_eval_tree_net.common_subexpression_elimination(1);
-    let mut neeet = precontracted_eval_tree_net
+    let neeet = precontracted_eval_tree_net
         .map_coeff::<f64, _>(&|r| r.into())
         .linearize()
         .compile_asm("nested_evaluation_asm", "libneval_asm");
@@ -313,12 +314,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     println!("asm compile time and optimisation: {:?}", time.elapsed());
     group.bench_function("3LPhysical precontracted new compiled asm", |b| {
         b.iter(|| {
-            let out = neeet.evaluate_complex(&values);
-            assert!(truth.relative_eq(
-                &(out.result_tensor().unwrap().scalar().unwrap()).into(),
-                0.1,
-                1.
-            ),);
+            let out = neeet.evaluate(&values);
+            assert!(truth.relative_eq(&(out.result_tensor().unwrap().scalar().unwrap()), 0.1, 1.),);
         })
     });
 }

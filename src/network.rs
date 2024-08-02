@@ -668,15 +668,14 @@ pub struct TensorNetworkSet<T: TensorStructure, S>
 where
     T::Slot: Serialize + for<'a> Deserialize<'a>,
 {
-    pub networks: Vec<HalfEdgeGraph<T, <T as TensorStructure>::Slot>>,
-    pub scalars: Vec<Option<S>>,
+    pub networks: Vec<TensorNetwork<T, S>>,
 }
 
 impl Default for TensorNetworkSet<NamedStructure, Atom> {
     fn default() -> Self {
         TensorNetworkSet {
             networks: vec![],
-            scalars: vec![],
+            // scalars: vec![],
         }
     }
 }
@@ -689,16 +688,17 @@ where
     pub fn new() -> Self {
         TensorNetworkSet {
             networks: vec![],
-            scalars: vec![],
+            // scalars: vec![],
         }
     }
 
     pub fn push(&mut self, network: TensorNetwork<T, S>) {
-        self.scalars.push(network.scalar);
-        self.networks.push(network.graph);
+        // self.scalars.push(network.scalar);
+        self.networks.push(network);
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct EvalTreeTensorNetworkSet<T, S: TensorStructure>
 where
     S::Slot: Serialize + for<'a> Deserialize<'a>,
@@ -708,6 +708,7 @@ where
     pub len: usize,
 }
 
+#[derive(Clone)]
 pub struct EvalTensorNetworkSet<T, S: TensorStructure>
 where
     S::Slot: Serialize + for<'a> Deserialize<'a>,
@@ -717,6 +718,7 @@ where
     pub len: usize,
 }
 
+#[derive(Debug, Clone)]
 pub struct CompiledTensorNetworkSet<S: TensorStructure>
 where
     S::Slot: Serialize + for<'a> Deserialize<'a>,
@@ -724,6 +726,20 @@ where
     pub networks: Vec<HalfEdgeGraph<DataTensor<usize, S>, <S as TensorStructure>::Slot>>,
     pub shared_data: CompiledEvaluator,
     pub len: usize,
+}
+
+impl<T: HasTensorData + GetTensorData<GetData = T::Data>> TensorNetworkSet<T, T::Data>
+where
+    T: Clone,
+    T::Structure: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
+{
+    pub fn result(&self) -> Result<Vec<T::Data>, TensorNetworkError> {
+        let mut data = vec![];
+        for n in &self.networks {
+            data.push(n.result()?);
+        }
+        Ok(data)
+    }
 }
 
 impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
@@ -745,7 +761,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
 
         let one = Atom::new_num(1);
 
-        for s in &self.scalars {
+        for s in self.networks.iter().map(|x| x.scalar.as_ref()) {
             if let Some(a) = s {
                 atoms.push(a.as_view());
             } else {
@@ -753,10 +769,10 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
             }
         }
 
-        id += self.scalars.len();
+        id += self.networks.len();
         for net in &self.networks {
             let mut usize_net = HalfEdgeGraph::new();
-            for (_, p) in &net.nodes {
+            for (_, p) in &net.graph.nodes {
                 let structure = p.structure().clone();
                 let usize_tensor = match &p.tensor {
                     DataTensor::Dense(d) => {
@@ -849,7 +865,12 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
 
         self.shared_data.evaluate(params, &mut data);
 
-        for net in self.networks.iter() {
+        let scalars: Vec<Option<T>> = data
+            .iter()
+            .take(self.len)
+            .map(|x| if x.is_one() { None } else { Some(x.clone()) })
+            .collect();
+        for (i, net) in self.networks.iter().enumerate() {
             let mut data_net = HalfEdgeGraph::new();
             for (_, p) in net.nodes.iter() {
                 let structure = p.structure().clone();
@@ -873,22 +894,68 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
                 let slots = data_tensor.external_structure().to_vec();
                 data_net.add_node_with_edges_fn(data_tensor, &slots, |s, so| s.matches(so));
             }
-            networks.push(data_net);
+            networks.push(TensorNetwork {
+                graph: data_net,
+                scalar: scalars[i].clone(),
+            });
         }
 
-        let scalars = data
-            .iter()
-            .take(self.len)
-            .map(|x| if x.is_one() { None } else { Some(x.clone()) })
-            .collect();
-
-        TensorNetworkSet { networks, scalars }
+        TensorNetworkSet { networks }
     }
 }
 
 impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     EvalTensorNetworkSet<T, S>
 {
+    pub fn evaluate(&mut self, params: &[T]) -> TensorNetworkSet<DataTensor<T, S>, T>
+    where
+        T: Real + NumericalFloatComparison,
+        S: TensorStructure + Clone,
+    {
+        let zero = params[0].zero();
+        let mut data = vec![zero; self.len];
+
+        let mut networks = vec![];
+
+        self.shared_data.evaluate_multiple(params, &mut data);
+        let scalars: Vec<Option<T>> = data
+            .iter()
+            .take(self.len)
+            .map(|x| if x.is_one() { None } else { Some(x.clone()) })
+            .collect();
+        for (i, net) in self.networks.iter().enumerate() {
+            let mut data_net = HalfEdgeGraph::new();
+            for (_, p) in net.nodes.iter() {
+                let structure = p.structure().clone();
+                let data_tensor = match &p {
+                    DataTensor::Dense(d) => {
+                        let mut t_data = vec![];
+                        for (_, &a) in d.flat_iter() {
+                            t_data.push(data[a].clone());
+                        }
+                        DataTensor::Dense(DenseTensor::from_data(t_data, structure).unwrap())
+                    }
+                    DataTensor::Sparse(s) => {
+                        let mut t = SparseTensor::empty(structure);
+                        for (i, &a) in s.flat_iter() {
+                            t.set_flat(i, data[a].clone()).unwrap();
+                        }
+                        DataTensor::Sparse(t)
+                    }
+                };
+
+                let slots = data_tensor.external_structure().to_vec();
+                data_net.add_node_with_edges_fn(data_tensor, &slots, |s, so| s.matches(so));
+            }
+            networks.push(TensorNetwork {
+                graph: data_net,
+                scalar: scalars[i].clone(),
+            });
+        }
+
+        TensorNetworkSet { networks }
+    }
+
     pub fn compile(&self, filename: &str, library_name: &str) -> CompiledTensorNetworkSet<S>
     where
         T: NumericalFloatLike,
@@ -930,7 +997,12 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
 
         self.shared_data.evaluate(params, &mut data);
 
-        for net in self.networks.iter() {
+        let scalars: Vec<Option<T>> = data
+            .iter()
+            .take(self.len)
+            .map(|x| Some(x.clone()))
+            .collect();
+        for (i, net) in self.networks.iter().enumerate() {
             let mut data_net = HalfEdgeGraph::new();
             for (_, p) in net.nodes.iter() {
                 let structure = p.structure().clone();
@@ -954,16 +1026,13 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
                 let slots = data_tensor.external_structure().to_vec();
                 data_net.add_node_with_edges_fn(data_tensor, &slots, |s, so| s.matches(so));
             }
-            networks.push(data_net);
+            networks.push(TensorNetwork {
+                graph: data_net,
+                scalar: scalars[i].clone(),
+            });
         }
 
-        let scalars = data
-            .iter()
-            .take(self.len)
-            .map(|x| Some(x.clone()))
-            .collect();
-
-        TensorNetworkSet { networks, scalars }
+        TensorNetworkSet { networks }
     }
 }
 

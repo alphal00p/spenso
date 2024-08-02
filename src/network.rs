@@ -664,6 +664,7 @@ where
     pub scalar: Option<S>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TensorNetworkSet<T: TensorStructure, S>
 where
     T::Slot: Serialize + for<'a> Deserialize<'a>,

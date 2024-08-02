@@ -15,7 +15,9 @@ use symbolica::domains::float::Complex as SymComplex;
 #[cfg(feature = "shadowing")]
 use symbolica::domains::float::ConstructibleFloat;
 #[cfg(feature = "shadowing")]
-use symbolica::domains::{float::NumericalFloatLike, float::Real, rational::Rational};
+use symbolica::domains::{
+    float::NumericalFloatComparison, float::NumericalFloatLike, float::Real, rational::Rational,
+};
 use symbolica::{
     atom::Atom,
     evaluate::{CompiledEvaluatorFloat, FunctionMap},
@@ -55,6 +57,38 @@ duplicate! {
 pub struct Complex<T> {
     pub re: T,
     pub im: T,
+}
+
+impl<T: NumericalFloatComparison> NumericalFloatComparison for Complex<T>
+where
+    T: for<'a> RefMul<&'a T, Output = T>
+        + for<'a> RefAdd<&'a T, Output = T>
+        + for<'a> RefSub<&'a T, Output = T>
+        + for<'a> RefDiv<&'a T, Output = T>,
+{
+    fn is_finite(&self) -> bool {
+        self.re.is_finite() && self.im.is_finite()
+    }
+
+    fn is_one(&self) -> bool {
+        self.re.is_one() && self.im.is_zero()
+    }
+
+    fn is_zero(&self) -> bool {
+        self.re.is_zero() && self.im.is_zero()
+    }
+
+    fn max(&self, other: &Self) -> Self {
+        Complex::new(self.re.max(&other.re), self.im.max(&other.im))
+    }
+
+    fn to_f64(&self) -> f64 {
+        self.re.to_f64()
+    }
+
+    fn to_usize_clamped(&self) -> usize {
+        self.re.to_usize_clamped()
+    }
 }
 
 impl<T: NumericalFloatLike> NumericalFloatLike for Complex<T>

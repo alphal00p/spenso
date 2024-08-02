@@ -437,7 +437,7 @@ where
     identity(indices, signature)
 }
 
-pub fn mink_four_vector<T, I>(index: AbstractIndex, p: &[T; 4]) -> DenseTensor<T, I>
+pub fn mink_four_vector<T, I>(index: AbstractIndex, p: [T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
     I: TensorStructure + FromIterator<Slot<Lorentz>> + FromIterator<Slot<Dual<Lorentz>>>,
@@ -450,19 +450,19 @@ where
         }
         AbstractIndex::Normal(_) => [Lorentz::new_slot_selfless(4, index)].into_iter().collect(),
     };
-    DenseTensor::from_data(p, structure).unwrap_or_else(|_| unreachable!())
+    DenseTensor::from_data(p.to_vec(), structure).unwrap_or_else(|_| unreachable!())
 }
 
 #[cfg(feature = "shadowing")]
 pub fn mink_four_vector_sym<T>(
     index: AbstractIndex,
-    p: &[T; 4],
+    p: [T; 4],
 ) -> DenseTensor<T, HistoryStructure<Symbol, ()>>
 where
     T: Clone,
 {
     DenseTensor::from_data(
-        p,
+        p.to_vec(),
         HistoryStructure::from(NamedStructure::from_iter(
             [Lorentz::new_slot_selfless(4, index)],
             State::get_symbol("p"),
@@ -472,13 +472,13 @@ where
     .unwrap_or_else(|_| unreachable!())
 }
 
-pub fn euclidean_four_vector<T, I>(index: AbstractIndex, p: &[T; 4]) -> DenseTensor<T, I>
+pub fn euclidean_four_vector<T, I>(index: AbstractIndex, p: [T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
     I: TensorStructure + FromIterator<Slot<Euclidean>>,
 {
     DenseTensor::from_data(
-        p,
+        p.to_vec(),
         [Euclidean::new_slot_selfless(4, index)]
             .into_iter()
             .collect(),
@@ -489,13 +489,13 @@ where
 #[cfg(feature = "shadowing")]
 pub fn euclidean_four_vector_sym<T>(
     index: AbstractIndex,
-    p: &[T; 4],
+    p: [T; 4],
 ) -> DenseTensor<T, HistoryStructure<Symbol, ()>>
 where
     T: Clone,
 {
     DenseTensor::from_data(
-        p,
+        p.to_vec(),
         HistoryStructure::from(NamedStructure::from_iter(
             [Euclidean::new_slot_selfless(4, index)],
             State::get_symbol("p"),

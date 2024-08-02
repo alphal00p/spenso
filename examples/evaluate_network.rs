@@ -25,7 +25,7 @@ fn gamma_net_param(
     let mut i: i32 = 0;
     let mut contracting_index = 0.into();
     let mut result: Vec<MixedTensor<f64, ContractionCountStructure>> =
-        vec![euclidean_four_vector(contracting_index, &vbar).into()];
+        vec![euclidean_four_vector(contracting_index, vbar).into()];
     let lor_fouru = PhysReps::new_dimed_rep(&Lorentz {}.into(), 4);
     let lor_fourd = lor_fouru.dual();
     let p = State::get_symbol("p");
@@ -68,7 +68,7 @@ fn gamma_net_param(
             result.push(gamma(mu, [ui, uj]).into());
         }
     }
-    result.push(euclidean_four_vector(contracting_index, &u).into());
+    result.push(euclidean_four_vector(contracting_index, u).into());
     TensorNetwork::from(result)
 }
 

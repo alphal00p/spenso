@@ -23,7 +23,7 @@ fn gamma_net_sym(
     let mut i = 0;
     let mut contracting_index = 0.into();
     let mut result: Vec<NumTensor<HistoryStructure<Symbol>>> =
-        vec![euclidean_four_vector_sym(contracting_index, &vbar).into()];
+        vec![euclidean_four_vector_sym(contracting_index, vbar).into()];
     let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;
@@ -37,7 +37,7 @@ fn gamma_net_sym(
                 Complex::<f64>::new(1.3 + 0.01 * i.to_f64().unwrap(), 0.0),
             ];
             i += 1;
-            result.push(mink_four_vector_sym(AbstractIndex::from(*m), &p).into());
+            result.push(mink_four_vector_sym(AbstractIndex::from(*m), p).into());
             result.push(gammasym(AbstractIndex::from(-*m), [ui, uj]).into());
         } else {
             let mu = if seen.insert(m) {
@@ -48,7 +48,7 @@ fn gamma_net_sym(
             result.push(gammasym(mu, [ui, uj]).into());
         }
     }
-    result.push(euclidean_four_vector_sym(contracting_index, &u).into());
+    result.push(euclidean_four_vector_sym(contracting_index, u).into());
     TensorNetwork::from(result)
 }
 
@@ -59,7 +59,7 @@ fn gamma_net(
 ) -> TensorNetwork<NumTensor, Complex<f64>> {
     let mut i = 0;
     let mut contracting_index = 0.into();
-    let mut result: Vec<NumTensor> = vec![euclidean_four_vector(contracting_index, &vbar).into()];
+    let mut result: Vec<NumTensor> = vec![euclidean_four_vector(contracting_index, vbar).into()];
 
     let mut seen = HashSet::new();
     for m in minkindices {
@@ -74,7 +74,7 @@ fn gamma_net(
                 Complex::<f64>::new(1.3 + 0.01 * i.to_f64().unwrap(), 0.0),
             ];
             i += 1;
-            result.push(mink_four_vector(AbstractIndex::from(*m), &p).into());
+            result.push(mink_four_vector(AbstractIndex::from(*m), p).into());
             result.push(gamma(AbstractIndex::from(-*m), [ui, uj]).into());
         } else {
             let mu = if seen.insert(m) {
@@ -85,7 +85,7 @@ fn gamma_net(
             result.push(gamma(mu, [ui, uj]).into());
         }
     }
-    result.push(euclidean_four_vector(contracting_index, &u).into());
+    result.push(euclidean_four_vector(contracting_index, u).into());
     TensorNetwork::from(result)
 }
 

@@ -18,7 +18,7 @@ fn gamma_net_num(
     let mut i: i32 = 0;
     let mut contracting_index = 0.into();
     let mut result: Vec<NumTensor<ContractionCountStructure>> =
-        vec![euclidean_four_vector(contracting_index, &vbar).into()];
+        vec![euclidean_four_vector(contracting_index, vbar).into()];
     for m in minkindices {
         let ui = contracting_index;
         contracting_index += 1.into();
@@ -31,7 +31,7 @@ fn gamma_net_num(
                 Complex::<f64>::new(1.3 + 0.01 * i.to_f64().unwrap(), 0.0),
             ];
             i += 1;
-            result.push(mink_four_vector(usize::try_from(*m).unwrap().into(), &p).into());
+            result.push(mink_four_vector(usize::try_from(*m).unwrap().into(), p).into());
             result.push(gamma(AbstractIndex::from(-*m), [ui, uj]).into());
         } else {
             result.push(
@@ -43,7 +43,7 @@ fn gamma_net_num(
             );
         }
     }
-    result.push(euclidean_four_vector(contracting_index, &u).into());
+    result.push(euclidean_four_vector(contracting_index, u).into());
     TensorNetwork::from(result)
 }
 

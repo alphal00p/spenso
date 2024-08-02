@@ -302,7 +302,7 @@ fn trace() {
 fn construct_dense_tensor() {
     let a = test_structure(4, 32);
     let data = vec![1.0; a.size().unwrap()];
-    let tensor = DenseTensor::from_data(&data, a).unwrap();
+    let tensor = DenseTensor::from_data(data.clone(), a).unwrap();
     let num_tensor: NumTensor = tensor.clone().into();
     let data_tensor: DataTensor<f64, _> = tensor.clone().into();
 
@@ -417,13 +417,16 @@ fn dense_dense_single_contract() {
     ]);
 
     let a = DenseTensor::from_data(
-        &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
         structura,
     )
     .unwrap();
 
-    let b = DenseTensor::from_data(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], structurb.clone())
-        .unwrap();
+    let b = DenseTensor::from_data(
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        structurb.clone(),
+    )
+    .unwrap();
 
     let f = a.contract(&b).unwrap();
 
@@ -453,8 +456,11 @@ fn sparse_diag_dense_contract() {
     )
     .unwrap();
 
-    let b = DenseTensor::from_data(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], structurb.clone())
-        .unwrap();
+    let b = DenseTensor::from_data(
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        structurb.clone(),
+    )
+    .unwrap();
 
     let f = a.contract(&b).unwrap();
     let g = b.contract(&a).unwrap();
@@ -642,7 +648,7 @@ fn simple_multi_contract() {
     ]);
 
     let a = DenseTensor::from_data(
-        &[
+        vec![
             1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 12, 13, 14, 15, 16, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11,
             12, 13, 14, 15, 16, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 12, 13, 14, 15, 16,
         ],
@@ -651,7 +657,7 @@ fn simple_multi_contract() {
     .unwrap();
 
     let b = DenseTensor::from_data(
-        &[
+        vec![
             3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 3, 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0,
             3, 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 3, 2, 1,
         ],
@@ -920,7 +926,7 @@ fn mixed_tensor_contraction() {
     ));
 
     let b = DenseTensor::from_data(
-        &[
+        vec![
             im.mul_fallible(&1.0).unwrap(),
             2.0.mul_fallible(&im).unwrap(),
             3.0.mul_fallible(&im).unwrap(),
@@ -949,7 +955,7 @@ fn mixed_tensor_contraction() {
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
-    let b = DenseTensor::from_data(&[1.0, 2.0, 3.0, 4.0], structur_b).unwrap();
+    let b = DenseTensor::from_data(vec![1.0, 2.0, 3.0, 4.0], structur_b).unwrap();
 
     let f = a.contract(&b).unwrap();
     assert_eq!(
@@ -974,16 +980,16 @@ fn tensor_net() {
     let d: RealOrComplexTensor<f64, _> =
         RealOrComplexTensor::Complex(DataTensor::from(ufo::gamma(4.into(), [5.into(), 2.into()])));
     let p: RealOrComplexTensor<f64, _> = RealOrComplexTensor::Real(DataTensor::from(
-        mink_four_vector(AbstractIndex::from(-1), &[2., 3., 2., 1.]),
+        mink_four_vector(AbstractIndex::from(-1), [2., 3., 2., 1.]),
     ));
     let q: RealOrComplexTensor<f64, _> = RealOrComplexTensor::Real(DataTensor::from(
-        mink_four_vector(AbstractIndex::from(-2), &[2., 3., 2., 1.]),
+        mink_four_vector(AbstractIndex::from(-2), [2., 3., 2., 1.]),
     ));
     let r: RealOrComplexTensor<f64, _> = RealOrComplexTensor::Real(DataTensor::from(
-        mink_four_vector(AbstractIndex::from(-3), &[2., 3., 2., 1.]),
+        mink_four_vector(AbstractIndex::from(-3), [2., 3., 2., 1.]),
     ));
     let s: RealOrComplexTensor<f64, _> = RealOrComplexTensor::Real(DataTensor::from(
-        mink_four_vector(AbstractIndex::from(-4), &[2., 3., 2., 1.]),
+        mink_four_vector(AbstractIndex::from(-4), [2., 3., 2., 1.]),
     ));
 
     let pslash = a.contract(&p).unwrap();
@@ -1177,7 +1183,7 @@ fn contract_densor_with_spensor() {
         None,
     ));
 
-    let b = DenseTensor::from_data(&data_b, structur_b).unwrap();
+    let b = DenseTensor::from_data(data_b.to_vec(), structur_b).unwrap();
 
     let f = a.contract(&b).unwrap();
 
@@ -1234,7 +1240,7 @@ fn convert_sym() {
         "b",
         None,
     ));
-    let b = DenseTensor::from_data(&data_b, structur_b).unwrap();
+    let b = DenseTensor::from_data(data_b.to_vec(), structur_b).unwrap();
 
     let symb: DenseTensor<Atom, _> = b.try_into_upgrade().unwrap();
 
@@ -1275,7 +1281,7 @@ fn simple_multi_contract_sym() {
     // let structb = structb.to_named("b");
 
     let _a = DenseTensor::from_data(
-        &[
+        vec![
             1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 12, 13, 14, 15, 16, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11,
             12, 13, 14, 15, 16, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 12, 13, 14, 15, 16,
         ],
@@ -1284,7 +1290,7 @@ fn simple_multi_contract_sym() {
     .unwrap();
 
     let _b = DenseTensor::from_data(
-        &[
+        vec![
             3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 3, 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0,
             3, 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 3, 2, 1,
         ],

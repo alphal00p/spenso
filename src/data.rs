@@ -824,14 +824,11 @@ where
     I: TensorStructure,
 {
     /// Generates a new dense tensor from the given data and structure
-    pub fn from_data(data: &[T], structure: I) -> Result<Self> {
+    pub fn from_data(data: Vec<T>, structure: I) -> Result<Self> {
         if data.len() != structure.size()? && !(data.len() == 1 && structure.is_scalar()) {
             return Err(anyhow!("Data length does not match shape"));
         }
-        Ok(DenseTensor {
-            data: data.to_vec(),
-            structure,
-        })
+        Ok(DenseTensor { data, structure })
     }
 
     pub fn cast<U>(&self) -> DenseTensor<U, I>

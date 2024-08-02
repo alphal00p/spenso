@@ -89,4 +89,5 @@ thiserror = "1.0.60"
 shadowing = ["dep:symbolica"]
 
 [patch.crates-io]
-symbolica = { git = "https://github.com/benruijl/symbolica", branch = "nested_evaluate" }
+# symbolica = { git = "https://github.com/benruijl/symbolica", branch = "nested_evaluate" }
+symbolica = { path = "../gammaloop/python/gammaloop/dependencies/symbolica" }

@@ -978,6 +978,29 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
             len: self.len,
         }
     }
+
+    pub fn compile_asm(&self, filename: &str, library_name: &str) -> CompiledTensorNetworkSet<S>
+    where
+        T: NumericalFloatLike,
+        S: Clone,
+    {
+        let function_name = filename;
+        let filename = format!("{filename}.cpp");
+        let library_name = format!("{library_name}.so");
+
+        CompiledTensorNetworkSet {
+            networks: self.networks.clone(),
+            shared_data: self
+                .shared_data
+                .export_asm(&filename, function_name, true)
+                .unwrap()
+                .compile(&library_name, CompileOptions::default())
+                .unwrap()
+                .load()
+                .unwrap(),
+            len: self.len,
+        }
+    }
 }
 
 impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>

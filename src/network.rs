@@ -812,6 +812,15 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     }
 }
 
+#[cfg(feature = "shadowing")]
+impl<S: Clone + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
+    EvalTreeTensorNetworkSet<Rational, S>
+{
+    pub fn horner_scheme(&mut self) {
+        self.shared_data.horner_scheme();
+    }
+}
+
 impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     EvalTreeTensorNetworkSet<T, S>
 {

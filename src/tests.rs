@@ -10,6 +10,7 @@ use insta::{assert_ron_snapshot, assert_snapshot, assert_yaml_snapshot};
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 
+use slotmap::{SecondaryMap, SlotMap};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView},
@@ -1505,4 +1506,31 @@ fn parsing_addition_and_mul() {
 
     network.contract();
     println!("Network res: {}", network.result_tensor().unwrap());
+}
+
+#[test]
+fn slotmap() {
+    let mut a = SlotMap::new();
+    let mut b = SecondaryMap::new();
+    let mut c = SecondaryMap::new();
+
+    let idx0 = a.insert(0);
+    let idx1 = a.insert(1);
+    let idx2 = a.insert(2);
+
+    b.insert(idx0, 0);
+    b.insert(idx1, 1);
+    b.insert(idx2, 2);
+
+    c.insert(idx0, 0);
+    c.insert(idx1, 1);
+    c.insert(idx2, 2);
+
+    // c.remove(idx1);
+    // b.remove(idx1);
+    a.remove(idx1);
+
+    for (i, j) in b {
+        println!("{:?}:{}", i, j);
+    }
 }

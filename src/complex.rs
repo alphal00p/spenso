@@ -16,7 +16,7 @@ use symbolica::domains::float::Complex as SymComplex;
 use symbolica::domains::float::ConstructibleFloat;
 #[cfg(feature = "shadowing")]
 use symbolica::domains::{
-    float::NumericalFloatComparison, float::NumericalFloatLike, float::Real, rational::Rational,
+    float::NumericalFloatLike, float::Real, float::SingleFloat, rational::Rational,
 };
 use symbolica::{
     atom::Atom,
@@ -59,7 +59,7 @@ pub struct Complex<T> {
     pub im: T,
 }
 
-impl<T: NumericalFloatComparison> NumericalFloatComparison for Complex<T>
+impl<T: SingleFloat> SingleFloat for Complex<T>
 where
     T: for<'a> RefMul<&'a T, Output = T>
         + for<'a> RefAdd<&'a T, Output = T>
@@ -76,18 +76,6 @@ where
 
     fn is_zero(&self) -> bool {
         self.re.is_zero() && self.im.is_zero()
-    }
-
-    fn max(&self, other: &Self) -> Self {
-        Complex::new(self.re.max(&other.re), self.im.max(&other.im))
-    }
-
-    fn to_f64(&self) -> f64 {
-        self.re.to_f64()
-    }
-
-    fn to_usize_clamped(&self) -> usize {
-        self.re.to_usize_clamped()
     }
 }
 

@@ -1,6 +1,9 @@
 extern crate derive_more;
 
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    sync::Arc,
+};
 
 use ahash::{AHashMap, HashMap};
 
@@ -25,15 +28,25 @@ use crate::{
 
 use symbolica::{
     atom::{representation::FunView, Atom, AtomOrView, AtomView, FunctionBuilder, Symbol},
+    coefficient::ConvertToRing,
     domains::{
+        factorized_rational_polynomial::{
+            FactorizedRationalPolynomial, FromNumeratorAndFactorizedDenominator,
+        },
         float::{NumericalFloatLike, Real},
         rational::Rational,
+        rational_polynomial::{FromNumeratorAndDenominator, RationalPolynomial},
+        EuclideanDomain,
     },
     evaluate::{
         CompileOptions, CompiledEvaluator, CompiledEvaluatorFloat, EvalTree, EvaluationFn,
         ExpressionEvaluator, FunctionMap,
     },
     id::{Condition, MatchSettings, Pattern, Replacement, WildcardAndRestriction},
+    poly::{
+        factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Exponent,
+        Variable,
+    },
     state::State,
 };
 
@@ -275,6 +288,73 @@ impl<S: TensorStructure> ParamTensor<S> {
             tensor,
             param_type: ParamOrComposite::Composite,
         }
+    }
+
+    /// Convert the tensor of atoms to a tensor of polynomials, optionally in the variable ordering
+    /// specified by `var_map`. If new variables are encountered, they are
+    /// added to the variable map. Similarly, non-polynomial parts are automatically
+    /// defined as a new independent variable in the polynomial.
+    pub fn to_polynomial<R: EuclideanDomain + ConvertToRing, E: Exponent>(
+        &self,
+        field: &R,
+        var_map: Option<Arc<Vec<Variable>>>,
+    ) -> DataTensor<MultivariatePolynomial<R, E>, S>
+    where
+        S: Clone,
+    {
+        self.tensor
+            .map_data_ref(|a| a.as_view().to_polynomial(field, var_map.clone()))
+    }
+
+    /// Convert the tensor of atoms to a tensor of rational polynomials, optionally in the variable ordering
+    /// specified by `var_map`. If new variables are encountered, they are
+    /// added to the variable map. Similarly, non-rational polynomial parts are automatically
+    /// defined as a new independent variable in the rational polynomial.
+    pub fn to_rational_polynomial<
+        R: EuclideanDomain + ConvertToRing,
+        RO: EuclideanDomain + PolynomialGCD<E>,
+        E: Exponent,
+    >(
+        &self,
+        field: &R,
+        out_field: &RO,
+        var_map: Option<Arc<Vec<Variable>>>,
+    ) -> DataTensor<RationalPolynomial<RO, E>, S>
+    where
+        RationalPolynomial<RO, E>:
+            FromNumeratorAndDenominator<R, RO, E> + FromNumeratorAndDenominator<RO, RO, E>,
+        S: Clone,
+    {
+        self.tensor.map_data_ref(|a| {
+            a.as_view()
+                .to_rational_polynomial(field, out_field, var_map.clone())
+        })
+    }
+
+    /// Convert the tensor of atoms to a tensor of rational polynomials with factorized denominators, optionally in the variable ordering
+    /// specified by `var_map`. If new variables are encountered, they are
+    /// added to the variable map. Similarly, non-rational polynomial parts are automatically
+    /// defined as a new independent variable in the rational polynomial.
+    pub fn to_factorized_rational_polynomial<
+        R: EuclideanDomain + ConvertToRing,
+        RO: EuclideanDomain + PolynomialGCD<E>,
+        E: Exponent,
+    >(
+        &self,
+        field: &R,
+        out_field: &RO,
+        var_map: Option<Arc<Vec<Variable>>>,
+    ) -> DataTensor<FactorizedRationalPolynomial<RO, E>, S>
+    where
+        FactorizedRationalPolynomial<RO, E>: FromNumeratorAndFactorizedDenominator<R, RO, E>
+            + FromNumeratorAndFactorizedDenominator<RO, RO, E>,
+        MultivariatePolynomial<RO, E>: Factorize,
+        S: Clone,
+    {
+        self.tensor.map_data_ref(|a| {
+            a.as_view()
+                .to_factorized_rational_polynomial(field, out_field, var_map.clone())
+        })
     }
 }
 
@@ -1328,7 +1408,6 @@ where
         }
     }
 }
-
 
 pub struct EvalTreeTensor<T, S> {
     eval: EvalTree<T>,

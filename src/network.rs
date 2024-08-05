@@ -3,7 +3,21 @@ use ahash::{AHashSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
-use symbolica::domains::float::NumericalFloatComparison;
+use symbolica::{
+    coefficient::ConvertToRing,
+    domains::{
+        factorized_rational_polynomial::{
+            FactorizedRationalPolynomial, FromNumeratorAndFactorizedDenominator,
+        },
+        float::SingleFloat,
+        rational_polynomial::{FromNumeratorAndDenominator, RationalPolynomial},
+        EuclideanDomain,
+    },
+    poly::{
+        factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Exponent,
+        Variable,
+    },
+};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     domains::float::NumericalFloatLike,
@@ -47,7 +61,10 @@ use symbolica::{
 use ahash::AHashMap;
 
 use smartstring::alias::String;
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    sync::Arc,
+};
 
 #[cfg(feature = "shadowing")]
 use anyhow::anyhow;
@@ -62,8 +79,8 @@ pub struct HalfEdgeGraph<N, E> {
     pub edges: DenseSlotMap<HedgeId, E>,
     pub involution: SecondaryMap<HedgeId, HedgeId>,
     pub neighbors: SecondaryMap<HedgeId, HedgeId>,
-    pub nodes: DenseSlotMap<NodeId, N>,
     pub nodemap: SecondaryMap<HedgeId, NodeId>,
+    pub nodes: DenseSlotMap<NodeId, N>,
     pub reverse_nodemap: SecondaryMap<NodeId, HedgeId>,
 }
 
@@ -339,6 +356,15 @@ impl<N, E> HalfEdgeGraph<N, E> {
         out
     }
 
+    fn remove_edge(&mut self, edge: HedgeId) {
+        self.edges.remove(edge);
+        self.edges.remove(self.involution[edge]);
+        self.nodemap.remove(edge);
+        self.nodemap.remove(self.involution[edge]);
+        self.involution.remove(self.involution[edge]);
+        self.involution.remove(edge);
+    }
+
     #[allow(clippy::too_many_lines)]
     fn merge_nodes(&mut self, a: NodeId, b: NodeId, data: N) -> NodeId {
         let c = self.nodes.insert(data);
@@ -355,40 +381,35 @@ impl<N, E> HalfEdgeGraph<N, E> {
                 .find(|x| self.nodemap[self.involution[*x]] != b);
         }
 
-        let mut a_edge = new_initial_a;
+        if let Some(initial) = new_initial_a {
+            let mut current = Ok(initial);
 
-        if a_edge.is_none() {
+            while let Ok(cur) = current {
+                let mut next = self.neighbors[cur];
+                while self.nodemap[self.involution[next]] == b {
+                    next = self.neighbors.remove(next).unwrap();
+                }
+                self.neighbors[cur] = next;
+
+                if next == initial {
+                    current = Err(cur);
+                } else {
+                    current = Ok(next);
+                }
+            }
+        } else {
             // all edges link to b, and must be removed
             let initial = self.reverse_nodemap[a];
             let mut current = Some(initial);
-            loop {
-                if current.is_none() {
-                    break;
-                }
-                let next = self.neighbors.remove(current.unwrap());
 
+            while let Some(c) = current {
+                let next = self.neighbors.remove(c);
+                // self.remove_edge(c);
                 if next == Some(initial) {
                     current = None;
                 } else {
                     current = next;
                 }
-            }
-        } else {
-            loop {
-                let mut next = self.neighbors[a_edge.unwrap()];
-
-                while self.nodemap[self.involution[next]] == b {
-                    next = self.neighbors.remove(next).unwrap();
-                }
-
-                self.nodemap.insert(a_edge.unwrap(), c);
-                self.neighbors.insert(a_edge.unwrap(), next);
-
-                if new_initial_a == Some(next) {
-                    break;
-                }
-
-                a_edge = Some(next);
             }
         }
 
@@ -401,39 +422,42 @@ impl<N, E> HalfEdgeGraph<N, E> {
                 .edges_incident(b)
                 .find(|x| self.nodemap[self.involution[*x]] != a);
         }
-        let mut b_edge = new_initial_b;
 
-        if b_edge.is_none() {
+        let mut edge_leading_to_start_b = None;
+
+        if let Some(initial) = new_initial_b {
+            let mut current = Ok(initial);
+            while let Ok(cur) = current {
+                let mut next = self.neighbors[cur];
+                while self.nodemap[self.involution[next]] == a {
+                    self.remove_edge(next);
+                    next = self.neighbors.remove(next).unwrap();
+                }
+                self.neighbors[cur] = next;
+
+                if next == initial {
+                    current = Err(cur);
+                } else {
+                    current = Ok(next);
+                }
+            }
+
+            if let Err(cur) = current {
+                edge_leading_to_start_b = Some(cur);
+            }
+        } else {
+            // all edges link to b, and must be removed
             let initial = self.reverse_nodemap[b];
             let mut current = Some(initial);
-            loop {
-                if current.is_none() {
-                    break;
-                }
-                let next = self.neighbors.remove(current.unwrap());
 
+            while let Some(c) = current {
+                let next = self.neighbors.remove(c);
+                self.remove_edge(c);
                 if next == Some(initial) {
                     current = None;
                 } else {
                     current = next;
                 }
-            }
-        } else {
-            loop {
-                let mut next = self.neighbors[b_edge.unwrap()];
-
-                while self.nodemap[self.involution[next]] == a {
-                    next = self.neighbors.remove(next).unwrap();
-                }
-
-                self.nodemap.insert(b_edge.unwrap(), c);
-                self.neighbors.insert(b_edge.unwrap(), next);
-
-                if new_initial_b == Some(next) {
-                    break;
-                }
-
-                b_edge = Some(next);
             }
         }
 
@@ -443,7 +467,11 @@ impl<N, E> HalfEdgeGraph<N, E> {
                 self.reverse_nodemap.remove(a);
                 self.reverse_nodemap.remove(b);
                 let old_neig = self.neighbors.insert(new_edge_a, new_edge_b).unwrap();
-                self.neighbors.insert(b_edge.unwrap(), old_neig);
+                if let Some(next) = edge_leading_to_start_b {
+                    self.neighbors.insert(next, old_neig).unwrap();
+                } else {
+                    self.neighbors.insert(new_edge_b, old_neig);
+                }
             }
             (Some(new_edge_a), None) => {
                 self.reverse_nodemap.insert(c, new_edge_a);
@@ -460,6 +488,20 @@ impl<N, E> HalfEdgeGraph<N, E> {
                 self.reverse_nodemap.remove(a);
             }
         }
+
+        if let Some(&init) = self.reverse_nodemap.get(c) {
+            let mut current = Some(init);
+            while let Some(cur) = current {
+                self.nodemap.insert(cur, c);
+                let next = self.neighbors[cur];
+                if next == init {
+                    current = None;
+                } else {
+                    current = Some(next);
+                }
+            }
+        }
+
         self.nodes.remove(a);
         self.nodes.remove(b);
         c
@@ -563,9 +605,9 @@ impl<N, E> HalfEdgeGraph<N, E> {
 #[test]
 fn merge() {
     let mut graph = HalfEdgeGraph::new();
-    let a = graph.add_node_with_edges(1, &[1, 2, 3, 4, 5]);
-    let b = graph.add_node_with_edges(2, &[1, 2, 6, 7, 8]);
-    let c = graph.add_node_with_edges(4, &[4, 6, 9, 10, 11]);
+    let a = graph.add_node_with_edges_fn(1, &[1, -2, 3, 4, 5], |a, b| *a == -b);
+    let b = graph.add_node_with_edges_fn(2, &[-1, 2, -6, 7, 8], |a, b| *a == -b);
+    let c = graph.add_node_with_edges_fn(4, &[-4, 6, 9, 10, 11], |a, b| *a == -b);
 
     println!("{}", graph.dot());
     println!("{}", graph.degree(a));
@@ -576,80 +618,111 @@ fn merge() {
     }
 
     let d = graph.merge_nodes(a, b, 3);
+    // print!("merge");
 
     // for (i, n) in &graph.neighbors {
     //     println!("{} {}", graph.edges[i], graph.edges[*n]);
     // }
 
+    // // println!("{:#?}", graph);
+
     println!("{}", graph.dot());
     println!("{}", graph.degree(c));
     println!("{}", graph.neighbors.len());
 
-    let e = graph.merge_nodes(c, d, 5);
+    let _e = graph.merge_nodes(c, d, 5);
 
     println!("{}", graph.dot());
-    println!("{}", graph.degree(e));
-    println!("{}", graph.neighbors.len());
-
-    let mut graph = HalfEdgeGraph::new();
-    let a = graph.add_node_with_edges("a", &[10, 2, 3]);
-    let b = graph.add_node_with_edges("b", &[20, 3, 4]);
-    let c = graph.add_node_with_edges("c", &[30, 4, 2]);
-    let d = graph.add_node_with_edges("d", &[20]);
-    let e = graph.add_node_with_edges("e", &[30]);
-
-    println!("Test {}", graph.dot());
-    println!("{}", graph.degree(a));
-    println!("{}", graph.degree(b));
-
+    println!("neighbors");
     for (i, n) in &graph.neighbors {
         println!("{} {}", graph.edges[i], graph.edges[*n]);
     }
+    println!("edges");
+    for (i, n) in &graph.edges {
+        println!("{:?} {}", i, n);
+    }
+    println!("involution");
 
-    let d = graph.merge_nodes(d, b, "bd");
+    for (i, n) in &graph.involution {
+        println!("{} {}", graph.edges[i], graph.edges[*n]);
+    }
+    println!("nodemap");
+
+    for (i, n) in &graph.nodemap {
+        println!("{} {}", graph.edges[i], graph.nodes[*n]);
+    }
+    println!("reverse_nodemap");
+
+    for (i, n) in &graph.reverse_nodemap {
+        println!("{} {}", graph.nodes[i], graph.edges[*n]);
+    }
+    println!("nodes");
+
+    for (i, n) in &graph.nodes {
+        println!("{:?} {}", i, n);
+    }
+    // println!("{}", graph.degree(e));
+    // println!("{}", graph.neighbors.len());
+
+    // let mut graph = HalfEdgeGraph::new();
+    // let a = graph.add_node_with_edges("a", &[10, 2, 3]);
+    // let b = graph.add_node_with_edges("b", &[20, 3, 4]);
+    // let c = graph.add_node_with_edges("c", &[30, 4, 2]);
+    // let d = graph.add_node_with_edges("d", &[20]);
+    // let e = graph.add_node_with_edges("e", &[30]);
+
+    // println!("Test {}", graph.dot());
+    // println!("{}", graph.degree(a));
+    // println!("{}", graph.degree(b));
 
     // for (i, n) in &graph.neighbors {
     //     println!("{} {}", graph.edges[i], graph.edges[*n]);
     // }
 
-    println!("{}", graph.degree(c));
-    println!("{}", graph.neighbors.len());
+    // let d = graph.merge_nodes(d, b, "bd");
 
-    println!("{}", graph.dot());
+    // // for (i, n) in &graph.neighbors {
+    // //     println!("{} {}", graph.edges[i], graph.edges[*n]);
+    // // }
 
-    let e = graph.merge_nodes(c, e, "ce");
+    // println!("{}", graph.degree(c));
+    // println!("{}", graph.neighbors.len());
 
-    if graph.validate_neighbors() {
-        println!("valid");
-    } else {
-        println!("invalid");
-    }
+    // println!("{}", graph.dot());
 
-    println!("{}", graph.dot());
-    let f = graph.merge_nodes(d, e, "de");
+    // let e = graph.merge_nodes(c, e, "ce");
 
-    if graph.validate_neighbors() {
-        println!("valid");
-    } else {
-        println!("invalid");
-    }
+    // if graph.validate_neighbors() {
+    //     println!("valid");
+    // } else {
+    //     println!("invalid");
+    // }
 
-    println!("{}", graph.dot());
-    println!("{}", graph.node_labels());
-    println!("{}", graph.degree(a));
-    println!("{}", graph.neighbors.len());
+    // println!("{}", graph.dot());
+    // let f = graph.merge_nodes(d, e, "de");
 
-    let g = graph.merge_nodes(a, f, "af");
+    // if graph.validate_neighbors() {
+    //     println!("valid");
+    // } else {
+    //     println!("invalid");
+    // }
 
-    if graph.validate_neighbors() {
-        println!("valid");
-    } else {
-        println!("invalid");
-    }
+    // println!("{}", graph.dot());
+    // println!("{}", graph.node_labels());
+    // println!("{}", graph.degree(a));
+    // println!("{}", graph.neighbors.len());
 
-    println!("{}", graph.dot());
-    println!("{}", graph.neighbors.len());
-    println!("{}", graph.degree(g));
+    // let g = graph.merge_nodes(a, f, "af");
+
+    // if graph.validate_neighbors() {
+    //     println!("valid");
+    // } else {
+    //     println!("invalid");
+    // }
+
+    // println!("{}", graph.dot());
+    // println!("{}", graph.neighbors.len());
+    // println!("{}", graph.degree(g));
 
     // println!("{}", graph.degree(b));
 }
@@ -865,7 +938,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
 
     pub fn evaluate(&mut self, params: &[T]) -> TensorNetworkSet<DataTensor<T, S>, T>
     where
-        T: Real + NumericalFloatComparison,
+        T: Real + SingleFloat,
         S: TensorStructure + Clone,
     {
         let zero = params[0].zero();
@@ -919,7 +992,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
 {
     pub fn evaluate(&mut self, params: &[T]) -> TensorNetworkSet<DataTensor<T, S>, T>
     where
-        T: Real + NumericalFloatComparison,
+        T: Real + SingleFloat,
         S: TensorStructure + Clone,
     {
         let zero = params[0].zero();
@@ -1292,6 +1365,93 @@ where
 impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     TensorNetwork<ParamTensor<S>, Atom>
 {
+    /// Convert the tensor of atoms to a tensor of polynomials, optionally in the variable ordering
+    /// specified by `var_map`. If new variables are encountered, they are
+    /// added to the variable map. Similarly, non-polynomial parts are automatically
+    /// defined as a new independent variable in the polynomial.
+    pub fn to_polynomial<R: EuclideanDomain + ConvertToRing, E: Exponent>(
+        &self,
+        field: &R,
+        var_map: Option<Arc<Vec<Variable>>>,
+    ) -> TensorNetwork<DataTensor<MultivariatePolynomial<R, E>, S>, MultivariatePolynomial<R, E>>
+    where
+        S: Clone,
+    {
+        TensorNetwork {
+            graph: self
+                .graph
+                .map_nodes_ref(|(_, t)| t.to_polynomial(field, var_map.clone())),
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.to_polynomial(field, var_map.clone())),
+        }
+    }
+
+    /// Convert the tensor of atoms to a tensor of rational polynomials, optionally in the variable ordering
+    /// specified by `var_map`. If new variables are encountered, they are
+    /// added to the variable map. Similarly, non-rational polynomial parts are automatically
+    /// defined as a new independent variable in the rational polynomial.
+    pub fn to_rational_polynomial<
+        R: EuclideanDomain + ConvertToRing,
+        RO: EuclideanDomain + PolynomialGCD<E>,
+        E: Exponent,
+    >(
+        &self,
+        field: &R,
+        out_field: &RO,
+        var_map: Option<Arc<Vec<Variable>>>,
+    ) -> TensorNetwork<DataTensor<RationalPolynomial<RO, E>, S>, RationalPolynomial<RO, E>>
+    where
+        RationalPolynomial<RO, E>:
+            FromNumeratorAndDenominator<R, RO, E> + FromNumeratorAndDenominator<RO, RO, E>,
+        S: Clone,
+    {
+        TensorNetwork {
+            graph: self.graph.map_nodes_ref(|(_, t)| {
+                t.to_rational_polynomial(field, out_field, var_map.clone())
+            }),
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.to_rational_polynomial(field, out_field, var_map.clone())),
+        }
+    }
+
+    /// Convert the tensor of atoms to a tensor of rational polynomials with factorized denominators, optionally in the variable ordering
+    /// specified by `var_map`. If new variables are encountered, they are
+    /// added to the variable map. Similarly, non-rational polynomial parts are automatically
+    /// defined as a new independent variable in the rational polynomial.
+    pub fn to_factorized_rational_polynomial<
+        R: EuclideanDomain + ConvertToRing,
+        RO: EuclideanDomain + PolynomialGCD<E>,
+        E: Exponent,
+    >(
+        &self,
+        field: &R,
+        out_field: &RO,
+        var_map: Option<Arc<Vec<Variable>>>,
+    ) -> TensorNetwork<
+        DataTensor<FactorizedRationalPolynomial<RO, E>, S>,
+        FactorizedRationalPolynomial<RO, E>,
+    >
+    where
+        FactorizedRationalPolynomial<RO, E>: FromNumeratorAndFactorizedDenominator<R, RO, E>
+            + FromNumeratorAndFactorizedDenominator<RO, RO, E>,
+        MultivariatePolynomial<RO, E>: Factorize,
+        S: Clone,
+    {
+        TensorNetwork {
+            graph: self.graph.map_nodes_ref(|(_, t)| {
+                t.to_factorized_rational_polynomial(field, out_field, var_map.clone())
+            }),
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.to_factorized_rational_polynomial(field, out_field, var_map.clone())),
+        }
+    }
+
     pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
         &'a self,
         coeff_map: F,

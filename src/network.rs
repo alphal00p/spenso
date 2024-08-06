@@ -1,6 +1,7 @@
 #[cfg(feature = "shadowing")]
 use ahash::{AHashSet, HashMap};
 
+// use log::trace;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
 use symbolica::{
@@ -838,8 +839,10 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         for s in self.networks.iter().map(|x| x.scalar.as_ref()) {
             if let Some(a) = s {
                 atoms.push(a.as_view());
+                // trace!("Scalar is Some {}", a);
             } else {
                 atoms.push(one.as_view());
+                // trace!("Scalar is None");
             }
         }
 
@@ -950,8 +953,8 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
 
         let scalars: Vec<Option<T>> = data
             .iter()
-            .take(self.len)
-            .map(|x| if x.is_one() { None } else { Some(x.clone()) })
+            .take(self.networks.len())
+            .map(|x| Some(x.clone()))
             .collect();
         for (i, net) in self.networks.iter().enumerate() {
             let mut data_net = HalfEdgeGraph::new();
@@ -1001,10 +1004,11 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         let mut networks = vec![];
 
         self.shared_data.evaluate_multiple(params, &mut data);
+
         let scalars: Vec<Option<T>> = data
             .iter()
-            .take(self.len)
-            .map(|x| if x.is_one() { None } else { Some(x.clone()) })
+            .take(self.networks.len())
+            .map(|x| Some(x.clone()))
             .collect();
         for (i, net) in self.networks.iter().enumerate() {
             let mut data_net = HalfEdgeGraph::new();
@@ -1105,9 +1109,10 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
 
         let scalars: Vec<Option<T>> = data
             .iter()
-            .take(self.len)
+            .take(self.networks.len())
             .map(|x| Some(x.clone()))
             .collect();
+
         for (i, net) in self.networks.iter().enumerate() {
             let mut data_net = HalfEdgeGraph::new();
             for (_, p) in net.nodes.iter() {
@@ -2053,6 +2058,7 @@ impl<'a> TryFrom<MulView<'a>>
 {
     type Error = TensorNetworkError;
     fn try_from(value: MulView<'a>) -> Result<Self, Self::Error> {
+        // trace!("MulView: {}", value.as_view());
         let mut network: Self = TensorNetwork::new();
         let mut scalars = Atom::new_num(1);
         for arg in value.iter() {
@@ -2100,6 +2106,7 @@ impl<'a> TryFrom<FunView<'a>>
 {
     type Error = TensorNetworkError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
+        // trace!("FunView: {}", value.as_view());
         let mut network: Self = TensorNetwork::new();
         let s: Result<NamedStructure<_, _>, _> = value.try_into();
 
@@ -2121,6 +2128,7 @@ impl<'a> TryFrom<AddView<'a>>
 {
     type Error = TensorNetworkError;
     fn try_from(value: AddView<'a>) -> Result<Self, Self::Error> {
+        // trace!("AddView: {}", value.as_view());
         let mut tensors = vec![];
         let mut scalars = Atom::new_num(0);
         for summand in value.iter() {

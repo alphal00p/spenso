@@ -323,7 +323,7 @@ where
                 im: c.im.into(),
             })
             .collect();
-        let mut castout: Vec<SymComplex<f64>> = args
+        let mut castout: Vec<SymComplex<f64>> = out
             .iter()
             .map(|&c| SymComplex {
                 re: c.re.into(),

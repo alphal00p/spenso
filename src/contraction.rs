@@ -30,7 +30,7 @@ use thiserror::Error;
 //     T: ContractableWith<U, Out = LCMData> + Clone,
 //     U: ContractableWith<T, Out = LCMData> + Clone,
 //     LCMData: Default + Clone,
-//     I: TensorStructure + StructureContract + Clone,
+//     I: TensorStructure+ScalarStructure + StructureContract + Clone,
 // {
 //     type OutStorage = DenseTensor<LCMData, I>;
 //     type LCMData = LCMData;
@@ -51,7 +51,7 @@ use thiserror::Error;
 //     T: ContractableWith<U, Out = LCMData> + Clone,
 //     U: ContractableWith<T, Out = LCMData> + Clone,
 //     LCMData: Default + Clone,
-//     I: TensorStructure + StructureContract + Clone,
+//     I: TensorStructure+ScalarStructure + StructureContract + Clone,
 // {
 //     type OutStorage = DenseTensor<LCMData, I>;
 //     type LCMData = LCMData;
@@ -72,7 +72,7 @@ use thiserror::Error;
 //     T: ContractableWith<U, Out = LCMData> + Clone,
 //     U: ContractableWith<T, Out = LCMData> + Clone,
 //     LCMData: Default + Clone,
-//     I: TensorStructure + StructureContract + Clone,
+//     I: TensorStructure+ScalarStructure + StructureContract + Clone,
 // {
 //     type OutStorage = DenseTensor<LCMData, I>;
 //     type LCMData = LCMData;
@@ -93,7 +93,7 @@ use thiserror::Error;
 //     T: ContractableWith<U, Out = LCMData> + Clone,
 //     U: ContractableWith<T, Out = LCMData> + Clone,
 //     LCMData: Default + Clone,
-//     I: TensorStructure + StructureContract + Clone,
+//     I: TensorStructure+ScalarStructure + StructureContract + Clone,
 // {
 //     type OutStorage = SparseTensor<LCMData, I>;
 //     type LCMData = LCMData;
@@ -150,7 +150,7 @@ where
 //     U: ContractableWith<T, Out = O>,
 //     // T: ContractableWith<U, Out = O>,
 //     O: FallibleAddAssign<O> + FallibleSubAssign<O> + Clone + RefZero + IsZero,
-//     I: TensorStructure + Clone + StructureContract,
+//     I: TensorStructure+ScalarStructure + Clone + StructureContract,
 // {
 //     type LCM = DenseTensor<U::Out, I>;
 
@@ -559,7 +559,7 @@ where
         + MultiContract<T, LCM = O>
         + ExteriorProduct<T, LCM = O>
         + HasStructure,
-    // U::Structure: TensorStructure,
+    // U::Structure: TensorStructure+ScalarStructure,
     T: HasStructure<Structure = U::Structure>,
     T: SingleContract<U, LCM = O>
         + MultiContract<U, LCM = O>

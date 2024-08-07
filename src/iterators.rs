@@ -4,7 +4,7 @@
 //! More specialized iterators are provided that fix a certain subset of indices, and iterate over the remaining indices.
 //! At each iteration, the iterator returns a vector of references to the elements of the tensor along the fixed indices (so called fibers).
 //!
-//! The iterators are built using the basic index iterators provided by the `TensorStructureIterator`s.
+//! The iterators are built using the basic index iterators provided by the `TensorStructure+ScalarStructureIterator`s.
 //!
 
 use std::{

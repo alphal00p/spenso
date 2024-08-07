@@ -73,5 +73,6 @@ pub mod permutation;
 /// Tensors as defined in the UFO format
 pub mod ufo;
 
+pub mod polynomial;
 #[cfg(test)]
 mod tests;

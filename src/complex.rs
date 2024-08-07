@@ -30,7 +30,8 @@ use crate::{
     parametric::{IteratorEnum, TensorCoefficient},
     structure::{
         CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, IntoArgs, IntoSymbol,
-        ShadowMapping, Shadowable, StructureContract, TensorStructure, ToSymbolic, TracksCount,
+        ScalarStructure, ScalarTensor, ShadowMapping, Shadowable, StructureContract,
+        TensorStructure, ToSymbolic, TracksCount,
     },
     upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign},
 };
@@ -1427,6 +1428,15 @@ impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
         match self {
             RealOrComplexTensor::Real(r) => r.scalar().map(|x| RealOrComplex::Real(x)),
             RealOrComplexTensor::Complex(r) => r.scalar().map(|x| RealOrComplex::Complex(x)),
+        }
+    }
+}
+
+impl<T: Clone, S: TensorStructure + ScalarStructure> ScalarTensor for RealOrComplexTensor<T, S> {
+    fn new_scalar(scalar: Self::Scalar) -> Self {
+        match scalar {
+            RealOrComplex::Real(r) => RealOrComplexTensor::Real(DataTensor::new_scalar(r)),
+            RealOrComplex::Complex(r) => RealOrComplexTensor::Complex(DataTensor::new_scalar(r)),
         }
     }
 }

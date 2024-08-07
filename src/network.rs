@@ -40,7 +40,8 @@ use crate::{
     },
     structure::{
         CastStructure, DualSlotTo, HasName, HasStructure, IntoArgs, IntoSymbol, NamedStructure,
-        ShadowMapping, Shadowable, StructureContract, TensorStructure, ToSymbolic, TracksCount,
+        ScalarTensor, ShadowMapping, Shadowable, StructureContract, TensorStructure, ToSymbolic,
+        TracksCount,
     },
     upgrading_arithmetic::{FallibleAdd, FallibleMul, TrySmallestUpgrade},
 };
@@ -1920,6 +1921,28 @@ where
     pub fn result_tensor(&self) -> Result<T, TensorNetworkError> {
         match self.graph.nodes.len() {
             0 => Err(TensorNetworkError::NoNodes),
+            1 => Ok(self.graph.nodes.iter().next().unwrap().1.clone()),
+            _ => Err(TensorNetworkError::MoreThanOneNode),
+        }
+    }
+}
+
+impl<T, S: Clone> TensorNetwork<T, S>
+where
+    T: Clone
+        + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>
+        + HasStructure<Scalar = S>
+        + ScalarTensor,
+{
+    pub fn result_tensor_smart(&self) -> Result<T, TensorNetworkError> {
+        match self.graph.nodes.len() {
+            0 => {
+                let scalar = self
+                    .scalar
+                    .clone()
+                    .ok_or(TensorNetworkError::ScalarFieldEmpty)?;
+                Ok(T::new_scalar(scalar))
+            }
             1 => Ok(self.graph.nodes.iter().next().unwrap().1.clone()),
             _ => Err(TensorNetworkError::MoreThanOneNode),
         }

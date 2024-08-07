@@ -5,8 +5,8 @@ use crate::{
     parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
     structure::{
         atomic_expanded_label_id, CastStructure, ConcreteIndex, ExpandedIndex, FlatIndex, HasName,
-        HasStructure, IntoArgs, IntoSymbol, ShadowMapping, Shadowable, TensorStructure,
-        TracksCount, VecStructure,
+        HasStructure, IntoArgs, IntoSymbol, ScalarStructure, ScalarTensor, ShadowMapping,
+        Shadowable, TensorStructure, TracksCount, VecStructure,
     },
     upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
 };
@@ -424,6 +424,20 @@ where
     }
 }
 
+impl<T, I> ScalarTensor for SparseTensor<T, I>
+where
+    I: TensorStructure + ScalarStructure,
+{
+    fn new_scalar(scalar: Self::Scalar) -> Self {
+        let mut elements = AHashMap::new();
+        elements.insert(0.into(), scalar);
+        SparseTensor {
+            elements,
+            structure: I::scalar_structure(),
+        }
+    }
+}
+
 impl<T, I> HasStructure for SparseTensor<T, I>
 where
     I: TensorStructure,
@@ -708,6 +722,18 @@ where
             self.data.drain(0..).next()
         } else {
             None
+        }
+    }
+}
+
+impl<T, I> ScalarTensor for DenseTensor<T, I>
+where
+    I: TensorStructure + ScalarStructure,
+{
+    fn new_scalar(scalar: Self::Scalar) -> Self {
+        DenseTensor {
+            data: vec![scalar],
+            structure: I::scalar_structure(),
         }
     }
 }
@@ -1143,6 +1169,12 @@ impl<T, I> DataTensor<T, I>
 where
     I: TensorStructure + Clone,
 {
+    pub fn actual_size(&self) -> usize {
+        match self {
+            DataTensor::Dense(d) => d.data.len(),
+            DataTensor::Sparse(s) => s.elements.len(),
+        }
+    }
     pub fn to_sparse(self) -> SparseTensor<T, I>
     where
         T: Clone + Default + PartialEq,
@@ -1266,6 +1298,15 @@ where
             DataTensor::Dense(d) => d.scalar(),
             DataTensor::Sparse(s) => s.scalar(),
         }
+    }
+}
+
+impl<T, I> ScalarTensor for DataTensor<T, I>
+where
+    I: TensorStructure + ScalarStructure,
+{
+    fn new_scalar(scalar: Self::Scalar) -> Self {
+        DataTensor::Dense(DenseTensor::new_scalar(scalar))
     }
 }
 
@@ -1432,6 +1473,15 @@ where
             NumTensor::Float(f) => f.scalar().map(|x| Complex { re: x, im: 0. }),
             NumTensor::Complex(c) => c.scalar(),
         }
+    }
+}
+
+impl<T> ScalarTensor for NumTensor<T>
+where
+    T: TensorStructure + ScalarStructure,
+{
+    fn new_scalar(scalar: Self::Scalar) -> Self {
+        NumTensor::Complex(DataTensor::new_scalar(scalar))
     }
 }
 

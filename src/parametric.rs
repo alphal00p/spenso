@@ -1534,7 +1534,7 @@ impl<S: Clone + TensorStructure> EvalTreeTensorSet<Rational, S> {
 impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(&self, f: &F) -> EvalTreeTensorSet<T2, S>
     where
-        T: Clone + Default + PartialEq,
+        T: Clone + PartialEq,
         S: Clone,
     {
         EvalTreeTensorSet {
@@ -1679,7 +1679,7 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
 
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(&self, f: &F) -> EvalTreeTensor<T2, S>
     where
-        T: Clone + Default + PartialEq,
+        T: Clone + PartialEq,
     {
         EvalTreeTensor {
             eval: self.eval.map_coeff(f),

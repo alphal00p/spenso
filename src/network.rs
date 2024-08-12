@@ -957,7 +957,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
 {
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(&self, f: &F) -> EvalTreeTensorNetworkSet<T2, S>
     where
-        T: Clone + Default + PartialEq,
+        T: Clone + PartialEq,
     {
         EvalTreeTensorNetworkSet {
             networks: self.networks.clone(),
@@ -1580,7 +1580,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
         f: &F,
     ) -> TensorNetwork<EvalTreeTensor<T2, S>, EvalTree<T2>>
     where
-        T: Clone + Default + PartialEq,
+        T: Clone + PartialEq,
         S: Clone,
     {
         let new_graph = self.graph.map_nodes_ref(|(_, x)| x.map_coeff(f));

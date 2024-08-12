@@ -2463,7 +2463,7 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
 #[cfg(feature = "shadowing")]
 impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {}
 
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
 pub struct VecStructure {
     pub structure: Vec<PhysicalSlots>,
 }
@@ -2724,7 +2724,7 @@ impl StructureContract for VecStructure {
 /// A named structure is a structure with a global name, and a list of slots
 ///
 /// It is useful when you want to shadow tensors, to nest tensor network contraction operations.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
 pub struct NamedStructure<Name = SmartString<LazyCompact>, Args = usize> {
     pub structure: VecStructure,
     pub global_name: Option<Name>,

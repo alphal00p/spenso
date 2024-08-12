@@ -1,3 +1,5 @@
+use std::hash::{DefaultHasher, Hash};
+
 #[cfg(feature = "shadowing")]
 use ahash::{HashMap, HashMapExt};
 #[cfg(feature = "shadowing")]
@@ -26,10 +28,10 @@ use crate::{
     },
     iterators::{
         AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, Fiber, FiberClass,
+        IteratableTensor, IteratesAlongFibers,
     },
-    iterators::{IteratableTensor, IteratesAlongFibers},
     network::TensorNetwork,
-    parametric::MixedTensor,
+    parametric::{MixedTensor, ParamTensor},
     structure::{
         AbstractIndex, BaseRepName, Bispinor, ColorAdjoint, ColorFundamental, Dimension,
         DualSlotTo, Euclidean, ExpandedIndex, FlatIndex, HasStructure, HistoryStructure, Lorentz,
@@ -37,8 +39,7 @@ use crate::{
         StructureContract, TensorShell, TensorStructure, ToSymbolic, VecStructure,
     },
     symbolic::SymbolicTensor,
-    ufo,
-    ufo::mink_four_vector,
+    ufo::{self, mink_four_vector},
     upgrading_arithmetic::{
         FallibleAdd, FallibleAddAssign, FallibleMul, FallibleSub, TryIntoUpgrade,
     },
@@ -1533,4 +1534,15 @@ fn slotmap() {
     for (i, j) in b {
         println!("{:?}:{}", i, j);
     }
+
+    let p: ParamTensor<NamedStructure<symbolica::atom::Symbol, Vec<Atom>>> = ParamTensor::param(
+        DataTensor::Sparse(SparseTensor::empty(NamedStructure::from_iter(
+            [Lorentz::new_slot_selfless(3, 4)],
+            State::get_symbol("name"),
+            Some(vec![Atom::parse("q").unwrap()]),
+        ))),
+    );
+
+    let mut hasher = DefaultHasher::new();
+    p.hash(&mut hasher);
 }

@@ -3,6 +3,7 @@ use std::{
     ops::{AddAssign, Neg},
 };
 
+use gat_lending_iterator::LendingIterator;
 #[cfg(feature = "shadowing")]
 use symbolica::atom::Atom;
 
@@ -82,12 +83,36 @@ where
     }
 }
 
+impl<T, U, I> AddAssign<&DenseTensor<T, I>> for DenseTensor<U, I>
+where
+    U: for<'a> AddAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn add_assign(&mut self, rhs: &DenseTensor<T, I>) {
+        for (u, t) in self.data.iter_mut().zip(rhs.data.iter()) {
+            *u += t;
+        }
+    }
+}
+
 impl<T, U, I> AddAssign<DenseTensor<T, I>> for SparseTensor<U, I>
 where
     U: for<'a> AddAssign<&'a T>,
     I: TensorStructure + Clone,
 {
     fn add_assign(&mut self, rhs: DenseTensor<T, I>) {
+        for (i, u) in self.elements.iter_mut() {
+            *u += &rhs[*i];
+        }
+    }
+}
+
+impl<T, U, I> AddAssign<&DenseTensor<T, I>> for SparseTensor<U, I>
+where
+    U: for<'a> AddAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn add_assign(&mut self, rhs: &DenseTensor<T, I>) {
         for (i, u) in self.elements.iter_mut() {
             *u += &rhs[*i];
         }
@@ -108,12 +133,38 @@ where
     }
 }
 
+impl<T, U, I> AddAssign<&SparseTensor<T, I>> for SparseTensor<U, I>
+where
+    U: for<'a> AddAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn add_assign(&mut self, rhs: &SparseTensor<T, I>) {
+        for (i, u) in self.elements.iter_mut() {
+            if let Some(t) = rhs.get_linear(*i) {
+                *u += t;
+            }
+        }
+    }
+}
+
 impl<T, U, I> AddAssign<SparseTensor<T, I>> for DenseTensor<U, I>
 where
     U: for<'a> AddAssign<&'a T>,
     I: TensorStructure + Clone,
 {
     fn add_assign(&mut self, rhs: SparseTensor<T, I>) {
+        for (i, u) in rhs.elements.iter() {
+            self[*i] += u;
+        }
+    }
+}
+
+impl<T, U, I> AddAssign<&SparseTensor<T, I>> for DenseTensor<U, I>
+where
+    U: for<'a> AddAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn add_assign(&mut self, rhs: &SparseTensor<T, I>) {
         for (i, u) in rhs.elements.iter() {
             self[*i] += u;
         }
@@ -143,6 +194,29 @@ where
     }
 }
 
+impl<T, U, I> AddAssign<&DataTensor<T, I>> for DataTensor<U, I>
+where
+    U: for<'a> AddAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn add_assign(&mut self, rhs: &DataTensor<T, I>) {
+        match (self, rhs) {
+            (DataTensor::Dense(a), DataTensor::Dense(b)) => {
+                *a += b;
+            }
+            (DataTensor::Sparse(a), DataTensor::Sparse(b)) => {
+                *a += b;
+            }
+            (DataTensor::Dense(a), DataTensor::Sparse(b)) => {
+                *a += b;
+            }
+            (DataTensor::Sparse(a), DataTensor::Dense(b)) => {
+                *a += b;
+            }
+        }
+    }
+}
+
 impl<T, S: TensorStructure + Clone> Sum for DataTensor<T, S>
 where
     T: for<'a> AddAssign<&'a T>,
@@ -153,6 +227,45 @@ where
                 i += j;
             }
             i
+        } else {
+            panic!("Empty iterator in sum");
+        }
+    }
+}
+
+// pub trait LendingSum: LendingIterator
+// where
+//     for<'p> Self::Item<'p>: Clone + for<'a> AddAssign<Self::Item>,
+// {
+//     fn sum_ref<I>(mut iter: I) -> Self {
+//         if let Some(mut i) = iter.next() {
+//             let sum = i.clone();
+
+//             while let Some(j) = iter.next() {
+//                 sum += j;
+//             }
+//             sum
+//         } else {
+//             panic!("Empty iterator in sum");
+//         }
+//     }
+// }
+
+impl<T, S: TensorStructure + Clone> DataTensor<T, S>
+where
+    T: for<'a> AddAssign<&'a T> + Clone,
+{
+    pub fn sum_ref<I>(mut iter: I) -> Self
+    where
+        for<'a> I: LendingIterator<Item<'a> = &'a DataTensor<T, S>>,
+    {
+        if let Some(i) = iter.next() {
+            let mut sum = i.clone();
+
+            while let Some(j) = iter.next() {
+                sum += j;
+            }
+            sum
         } else {
             panic!("Empty iterator in sum");
         }

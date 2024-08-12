@@ -1,4 +1,7 @@
-use std::ops::Neg;
+use std::{
+    iter::Sum,
+    ops::{AddAssign, Neg},
+};
 
 #[cfg(feature = "shadowing")]
 use symbolica::atom::Atom;
@@ -64,6 +67,95 @@ where
             .collect();
 
         data.map(|data| DenseTensor { structure, data })
+    }
+}
+
+impl<T, U, I> AddAssign<DenseTensor<T, I>> for DenseTensor<U, I>
+where
+    U: for<'a> AddAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn add_assign(&mut self, rhs: DenseTensor<T, I>) {
+        for (u, t) in self.data.iter_mut().zip(rhs.data.iter()) {
+            *u += t;
+        }
+    }
+}
+
+impl<T, U, I> AddAssign<DenseTensor<T, I>> for SparseTensor<U, I>
+where
+    U: for<'a> AddAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn add_assign(&mut self, rhs: DenseTensor<T, I>) {
+        for (i, u) in self.elements.iter_mut() {
+            *u += &rhs[*i];
+        }
+    }
+}
+
+impl<T, U, I> AddAssign<SparseTensor<T, I>> for SparseTensor<U, I>
+where
+    U: for<'a> AddAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn add_assign(&mut self, rhs: SparseTensor<T, I>) {
+        for (i, u) in self.elements.iter_mut() {
+            if let Some(t) = rhs.get_linear(*i) {
+                *u += t;
+            }
+        }
+    }
+}
+
+impl<T, U, I> AddAssign<SparseTensor<T, I>> for DenseTensor<U, I>
+where
+    U: for<'a> AddAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn add_assign(&mut self, rhs: SparseTensor<T, I>) {
+        for (i, u) in rhs.elements.iter() {
+            self[*i] += u;
+        }
+    }
+}
+
+impl<T, U, I> AddAssign<DataTensor<T, I>> for DataTensor<U, I>
+where
+    U: for<'a> AddAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn add_assign(&mut self, rhs: DataTensor<T, I>) {
+        match (self, rhs) {
+            (DataTensor::Dense(a), DataTensor::Dense(b)) => {
+                *a += b;
+            }
+            (DataTensor::Sparse(a), DataTensor::Sparse(b)) => {
+                *a += b;
+            }
+            (DataTensor::Dense(a), DataTensor::Sparse(b)) => {
+                *a += b;
+            }
+            (DataTensor::Sparse(a), DataTensor::Dense(b)) => {
+                *a += b;
+            }
+        }
+    }
+}
+
+impl<T, S: TensorStructure + Clone> Sum for DataTensor<T, S>
+where
+    T: for<'a> AddAssign<&'a T>,
+{
+    fn sum<I: Iterator<Item = Self>>(mut iter: I) -> Self {
+        if let Some(mut i) = iter.next() {
+            for j in iter {
+                i += j;
+            }
+            i
+        } else {
+            panic!("Empty iterator in sum");
+        }
     }
 }
 
@@ -556,6 +648,11 @@ where
 pub trait ScalarMul<T> {
     type Output;
     fn scalar_mul(&self, rhs: &T) -> Option<Self::Output>;
+}
+
+pub trait ScalarMulMut<T> {
+    type Output;
+    fn scalar_mul_mut(&self, rhs: &T) -> Option<Self::Output>;
 }
 
 impl<T, U, I, Out> ScalarMul<T> for DenseTensor<U, I>

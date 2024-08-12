@@ -14,6 +14,7 @@ use symbolica::{
         rational_polynomial::{FromNumeratorAndDenominator, RationalPolynomial},
         EuclideanDomain,
     },
+    evaluate::{CompiledCode, ExportedCode, InlineASM},
     poly::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Exponent,
         Variable,
@@ -150,6 +151,72 @@ impl<N, E> HalfEdgeGraph<N, E> {
             reverse_nodemap: newreverse_nodemap,
             neighbors: self.neighbors.clone(),
         }
+    }
+
+    pub fn map_nodes_ref_option<U, F>(&self, f: F) -> Option<HalfEdgeGraph<U, E>>
+    where
+        F: Fn((NodeId, &N)) -> Option<U>,
+        E: Clone,
+    {
+        let mut nodeidmap: SecondaryMap<NodeId, NodeId> = SecondaryMap::new();
+        let mut newnodes: DenseSlotMap<NodeId, U> = DenseSlotMap::with_key();
+
+        for (i, n) in &self.nodes {
+            let nid = newnodes.insert(f((i, n))?);
+            nodeidmap.insert(i, nid);
+        }
+
+        let mut newnodemap: SecondaryMap<HedgeId, NodeId> = SecondaryMap::new();
+        for (i, &n) in &self.nodemap {
+            newnodemap.insert(i, nodeidmap[n]);
+        }
+
+        let mut newreverse_nodemap: SecondaryMap<NodeId, HedgeId> = SecondaryMap::new();
+        for (i, &n) in &self.reverse_nodemap {
+            newreverse_nodemap.insert(nodeidmap[i], n);
+        }
+
+        Some(HalfEdgeGraph {
+            edges: self.edges.clone(),
+            involution: self.involution.clone(),
+            nodes: newnodes,
+            nodemap: newnodemap,
+            reverse_nodemap: newreverse_nodemap,
+            neighbors: self.neighbors.clone(),
+        })
+    }
+
+    pub fn map_nodes_ref_result<U, F, Er>(&self, f: F) -> Result<HalfEdgeGraph<U, E>, Er>
+    where
+        F: Fn((NodeId, &N)) -> Result<U, Er>,
+        E: Clone,
+    {
+        let mut nodeidmap: SecondaryMap<NodeId, NodeId> = SecondaryMap::new();
+        let mut newnodes: DenseSlotMap<NodeId, U> = DenseSlotMap::with_key();
+
+        for (i, n) in &self.nodes {
+            let nid = newnodes.insert(f((i, n))?);
+            nodeidmap.insert(i, nid);
+        }
+
+        let mut newnodemap: SecondaryMap<HedgeId, NodeId> = SecondaryMap::new();
+        for (i, &n) in &self.nodemap {
+            newnodemap.insert(i, nodeidmap[n]);
+        }
+
+        let mut newreverse_nodemap: SecondaryMap<NodeId, HedgeId> = SecondaryMap::new();
+        for (i, &n) in &self.reverse_nodemap {
+            newreverse_nodemap.insert(nodeidmap[i], n);
+        }
+
+        Ok(HalfEdgeGraph {
+            edges: self.edges.clone(),
+            involution: self.involution.clone(),
+            nodes: newnodes,
+            nodemap: newnodemap,
+            reverse_nodemap: newreverse_nodemap,
+            neighbors: self.neighbors.clone(),
+        })
     }
 
     pub fn map_nodes_ref_mut<U, F>(&mut self, mut f: F) -> HalfEdgeGraph<U, E>
@@ -774,33 +841,19 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct EvalTreeTensorNetworkSet<T, S: TensorStructure>
-where
-    S::Slot: Serialize + for<'a> Deserialize<'a>,
-{
-    pub networks: Vec<HalfEdgeGraph<DataTensor<usize, S>, <S as TensorStructure>::Slot>>,
-    pub shared_data: EvalTree<T>,
-    pub len: usize,
-}
+pub type EvalTreeTensorNetworkSet<T, S> = SharedTensorNetworkSet<EvalTree<T>, S>;
 
-#[derive(Clone)]
-pub struct EvalTensorNetworkSet<T, S: TensorStructure>
-where
-    S::Slot: Serialize + for<'a> Deserialize<'a>,
-{
-    pub networks: Vec<HalfEdgeGraph<DataTensor<usize, S>, <S as TensorStructure>::Slot>>,
-    pub shared_data: ExpressionEvaluator<T>,
-    pub len: usize,
-}
+pub type EvalTensorNetworkSet<T, S> = SharedTensorNetworkSet<ExpressionEvaluator<T>, S>;
+
+pub type CompiledTensorNetworkSet<S> = SharedTensorNetworkSet<CompiledEvaluator, S>;
 
 #[derive(Debug, Clone)]
-pub struct CompiledTensorNetworkSet<S: TensorStructure>
+pub struct SharedTensorNetworkSet<D, S: TensorStructure>
 where
     S::Slot: Serialize + for<'a> Deserialize<'a>,
 {
     pub networks: Vec<HalfEdgeGraph<DataTensor<usize, S>, <S as TensorStructure>::Slot>>,
-    pub shared_data: CompiledEvaluator,
+    pub shared_data: D,
     pub len: usize,
 }
 
@@ -914,13 +967,13 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self) -> EvalTensorNetworkSet<T, S>
+    pub fn linearize(self, cpe_rounds: usize) -> EvalTensorNetworkSet<T, S>
     where
         T: Clone + Default + PartialEq,
     {
         EvalTensorNetworkSet {
             networks: self.networks,
-            shared_data: self.shared_data.linearize(),
+            shared_data: self.shared_data.linearize(cpe_rounds),
             len: self.len,
         }
     }
@@ -1044,50 +1097,59 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         TensorNetworkSet { networks }
     }
 
-    pub fn compile(&self, filename: &str, library_name: &str) -> CompiledTensorNetworkSet<S>
+    /// Create a C++ code representation of the evaluation tree tensor.
+    /// With `inline_asm` set to any value other than `None`,
+    /// high-performance inline ASM code will be generated for most
+    /// evaluation instructions. This often gives better performance than
+    /// the `O3` optimization level and results in very fast compilation.
+    pub fn export_cpp(
+        &self,
+        filename: &str,
+        function_name: &str,
+        include_header: bool,
+        inline_asm: InlineASM,
+    ) -> Result<SharedTensorNetworkSet<ExportedCode, S>, std::io::Error>
     where
-        T: NumericalFloatLike,
-        S: Clone,
+        T: Display,
     {
-        let function_name = filename;
-        let filename = format!("{filename}.cpp");
-        let library_name = format!("{library_name}.so");
-
-        CompiledTensorNetworkSet {
+        Ok(SharedTensorNetworkSet {
             networks: self.networks.clone(),
-            shared_data: self
-                .shared_data
-                .export_cpp(&filename, function_name, true)
-                .unwrap()
-                .compile(&library_name, CompileOptions::default())
-                .unwrap()
-                .load()
-                .unwrap(),
+            shared_data: self.shared_data.export_cpp(
+                filename,
+                function_name,
+                include_header,
+                inline_asm,
+            )?,
             len: self.len,
-        }
+        })
     }
+}
 
-    pub fn compile_asm(&self, filename: &str, library_name: &str) -> CompiledTensorNetworkSet<S>
-    where
-        T: NumericalFloatLike,
-        S: Clone,
-    {
-        let function_name = filename;
-        let filename = format!("{filename}.cpp");
-        let library_name = format!("{library_name}.so");
-
-        CompiledTensorNetworkSet {
+impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
+    SharedTensorNetworkSet<ExportedCode, S>
+{
+    pub fn compile(
+        &self,
+        out: &str,
+        options: CompileOptions,
+    ) -> Result<SharedTensorNetworkSet<CompiledCode, S>, std::io::Error> {
+        Ok(SharedTensorNetworkSet {
             networks: self.networks.clone(),
-            shared_data: self
-                .shared_data
-                .export_asm(&filename, function_name, true)
-                .unwrap()
-                .compile(&library_name, CompileOptions::default())
-                .unwrap()
-                .load()
-                .unwrap(),
+            shared_data: self.shared_data.compile(out, options)?,
             len: self.len,
-        }
+        })
+    }
+}
+
+impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
+    SharedTensorNetworkSet<CompiledCode, S>
+{
+    pub fn load(&self) -> Result<SharedTensorNetworkSet<CompiledEvaluator, S>, String> {
+        Ok(SharedTensorNetworkSet {
+            networks: self.networks.clone(),
+            shared_data: self.shared_data.load()?,
+            len: self.len,
+        })
     }
 }
 
@@ -1529,15 +1591,18 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self) -> TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<T>>
+    pub fn linearize(
+        self,
+        cpe_rounds: usize,
+    ) -> TensorNetwork<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>
     where
         T: Clone + Default + PartialEq,
         S: Clone,
     {
-        let new_graph = self.graph.map_nodes(|(_, x)| x.linearize());
+        let new_graph = self.graph.map_nodes(|(_, x)| x.linearize(cpe_rounds));
         TensorNetwork {
             graph: new_graph,
-            scalar: self.scalar.map(|a| a.linearize()),
+            scalar: self.scalar.map(|a| a.linearize(cpe_rounds)),
         }
     }
 
@@ -1618,7 +1683,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
 
 #[cfg(feature = "shadowing")]
 impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
-    TensorNetwork<EvalTensor<T, S>, ExpressionEvaluator<T>>
+    TensorNetwork<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>
 {
     pub fn evaluate(&mut self, params: &[T]) -> TensorNetwork<DataTensor<T, S>, T>
     where
@@ -1637,68 +1702,93 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
             }),
         }
     }
-    pub fn compile_asm(
+    pub fn export_cpp(
         &self,
         filename: &str,
-        library_name: &str,
-    ) -> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator>
+        function_name: &str,
+        include_header: bool,
+        inline_asm: InlineASM,
+    ) -> Result<TensorNetwork<EvalTensor<ExportedCode, S>, ExportedCode>, TensorNetworkError>
     where
         T: NumericalFloatLike,
         S: Clone,
     {
         // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
-        let new_graph = self.graph.map_nodes_ref(|(n, x)| {
-            let function_name = format!("{filename}_{}", n.data().as_ffi());
+        let new_graph = self.graph.map_nodes_ref_result(|(n, x)| {
+            let function_name = format!("{function_name}_{}", n.data().as_ffi());
             let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
-            let library_name = format!("{library_name}_{}.so", n.data().as_ffi());
-            x.compile_asm(&filename, &function_name, &library_name, true)
-        });
-        let function_name = format!("{filename}_scalar");
+            x.export_cpp(&filename, &function_name, include_header, inline_asm)
+        })?;
+        let function_name = format!("{function_name}_scalar");
         let filename = format!("{filename}_scalar.cpp");
-        let library_name = format!("{library_name}_scalar.so");
-        TensorNetwork {
-            graph: new_graph,
-            scalar: self.scalar.as_ref().map(|a| {
-                a.export_asm(&filename, &function_name, true)
-                    .unwrap()
-                    .compile(&library_name, CompileOptions::default())
-                    .unwrap()
-                    .load()
-                    .unwrap()
-            }),
-        }
-    }
 
+        let exported_scalar = if let Some(ref s) = self.scalar {
+            Some(s.export_cpp(&filename, &function_name, include_header, inline_asm)?)
+        } else {
+            None
+        };
+
+        Ok(TensorNetwork {
+            graph: new_graph,
+            scalar: exported_scalar,
+        })
+    }
+}
+
+impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
+    TensorNetwork<EvalTensor<ExportedCode, S>, ExportedCode>
+{
     pub fn compile(
         &self,
-        filename: &str,
-        library_name: &str,
-    ) -> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator>
+        out: &str,
+        options: CompileOptions,
+    ) -> Result<TensorNetwork<EvalTensor<CompiledCode, S>, CompiledCode>, TensorNetworkError>
     where
-        T: NumericalFloatLike,
         S: Clone,
     {
-        // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
-        let new_graph = self.graph.map_nodes_ref(|(n, x)| {
-            let function_name = format!("{filename}_{}", n.data().as_ffi());
-            let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
-            let library_name = format!("{library_name}_{}.so", n.data().as_ffi());
-            x.compile(&filename, &function_name, &library_name)
-        });
-        let function_name = format!("{filename}_scalar");
-        let filename = format!("{filename}_scalar.cpp");
-        let library_name = format!("{library_name}_scalar.so");
-        TensorNetwork {
+        let new_graph = self
+            .graph
+            .map_nodes_ref_result(|(_, x)| x.compile(out, options.clone()))?;
+        let exported_scalar = if let Some(ref s) = self.scalar {
+            Some(s.compile(out, options.clone())?)
+        } else {
+            None
+        };
+        Ok(TensorNetwork {
             graph: new_graph,
-            scalar: self.scalar.as_ref().map(|a| {
-                a.export_cpp(&filename, &function_name, true)
-                    .unwrap()
-                    .compile(&library_name, CompileOptions::default())
-                    .unwrap()
+            scalar: exported_scalar,
+        })
+    }
+
+    pub fn compile_and_load(
+        &self,
+        out: &str,
+        options: CompileOptions,
+    ) -> Result<
+        TensorNetwork<EvalTensor<CompiledEvaluator, S>, CompiledEvaluator>,
+        TensorNetworkError,
+    >
+    where
+        S: Clone,
+    {
+        let new_graph = self.graph.map_nodes_ref_result(|(_, x)| {
+            x.compile(out, options.clone())?
+                .load()
+                .map_err(|s| TensorNetworkError::Other(anyhow!(s)))
+        })?;
+        let exported_scalar = if let Some(ref s) = self.scalar {
+            Some(
+                s.compile(out, options.clone())?
                     .load()
-                    .unwrap()
-            }),
-        }
+                    .map_err(|s| TensorNetworkError::Other(anyhow!(s)))?,
+            )
+        } else {
+            None
+        };
+        Ok(TensorNetwork {
+            graph: new_graph,
+            scalar: exported_scalar,
+        })
     }
 }
 
@@ -1912,6 +2002,8 @@ pub enum TensorNetworkError {
     ScalarFieldEmpty,
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+    #[error("Io error")]
+    InOut(#[from] std::io::Error),
 }
 
 impl<T, S> TensorNetwork<T, S>

@@ -40,8 +40,8 @@ use symbolica::{
         EuclideanDomain,
     },
     evaluate::{
-        CompileOptions, CompiledEvaluator, CompiledEvaluatorFloat, EvalTree, EvaluationFn,
-        ExpressionEvaluator, FunctionMap,
+        CompileOptions, CompiledCode, CompiledEvaluator, CompiledEvaluatorFloat, EvalTree,
+        EvaluationFn, ExportedCode, ExpressionEvaluator, FunctionMap, InlineASM,
     },
     id::{Condition, MatchSettings, Pattern, Replacement, WildcardAndRestriction},
     poly::{
@@ -1521,17 +1521,9 @@ where
     }
 }
 
-pub struct EvalTreeTensor<T, S> {
-    eval: EvalTree<T>,
-    indexmap: Option<Vec<FlatIndex>>,
-    structure: S,
-}
+pub type EvalTreeTensor<T, S> = EvalTensor<EvalTree<T>, S>;
 
-pub struct EvalTreeTensorSet<T, S: TensorStructure> {
-    tensors: Vec<DataTensor<usize, S>>,
-    eval: EvalTree<T>,
-    size: usize, //
-}
+pub type EvalTreeTensorSet<T, S> = EvalTensorSet<EvalTree<T>, S>;
 
 impl<S: Clone + TensorStructure> EvalTreeTensorSet<Rational, S> {
     pub fn horner_scheme(&mut self) {
@@ -1553,12 +1545,12 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self) -> EvalTensorSet<T, S>
+    pub fn linearize(self, cpe_rounds: usize) -> EvalTensorSet<ExpressionEvaluator<T>, S>
     where
         T: Clone + Default + PartialEq,
     {
         EvalTensorSet {
-            eval: self.eval.linearize(),
+            eval: self.eval.linearize(cpe_rounds),
             tensors: self.tensors,
             size: self.size,
         }
@@ -1616,27 +1608,6 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
                 .unwrap(),
             size: self.size,
             tensors: self.tensors.clone(),
-        }
-    }
-}
-
-impl<T, S: TensorStructure> HasStructure for EvalTreeTensor<T, S> {
-    type Scalar = EvalTree<T>;
-    type Structure = S;
-
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        &mut self.structure
-    }
-
-    fn structure(&self) -> &Self::Structure {
-        &self.structure
-    }
-
-    fn scalar(self) -> Option<Self::Scalar> {
-        if self.is_scalar() {
-            Some(self.eval)
-        } else {
-            None
         }
     }
 }
@@ -1718,12 +1689,12 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self) -> EvalTensor<T, S>
+    pub fn linearize(self, cpe_rounds: usize) -> EvalTensor<ExpressionEvaluator<T>, S>
     where
         T: Clone + Default + PartialEq,
     {
         EvalTensor {
-            eval: self.eval.linearize(),
+            eval: self.eval.linearize(cpe_rounds),
             structure: self.structure,
             indexmap: self.indexmap,
         }
@@ -1788,21 +1759,22 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct EvalTensor<T, S> {
-    eval: ExpressionEvaluator<T>,
+    eval: T,
     indexmap: Option<Vec<FlatIndex>>,
     structure: S,
 }
 
-// #[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EvalTensorSet<T, S: TensorStructure> {
     tensors: Vec<DataTensor<usize, S>>,
-    eval: ExpressionEvaluator<T>,
+    eval: T,
     size: usize, //
 }
 
 impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
-    type Scalar = ExpressionEvaluator<T>;
+    type Scalar = T;
     type Structure = S;
 
     fn structure(&self) -> &Self::Structure {
@@ -1822,54 +1794,25 @@ impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
     }
 }
 
-impl<T, S> EvalTensor<T, S> {
-    pub fn compile(
+impl<T, S> EvalTensor<ExpressionEvaluator<T>, S> {
+    pub fn export_cpp(
         &self,
         filename: &str,
         function_name: &str,
-        library_name: &str,
-    ) -> CompiledEvalTensor<S>
-    where
-        T: NumericalFloatLike,
-        S: Clone,
-    {
-        CompiledEvalTensor {
-            eval: self
-                .eval
-                .export_cpp(filename, function_name, true)
-                .unwrap()
-                .compile(library_name, CompileOptions::default())
-                .unwrap()
-                .load()
-                .unwrap(),
-            indexmap: self.indexmap.clone(),
-            structure: self.structure.clone(),
-        }
-    }
-
-    pub fn compile_asm(
-        &self,
-        filename: &str,
-        function_name: &str,
-        library_name: &str,
         include_header: bool,
-    ) -> CompiledEvalTensor<S>
+        inline_asm: InlineASM,
+    ) -> Result<EvalTensor<ExportedCode, S>, std::io::Error>
     where
-        T: NumericalFloatLike,
+        T: Display,
         S: Clone,
     {
-        CompiledEvalTensor {
+        Ok(EvalTensor {
             eval: self
                 .eval
-                .export_asm(filename, function_name, include_header)
-                .unwrap()
-                .compile(library_name, CompileOptions::default())
-                .unwrap()
-                .load()
-                .unwrap(),
+                .export_cpp(filename, function_name, include_header, inline_asm)?,
             indexmap: self.indexmap.clone(),
             structure: self.structure.clone(),
-        }
+        })
     }
 
     pub fn evaluate(&mut self, params: &[T]) -> DataTensor<T, S>
@@ -1894,54 +1837,55 @@ impl<T, S> EvalTensor<T, S> {
     }
 }
 
-impl<T, S: TensorStructure> EvalTensorSet<T, S> {
+impl<S: TensorStructure> EvalTensor<ExportedCode, S> {
     pub fn compile(
         &self,
-        filename: &str,
-        function_name: &str,
-        library_name: &str,
-    ) -> CompiledEvalTensorSet<S>
+        out: &str,
+        options: CompileOptions,
+    ) -> Result<EvalTensor<CompiledCode, S>, std::io::Error>
     where
-        T: NumericalFloatLike,
         S: Clone,
     {
-        CompiledEvalTensorSet {
-            eval: self
-                .eval
-                .export_cpp(filename, function_name, true)
-                .unwrap()
-                .compile(library_name, CompileOptions::default())
-                .unwrap()
-                .load()
-                .unwrap(),
-            tensors: self.tensors.clone(),
-            size: self.size,
-        }
+        Ok(EvalTensor {
+            eval: self.eval.compile(out, options)?,
+            indexmap: self.indexmap.clone(),
+            structure: self.structure.clone(),
+        })
     }
+}
 
-    pub fn compile_asm(
+impl<S: TensorStructure> EvalTensor<CompiledCode, S> {
+    pub fn load(&self) -> Result<CompiledEvalTensor<S>, String>
+    where
+        S: Clone,
+    {
+        Ok(EvalTensor {
+            eval: self.eval.load()?,
+            indexmap: self.indexmap.clone(),
+            structure: self.structure.clone(),
+        })
+    }
+}
+
+impl<T, S: TensorStructure> EvalTensorSet<ExpressionEvaluator<T>, S> {
+    pub fn export_cpp(
         &self,
         filename: &str,
         function_name: &str,
-        library_name: &str,
         include_header: bool,
-    ) -> CompiledEvalTensorSet<S>
+        inline_asm: InlineASM,
+    ) -> Result<EvalTensorSet<ExportedCode, S>, std::io::Error>
     where
-        T: NumericalFloatLike,
+        T: Display,
         S: Clone,
     {
-        CompiledEvalTensorSet {
+        Ok(EvalTensorSet {
             eval: self
                 .eval
-                .export_asm(filename, function_name, include_header)
-                .unwrap()
-                .compile(library_name, CompileOptions::default())
-                .unwrap()
-                .load()
-                .unwrap(),
+                .export_cpp(filename, function_name, include_header, inline_asm)?,
             tensors: self.tensors.clone(),
             size: self.size,
-        }
+        })
     }
 
     pub fn evaluate(&mut self, params: &[T]) -> Vec<DataTensor<T, S>>
@@ -1962,40 +1906,37 @@ impl<T, S: TensorStructure> EvalTensorSet<T, S> {
     }
 }
 
-#[derive(Debug)]
-pub struct CompiledEvalTensor<S> {
-    eval: CompiledEvaluator,
-    indexmap: Option<Vec<FlatIndex>>,
-    structure: S,
-}
-
-#[derive(Debug)]
-pub struct CompiledEvalTensorSet<S: TensorStructure> {
-    eval: CompiledEvaluator,
-    tensors: Vec<DataTensor<usize, S>>,
-    size: usize,
-}
-
-impl<S: TensorStructure> HasStructure for CompiledEvalTensor<S> {
-    type Scalar = CompiledEvaluator;
-    type Structure = S;
-
-    fn structure(&self) -> &Self::Structure {
-        &self.structure
-    }
-
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        &mut self.structure
-    }
-
-    fn scalar(self) -> Option<Self::Scalar> {
-        if self.is_scalar() {
-            Some(self.eval)
-        } else {
-            None
-        }
+impl<S: TensorStructure> EvalTensorSet<ExportedCode, S> {
+    pub fn compile(
+        &self,
+        out: &str,
+        options: CompileOptions,
+    ) -> Result<EvalTensorSet<CompiledCode, S>, std::io::Error>
+    where
+        S: Clone,
+    {
+        Ok(EvalTensorSet {
+            eval: self.eval.compile(out, options)?,
+            tensors: self.tensors.clone(),
+            size: self.size,
+        })
     }
 }
+
+impl<S: TensorStructure> EvalTensorSet<CompiledCode, S> {
+    pub fn load(&self) -> Result<CompiledEvalTensorSet<S>, String>
+    where
+        S: Clone,
+    {
+        Ok(EvalTensorSet {
+            eval: self.eval.load()?,
+            tensors: self.tensors.clone(),
+            size: self.size,
+        })
+    }
+}
+
+pub type CompiledEvalTensor<S> = EvalTensor<CompiledEvaluator, S>;
 
 impl<S> CompiledEvalTensor<S> {
     pub fn evaluate_float(&self, params: &[f64]) -> DataTensor<f64, S>
@@ -2059,6 +2000,8 @@ impl<S> CompiledEvalTensor<S> {
     }
 }
 
+pub type CompiledEvalTensorSet<S> = EvalTensorSet<CompiledEvaluator, S>;
+
 impl<S: TensorStructure> CompiledEvalTensorSet<S> {
     pub fn evaluate_float(&self, params: &[f64]) -> Vec<DataTensor<f64, S>>
     where
@@ -2107,6 +2050,7 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
         let mut elements = vec![zero; self.size];
         let mut out_tensors = Vec::with_capacity(self.tensors.len());
         self.eval.evaluate(params, &mut elements);
+
         for t in self.tensors.iter() {
             out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
         }

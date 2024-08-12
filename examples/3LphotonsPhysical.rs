@@ -277,7 +277,7 @@ fn main() {
         1.
     ));
 
-    let mut mapped_precontracted_eval_net = mapped_precontracted_eval_tree_net.linearize();
+    let mut mapped_precontracted_eval_net = mapped_precontracted_eval_tree_net.linearize(1);
 
     let out = mapped_precontracted_eval_net.evaluate(&values);
     assert!(truth.relative_eq(

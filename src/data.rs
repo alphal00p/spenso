@@ -301,7 +301,7 @@ impl<T, S: TensorStructure> SparseTensor<T, S> {
         // U: Clone,
         S: Clone,
     {
-        let elements = self.elements.iter().map(|(k, v)| (*k, f(v))).collect();
+        let elements = self.flat_iter().map(|(k, v)| (*k, f(v))).collect();
         SparseTensor {
             elements,
             structure: self.structure.clone(),

@@ -14,7 +14,7 @@ use spenso::{
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
     domains::rational::Rational,
-    evaluate::FunctionMap,
+    evaluate::{CompileOptions, FunctionMap, InlineASM},
     id::Replacement,
     state::State,
 };
@@ -266,7 +266,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    let mut mapped_precontracted_eval_net = mapped_precontracted_eval_tree_net.linearize();
+    let mut mapped_precontracted_eval_net = mapped_precontracted_eval_tree_net.linearize(1);
 
     group.bench_function("3LPhysical precontracted new lin", |b| {
         b.iter(|| {
@@ -308,8 +308,16 @@ fn criterion_benchmark(c: &mut Criterion) {
     precontracted_eval_tree_net.common_subexpression_elimination(1);
     let neeet = precontracted_eval_tree_net
         .map_coeff::<f64, _>(&|r| r.into())
-        .linearize()
-        .compile_asm("nested_evaluation_asm", "libneval_asm");
+        .linearize(1)
+        .export_cpp(
+            "nested_evaluation_asm",
+            "nested_evaluation_asm",
+            true,
+            InlineASM::Intel,
+        )
+        .unwrap()
+        .compile_and_load("nested_evaluation_asm", CompileOptions::default())
+        .unwrap();
 
     println!("asm compile time and optimisation: {:?}", time.elapsed());
     group.bench_function("3LPhysical precontracted new compiled asm", |b| {

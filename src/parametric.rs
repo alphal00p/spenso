@@ -267,7 +267,7 @@ impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<A
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ParamTensor<S: TensorStructure> {
     pub tensor: DataTensor<Atom, S>,
     pub param_type: ParamOrComposite,
@@ -388,7 +388,7 @@ impl<S: TensorStructure> ParamTensor<S> {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Copy, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Copy, PartialEq, Eq, Hash)]
 pub enum ParamOrComposite {
     Param,
     Composite,
@@ -709,8 +709,7 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-// #[derive_err(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ParamOrConcrete<C: HasStructure<Structure = S> + Clone, S: TensorStructure> {
     Concrete(C),
     Param(ParamTensor<S>),

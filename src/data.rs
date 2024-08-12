@@ -22,6 +22,7 @@ use smartstring::alias::String;
 use std::{
     borrow::Cow,
     fmt::Display,
+    hash::Hash,
     ops::{Index, IndexMut},
 };
 
@@ -123,10 +124,21 @@ pub trait GetTensorData {
 ///
 /// Stores data in a hashmap of usize, using ahash's hashmap.
 /// The usize key is the flattened index of the corresponding position in the dense tensor
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SparseTensor<T, I = VecStructure> {
     pub elements: AHashMap<FlatIndex, T>,
     pub structure: I,
+}
+
+impl<T: Hash, I: Hash> Hash for SparseTensor<T, I> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let mut vecel: Vec<_> = self.elements.iter().collect();
+
+        vecel.sort_by(|(i, _), (j, _)| i.cmp(j));
+
+        vecel.hash(state);
+        self.structure.hash(state);
+    }
 }
 
 pub trait CastData<O: HasTensorData>: HasStructure<Structure = O::Structure> {
@@ -596,7 +608,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash, Eq)]
 pub struct DenseTensor<T, S = VecStructure> {
     pub data: Vec<T>,
     pub structure: S,
@@ -1090,7 +1102,7 @@ where
 }
 
 /// Enum for storing either a dense or a sparse tensor, with the same structure
-#[derive(Debug, Clone, EnumTryAsInner, Serialize, Deserialize, From)]
+#[derive(Debug, Clone, EnumTryAsInner, Serialize, Deserialize, From, Hash, PartialEq, Eq)]
 #[derive_err(Debug)]
 pub enum DataTensor<T, I: TensorStructure = VecStructure> {
     Dense(DenseTensor<T, I>),

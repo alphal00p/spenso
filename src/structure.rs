@@ -3002,7 +3002,7 @@ impl StructureContract for ContractionCountStructure {
 }
 
 /// A structure to enable smart shadowing of tensors in a tensor network contraction algorithm.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Hash)]
 pub struct SmartShadowStructure<Name = SmartString<LazyCompact>, Args = usize> {
     pub structure: VecStructure,
     pub contractions: usize,

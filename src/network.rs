@@ -2474,22 +2474,22 @@ where
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Levels<
-    T: Clone,
+    T: HasStructure<Structure = S>,
     S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + HasName + Clone,
 > {
     pub levels: Vec<TensorNetwork<ParamTensor<S>, Atom>>,
-    pub initial: TensorNetwork<MixedTensor<T, S>, Atom>,
+    pub initial: TensorNetwork<T, Atom>,
     // fn_map: FunctionMap<'static, Complex<T>>,
     params: Vec<Atom>,
 }
 
 #[cfg(feature = "shadowing")]
-impl<T, S> From<TensorNetwork<MixedTensor<T, S>, Atom>> for Levels<T, S>
+impl<T, S> From<TensorNetwork<T, Atom>> for Levels<T, S>
 where
-    T: Clone,
+    T: HasStructure<Structure = S>,
     S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + HasName + Clone,
 {
-    fn from(t: TensorNetwork<MixedTensor<T, S>, Atom>) -> Self {
+    fn from(t: TensorNetwork<T, Atom>) -> Self {
         Levels {
             initial: t,
             levels: vec![],
@@ -2503,7 +2503,7 @@ where
 impl<
         T: Clone + RefZero + Display,
         S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone + TracksCount + Display,
-    > Levels<T, S>
+    > Levels<MixedTensor<T, S>, S>
 where
     MixedTensor<T, S>: Contract<LCM = MixedTensor<T, S>>,
 
@@ -2577,6 +2577,84 @@ where
     where
         R: From<T>,
     {
+        self.initial.append_map(fn_map);
+        for l in &self.levels {
+            l.append_map(fn_map);
+        }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<
+        S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone + TracksCount + Display,
+    > Levels<ParamTensor<S>, S>
+where
+    ParamTensor<S>: Contract<LCM = ParamTensor<S>>,
+
+    S: HasName<Name = Symbol, Args: IntoArgs> + ToSymbolic + StructureContract,
+{
+    fn contract_levels(
+        &mut self,
+        depth: usize,
+        // fn_map: &mut FunctionMap<'a, Complex<T>>,
+    ) {
+        let mut not_done = true;
+        let level = self.levels.len();
+
+        if let Some(current_level) = self.levels.last_mut() {
+            current_level.namesym(&format!("L{level}"))
+        } else {
+            not_done = false;
+        }
+
+        let nl = if let Some(current_level) = self.levels.last() {
+            let mut new_level = current_level.shadow();
+            new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+            if new_level.graph.nodes.len() == 1 {
+                not_done = false;
+            }
+            Some(new_level)
+        } else {
+            None
+        };
+
+        if let Some(nl) = nl {
+            self.levels.push(nl);
+        }
+
+        if not_done {
+            self.contract_levels(depth)
+        }
+    }
+
+    pub fn contract<'a, R>(
+        &'a mut self,
+        depth: usize,
+        fn_map: &mut FunctionMap<'a, R>,
+    ) -> ParamTensor<S> {
+        self.initial
+            .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+
+        self.initial.namesym("L0");
+        if self.initial.graph.nodes.len() > 1 {
+            let mut new_level = self.initial.shadow();
+            new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+            self.levels.push(new_level);
+
+            self.contract_levels(depth);
+            println!("levels {}", self.levels.len());
+            self.generate_fn_map(fn_map);
+            self.levels.last().unwrap().result_tensor().unwrap()
+        } else {
+            self.initial
+                .result_tensor_ref()
+                .unwrap()
+                .expanded_shadow_with_map(fn_map)
+                .unwrap()
+        }
+    }
+
+    fn generate_fn_map<'a, R>(&'a self, fn_map: &mut FunctionMap<'a, R>) {
         self.initial.append_map(fn_map);
         for l in &self.levels {
             l.append_map(fn_map);

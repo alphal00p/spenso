@@ -270,6 +270,22 @@ where
             panic!("Empty iterator in sum");
         }
     }
+
+    pub fn sum<I>(mut iter: I) -> Self
+    where
+        for<'a> I: LendingIterator<Item<'a> = DataTensor<T, S>>,
+    {
+        if let Some(i) = iter.next() {
+            let mut sum = i;
+
+            while let Some(j) = iter.next() {
+                sum += j;
+            }
+            sum
+        } else {
+            panic!("Empty iterator in sum");
+        }
+    }
 }
 
 impl<T, U, I, Out> FallibleAdd<SparseTensor<T, I>> for DenseTensor<U, I>

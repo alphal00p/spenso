@@ -2,6 +2,7 @@ extern crate derive_more;
 
 use std::{
     fmt::{Debug, Display},
+    ops::Index,
     sync::Arc,
 };
 
@@ -17,8 +18,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     complex::{Complex, RealOrComplexTensor},
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero},
-    data::{DataIterator, DataTensor, DenseTensor, SetTensorData, SparseTensor},
+    data::{DataIterator, DataTensor, DenseTensor, HasTensorData, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
+    scalar,
     structure::{
         CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, IntoArgs, IntoSymbol,
         NamedStructure, PhysicalSlots, ScalarStructure, ScalarTensor, ShadowMapping, Shadowable,
@@ -276,8 +278,57 @@ pub struct ParamTensor<S: TensorStructure> {
     // Composite(DataTensor<Atom, S>),
 }
 
-pub struct ParamTensorSet<S: TensorStructure> {
-    pub tensors: Vec<ParamTensor<S>>,
+impl<S: TensorStructure + Clone> HasTensorData for ParamTensor<S> {
+    type Data = Atom;
+    fn data(&self) -> Vec<Self::Data> {
+        self.tensor.data()
+    }
+
+    fn hashmap(&self) -> indexmap::IndexMap<ExpandedIndex, Self::Data> {
+        self.tensor.hashmap()
+    }
+
+    fn indices(&self) -> Vec<ExpandedIndex> {
+        self.tensor.indices()
+    }
+
+    fn symhashmap(
+        &self,
+        name: Symbol,
+        args: &[Atom],
+    ) -> std::collections::HashMap<Atom, Self::Data> {
+        self.tensor.symhashmap(name, args)
+    }
+}
+pub enum TensorSet<T: HasStructure> {
+    Tensors(Vec<T>),
+    Scalars(Vec<T::Scalar>),
+}
+
+impl<T: HasStructure> TensorSet<T> {
+    pub fn len(&self) -> usize {
+        match self {
+            TensorSet::Tensors(t) => t.len(),
+            TensorSet::Scalars(t) => t.len(),
+        }
+    }
+}
+
+impl<T: HasStructure + Clone> FromIterator<T> for TensorSet<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let (scalars, set): (Vec<Option<T::Scalar>>, Vec<T>) =
+            iter.into_iter().map(|t| (t.clone().scalar(), t)).collect();
+        let scalars: Option<Vec<_>> = scalars.into_iter().collect();
+        if let Some(s) = scalars {
+            TensorSet::Scalars(s)
+        } else {
+            TensorSet::Tensors(set)
+        }
+    }
+}
+
+pub struct ParamTensorSet<S: TensorStructure + Clone> {
+    pub tensors: TensorSet<ParamTensor<S>>,
     size: usize,
 }
 
@@ -289,20 +340,23 @@ impl<S: TensorStructure + Clone> ParamTensorSet<S> {
             .reduce(|acc, a| acc + a)
             .unwrap();
 
-        ParamTensorSet { tensors, size }
+        ParamTensorSet {
+            tensors: tensors.into_iter().collect(),
+            size,
+        }
     }
 
     pub fn empty() -> Self {
         ParamTensorSet {
-            tensors: vec![],
+            tensors: [].into_iter().collect(),
             size: 0,
         }
     }
 
-    pub fn push(&mut self, tensor: ParamTensor<S>) {
-        self.size += tensor.tensor.actual_size();
-        self.tensors.push(tensor);
-    }
+    // pub fn push(&mut self, tensor: ParamTensor<S>) {
+    //     self.size += tensor.tensor.actual_size();
+    //     self.tensors.push(tensor);
+    // }
 }
 
 impl<S: TensorStructure> ParamTensor<S> {
@@ -625,44 +679,56 @@ impl<S: TensorStructure + Clone> ParamTensorSet<S> {
         fn_map: &FunctionMap<'a, T>,
         params: &[Atom],
     ) -> Result<EvalTreeTensorSet<T, S>> {
-        let mut tensors = vec![];
+        match &self.tensors {
+            TensorSet::Scalars(s) => {
+                let exprs = s.iter().map(|a| a.as_view()).collect::<Vec<_>>();
+                return Ok(EvalTreeTensorSet {
+                    tensors: TensorsOrScalars::Scalars,
+                    eval: AtomView::to_eval_tree_multiple(&exprs, coeff_map, fn_map, params)
+                        .map_err(|s| anyhow!(s))?,
+                    size: self.size,
+                });
+            }
+            TensorSet::Tensors(in_tensors) => {
+                let mut tensors = vec![];
 
-        let mut atoms = vec![];
-        let mut id = 0;
+                let mut atoms = vec![];
+                let mut id = 0;
+                for t in in_tensors.iter() {
+                    let structure = t.structure().clone();
+                    let usize_tensor = match &t.tensor {
+                        DataTensor::Dense(d) => {
+                            let oldid = id;
+                            id += d.size().unwrap();
+                            for (_, a) in d.flat_iter() {
+                                atoms.push(a.as_view());
+                            }
+                            DataTensor::Dense(DenseTensor::from_data(
+                                Vec::from_iter(oldid..id),
+                                structure,
+                            )?)
+                        }
+                        DataTensor::Sparse(s) => {
+                            let mut t = SparseTensor::empty(structure);
+                            for (i, a) in s.flat_iter() {
+                                t.set_flat(i, id)?;
+                                atoms.push(a.as_view());
+                                id += 1;
+                            }
+                            DataTensor::Sparse(t)
+                        }
+                    };
+                    tensors.push(usize_tensor);
+                }
 
-        for t in self.tensors.iter() {
-            let structure = t.structure().clone();
-            let usize_tensor = match &t.tensor {
-                DataTensor::Dense(d) => {
-                    let oldid = id;
-                    id += d.size().unwrap();
-                    for (_, a) in d.flat_iter() {
-                        atoms.push(a.as_view());
-                    }
-                    DataTensor::Dense(DenseTensor::from_data(
-                        Vec::from_iter(oldid..id),
-                        structure,
-                    )?)
-                }
-                DataTensor::Sparse(s) => {
-                    let mut t = SparseTensor::empty(structure);
-                    for (i, a) in s.flat_iter() {
-                        t.set_flat(i, id)?;
-                        atoms.push(a.as_view());
-                        id += 1;
-                    }
-                    DataTensor::Sparse(t)
-                }
-            };
-            tensors.push(usize_tensor);
+                Ok(EvalTreeTensorSet {
+                    tensors: TensorsOrScalars::Tensors(tensors),
+                    eval: AtomView::to_eval_tree_multiple(&atoms, coeff_map, fn_map, params)
+                        .map_err(|s| anyhow!(s))?,
+                    size: self.size,
+                })
+            }
         }
-
-        Ok(EvalTreeTensorSet {
-            tensors,
-            eval: AtomView::to_eval_tree_multiple(&atoms, coeff_map, fn_map, params)
-                .map_err(|s| anyhow!(s))?,
-            size: self.size,
-        })
     }
 }
 
@@ -1569,7 +1635,7 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
         self.eval.common_pair_elimination()
     }
 
-    pub fn evaluate(&mut self, params: &[T]) -> Vec<DataTensor<T, S>>
+    pub fn evaluate(&mut self, params: &[T]) -> TensorSet<DataTensor<T, S>>
     where
         T: Real,
         S: TensorStructure + Clone,
@@ -1577,13 +1643,18 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
         let zero = params[0].zero();
 
         let mut elements = vec![zero; self.size];
-        let mut out_tensors = Vec::with_capacity(self.tensors.len());
         self.eval.evaluate(params, &mut elements);
-        for t in self.tensors.iter() {
-            out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
-        }
 
-        out_tensors
+        match &self.tensors {
+            TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
+            TensorsOrScalars::Tensors(t) => {
+                let mut out_tensors = Vec::with_capacity(t.len());
+                for t in t.iter() {
+                    out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
+                }
+                TensorSet::Tensors(out_tensors)
+            }
+        }
     }
 
     pub fn compile(
@@ -1766,8 +1837,14 @@ pub struct EvalTensor<T, S> {
 }
 
 #[derive(Debug, Clone)]
+pub enum TensorsOrScalars<T, S: TensorStructure> {
+    Tensors(Vec<DataTensor<T, S>>),
+    Scalars,
+}
+
+#[derive(Debug, Clone)]
 pub struct EvalTensorSet<T, S: TensorStructure> {
-    tensors: Vec<DataTensor<usize, S>>,
+    tensors: TensorsOrScalars<usize, S>,
     eval: T,
     size: usize, //
 }
@@ -1887,7 +1964,7 @@ impl<T, S: TensorStructure> EvalTensorSet<ExpressionEvaluator<T>, S> {
         })
     }
 
-    pub fn evaluate(&mut self, params: &[T]) -> Vec<DataTensor<T, S>>
+    pub fn evaluate(&mut self, params: &[T]) -> TensorSet<DataTensor<T, S>>
     where
         T: Real,
         S: TensorStructure + Clone,
@@ -1895,13 +1972,18 @@ impl<T, S: TensorStructure> EvalTensorSet<ExpressionEvaluator<T>, S> {
         let zero = params[0].zero();
 
         let mut elements = vec![zero; self.size];
-        let mut out_tensors = Vec::with_capacity(self.tensors.len());
         self.eval.evaluate_multiple(params, &mut elements);
-        for t in self.tensors.iter() {
-            out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
-        }
 
-        out_tensors
+        match &self.tensors {
+            TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
+            TensorsOrScalars::Tensors(t) => {
+                let mut out_tensors = Vec::with_capacity(t.len());
+                for t in t.iter() {
+                    out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
+                }
+                TensorSet::Tensors(out_tensors)
+            }
+        }
     }
 }
 
@@ -2002,58 +2084,72 @@ impl<S> CompiledEvalTensor<S> {
 pub type CompiledEvalTensorSet<S> = EvalTensorSet<CompiledEvaluator, S>;
 
 impl<S: TensorStructure> CompiledEvalTensorSet<S> {
-    pub fn evaluate_float(&self, params: &[f64]) -> Vec<DataTensor<f64, S>>
+    pub fn evaluate_float(&self, params: &[f64]) -> TensorSet<DataTensor<f64, S>>
     where
         S: TensorStructure + Clone,
     {
         let zero = params[0].zero();
 
         let mut elements = vec![zero; self.size];
-        let mut out_tensors = Vec::with_capacity(self.tensors.len());
         self.eval.evaluate_double(params, &mut elements);
-        for t in self.tensors.iter() {
-            out_tensors.push(t.map_data_ref(|&i| elements[i]));
-        }
 
-        out_tensors
+        match &self.tensors {
+            TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
+            TensorsOrScalars::Tensors(t) => {
+                let mut out_tensors = Vec::with_capacity(t.len());
+                for t in t.iter() {
+                    out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
+                }
+                TensorSet::Tensors(out_tensors)
+            }
+        }
     }
 
     pub fn evaluate_complex(
         &self,
         params: &[SymComplex<f64>],
-    ) -> Vec<DataTensor<SymComplex<f64>, S>>
+    ) -> TensorSet<DataTensor<SymComplex<f64>, S>>
     where
         S: TensorStructure + Clone,
     {
         let zero = params[0].zero();
 
         let mut elements = vec![zero; self.size];
-        let mut out_tensors = Vec::with_capacity(self.tensors.len());
         self.eval.evaluate_complex(params, &mut elements);
-        for t in self.tensors.iter() {
-            out_tensors.push(t.map_data_ref(|&i| elements[i]));
-        }
 
-        out_tensors
+        match &self.tensors {
+            TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
+            TensorsOrScalars::Tensors(t) => {
+                let mut out_tensors = Vec::with_capacity(t.len());
+                for t in t.iter() {
+                    out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
+                }
+                TensorSet::Tensors(out_tensors)
+            }
+        }
     }
 
     pub fn evaluate<T: CompiledEvaluatorFloat + Default + Clone>(
         &self,
         params: &[T],
-    ) -> Vec<DataTensor<T, S>>
+    ) -> TensorSet<DataTensor<T, S>>
     where
         S: TensorStructure + Clone,
     {
         let zero = T::default();
 
         let mut elements = vec![zero; self.size];
-        let mut out_tensors = Vec::with_capacity(self.tensors.len());
         self.eval.evaluate(params, &mut elements);
 
-        for t in self.tensors.iter() {
-            out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
+        match &self.tensors {
+            TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
+            TensorsOrScalars::Tensors(t) => {
+                let mut out_tensors = Vec::with_capacity(t.len());
+                for t in t.iter() {
+                    out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
+                }
+                TensorSet::Tensors(out_tensors)
+            }
         }
-
-        out_tensors
     }
 }

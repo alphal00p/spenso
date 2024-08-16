@@ -2,7 +2,6 @@ extern crate derive_more;
 
 use std::{
     fmt::{Debug, Display},
-    ops::Index,
     sync::Arc,
 };
 
@@ -20,7 +19,6 @@ use crate::{
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero},
     data::{DataIterator, DataTensor, DenseTensor, HasTensorData, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
-    scalar,
     structure::{
         CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, IntoArgs, IntoSymbol,
         NamedStructure, PhysicalSlots, ScalarStructure, ScalarTensor, ShadowMapping, Shadowable,
@@ -310,6 +308,13 @@ impl<T: HasStructure> TensorSet<T> {
         match self {
             TensorSet::Tensors(t) => t.len(),
             TensorSet::Scalars(t) => t.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            TensorSet::Tensors(t) => t.is_empty(),
+            TensorSet::Scalars(t) => t.is_empty(),
         }
     }
 }
@@ -647,13 +652,12 @@ impl<S: TensorStructure + Clone> PatternReplacement for ParamTensor<S> {
 }
 
 impl<S: TensorStructure + Clone> ParamTensor<S> {
-    pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
-        &'a self,
-        coeff_map: F,
-        fn_map: &FunctionMap<'a, T>,
+    pub fn eval_tree(
+        &self,
+        fn_map: &FunctionMap,
         params: &[Atom],
-    ) -> Result<EvalTreeTensor<T, S>, String> {
-        self.tensor.eval_tree(coeff_map, fn_map, params)
+    ) -> Result<EvalTreeTensor<Rational, S>, String> {
+        self.tensor.eval_tree(fn_map, params)
     }
 
     pub fn evaluate<'a, 'b, T, F: Fn(&Rational) -> T + Copy, U>(
@@ -673,21 +677,20 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
 }
 
 impl<S: TensorStructure + Clone> ParamTensorSet<S> {
-    pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
-        &'a self,
-        coeff_map: F,
-        fn_map: &FunctionMap<'a, T>,
+    pub fn eval_tree(
+        &self,
+        fn_map: &FunctionMap,
         params: &[Atom],
-    ) -> Result<EvalTreeTensorSet<T, S>> {
+    ) -> Result<EvalTreeTensorSet<Rational, S>> {
         match &self.tensors {
             TensorSet::Scalars(s) => {
                 let exprs = s.iter().map(|a| a.as_view()).collect::<Vec<_>>();
-                return Ok(EvalTreeTensorSet {
+                Ok(EvalTreeTensorSet {
                     tensors: TensorsOrScalars::Scalars,
-                    eval: AtomView::to_eval_tree_multiple(&exprs, coeff_map, fn_map, params)
+                    eval: AtomView::to_eval_tree_multiple(&exprs, fn_map, params)
                         .map_err(|s| anyhow!(s))?,
                     size: self.size,
-                });
+                })
             }
             TensorSet::Tensors(in_tensors) => {
                 let mut tensors = vec![];
@@ -723,7 +726,7 @@ impl<S: TensorStructure + Clone> ParamTensorSet<S> {
 
                 Ok(EvalTreeTensorSet {
                     tensors: TensorsOrScalars::Tensors(tensors),
-                    eval: AtomView::to_eval_tree_multiple(&atoms, coeff_map, fn_map, params)
+                    eval: AtomView::to_eval_tree_multiple(&atoms, fn_map, params)
                         .map_err(|s| anyhow!(s))?,
                     size: self.size,
                 })
@@ -1233,13 +1236,12 @@ impl<I> DataTensor<Atom, I>
 where
     I: Clone + TensorStructure,
 {
-    pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
-        &'a self,
-        coeff_map: F,
-        fn_map: &FunctionMap<'a, T>,
+    pub fn eval_tree(
+        &self,
+        fn_map: &FunctionMap,
         params: &[Atom],
-    ) -> Result<EvalTreeTensor<T, I>, String> {
-        EvalTreeTensor::from_data(self, coeff_map, fn_map, params)
+    ) -> Result<EvalTreeTensor<Rational, I>, String> {
+        EvalTreeTensor::from_data(self, fn_map, params)
     }
 
     pub fn evaluate<'a, 'b, T, F: Fn(&Rational) -> T + Copy, U>(
@@ -1265,13 +1267,12 @@ impl<I> SparseTensor<Atom, I>
 where
     I: Clone + TensorStructure,
 {
-    pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
-        &'a self,
-        coeff_map: F,
-        fn_map: &FunctionMap<'a, T>,
+    pub fn eval_tree(
+        &self,
+        fn_map: &FunctionMap,
         params: &[Atom],
-    ) -> Result<EvalTreeTensor<T, I>, String> {
-        EvalTreeTensor::from_sparse(self, coeff_map, fn_map, params)
+    ) -> Result<EvalTreeTensor<Rational, I>, String> {
+        EvalTreeTensor::from_sparse(self, fn_map, params)
     }
 
     pub fn evaluate<'a, T, F: Fn(&Rational) -> T + Copy, U>(
@@ -1311,13 +1312,12 @@ impl<I> DenseTensor<Atom, I>
 where
     I: Clone + TensorStructure,
 {
-    pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
-        &'a self,
-        coeff_map: F,
-        fn_map: &FunctionMap<'a, T>,
+    pub fn eval_tree(
+        &self,
+        fn_map: &FunctionMap,
         params: &[Atom],
-    ) -> Result<EvalTreeTensor<T, I>, String> {
-        EvalTreeTensor::from_dense(self, coeff_map, fn_map, params)
+    ) -> Result<EvalTreeTensor<Rational, I>, String> {
+        EvalTreeTensor::from_dense(self, fn_map, params)
     }
 
     pub fn evaluate<'a, T, F: Fn(&Rational) -> T + Copy, U>(
@@ -1610,7 +1610,7 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self, cpe_rounds: usize) -> EvalTensorSet<ExpressionEvaluator<T>, S>
+    pub fn linearize(self, cpe_rounds: Option<usize>) -> EvalTensorSet<ExpressionEvaluator<T>, S>
     where
         T: Clone + Default + PartialEq,
     {
@@ -1621,18 +1621,11 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
         }
     }
 
-    pub fn common_subexpression_elimination(&mut self, max_subexpr_len: usize)
+    pub fn common_subexpression_elimination(&mut self)
     where
         T: Debug + Hash + Eq + Ord + Clone + Default,
     {
-        self.eval.common_subexpression_elimination(max_subexpr_len)
-    }
-
-    pub fn common_pair_elimination(&mut self)
-    where
-        T: Debug + Hash + Eq + Ord + Clone + Default,
-    {
-        self.eval.common_pair_elimination()
+        self.eval.common_subexpression_elimination()
     }
 
     pub fn evaluate(&mut self, params: &[T]) -> TensorSet<DataTensor<T, S>>
@@ -1656,30 +1649,6 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
             }
         }
     }
-
-    pub fn compile(
-        &self,
-        filename: &str,
-        function_name: &str,
-        library_name: &str,
-    ) -> CompiledEvalTensorSet<S>
-    where
-        T: NumericalFloatLike,
-        S: Clone,
-    {
-        CompiledEvalTensorSet {
-            eval: self
-                .eval
-                .export_cpp(filename, function_name, true)
-                .unwrap()
-                .compile(library_name, CompileOptions::default())
-                .unwrap()
-                .load()
-                .unwrap(),
-            size: self.size,
-            tensors: self.tensors.clone(),
-        }
-    }
 }
 
 impl<S: Clone> EvalTreeTensor<Rational, S> {
@@ -1688,18 +1657,14 @@ impl<S: Clone> EvalTreeTensor<Rational, S> {
     }
 }
 
-impl<S: Clone, T> EvalTreeTensor<T, S> {
-    pub fn from_dense<'a, F: Fn(&Rational) -> T + Copy>(
-        dense: &'a DenseTensor<Atom, S>,
-        coeff_map: F,
-        fn_map: &FunctionMap<'a, T>,
+impl<S: Clone> EvalTreeTensor<Rational, S> {
+    pub fn from_dense(
+        dense: &DenseTensor<Atom, S>,
+        fn_map: &FunctionMap,
         params: &[Atom],
-    ) -> Result<Self, String>
-    where
-        T: Clone + Default + Debug + Hash + Ord,
-    {
+    ) -> Result<Self, String> {
         let atomviews: Vec<AtomView> = dense.data.iter().map(|a| a.as_view()).collect();
-        let eval = AtomView::to_eval_tree_multiple(&atomviews, coeff_map, fn_map, params)?;
+        let eval = AtomView::to_eval_tree_multiple(&atomviews, fn_map, params)?;
 
         Ok(EvalTreeTensor {
             eval,
@@ -1708,21 +1673,17 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         })
     }
 
-    pub fn from_sparse<'a, F: Fn(&Rational) -> T + Copy>(
-        dense: &'a SparseTensor<Atom, S>,
-        coeff_map: F,
-        fn_map: &FunctionMap<'a, T>,
+    pub fn from_sparse(
+        dense: &SparseTensor<Atom, S>,
+        fn_map: &FunctionMap,
         params: &[Atom],
-    ) -> Result<Self, String>
-    where
-        T: Clone + Default + Debug + Hash + Ord,
-    {
+    ) -> Result<Self, String> {
         let atomviews: (Vec<FlatIndex>, Vec<AtomView>) = dense
             .elements
             .iter()
             .map(|(k, a)| (*k, a.as_view()))
             .unzip();
-        let eval = AtomView::to_eval_tree_multiple(&atomviews.1, coeff_map, fn_map, params)?;
+        let eval = AtomView::to_eval_tree_multiple(&atomviews.1, fn_map, params)?;
 
         Ok(EvalTreeTensor {
             eval,
@@ -1731,22 +1692,22 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         })
     }
 
-    pub fn from_data<'a, F: Fn(&Rational) -> T + Copy>(
-        data: &'a DataTensor<Atom, S>,
-        coeff_map: F,
-        fn_map: &FunctionMap<'a, T>,
+    pub fn from_data(
+        data: &DataTensor<Atom, S>,
+        fn_map: &FunctionMap,
         params: &[Atom],
     ) -> Result<Self, String>
     where
         S: TensorStructure,
-        T: Clone + Default + Debug + Hash + Ord,
     {
         match data {
-            DataTensor::Dense(d) => Self::from_dense(d, coeff_map, fn_map, params),
-            DataTensor::Sparse(s) => Self::from_sparse(s, coeff_map, fn_map, params),
+            DataTensor::Dense(d) => Self::from_dense(d, fn_map, params),
+            DataTensor::Sparse(s) => Self::from_sparse(s, fn_map, params),
         }
     }
+}
 
+impl<S: Clone, T> EvalTreeTensor<T, S> {
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(&self, f: &F) -> EvalTreeTensor<T2, S>
     where
         T: Clone + PartialEq,
@@ -1759,7 +1720,7 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self, cpe_rounds: usize) -> EvalTensor<ExpressionEvaluator<T>, S>
+    pub fn linearize(self, cpe_rounds: Option<usize>) -> EvalTensor<ExpressionEvaluator<T>, S>
     where
         T: Clone + Default + PartialEq,
     {
@@ -1770,18 +1731,11 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         }
     }
 
-    pub fn common_subexpression_elimination(&mut self, max_subexpr_len: usize)
+    pub fn common_subexpression_elimination(&mut self)
     where
         T: Debug + Hash + Eq + Ord + Clone + Default,
     {
-        self.eval.common_subexpression_elimination(max_subexpr_len)
-    }
-
-    pub fn common_pair_elimination(&mut self)
-    where
-        T: Debug + Hash + Eq + Ord + Clone + Default,
-    {
-        self.eval.common_pair_elimination()
+        self.eval.common_subexpression_elimination()
     }
 
     pub fn evaluate(&mut self, params: &[T]) -> DataTensor<T, S>
@@ -1802,29 +1756,6 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
             let mut out_data = DenseTensor::repeat(self.structure.clone(), zero.clone());
             self.eval.evaluate(params, &mut out_data.data);
             DataTensor::Dense(out_data)
-        }
-    }
-
-    pub fn compile(
-        &self,
-        filename: &str,
-        function_name: &str,
-        library_name: &str,
-    ) -> CompiledEvalTensor<S>
-    where
-        T: NumericalFloatLike,
-    {
-        CompiledEvalTensor {
-            eval: self
-                .eval
-                .export_cpp(filename, function_name, true)
-                .unwrap()
-                .compile(library_name, CompileOptions::default())
-                .unwrap()
-                .load()
-                .unwrap(),
-            indexmap: self.indexmap.clone(),
-            structure: self.structure.clone(),
         }
     }
 }
@@ -2098,7 +2029,7 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
             TensorsOrScalars::Tensors(t) => {
                 let mut out_tensors = Vec::with_capacity(t.len());
                 for t in t.iter() {
-                    out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
+                    out_tensors.push(t.map_data_ref(|&i| elements[i]));
                 }
                 TensorSet::Tensors(out_tensors)
             }
@@ -2122,7 +2053,7 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
             TensorsOrScalars::Tensors(t) => {
                 let mut out_tensors = Vec::with_capacity(t.len());
                 for t in t.iter() {
-                    out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
+                    out_tensors.push(t.map_data_ref(|&i| elements[i]));
                 }
                 TensorSet::Tensors(out_tensors)
             }

@@ -220,7 +220,7 @@ where
     {
         for (i, d) in self.flat_iter() {
             let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
-            fn_map.add_constant(labeled_coef.clone().into(), d.clone().into());
+            fn_map.add_constant(labeled_coef.clone(), d.clone().into());
         }
     }
 }
@@ -686,7 +686,7 @@ where
     {
         for (i, d) in self.flat_iter() {
             let labeled_coef = index_to_atom(self.structure(), i).to_atom().unwrap();
-            fn_map.add_constant(labeled_coef.clone().into(), d.clone().into());
+            fn_map.add_constant(labeled_coef.clone(), d.clone().into());
         }
     }
 }

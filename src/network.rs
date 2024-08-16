@@ -874,12 +874,11 @@ where
 impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     TensorNetworkSet<ParamTensor<S>, Atom>
 {
-    pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
-        &'a self,
-        coeff_map: F,
-        fn_map: &FunctionMap<'a, T>,
+    pub fn eval_tree(
+        &self,
+        fn_map: &FunctionMap,
         params: &[Atom],
-    ) -> Result<EvalTreeTensorNetworkSet<T, S>>
+    ) -> Result<EvalTreeTensorNetworkSet<Rational, S>>
     where
         S: TensorStructure,
     {
@@ -936,7 +935,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
 
         Ok(EvalTreeTensorNetworkSet {
             networks,
-            shared_data: AtomView::to_eval_tree_multiple(&atoms, coeff_map, fn_map, params)
+            shared_data: AtomView::to_eval_tree_multiple(&atoms, fn_map, params)
                 .map_err(|s| anyhow!(s))?,
             len: atoms.len(),
         })
@@ -967,7 +966,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self, cpe_rounds: usize) -> EvalTensorNetworkSet<T, S>
+    pub fn linearize(self, cpe_rounds: Option<usize>) -> EvalTensorNetworkSet<T, S>
     where
         T: Clone + Default + PartialEq,
     {
@@ -978,19 +977,11 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         }
     }
 
-    pub fn common_subexpression_elimination(&mut self, max_subexpr_len: usize)
+    pub fn common_subexpression_elimination(&mut self)
     where
         T: Debug + Hash + Eq + Ord + Clone + Default,
     {
-        self.shared_data
-            .common_subexpression_elimination(max_subexpr_len)
-    }
-
-    pub fn common_pair_elimination(&mut self)
-    where
-        T: Debug + Hash + Eq + Ord + Clone + Default,
-    {
-        self.shared_data.common_pair_elimination()
+        self.shared_data.common_subexpression_elimination()
     }
 
     pub fn evaluate(&mut self, params: &[T]) -> TensorNetworkSet<DataTensor<T, S>, T>
@@ -1520,25 +1511,24 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         }
     }
 
-    pub fn eval_tree<'a, T: Clone + Default + Debug + Hash + Ord, F: Fn(&Rational) -> T + Copy>(
-        &'a self,
-        coeff_map: F,
-        fn_map: &FunctionMap<'a, T>,
+    pub fn eval_tree(
+        &self,
+        fn_map: &FunctionMap,
         params: &[Atom],
-    ) -> Result<TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>>, String>
+    ) -> Result<TensorNetwork<EvalTreeTensor<Rational, S>, EvalTree<Rational>>, String>
     where
         S: TensorStructure,
     {
         let mut evaluate_net = TensorNetwork::new();
         for (_, t) in &self.graph.nodes {
-            let evaluated_tensor = t.eval_tree(coeff_map, fn_map, params)?;
+            let evaluated_tensor = t.eval_tree(fn_map, params)?;
             evaluate_net.push(evaluated_tensor);
         }
 
         evaluate_net.scalar = self
             .scalar
             .as_ref()
-            .map(|a| a.as_view().to_eval_tree(coeff_map, fn_map, params))
+            .map(|a| a.as_view().to_evaluation_tree(fn_map, params))
             .transpose()?;
 
         Ok(evaluate_net)
@@ -1593,7 +1583,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
 
     pub fn linearize(
         self,
-        cpe_rounds: usize,
+        cpe_rounds: Option<usize>,
     ) -> TensorNetwork<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>
     where
         T: Clone + Default + PartialEq,
@@ -1606,27 +1596,15 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
         }
     }
 
-    pub fn common_subexpression_elimination(&mut self, max_subexpr_len: usize)
+    pub fn common_subexpression_elimination(&mut self)
     where
         T: Debug + Hash + Eq + Ord + Clone + Default,
         S: Clone,
     {
         self.graph
-            .map_nodes_mut(|(_, x)| x.common_subexpression_elimination(max_subexpr_len));
+            .map_nodes_mut(|(_, x)| x.common_subexpression_elimination());
         if let Some(a) = self.scalar.as_mut() {
-            a.common_subexpression_elimination(max_subexpr_len)
-        }
-    }
-
-    pub fn common_pair_elimination(&mut self)
-    where
-        T: Debug + Hash + Eq + Ord + Clone + Default,
-        S: Clone,
-    {
-        self.graph
-            .map_nodes_mut(|(_, x)| x.common_pair_elimination());
-        if let Some(a) = self.scalar.as_mut() {
-            a.common_pair_elimination()
+            a.common_subexpression_elimination()
         }
     }
 
@@ -1644,38 +1622,6 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
                 a.evaluate(params, &mut out);
                 let [o] = out;
                 o
-            }),
-        }
-    }
-
-    pub fn compile(
-        &self,
-        filename: &str,
-        library_name: &str,
-    ) -> TensorNetwork<CompiledEvalTensor<S>, CompiledEvaluator>
-    where
-        T: NumericalFloatLike,
-        S: Clone,
-    {
-        // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
-        let new_graph = self.graph.map_nodes_ref(|(n, x)| {
-            let function_name = format!("{filename}_{}", n.data().as_ffi());
-            let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
-            let library_name = format!("{library_name}_{}.so", n.data().as_ffi());
-            x.compile(&filename, &function_name, &library_name)
-        });
-        let function_name = format!("{filename}_scalar");
-        let filename = format!("{filename}_scalar.cpp");
-        let library_name = format!("{library_name}_scalar.so");
-        TensorNetwork {
-            graph: new_graph,
-            scalar: self.scalar.as_ref().map(|a| {
-                a.export_cpp(&filename, &function_name, true)
-                    .unwrap()
-                    .compile(&library_name, CompileOptions::default())
-                    .unwrap()
-                    .load()
-                    .unwrap()
             }),
         }
     }

@@ -98,8 +98,8 @@ fn criterion_benchmark(c: &mut Criterion) {
         let pat = &name_re + i * &name_im;
         replacements.push((Atom::new_var(*k).into_pattern(), pat.into_pattern()));
 
-        fn_map.add_constant(name_re.into(), Rational::from(v.re));
-        fn_map.add_constant(name_im.into(), Rational::from(v.im));
+        fn_map.add_constant(name_re, Rational::from(v.re));
+        fn_map.add_constant(name_im, Rational::from(v.im));
     }
 
     let reps: Vec<Replacement> = replacements
@@ -156,12 +156,12 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut postcontracted_eval_tree_tensor = counting_network
         .clone()
         .to_fully_parametric()
-        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .eval_tree(&fn_map, &params)
         .unwrap();
 
     postcontracted_eval_tree_tensor.horner_scheme();
     // postcontracted_eval_tree_tensor.common_pair_elimination();
-    postcontracted_eval_tree_tensor.common_subexpression_elimination(10);
+    postcontracted_eval_tree_tensor.common_subexpression_elimination();
 
     let mut mapped_postcontracted_eval_tree_tensor =
         postcontracted_eval_tree_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
@@ -183,7 +183,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let mut eval_tree_leveled_tensor = levels
         .contract(1, &mut fn_map)
-        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .eval_tree(&fn_map, &params)
         .unwrap();
 
     eval_tree_leveled_tensor.horner_scheme();
@@ -192,7 +192,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let mut eval_tree_leveled_tensor_depth2 = levels2
         .contract(2, &mut fn_map)
-        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .eval_tree(&fn_map, &params)
         .unwrap();
 
     eval_tree_leveled_tensor_depth2.horner_scheme();
@@ -246,7 +246,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut precontracted_eval_tree_net = contracted_counting_network
         .clone()
         .to_fully_parametric()
-        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .eval_tree(&fn_map, &params)
         .unwrap();
     precontracted_eval_tree_net.horner_scheme();
     // precontracted_eval_tree_net.common_subexpression_elimination(10);
@@ -266,7 +266,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    let mut mapped_precontracted_eval_net = mapped_precontracted_eval_tree_net.linearize(1);
+    let mut mapped_precontracted_eval_net = mapped_precontracted_eval_tree_net.linearize(Some(1));
 
     group.bench_function("3LPhysical precontracted new lin", |b| {
         b.iter(|| {
@@ -302,13 +302,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut precontracted_eval_tree_net = contracted_counting_network
         .clone()
         .to_fully_parametric()
-        .eval_tree(|a| a.clone(), &fn_map, &params)
+        .eval_tree(&fn_map, &params)
         .unwrap();
     precontracted_eval_tree_net.horner_scheme();
-    precontracted_eval_tree_net.common_subexpression_elimination(1);
+    precontracted_eval_tree_net.common_subexpression_elimination();
     let neeet = precontracted_eval_tree_net
         .map_coeff::<f64, _>(&|r| r.into())
-        .linearize(1)
+        .linearize(Some(1))
         .export_cpp(
             "nested_evaluation_asm",
             "nested_evaluation_asm",

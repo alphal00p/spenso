@@ -1367,8 +1367,8 @@ where
                             index_to_atom(self.structure(), i).to_atom_re().unwrap();
                         let labeled_coef_im =
                             index_to_atom(self.structure(), i).to_atom_im().unwrap();
-                        fn_map.add_constant(labeled_coef_re.clone().into(), c.re.clone().into());
-                        fn_map.add_constant(labeled_coef_im.clone().into(), c.re.clone().into());
+                        fn_map.add_constant(labeled_coef_re.clone(), c.re.clone().into());
+                        fn_map.add_constant(labeled_coef_im.clone(), c.re.clone().into());
                     }
                 }
                 DataTensor::Sparse(d) => {
@@ -1377,8 +1377,8 @@ where
                             index_to_atom(self.structure(), i).to_atom_re().unwrap();
                         let labeled_coef_im =
                             index_to_atom(self.structure(), i).to_atom_im().unwrap();
-                        fn_map.add_constant(labeled_coef_re.clone().into(), c.re.clone().into());
-                        fn_map.add_constant(labeled_coef_im.clone().into(), c.re.clone().into());
+                        fn_map.add_constant(labeled_coef_re.clone(), c.re.clone().into());
+                        fn_map.add_constant(labeled_coef_im.clone(), c.re.clone().into());
                     }
                 }
             }, // p.append_map(fn_map, index_to_atom),

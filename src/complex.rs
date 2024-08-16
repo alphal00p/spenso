@@ -316,7 +316,11 @@ where
     T: From<f64> + Copy,
 {
     #[allow(clippy::useless_conversion)]
-    fn evaluate(eval: &symbolica::evaluate::CompiledEvaluator, args: &[Self], out: &mut [Self]) {
+    fn evaluate(
+        eval: &mut symbolica::evaluate::CompiledEvaluator,
+        args: &[Self],
+        out: &mut [Self],
+    ) {
         let args: Vec<SymComplex<f64>> = args
             .iter()
             .map(|&c| SymComplex {

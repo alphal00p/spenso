@@ -1830,7 +1830,7 @@ impl<T, S> EvalTensor<ExpressionEvaluator<T>, S> {
         let zero = params[0].zero();
         if let Some(ref indexmap) = self.indexmap {
             let mut elements = vec![zero; indexmap.len()];
-            self.eval.evaluate_multiple(params, &mut elements);
+            self.eval.evaluate(params, &mut elements);
             let s = SparseTensor {
                 elements: indexmap.iter().cloned().zip(elements.drain(0..)).collect(),
                 structure: self.structure.clone(),
@@ -1838,7 +1838,7 @@ impl<T, S> EvalTensor<ExpressionEvaluator<T>, S> {
             DataTensor::Sparse(s)
         } else {
             let mut out_data = DenseTensor::repeat(self.structure.clone(), zero.clone());
-            self.eval.evaluate_multiple(params, &mut out_data.data);
+            self.eval.evaluate(params, &mut out_data.data);
             DataTensor::Dense(out_data)
         }
     }
@@ -1903,7 +1903,7 @@ impl<T, S: TensorStructure> EvalTensorSet<ExpressionEvaluator<T>, S> {
         let zero = params[0].zero();
 
         let mut elements = vec![zero; self.size];
-        self.eval.evaluate_multiple(params, &mut elements);
+        self.eval.evaluate(params, &mut elements);
 
         match &self.tensors {
             TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
@@ -1951,7 +1951,7 @@ impl<S: TensorStructure> EvalTensorSet<CompiledCode, S> {
 pub type CompiledEvalTensor<S> = EvalTensor<CompiledEvaluator, S>;
 
 impl<S> CompiledEvalTensor<S> {
-    pub fn evaluate_float(&self, params: &[f64]) -> DataTensor<f64, S>
+    pub fn evaluate_float(&mut self, params: &[f64]) -> DataTensor<f64, S>
     where
         S: TensorStructure + Clone,
     {
@@ -1970,7 +1970,7 @@ impl<S> CompiledEvalTensor<S> {
         }
     }
 
-    pub fn evaluate_complex(&self, params: &[SymComplex<f64>]) -> DataTensor<SymComplex<f64>, S>
+    pub fn evaluate_complex(&mut self, params: &[SymComplex<f64>]) -> DataTensor<SymComplex<f64>, S>
     where
         S: TensorStructure + Clone,
     {
@@ -1990,7 +1990,7 @@ impl<S> CompiledEvalTensor<S> {
     }
 
     pub fn evaluate<T: CompiledEvaluatorFloat + Default + Clone>(
-        &self,
+        &mut self,
         params: &[T],
     ) -> DataTensor<T, S>
     where
@@ -2015,7 +2015,7 @@ impl<S> CompiledEvalTensor<S> {
 pub type CompiledEvalTensorSet<S> = EvalTensorSet<CompiledEvaluator, S>;
 
 impl<S: TensorStructure> CompiledEvalTensorSet<S> {
-    pub fn evaluate_float(&self, params: &[f64]) -> TensorSet<DataTensor<f64, S>>
+    pub fn evaluate_float(&mut self, params: &[f64]) -> TensorSet<DataTensor<f64, S>>
     where
         S: TensorStructure + Clone,
     {
@@ -2037,7 +2037,7 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
     }
 
     pub fn evaluate_complex(
-        &self,
+        &mut self,
         params: &[SymComplex<f64>],
     ) -> TensorSet<DataTensor<SymComplex<f64>, S>>
     where
@@ -2061,7 +2061,7 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
     }
 
     pub fn evaluate<T: CompiledEvaluatorFloat + Default + Clone>(
-        &self,
+        &mut self,
         params: &[T],
     ) -> TensorSet<DataTensor<T, S>>
     where

@@ -1048,7 +1048,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
 
         let mut networks = vec![];
 
-        self.shared_data.evaluate_multiple(params, &mut data);
+        self.shared_data.evaluate(params, &mut data);
 
         let scalars: Vec<Option<T>> = data
             .iter()
@@ -1148,7 +1148,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     CompiledTensorNetworkSet<S>
 {
     pub fn evaluate<T: symbolica::evaluate::CompiledEvaluatorFloat + Default + Clone>(
-        &self,
+        &mut self,
         params: &[T],
     ) -> TensorNetworkSet<DataTensor<T, S>, T>
     where
@@ -1642,7 +1642,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
             graph: new_graph,
             scalar: self.scalar.as_mut().map(|a| {
                 let mut out = [zero];
-                a.evaluate_multiple(params, &mut out);
+                a.evaluate(params, &mut out);
                 let [o] = out;
                 o
             }),
@@ -1784,17 +1784,17 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
     }
 
     pub fn evaluate<T: symbolica::evaluate::CompiledEvaluatorFloat + Default + Clone>(
-        &self,
+        &mut self,
         params: &[T],
     ) -> TensorNetwork<DataTensor<T, S>, T>
     where
         S: TensorStructure + Clone,
     {
         let zero = T::default();
-        let new_graph = self.graph.map_nodes_ref(|(_, x)| x.evaluate(params));
+        let new_graph = self.graph.map_nodes_ref_mut(|(_, x)| x.evaluate(params));
         TensorNetwork {
             graph: new_graph,
-            scalar: self.scalar.as_ref().map(|a| {
+            scalar: self.scalar.as_mut().map(|a| {
                 let mut out = [zero];
                 a.evaluate(params, &mut out);
                 let [o] = out;

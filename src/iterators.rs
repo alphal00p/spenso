@@ -49,6 +49,25 @@ impl AbstractFiberIndex for FiberClassIndex {
     }
 }
 
+pub enum IteratorEnum<A, B> {
+    A(A),
+    B(B),
+}
+
+impl<A, B> Iterator for IteratorEnum<A, B>
+where
+    A: Iterator,
+    B: Iterator<Item = A::Item>,
+{
+    type Item = A::Item;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            IteratorEnum::A(a) => a.next(),
+            IteratorEnum::B(b) => b.next(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum FiberIndex {
     Free,

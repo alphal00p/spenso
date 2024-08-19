@@ -2,13 +2,17 @@ use crate::{
     complex::Complex,
     contraction::IsZero,
     iterators::{DenseTensorLinearIterator, IteratableTensor, SparseTensorLinearIterator},
-    parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
     structure::{
-        atomic_expanded_label_id, CastStructure, ConcreteIndex, ExpandedIndex, FlatIndex, HasName,
-        HasStructure, IntoArgs, IntoSymbol, ScalarStructure, ScalarTensor, ShadowMapping,
-        Shadowable, TensorStructure, TracksCount, VecStructure,
+        CastStructure, ConcreteIndex, ExpandedIndex, FlatIndex, HasName, HasStructure,
+        ScalarStructure, ScalarTensor, TensorStructure, TracksCount, VecStructure,
     },
     upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
+};
+
+#[cfg(feature = "shadowing")]
+use crate::{
+    parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
+    structure::{atomic_expanded_label_id, IntoArgs, IntoSymbol, ShadowMapping, Shadowable},
 };
 
 use ahash::AHashMap;

@@ -1,76 +1,69 @@
 #[cfg(feature = "shadowing")]
-use ahash::{AHashSet, HashMap};
+use ahash::{AHashMap, AHashSet, HashMap};
+#[cfg(feature = "shadowing")]
+use anyhow::anyhow;
+#[cfg(feature = "shadowing")]
+use std::sync::Arc;
 
 // use log::trace;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
+#[cfg(feature = "shadowing")]
 use symbolica::{
+    atom::{representation::FunView, AddView, Atom, AtomView, MulView, Symbol},
     coefficient::ConvertToRing,
     domains::{
         factorized_rational_polynomial::{
             FactorizedRationalPolynomial, FromNumeratorAndFactorizedDenominator,
         },
-        float::SingleFloat,
+        float::{Complex as SymComplex, NumericalFloatLike, Real, SingleFloat},
+        rational::Rational,
         rational_polynomial::{FromNumeratorAndDenominator, RationalPolynomial},
         EuclideanDomain,
     },
-    evaluate::{CompiledCode, ExportedCode, InlineASM},
+    evaluate::{
+        CompileOptions, CompiledCode, CompiledEvaluator, EvalTree, EvaluationFn, ExportedCode,
+        ExpressionEvaluator, FunctionMap, InlineASM,
+    },
+    id::{Condition, MatchSettings, Pattern, Replacement, WildcardAndRestriction},
     poly::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Exponent,
         Variable,
     },
-};
-#[cfg(feature = "shadowing")]
-use symbolica::{
-    domains::float::NumericalFloatLike,
-    evaluate::{CompileOptions, CompiledEvaluator, EvalTree, ExpressionEvaluator},
-    id::{Condition, MatchSettings, Pattern, Replacement, WildcardAndRestriction},
+    state::State,
 };
 
+#[cfg(feature = "shadowing")]
 use crate::{
     complex::{Complex, RealOrComplexTensor},
-    contraction::{Contract, RefZero},
-    data::{
-        DataIterator, DataTensor, DenseTensor, GetTensorData, HasTensorData, SetTensorData,
-        SparseTensor,
-    },
+    contraction::RefZero,
+    data::{DataIterator, DenseTensor, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
     parametric::{
         AtomViewOrConcrete, CompiledEvalTensor, EvalTensor, EvalTreeTensor, MixedTensor,
         ParamTensor, PatternReplacement,
     },
     structure::{
-        CastStructure, DualSlotTo, HasName, HasStructure, IntoArgs, IntoSymbol, NamedStructure,
-        ScalarTensor, ShadowMapping, Shadowable, StructureContract, TensorStructure, ToSymbolic,
+        IntoArgs, IntoSymbol, NamedStructure, ShadowMapping, Shadowable, StructureContract,
+        ToSymbolic,
+    },
+    upgrading_arithmetic::{FallibleAdd, TrySmallestUpgrade},
+};
+
+use crate::{
+    contraction::Contract,
+    data::{DataTensor, GetTensorData, HasTensorData},
+    structure::{
+        CastStructure, DualSlotTo, HasName, HasStructure, ScalarTensor, TensorStructure,
         TracksCount,
     },
-    upgrading_arithmetic::{FallibleAdd, FallibleMul, TrySmallestUpgrade},
+    upgrading_arithmetic::FallibleMul,
 };
 
 use anyhow::Result;
-#[cfg(feature = "shadowing")]
-use symbolica::{
-    atom::{representation::FunView, AddView, MulView},
-    atom::{Atom, AtomView, Symbol},
-    domains::float::Complex as SymComplex,
-    domains::float::Real,
-    domains::rational::Rational,
-    evaluate::EvaluationFn,
-    evaluate::FunctionMap,
-    state::State,
-};
-
-#[cfg(feature = "shadowing")]
-use ahash::AHashMap;
 
 use smartstring::alias::String;
-use std::{
-    fmt::{Debug, Display},
-    sync::Arc,
-};
-
-#[cfg(feature = "shadowing")]
-use anyhow::anyhow;
+use std::fmt::{Debug, Display};
 
 new_key_type! {
     pub struct NodeId;
@@ -814,6 +807,7 @@ where
     pub networks: Vec<TensorNetwork<T, S>>,
 }
 
+#[cfg(feature = "shadowing")]
 impl Default for TensorNetworkSet<NamedStructure, Atom> {
     fn default() -> Self {
         TensorNetworkSet {
@@ -841,10 +835,13 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 pub type EvalTreeTensorNetworkSet<T, S> = SharedTensorNetworkSet<EvalTree<T>, S>;
 
+#[cfg(feature = "shadowing")]
 pub type EvalTensorNetworkSet<T, S> = SharedTensorNetworkSet<ExpressionEvaluator<T>, S>;
 
+#[cfg(feature = "shadowing")]
 pub type CompiledTensorNetworkSet<S> = SharedTensorNetworkSet<CompiledEvaluator, S>;
 
 #[derive(Debug, Clone)]
@@ -871,6 +868,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     TensorNetworkSet<ParamTensor<S>, Atom>
 {
@@ -951,6 +949,7 @@ impl<S: Clone + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     EvalTreeTensorNetworkSet<T, S>
 {
@@ -1035,6 +1034,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     EvalTensorNetworkSet<T, S>
 {
@@ -1116,6 +1116,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     SharedTensorNetworkSet<ExportedCode, S>
 {
@@ -1132,6 +1133,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     SharedTensorNetworkSet<CompiledCode, S>
 {
@@ -1144,6 +1146,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     CompiledTensorNetworkSet<S>
 {
@@ -1681,6 +1684,7 @@ impl<T, S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>>
     TensorNetwork<EvalTensor<ExportedCode, S>, ExportedCode>
 {

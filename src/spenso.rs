@@ -37,7 +37,6 @@ pub mod data;
 /// complex numbers
 pub mod complex;
 // pub use complex::*;
-#[cfg(feature = "shadowing")]
 // pub use symbolic::*;
 /// Iterators on fibers of tensors
 pub mod iterators;
@@ -73,6 +72,7 @@ pub mod permutation;
 /// Tensors as defined in the UFO format
 pub mod ufo;
 
+#[cfg(feature = "shadowing")]
 pub mod polynomial;
 #[cfg(test)]
 mod tests;

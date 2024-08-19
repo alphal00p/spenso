@@ -1228,8 +1228,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "symbolica"
-version = "0.8.0"
-source = "git+https://github.com/benruijl/symbolica?branch=nested_evaluate#938d22e62aab7e3c01eb399575fb9eec3f0cfa23"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80dd6b05f3f25fea5fe8dbcaffe85330e6292ee011938b974f7f587fa2acd4e0"
 dependencies = [
  "ahash",
  "append-only-vec",

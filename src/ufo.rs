@@ -6,10 +6,8 @@ use crate::{
     complex::Complex,
     data::{DenseTensor, SetTensorData, SparseTensor},
     structure::{
-        AbstractIndex, BaseRepName, Bispinor, Dimension, Dual, Euclidean, HistoryStructure,
-        IntoArgs, IntoSymbol, Lorentz, NamedStructure, PhysReps, RepName, Representation,
-        Shadowable, Slot, TensorStructure, ABSTRACTIND, BISPINOR, COLORADJ, COLORANTIFUND,
-        COLORANTISEXT, COLORFUND, COLORSEXT, EUCLIDEAN, SPINFUND,
+        AbstractIndex, BaseRepName, Bispinor, Dimension, Dual, Euclidean, Lorentz, PhysReps,
+        RepName, Representation, Slot, TensorStructure,
     },
 };
 
@@ -18,6 +16,12 @@ use symbolica::{
     atom::{Atom, Symbol},
     id::Pattern,
     state::State,
+};
+
+#[cfg(feature = "shadowing")]
+use crate::structure::{
+    HistoryStructure, IntoArgs, IntoSymbol, NamedStructure, Shadowable, ABSTRACTIND, BISPINOR,
+    COLORADJ, COLORANTIFUND, COLORANTISEXT, COLORFUND, COLORSEXT, EUCLIDEAN, SPINFUND,
 };
 
 #[allow(dead_code)]
@@ -240,10 +244,12 @@ fn bis(rep_args: ReplacementArgs) -> String {
     rep_string(BISPINOR, rep_args)
 }
 
+#[cfg(feature = "shadowing")]
 trait ReprRepl {
     fn rep_string(rep_args: ReplacementArgs) -> String;
 }
 
+#[cfg(feature = "shadowing")]
 impl<R: BaseRepName> ReprRepl for R {
     fn rep_string(rep_args: ReplacementArgs) -> String {
         rep_string(R::NAME, rep_args)

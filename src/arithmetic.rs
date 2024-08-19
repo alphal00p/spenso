@@ -7,12 +7,14 @@ use gat_lending_iterator::LendingIterator;
 #[cfg(feature = "shadowing")]
 use symbolica::atom::Atom;
 
+#[cfg(feature = "shadowing")]
+use crate::parametric::{MixedTensor, ParamTensor};
+
 use crate::{
     complex::{Complex, RealOrComplexTensor, R},
     contraction::{IsZero, RefZero},
     data::{DataTensor, DenseTensor, GetTensorData, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
-    parametric::{MixedTensor, ParamTensor},
     structure::{ConcreteIndex, HasStructure, TensorStructure},
     upgrading_arithmetic::{FallibleAdd, FallibleMul, FallibleSub, TrySmallestUpgrade},
 };
@@ -419,7 +421,6 @@ where
     }
 }
 
-#[cfg(feature = "shadowing")]
 impl<T: Clone + R, S: TensorStructure + Clone> FallibleAdd<RealOrComplexTensor<T, S>>
     for RealOrComplexTensor<T, S>
 where
@@ -670,7 +671,7 @@ where
         }
     }
 }
-#[cfg(feature = "shadowing")]
+
 impl<T: Clone + R, S: TensorStructure + Clone> FallibleSub<RealOrComplexTensor<T, S>>
     for RealOrComplexTensor<T, S>
 where

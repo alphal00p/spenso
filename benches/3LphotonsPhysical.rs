@@ -306,7 +306,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .unwrap();
     precontracted_eval_tree_net.horner_scheme();
     precontracted_eval_tree_net.common_subexpression_elimination();
-    let neeet = precontracted_eval_tree_net
+    let mut neeet = precontracted_eval_tree_net
         .map_coeff::<f64, _>(&|r| r.into())
         .linearize(Some(1))
         .export_cpp(

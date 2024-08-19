@@ -1,4 +1,6 @@
+#[cfg(feature = "shadowing")]
 use spenso::symbolic::SymbolicTensor;
+#[cfg(feature = "shadowing")]
 use symbolica::atom::Atom;
 
 fn main() {
@@ -14,16 +16,16 @@ fn main() {
     "*γ(aind(lord(4,229),bis(4,228),bis(4,227)))",
     "*ϵ(0,aind(loru(4,187)))*ϵbar(1,aind(loru(4,219)))*ϵbar(2,aind(loru(4,224)))*ϵbar(3,aind(loru(4,229)))",
 );
-
+    #[cfg(feature = "shadowing")]
     let atom = Atom::parse(expr).unwrap();
-
+    #[cfg(feature = "shadowing")]
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
-
+    #[cfg(feature = "shadowing")]
     let network = sym_tensor.to_network().unwrap();
-
+    #[cfg(feature = "shadowing")]
     for (_, t) in &network.graph.nodes {
         println!("{}", t)
     }
-
+    #[cfg(feature = "shadowing")]
     println!("Network dot: {}", network.dot());
 }

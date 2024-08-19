@@ -7,31 +7,36 @@ use anyhow::Result;
 use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
-use rand::Rng;
+
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "shadowing")]
-use symbolica::domains::float::Complex as SymComplex;
-#[cfg(feature = "shadowing")]
-use symbolica::domains::float::ConstructibleFloat;
-#[cfg(feature = "shadowing")]
-use symbolica::domains::{
-    float::NumericalFloatLike, float::Real, float::SingleFloat, rational::Rational,
-};
 use symbolica::{
     atom::Atom,
+    domains::{
+        float::{Complex as SymComplex, ConstructibleFloat, NumericalFloatLike, Real, SingleFloat},
+        rational::Rational,
+    },
     evaluate::{CompiledEvaluatorFloat, FunctionMap},
 };
 
+#[cfg(feature = "shadowing")]
+use crate::{
+    data::{DataIterator, DenseTensor},
+    parametric::TensorCoefficient,
+    structure::{IntoArgs, IntoSymbol, ShadowMapping, Shadowable, ToSymbolic},
+};
+
+#[cfg(feature = "shadowing")]
+use rand::Rng;
+
 use crate::{
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefOne, RefZero},
-    data::{DataIterator, DataTensor, DenseTensor},
-    iterators::IteratableTensor,
-    parametric::{IteratorEnum, TensorCoefficient},
+    data::DataTensor,
+    iterators::{IteratableTensor, IteratorEnum},
     structure::{
-        CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, IntoArgs, IntoSymbol,
-        ScalarStructure, ScalarTensor, ShadowMapping, Shadowable, StructureContract,
-        TensorStructure, ToSymbolic, TracksCount,
+        CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, ScalarStructure,
+        ScalarTensor, StructureContract, TensorStructure, TracksCount,
     },
     upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign},
 };
@@ -60,6 +65,7 @@ pub struct Complex<T> {
     pub im: T,
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: SingleFloat> SingleFloat for Complex<T>
 where
     T: for<'a> RefMul<&'a T, Output = T>
@@ -80,6 +86,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: NumericalFloatLike> NumericalFloatLike for Complex<T>
 where
     T: for<'a> RefMul<&'a T, Output = T>
@@ -172,6 +179,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: Real> Real for Complex<T>
 where
     T: for<'a> RefMul<&'a T, Output = T>
@@ -310,6 +318,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T> CompiledEvaluatorFloat for Complex<T>
 where
     f64: From<T>,
@@ -1324,6 +1333,8 @@ impl<T: Clone, S: TensorStructure, O: From<S> + TensorStructure>
         }
     }
 }
+
+#[cfg(feature = "shadowing")]
 impl<T: Clone, S: TensorStructure> Shadowable for RealOrComplexTensor<T, S>
 where
     S: HasName + Clone,
@@ -1348,6 +1359,7 @@ where
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<T: Clone + RefZero, S: TensorStructure, R> ShadowMapping<R> for RealOrComplexTensor<T, S>
 where
     S: HasName + Clone,

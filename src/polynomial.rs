@@ -2,14 +2,16 @@
 mod test {
 
     use constcat::concat;
-    use symbolica::id::{Pattern, Replacement};
-    use symbolica::poly::Variable;
-    use symbolica::state::State;
+    #[cfg(feature = "shadowing")]
+    use symbolica::{
+        atom::Atom,
+        id::{Pattern, Replacement},
+        poly::{polynomial::MultivariatePolynomial, Variable},
+        state::State,
+    };
 
     #[cfg(feature = "shadowing")]
     use crate::symbolic::SymbolicTensor;
-    use symbolica::atom::Atom;
-    use symbolica::poly::polynomial::MultivariatePolynomial;
 
     use crate::structure::HasStructure;
 
@@ -126,6 +128,7 @@ mod test {
 
     #[test]
     fn one_loop_photon_parse() {
+        #[cfg(feature = "shadowing")]
         use symbolica::domains::rational::Q;
 
         use crate::structure::HasStructure;

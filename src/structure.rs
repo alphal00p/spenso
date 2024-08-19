@@ -32,32 +32,32 @@ use std::ops::Neg;
 use thiserror::Error;
 
 #[cfg(feature = "shadowing")]
-use symbolica::evaluate::FunctionMap;
-
-#[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{
         representation::FunView, AsAtomView, Atom, AtomView, FunctionBuilder, ListIterator,
         MulView, Symbol,
     },
     coefficient::CoefficientView,
+    evaluate::FunctionMap,
     state::State,
 };
 
 use crate::data::SparseTensor;
-#[cfg(feature = "shadowing")]
-use crate::parametric::{ExpandedCoefficent, FlatCoefficent, ParamTensor, TensorCoefficient};
 use crate::permutation::Permutation;
+#[cfg(feature = "shadowing")]
+use crate::{
+    data::DenseTensor,
+    parametric::{ExpandedCoefficent, FlatCoefficent, MixedTensor, ParamTensor, TensorCoefficient},
+    ufo,
+};
 use std::ops::Range;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use crate::data::{DenseTensor, SetTensorData};
+use crate::data::SetTensorData;
 use crate::iterators::TensorStructureIndexIterator;
-use crate::parametric::MixedTensor;
-#[cfg(feature = "shadowing")]
-use crate::ufo;
+
 // use smartstring::alias::String;
 /// A type that represents the name of an index in a tensor.
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, Serialize, Deserialize)]
@@ -249,6 +249,7 @@ pub enum DimensionError {
     TooLarge,
 }
 
+#[allow(unreachable_patterns)]
 impl TryFrom<Dimension> for usize {
     type Error = DimensionError;
 
@@ -273,6 +274,7 @@ impl From<Symbol> for Dimension {
     }
 }
 
+#[allow(unreachable_patterns)]
 impl PartialEq<usize> for Dimension {
     fn eq(&self, other: &usize) -> bool {
         match self {
@@ -282,6 +284,7 @@ impl PartialEq<usize> for Dimension {
     }
 }
 
+#[allow(unreachable_patterns)]
 impl PartialEq<Dimension> for usize {
     fn eq(&self, other: &Dimension) -> bool {
         match other {
@@ -2731,6 +2734,7 @@ pub struct NamedStructure<Name = SmartString<LazyCompact>, Args = usize> {
     pub additional_args: Option<Args>,
 }
 
+#[cfg(feature = "shadowing")]
 pub type AtomStructure = NamedStructure<Symbol, Vec<Atom>>;
 
 impl<Name, Args> NamedStructure<Name, Args> {

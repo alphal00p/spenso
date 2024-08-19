@@ -80,8 +80,7 @@ serde_json = "1.0.117"
 serde_toml = "0.0.1"
 slotmap = { version = "1.0.7", features = ["serde"] }
 smartstring = { version = "1.0.1", features = ["serde"] }
-symbolica = { version = "0.8.0", optional = true }
-# symbolica = { path = "../gammaloop/python/gammaloop/dependencies/symbolica" }
+symbolica = { version = "0.9.0", optional = true }
 thiserror = "1.0.60"
 
 
@@ -89,5 +88,5 @@ thiserror = "1.0.60"
 shadowing = ["dep:symbolica"]
 
 [patch.crates-io]
-symbolica = { git = "https://github.com/benruijl/symbolica", branch = "nested_evaluate" }
+# symbolica = { git = "https://github.com/benruijl/symbolica", branch = "nested_evaluate" }
 # symbolica = { path = "../gammaloop/python/gammaloop/dependencies/symbolica" }

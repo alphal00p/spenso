@@ -18,7 +18,7 @@ use crate::{
     complex::{Complex, RealOrComplexTensor},
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero},
     data::{DataIterator, DataTensor, DenseTensor, HasTensorData, SetTensorData, SparseTensor},
-    iterators::IteratableTensor,
+    iterators::{IteratableTensor, IteratorEnum},
     structure::{
         CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, IntoArgs, IntoSymbol,
         NamedStructure, PhysicalSlots, ScalarStructure, ScalarTensor, ShadowMapping, Shadowable,
@@ -1045,25 +1045,6 @@ where
         match self {
             ParamOrConcrete::Concrete(x) => x.set_name(name),
             ParamOrConcrete::Param(x) => x.set_name(name),
-        }
-    }
-}
-
-pub enum IteratorEnum<A, B> {
-    A(A),
-    B(B),
-}
-
-impl<A, B> Iterator for IteratorEnum<A, B>
-where
-    A: Iterator,
-    B: Iterator<Item = A::Item>,
-{
-    type Item = A::Item;
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            IteratorEnum::A(a) => a.next(),
-            IteratorEnum::B(b) => b.next(),
         }
     }
 }

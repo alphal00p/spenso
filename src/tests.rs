@@ -1,10 +1,7 @@
-use std::hash::{DefaultHasher, Hash};
-
 #[cfg(feature = "shadowing")]
 use ahash::{HashMap, HashMapExt};
-#[cfg(feature = "shadowing")]
-// use flexi_logger::Logger;
 use indexmap::{IndexMap, IndexSet};
+
 use log::info;
 // use slotmap::SlotMap;
 
@@ -12,12 +9,16 @@ use insta::{assert_ron_snapshot, assert_snapshot, assert_yaml_snapshot};
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 
-use slotmap::{SecondaryMap, SlotMap};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView},
     state::State,
 };
+
+#[cfg(feature = "shadowing")]
+use slotmap::{SecondaryMap, SlotMap};
+#[cfg(feature = "shadowing")]
+use std::hash::{DefaultHasher, Hash};
 
 use crate::{
     complex::{Complex, RealOrComplexTensor},
@@ -28,21 +29,25 @@ use crate::{
     },
     iterators::{
         AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, Fiber, FiberClass,
-        IteratableTensor, IteratesAlongFibers,
+        IteratesAlongFibers,
     },
     network::TensorNetwork,
-    parametric::{MixedTensor, ParamTensor},
     structure::{
-        AbstractIndex, BaseRepName, Bispinor, ColorAdjoint, ColorFundamental, Dimension,
-        DualSlotTo, Euclidean, ExpandedIndex, FlatIndex, HasStructure, HistoryStructure, Lorentz,
-        NamedStructure, NoArgs, PhysReps, PhysicalSlots, RepName, Representation, Shadowable, Slot,
-        StructureContract, TensorShell, TensorStructure, ToSymbolic, VecStructure,
+        AbstractIndex, BaseRepName, ColorAdjoint, ColorFundamental, Dimension, DualSlotTo,
+        Euclidean, ExpandedIndex, FlatIndex, HasStructure, HistoryStructure, Lorentz,
+        NamedStructure, NoArgs, PhysReps, PhysicalSlots, RepName, Representation, Slot,
+        StructureContract, TensorStructure, VecStructure,
     },
-    symbolic::SymbolicTensor,
     ufo::{self, mink_four_vector},
-    upgrading_arithmetic::{
-        FallibleAdd, FallibleAddAssign, FallibleMul, FallibleSub, TryIntoUpgrade,
-    },
+    upgrading_arithmetic::{FallibleAdd, FallibleAddAssign, FallibleMul, FallibleSub},
+};
+#[cfg(feature = "shadowing")]
+use crate::{
+    iterators::IteratableTensor,
+    parametric::{MixedTensor, ParamTensor},
+    structure::{Bispinor, Shadowable, TensorShell, ToSymbolic},
+    symbolic::SymbolicTensor,
+    upgrading_arithmetic::TryIntoUpgrade,
 };
 
 fn test_tensor<D, S>(structure: S, seed: u64, range: Option<(D, D)>) -> SparseTensor<D, S>
@@ -1469,6 +1474,7 @@ fn duals() {
     assert!(!mu.matches(&rho))
 }
 
+#[cfg(feature = "shadowing")]
 #[test]
 fn parsing_scalar_mul() {
     let expr = "MT*id(aind(bis(4,105),bis(4,175)))";
@@ -1482,6 +1488,7 @@ fn parsing_scalar_mul() {
     println!("Network res: {}", network.result_tensor().unwrap());
 }
 
+#[cfg(feature = "shadowing")]
 #[test]
 fn parsing_single_contract() {
     let expr = "Q(15,aind(loru(4,192)))*γ(aind(lord(4,192),bis(4,105),bis(4,175)))";
@@ -1496,6 +1503,7 @@ fn parsing_single_contract() {
     println!("Network res: {}", network.result_tensor().unwrap());
 }
 
+#[cfg(feature = "shadowing")]
 #[test]
 fn parsing_addition_and_mul() {
     let expr = "(MT*id(aind(bis(4,105),bis(4,175)))+Q(15,aind(loru(4,192)))*γ(aind(lord(4,192),bis(4,105),bis(4,175))))";
@@ -1509,6 +1517,7 @@ fn parsing_addition_and_mul() {
     println!("Network res: {}", network.result_tensor().unwrap());
 }
 
+#[cfg(feature = "shadowing")]
 #[test]
 fn slotmap() {
     let mut a = SlotMap::new();

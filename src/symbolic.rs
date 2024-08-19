@@ -3,8 +3,8 @@ use crate::{
     network::{TensorNetwork, TensorNetworkError},
     parametric::{MixedTensor, SerializableAtom},
     structure::{
-        HasName, HasStructure, IntoArgs, IntoSymbol, NamedStructure, PhysicalSlots, Shadowable,
-        StructureContract, TensorStructure, ToSymbolic, VecStructure, ABSTRACTIND,
+        AtomStructure, HasName, HasStructure, IntoArgs, IntoSymbol, NamedStructure, PhysicalSlots,
+        Shadowable, StructureContract, TensorStructure, ToSymbolic, VecStructure, ABSTRACTIND,
     },
 };
 
@@ -114,10 +114,8 @@ impl SymbolicTensor {
     #[allow(clippy::type_complexity)]
     pub fn to_network(
         &self,
-    ) -> Result<
-        TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, SerializableAtom>,
-        TensorNetworkError,
-    > {
+    ) -> Result<TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom>, TensorNetworkError>
+    {
         self.expression.as_view().try_into()
     }
 }

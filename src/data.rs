@@ -324,6 +324,25 @@ impl<T, S: TensorStructure> SparseTensor<T, S> {
         }
     }
 
+    pub fn map_data_ref_result<U, E>(
+        &self,
+        f: impl Fn(&T) -> Result<U, E>,
+    ) -> Result<SparseTensor<U, S>, E>
+    where
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
+    {
+        let elements: Result<AHashMap<FlatIndex, _>, E> = self
+            .flat_iter()
+            .map(|(k, v)| f(v).map(|v| (k, v)))
+            .collect();
+        Ok(SparseTensor {
+            elements: elements?,
+            structure: self.structure.clone(),
+        })
+    }
+
     pub fn map_data<U>(self, f: impl Fn(T) -> U) -> SparseTensor<U, S> {
         let elements = self.elements.into_iter().map(|(k, v)| (k, f(v))).collect();
         SparseTensor {
@@ -1025,6 +1044,22 @@ impl<T, S: TensorStructure> DenseTensor<T, S> {
         }
     }
 
+    pub fn map_data_ref_result<U, E>(
+        &self,
+        f: impl Fn(&T) -> Result<U, E>,
+    ) -> Result<DenseTensor<U, S>, E>
+    where
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
+    {
+        let data: Result<Vec<U>, E> = self.data.iter().map(f).collect();
+        Ok(DenseTensor {
+            data: data?,
+            structure: self.structure.clone(),
+        })
+    }
+
     pub fn map_data_ref_mut<U>(&mut self, f: impl FnMut(&mut T) -> U) -> DenseTensor<U, S>
     where
         // T: Clone,
@@ -1248,6 +1283,21 @@ where
 }
 
 impl<T, S: TensorStructure> DataTensor<T, S> {
+    pub fn map_data_ref_result<U, E>(
+        &self,
+        f: impl Fn(&T) -> Result<U, E>,
+    ) -> Result<DataTensor<U, S>, E>
+    where
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
+    {
+        match self {
+            DataTensor::Dense(d) => Ok(DataTensor::Dense(d.map_data_ref_result(f)?)),
+            DataTensor::Sparse(s) => Ok(DataTensor::Sparse(s.map_data_ref_result(f)?)),
+        }
+    }
+
     pub fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> DataTensor<U, S>
     where
         // T: Clone,

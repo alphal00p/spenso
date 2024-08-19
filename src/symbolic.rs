@@ -1,7 +1,7 @@
 use crate::{
     contraction::{Contract, ContractionError},
     network::{TensorNetwork, TensorNetworkError},
-    parametric::MixedTensor,
+    parametric::{MixedTensor, SerializableAtom},
     structure::{
         HasName, HasStructure, IntoArgs, IntoSymbol, NamedStructure, PhysicalSlots, Shadowable,
         StructureContract, TensorStructure, ToSymbolic, VecStructure, ABSTRACTIND,
@@ -115,7 +115,7 @@ impl SymbolicTensor {
     pub fn to_network(
         &self,
     ) -> Result<
-        TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>,
+        TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, SerializableAtom>,
         TensorNetworkError,
     > {
         self.expression.as_view().try_into()

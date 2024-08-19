@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use spenso::{
     complex::Complex,
     network::TensorNetwork,
-    parametric::{FlatCoefficent, MixedTensor},
+    parametric::{FlatCoefficent, MixedTensor, SerializableAtom},
     structure::{AbstractIndex, ContractionCountStructure, Lorentz, PhysReps, RepName, ToSymbolic},
     ufo::{euclidean_four_vector, gamma},
     upgrading_arithmetic::FallibleMul,
@@ -36,7 +36,7 @@ fn gamma_net_param(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
-) -> TensorNetwork<MixedTensor<f64, ContractionCountStructure>, Atom> {
+) -> TensorNetwork<MixedTensor<f64, ContractionCountStructure>, SerializableAtom> {
     let mut i: i32 = 0;
     let mut contracting_index = 0.into();
     let mut result: Vec<MixedTensor<f64, ContractionCountStructure>> =

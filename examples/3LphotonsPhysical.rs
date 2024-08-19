@@ -5,9 +5,8 @@ use ahash::AHashMap;
 use approx::{assert_relative_eq, RelativeEq};
 use spenso::{
     complex::Complex,
-    network::Levels,
-    network::TensorNetwork,
-    parametric::MixedTensor,
+    network::{Levels, TensorNetwork},
+    parametric::{MixedTensor, SerializableAtom},
     structure::{HasStructure, SmartShadowStructure},
     symbolic::SymbolicTensor,
 };
@@ -181,8 +180,10 @@ fn main() {
         epsilon = 0.1
     );
 
-    let counting_network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
-        network.clone().cast().replace_all_multiple(&reps);
+    let counting_network: TensorNetwork<
+        MixedTensor<_, SmartShadowStructure<_, _>>,
+        SerializableAtom,
+    > = network.clone().cast().replace_all_multiple(&reps);
     let mut values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
     values.push(SymComplex::from(Complex::i()));
 

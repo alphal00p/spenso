@@ -2111,6 +2111,12 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
 #[derive(Debug, Clone)]
 pub struct SerializableAtom(pub Atom);
 
+impl Display for SerializableAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.to_string())
+    }
+}
+
 impl Serialize for SerializableAtom {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where

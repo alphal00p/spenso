@@ -2108,12 +2108,12 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SerializableAtom(pub Atom);
 
 impl Display for SerializableAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.to_string())
+        write!(f, "{}", self.0)
     }
 }
 
@@ -2142,6 +2142,11 @@ impl From<Atom> for SerializableAtom {
     }
 }
 
+impl From<SerializableAtom> for Atom {
+    fn from(atom: SerializableAtom) -> Self {
+        atom.0
+    }
+}
 impl FallibleMul for SerializableAtom {
     type Output = SerializableAtom;
     fn mul_fallible(&self, rhs: &Self) -> Option<Self::Output> {

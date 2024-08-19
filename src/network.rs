@@ -54,8 +54,8 @@ use crate::{
     contraction::Contract,
     data::{DataTensor, GetTensorData, HasTensorData},
     structure::{
-        AtomStructure, CastStructure, DualSlotTo, HasName, HasStructure, ScalarTensor,
-        TensorStructure, TracksCount,
+        CastStructure, DualSlotTo, HasName, HasStructure, ScalarTensor, TensorStructure,
+        TracksCount,
     },
     upgrading_arithmetic::FallibleMul,
 };
@@ -1971,7 +1971,7 @@ impl<T, S: Clone> TensorNetwork<T, S>
 where
     T: Clone
         + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>
-        + HasStructure<Scalar: From<S>>
+        + HasStructure<Scalar = S>
         + ScalarTensor,
 {
     pub fn result_tensor_smart(&self) -> Result<T, TensorNetworkError> {
@@ -1981,7 +1981,7 @@ where
                     .scalar
                     .clone()
                     .ok_or(TensorNetworkError::ScalarFieldEmpty)?;
-                Ok(T::new_scalar(scalar.into()))
+                Ok(T::new_scalar(scalar))
             }
             1 => Ok(self.graph.nodes.iter().next().unwrap().1.clone()),
             _ => Err(TensorNetworkError::MoreThanOneNode),
@@ -2116,7 +2116,9 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> TryFrom<MulView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
+impl<'a> TryFrom<MulView<'a>>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, SerializableAtom>
+{
     type Error = TensorNetworkError;
     fn try_from(value: MulView<'a>) -> Result<Self, Self::Error> {
         // trace!("MulView: {}", value.as_view());
@@ -2143,7 +2145,7 @@ impl<'a> TryFrom<MulView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
 
 #[cfg(feature = "shadowing")]
 impl<'a> TryFrom<AtomView<'a>>
-    for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, SerializableAtom>
 {
     type Error = TensorNetworkError;
     fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
@@ -2162,7 +2164,9 @@ impl<'a> TryFrom<AtomView<'a>>
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> TryFrom<FunView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
+impl<'a> TryFrom<FunView<'a>>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, SerializableAtom>
+{
     type Error = TensorNetworkError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         // trace!("FunView: {}", value.as_view());
@@ -2182,7 +2186,9 @@ impl<'a> TryFrom<FunView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
+impl<'a> TryFrom<AddView<'a>>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, SerializableAtom>
+{
     type Error = TensorNetworkError;
     fn try_from(value: AddView<'a>) -> Result<Self, Self::Error> {
         // trace!("AddView: {}", value.as_view());
@@ -2295,7 +2301,7 @@ impl<T: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>, S> TensorNet
 #[cfg(feature = "shadowing")]
 impl<T, S> TensorNetwork<T, S>
 where
-    T: HasName<Name: IntoSymbol, Args: IntoArgs>
+    T: HasName<Name = Symbol, Args: IntoArgs>
         + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
 {
     pub fn append_map<'a, U>(&'a self, fn_map: &mut FunctionMap<'a, U>)
@@ -2374,15 +2380,11 @@ where
 #[cfg(feature = "shadowing")]
 impl<T, S> TensorNetwork<T, S>
 where
-    T: HasName<Name: IntoSymbol> + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
+    T: HasName<Name = Symbol> + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
 {
     pub fn namesym(&mut self, name: &str) {
         for (id, n) in &mut self.graph.nodes {
-            n.set_name(IntoSymbol::from_str(&format!(
-                "{}{}",
-                name,
-                id.data().as_ffi()
-            )));
+            n.set_name(State::get_symbol(format!("{}{}", name, id.data().as_ffi())));
         }
     }
 }
@@ -2453,7 +2455,7 @@ impl<
 where
     MixedTensor<T, S>: Contract<LCM = MixedTensor<T, S>>,
 
-    S: HasName<Name: IntoSymbol, Args: IntoArgs> + ToSymbolic + StructureContract,
+    S: HasName<Name = Symbol, Args: IntoArgs> + ToSymbolic + StructureContract,
 {
     fn contract_levels(
         &mut self,

@@ -43,7 +43,6 @@ use symbolica::{
 };
 
 use crate::data::SparseTensor;
-use crate::parametric::SerializableAtom;
 use crate::permutation::Permutation;
 #[cfg(feature = "shadowing")]
 use crate::{
@@ -2736,7 +2735,7 @@ pub struct NamedStructure<Name = SmartString<LazyCompact>, Args = usize> {
 }
 
 #[cfg(feature = "shadowing")]
-pub type AtomStructure = NamedStructure<SerializableSymbol, Vec<SerializableAtom>>;
+pub type AtomStructure = NamedStructure<Symbol, Vec<Atom>>;
 
 impl<Name, Args> NamedStructure<Name, Args> {
     #[must_use]
@@ -2754,7 +2753,7 @@ impl<Name, Args> NamedStructure<Name, Args> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> TryFrom<FunView<'a>> for AtomStructure {
+impl<'a> TryFrom<FunView<'a>> for NamedStructure<Symbol, Vec<Atom>> {
     type Error = SlotError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         match value.get_symbol() {
@@ -2768,15 +2767,16 @@ impl<'a> TryFrom<FunView<'a>> for AtomStructure {
                 Ok(VecStructure::from(structure).into())
             }
             name => {
-                let mut structure: AtomStructure = VecStructure::default().into();
-                structure.set_name(name.into());
+                let mut structure: NamedStructure<Symbol, Vec<Atom>> =
+                    VecStructure::default().into();
+                structure.set_name(name);
                 let mut args = vec![];
 
                 for arg in value.iter() {
                     if let AtomView::Fun(fun) = arg {
                         structure.structure.extend(fun.try_into()?);
                     } else {
-                        args.push(arg.to_owned().into());
+                        args.push(arg.to_owned());
                     }
                 }
 
@@ -3374,8 +3374,6 @@ pub fn atomic_expanded_label_id(indices: &[ConcreteIndex], name: Symbol, args: &
 #[cfg(feature = "shadowing")]
 pub trait IntoSymbol {
     fn ref_into_symbol(&self) -> Symbol;
-
-    fn from_str(s: &str) -> Self;
 }
 
 #[cfg(feature = "shadowing")]
@@ -3394,18 +3392,6 @@ impl IntoArgs for usize {
     }
     fn cooked_name(&self) -> std::string::String {
         format!("{self}")
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl IntoArgs for Vec<SerializableAtom> {
-    fn ref_into_args(&self) -> impl Iterator<Item = Atom> {
-        self.iter().map(|x| x.0.clone())
-    }
-    fn cooked_name(&self) -> std::string::String {
-        let init = "".into();
-        self.iter()
-            .fold(init, |acc, x| acc + x.to_string().as_str())
     }
 }
 
@@ -3480,10 +3466,6 @@ impl IntoSymbol for SmartString<LazyCompact> {
     fn ref_into_symbol(&self) -> Symbol {
         State::get_symbol(self)
     }
-
-    fn from_str(s: &str) -> Self {
-        s.into()
-    }
 }
 
 #[cfg(feature = "shadowing")]
@@ -3491,22 +3473,12 @@ impl IntoSymbol for Symbol {
     fn ref_into_symbol(&self) -> Symbol {
         *self
     }
-
-    fn from_str(s: &str) -> Self {
-        State::get_symbol(s)
-    }
 }
 
 #[cfg(feature = "shadowing")]
-impl IntoSymbol for SerializableSymbol {
+impl IntoSymbol for &str {
     fn ref_into_symbol(&self) -> Symbol {
-        self.symbol
-    }
-
-    fn from_str(s: &str) -> Self {
-        Self {
-            symbol: State::get_symbol(s),
-        }
+        State::get_symbol(self)
     }
 }
 
@@ -3514,9 +3486,6 @@ impl IntoSymbol for SerializableSymbol {
 impl IntoSymbol for std::string::String {
     fn ref_into_symbol(&self) -> Symbol {
         State::get_symbol(self)
-    }
-    fn from_str(s: &str) -> Self {
-        s.into()
     }
 }
 

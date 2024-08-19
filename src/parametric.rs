@@ -12,7 +12,7 @@ use anyhow::{Error, Result};
 
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use crate::{
     complex::{Complex, RealOrComplexTensor},
@@ -24,7 +24,9 @@ use crate::{
         NamedStructure, PhysicalSlots, ScalarStructure, ScalarTensor, ShadowMapping, Shadowable,
         StructureContract, TensorStructure, ToSymbolic, TracksCount,
     },
-    upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade},
+    upgrading_arithmetic::{
+        FallibleAdd, FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade,
+    },
 };
 
 use symbolica::{
@@ -274,6 +276,45 @@ pub struct ParamTensor<S: TensorStructure> {
     // Param(DataTensor<Atom, S>),
     // // Concrete(DataTensor<T, S>),
     // Composite(DataTensor<Atom, S>),
+}
+
+impl<Structure: TensorStructure + Serialize + Clone> Serialize for ParamTensor<Structure> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("ParamTensor", 2)?;
+
+        state.serialize_field("param_type", &self.param_type)?;
+
+        let serialized_tensor = self.tensor.map_data_ref(|a| a.to_string());
+        state.serialize_field("tensor", &serialized_tensor)?;
+        state.end()
+    }
+}
+
+impl<'a, Structure: TensorStructure + Deserialize<'a> + Clone> Deserialize<'a>
+    for ParamTensor<Structure>
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'a>,
+    {
+        #[derive(Deserialize)]
+        struct ParamTensorHelper<Structure: TensorStructure> {
+            param_type: ParamOrComposite,
+            tensor: DataTensor<String, Structure>,
+        }
+
+        let helper = ParamTensorHelper::deserialize(deserializer)?;
+        Ok(ParamTensor {
+            tensor: helper
+                .tensor
+                .map_data_ref_result(|a| Atom::parse(a))
+                .map_err(serde::de::Error::custom)?,
+            param_type: helper.param_type,
+        })
+    }
 }
 
 impl<S: TensorStructure + Clone> HasTensorData for ParamTensor<S> {
@@ -778,13 +819,13 @@ where
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ParamOrConcrete<C: HasStructure<Structure = S> + Clone, S: TensorStructure> {
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ParamOrConcrete<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> {
     Concrete(C),
     Param(ParamTensor<S>),
 }
 
-impl<C: Display + HasStructure<Structure = S> + Clone, S: TensorStructure> Display
+impl<C: Display + HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> Display
     for ParamOrConcrete<C, S>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -798,8 +839,8 @@ impl<C: Display + HasStructure<Structure = S> + Clone, S: TensorStructure> Displ
 impl<
         U: HasStructure<Structure = O> + Clone,
         C: CastStructure<U> + HasStructure<Structure = S> + Clone,
-        S: TensorStructure,
-        O: From<S> + TensorStructure,
+        S: TensorStructure + Clone,
+        O: From<S> + TensorStructure + Clone,
     > CastStructure<ParamOrConcrete<U, O>> for ParamOrConcrete<C, S>
 {
     fn cast(self) -> ParamOrConcrete<U, O> {
@@ -927,7 +968,7 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> Pattern
     }
 }
 
-impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure> ParamOrConcrete<C, S> {
+impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> ParamOrConcrete<C, S> {
     pub fn is_parametric(&self) -> bool {
         matches!(self, ParamOrConcrete::Param(_))
     }
@@ -966,7 +1007,7 @@ impl<D: Display> Display for ConcreteOrParam<D> {
 impl<C, S> HasStructure for ParamOrConcrete<C, S>
 where
     C: HasStructure<Structure = S> + Clone,
-    S: TensorStructure,
+    S: TensorStructure + Clone,
 {
     type Scalar = ConcreteOrParam<C::Scalar>;
     type Structure = S;
@@ -996,7 +1037,7 @@ where
 impl<C, S> ScalarTensor for ParamOrConcrete<C, S>
 where
     C: HasStructure<Structure = S> + Clone + ScalarTensor,
-    S: TensorStructure + ScalarStructure,
+    S: TensorStructure + ScalarStructure + Clone,
 {
     fn new_scalar(scalar: Self::Scalar) -> Self {
         match scalar {
@@ -1009,7 +1050,7 @@ where
 impl<C, S> TracksCount for ParamOrConcrete<C, S>
 where
     C: TracksCount + HasStructure<Structure = S> + Clone,
-    S: TensorStructure + TracksCount,
+    S: TensorStructure + TracksCount + Clone,
 {
     fn contractions_num(&self) -> usize {
         match self {
@@ -1022,7 +1063,7 @@ where
 impl<C, S> HasName for ParamOrConcrete<C, S>
 where
     C: HasName + HasStructure<Structure = S> + Clone,
-    S: TensorStructure + HasName<Name = C::Name, Args = C::Args>,
+    S: TensorStructure + HasName<Name = C::Name, Args = C::Args> + Clone,
 {
     type Args = C::Args;
     type Name = C::Name;
@@ -1049,7 +1090,8 @@ where
     }
 }
 
-impl<C: IteratableTensor + Clone, S: TensorStructure> IteratableTensor for ParamOrConcrete<C, S>
+impl<C: IteratableTensor + Clone, S: TensorStructure + Clone> IteratableTensor
+    for ParamOrConcrete<C, S>
 where
     C: HasStructure<Structure = S>,
 {
@@ -2063,5 +2105,47 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
                 TensorSet::Tensors(out_tensors)
             }
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SerializableAtom(pub Atom);
+
+impl Serialize for SerializableAtom {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for SerializableAtom {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<SerializableAtom, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(SerializableAtom(Atom::parse(&s).unwrap()))
+    }
+}
+
+impl From<Atom> for SerializableAtom {
+    fn from(atom: Atom) -> Self {
+        SerializableAtom(atom)
+    }
+}
+
+impl FallibleMul for SerializableAtom {
+    type Output = SerializableAtom;
+    fn mul_fallible(&self, rhs: &Self) -> Option<Self::Output> {
+        Some(SerializableAtom(&self.0 * &rhs.0))
+    }
+}
+
+impl FallibleAdd<SerializableAtom> for SerializableAtom {
+    type Output = SerializableAtom;
+    fn add_fallible(&self, rhs: &Self) -> Option<Self::Output> {
+        Some(SerializableAtom(&self.0 + &rhs.0))
     }
 }

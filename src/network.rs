@@ -41,7 +41,7 @@ use crate::{
     iterators::IteratableTensor,
     parametric::{
         AtomViewOrConcrete, CompiledEvalTensor, EvalTensor, EvalTreeTensor, MixedTensor,
-        ParamTensor, PatternReplacement,
+        ParamTensor, PatternReplacement, SerializableAtom,
     },
     structure::{
         IntoArgs, IntoSymbol, NamedStructure, ShadowMapping, Shadowable, StructureContract,
@@ -1262,7 +1262,7 @@ impl<T: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>, S> TensorNet
 }
 
 #[cfg(feature = "shadowing")]
-impl<T, S> TensorNetwork<MixedTensor<T, S>, Atom>
+impl<T, S> TensorNetwork<MixedTensor<T, S>, SerializableAtom>
 where
     S: Clone + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Debug,
     T: Clone,
@@ -1325,7 +1325,7 @@ where
         }
     }
 
-    pub fn to_fully_parametric(self) -> TensorNetwork<ParamTensor<S>, Atom>
+    pub fn to_fully_parametric(self) -> TensorNetwork<ParamTensor<S>, SerializableAtom>
     where
         T: TrySmallestUpgrade<Atom, LCM = Atom>,
         Complex<T>: TrySmallestUpgrade<Atom, LCM = Atom>,
@@ -1356,7 +1356,7 @@ where
 use std::hash::Hash;
 
 #[cfg(feature = "shadowing")]
-impl<P: PatternReplacement + HasStructure> PatternReplacement for TensorNetwork<P, Atom>
+impl<P: PatternReplacement + HasStructure> PatternReplacement for TensorNetwork<P, SerializableAtom>
 where
     P::Structure: Clone + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
 {
@@ -1375,7 +1375,7 @@ where
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| a.replace_all(pattern, rhs, conditions, settings)),
+                .map(|a| SerializableAtom(a.0.replace_all(pattern, rhs, conditions, settings))),
         }
     }
 
@@ -1390,7 +1390,7 @@ where
             .map_nodes_mut(|(_, a)| a.replace_all_mut(pattern, rhs, conditions, settings));
 
         if let Some(a) = self.scalar.as_mut() {
-            *a = a.replace_all(pattern, rhs, conditions, settings);
+            a.0 = a.0.replace_all(pattern, rhs, conditions, settings);
         }
     }
 
@@ -1403,7 +1403,7 @@ where
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| a.replace_all_multiple(replacements)),
+                .map(|a| SerializableAtom(a.0.replace_all_multiple(replacements))),
         }
     }
 
@@ -1411,7 +1411,7 @@ where
         self.graph
             .map_nodes_mut(|(_, a)| a.replace_all_multiple_mut(replacements));
         if let Some(a) = self.scalar.as_mut() {
-            *a = a.replace_all_multiple(replacements);
+            a.0 = a.0.replace_all_multiple(replacements);
         }
     }
 
@@ -1419,13 +1419,13 @@ where
         self.graph
             .map_nodes_mut(|(_, a)| a.replace_all_multiple_repeat_mut(replacements));
         if let Some(a) = self.scalar.as_mut() {
-            Self::replace_repeat_multiple_atom(a, replacements);
+            Self::replace_repeat_multiple_atom(&mut a.0, replacements);
         }
     }
 }
 #[cfg(feature = "shadowing")]
 impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
-    TensorNetwork<ParamTensor<S>, Atom>
+    TensorNetwork<ParamTensor<S>, SerializableAtom>
 {
     /// Convert the tensor of atoms to a tensor of polynomials, optionally in the variable ordering
     /// specified by `var_map`. If new variables are encountered, they are
@@ -1446,7 +1446,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| a.to_polynomial(field, var_map.clone())),
+                .map(|a| a.0.to_polynomial(field, var_map.clone())),
         }
     }
 
@@ -1473,10 +1473,9 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
             graph: self.graph.map_nodes_ref(|(_, t)| {
                 t.to_rational_polynomial(field, out_field, var_map.clone())
             }),
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.to_rational_polynomial(field, out_field, var_map.clone())),
+            scalar: self.scalar.as_ref().map(|a| {
+                a.0.to_rational_polynomial(field, out_field, var_map.clone())
+            }),
         }
     }
 
@@ -1507,10 +1506,9 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
             graph: self.graph.map_nodes_ref(|(_, t)| {
                 t.to_factorized_rational_polynomial(field, out_field, var_map.clone())
             }),
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.to_factorized_rational_polynomial(field, out_field, var_map.clone())),
+            scalar: self.scalar.as_ref().map(|a| {
+                a.0.to_factorized_rational_polynomial(field, out_field, var_map.clone())
+            }),
         }
     }
 
@@ -1531,7 +1529,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         evaluate_net.scalar = self
             .scalar
             .as_ref()
-            .map(|a| a.as_view().to_evaluation_tree(fn_map, params))
+            .map(|a| a.0.as_view().to_evaluation_tree(fn_map, params))
             .transpose()?;
 
         Ok(evaluate_net)
@@ -1558,7 +1556,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         evaluated_net.scalar = self
             .scalar
             .as_ref()
-            .map(|x| x.evaluate(coeff_map, const_map, &fn_map, &mut cache));
+            .map(|x| x.0.evaluate(coeff_map, const_map, &fn_map, &mut cache));
         // println!("{:?}", evaluated_net.scalar);
         evaluated_net
     }
@@ -2064,7 +2062,7 @@ impl<
 }
 
 #[cfg(feature = "shadowing")]
-impl<T, S> TensorNetwork<MixedTensor<T, S>, Atom>
+impl<T, S> TensorNetwork<MixedTensor<T, S>, SerializableAtom>
 where
     S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone,
     T: Clone,
@@ -2087,7 +2085,7 @@ where
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| a.replace_all(pattern, rhs, conditions, settings)),
+                .map(|a| SerializableAtom(a.0.replace_all(pattern, rhs, conditions, settings))),
         }
     }
 
@@ -2100,7 +2098,7 @@ where
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| a.replace_all_multiple(replacements)),
+                .map(|a| SerializableAtom(a.0.replace_all_multiple(replacements))),
         }
     }
 
@@ -2119,18 +2117,18 @@ where
 
 #[cfg(feature = "shadowing")]
 impl<'a> TryFrom<MulView<'a>>
-    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, SerializableAtom>
 {
     type Error = TensorNetworkError;
     fn try_from(value: MulView<'a>) -> Result<Self, Self::Error> {
         // trace!("MulView: {}", value.as_view());
         let mut network: Self = TensorNetwork::new();
-        let mut scalars = Atom::new_num(1);
+        let mut scalars = SerializableAtom(Atom::new_num(1));
         for arg in value.iter() {
             let mut net = Self::try_from(arg)?;
             net.contract();
             if let Some(ref s) = net.scalar {
-                scalars = &scalars * s;
+                scalars = scalars.mul_fallible(s).unwrap();
             }
             match net.result_tensor() {
                 Ok(t) => {
@@ -2147,7 +2145,7 @@ impl<'a> TryFrom<MulView<'a>>
 
 #[cfg(feature = "shadowing")]
 impl<'a> TryFrom<AtomView<'a>>
-    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, SerializableAtom>
 {
     type Error = TensorNetworkError;
     fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
@@ -2158,7 +2156,7 @@ impl<'a> TryFrom<AtomView<'a>>
             a => {
                 let mut network: Self = TensorNetwork::new();
                 let a = a.to_owned();
-                network.scalar = Some(a);
+                network.scalar = Some(SerializableAtom(a));
                 Ok(network)
             }
         }
@@ -2167,7 +2165,7 @@ impl<'a> TryFrom<AtomView<'a>>
 
 #[cfg(feature = "shadowing")]
 impl<'a> TryFrom<FunView<'a>>
-    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, SerializableAtom>
 {
     type Error = TensorNetworkError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
@@ -2180,7 +2178,7 @@ impl<'a> TryFrom<FunView<'a>>
             let t = s.to_shell().to_explicit().ok_or(anyhow!("Cannot shadow"))?;
             network.push(t);
         } else {
-            scalar = Some(value.as_view().to_owned());
+            scalar = Some(SerializableAtom(value.as_view().to_owned()));
         }
         network.scalar = scalar;
         Ok(network)
@@ -2189,18 +2187,18 @@ impl<'a> TryFrom<FunView<'a>>
 
 #[cfg(feature = "shadowing")]
 impl<'a> TryFrom<AddView<'a>>
-    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, Atom>
+    for TensorNetwork<MixedTensor<f64, NamedStructure<Symbol, Vec<Atom>>>, SerializableAtom>
 {
     type Error = TensorNetworkError;
     fn try_from(value: AddView<'a>) -> Result<Self, Self::Error> {
         // trace!("AddView: {}", value.as_view());
         let mut tensors = vec![];
-        let mut scalars = Atom::new_num(0);
+        let mut scalars = SerializableAtom(Atom::new_num(0));
         for summand in value.iter() {
             let mut net = Self::try_from(summand)?;
             net.contract();
             if let Some(ref s) = net.scalar {
-                scalars = &scalars + s;
+                scalars = scalars.add_fallible(s).unwrap();
             }
             match net.result_tensor() {
                 Ok(t) => {
@@ -2422,24 +2420,24 @@ where
 
 #[cfg(feature = "shadowing")]
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Levels<
     T: HasStructure<Structure = S>,
     S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + HasName + Clone,
 > {
-    pub levels: Vec<TensorNetwork<ParamTensor<S>, Atom>>,
-    pub initial: TensorNetwork<T, Atom>,
+    pub levels: Vec<TensorNetwork<ParamTensor<S>, SerializableAtom>>,
+    pub initial: TensorNetwork<T, SerializableAtom>,
     // fn_map: FunctionMap<'static, Complex<T>>,
-    params: Vec<Atom>,
+    params: Vec<SerializableAtom>,
 }
 
 #[cfg(feature = "shadowing")]
-impl<T, S> From<TensorNetwork<T, Atom>> for Levels<T, S>
+impl<T, S> From<TensorNetwork<T, SerializableAtom>> for Levels<T, S>
 where
     T: HasStructure<Structure = S>,
     S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + HasName + Clone,
 {
-    fn from(t: TensorNetwork<T, Atom>) -> Self {
+    fn from(t: TensorNetwork<T, SerializableAtom>) -> Self {
         Levels {
             initial: t,
             levels: vec![],

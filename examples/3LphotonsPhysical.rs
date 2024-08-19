@@ -293,7 +293,7 @@ fn main() {
             "nested_evaluation_asm",
             "nested_evaluation_asm",
             true,
-            InlineASM::Intel,
+            InlineASM::X64,
         )
         .unwrap()
         .compile_and_load("nested_evaluation_asm", CompileOptions::default())

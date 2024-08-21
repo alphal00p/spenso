@@ -289,13 +289,13 @@ fn permutation() {
 
 #[test]
 fn trace() {
-    let structura: HistoryStructure<&str, NoArgs> =
+    let structura: HistoryStructure<String, NoArgs> =
         HistoryStructure::from(NamedStructure::from_iter(
             [
                 Euclidean::new_slot_selfless(5, 1),
                 Euclidean::new_slot_selfless(5, 1),
             ],
-            "a",
+            "a".into(),
             None,
         ));
     let a = test_tensor::<i8, _>(structura, 3, None);
@@ -881,16 +881,17 @@ fn gamma() {
 
 #[test]
 fn matches() {
-    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
-        [
-            Slot::<PhysReps>::from(Lorentz::new_slot_selfless(2, 3)),
-            Lorentz::new_slot_selfless(3, 2).into(),
-            Euclidean::new_slot_selfless(2, 2).into(),
-            Lorentz::new_slot_selfless(2, 1).into(),
-        ],
-        "a",
-        None,
-    ));
+    let structur_a: HistoryStructure<String, ()> =
+        HistoryStructure::from(NamedStructure::from_iter(
+            [
+                Slot::<PhysReps>::from(Lorentz::new_slot_selfless(2, 3)),
+                Lorentz::new_slot_selfless(3, 2).into(),
+                Euclidean::new_slot_selfless(2, 2).into(),
+                Lorentz::new_slot_selfless(2, 1).into(),
+            ],
+            "a".into(),
+            None,
+        ));
     let structur_b = HistoryStructure::from(NamedStructure::from_iter(
         [
             Slot::<PhysReps>::from(Lorentz::selfless_dual().new_slot(2, 1)),
@@ -898,7 +899,7 @@ fn matches() {
             Lorentz::selfless_dual().new_slot(2, 2).into(),
             Euclidean::new_slot_selfless(2, 1).into(),
         ],
-        "b",
+        "b".into(),
         None,
     ));
 
@@ -912,14 +913,15 @@ fn mixed_tensor_contraction() {
     let im = Complex::new(1.5, 1.25);
     let data_a = [(vec![0, 0], 1.0), (vec![1, 1], 2.0)];
 
-    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
-        [
-            Slot::<PhysReps>::from(Euclidean::new_slot_selfless(2, 2)),
-            Slot::<PhysReps>::from(Euclidean::new_slot_selfless(2, 1)),
-        ],
-        "a",
-        None,
-    ));
+    let structur_a: HistoryStructure<String, ()> =
+        HistoryStructure::from(NamedStructure::from_iter(
+            [
+                Slot::<PhysReps>::from(Euclidean::new_slot_selfless(2, 2)),
+                Slot::<PhysReps>::from(Euclidean::new_slot_selfless(2, 1)),
+            ],
+            "a".into(),
+            None,
+        ));
 
     let a = SparseTensor::from_data(&data_a, structur_a.clone()).unwrap();
 
@@ -928,7 +930,7 @@ fn mixed_tensor_contraction() {
             Slot::<PhysReps>::from(Euclidean::new_slot_selfless(2, 2)),
             Slot::<PhysReps>::from(Euclidean::new_slot_selfless(2, 4)),
         ],
-        "b",
+        "b".into(),
         None,
     ));
 
@@ -1046,14 +1048,15 @@ fn matchslot() {
 #[test]
 fn contract_spensor() {
     let data_a = [(vec![0, 0], 1.0), (vec![1, 1], 2.0)];
-    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
-        [
-            PhysReps::new_slot(Euclidean {}.into(), 2, 2),
-            Euclidean::new_slot_selfless(2, 1).into(),
-        ],
-        "a",
-        None,
-    ));
+    let structur_a: HistoryStructure<String, ()> =
+        HistoryStructure::from(NamedStructure::from_iter(
+            [
+                PhysReps::new_slot(Euclidean {}.into(), 2, 2),
+                Euclidean::new_slot_selfless(2, 1).into(),
+            ],
+            "a".into(),
+            None,
+        ));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
@@ -1063,7 +1066,7 @@ fn contract_spensor() {
             PhysReps::new_slot(Euclidean {}.into(), 2, 1),
             Euclidean::new_slot_selfless(2, 3).into(),
         ],
-        "b",
+        "b".into(),
         None,
     ));
 
@@ -1079,14 +1082,15 @@ fn contract_spensor() {
 #[test]
 fn sparse_addition() {
     let data_a = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
-    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
-        [
-            PhysReps::new_slot(Euclidean {}.into(), 2, 2),
-            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
-        ],
-        "a",
-        None,
-    ));
+    let structur_a: HistoryStructure<String, ()> =
+        HistoryStructure::from(NamedStructure::from_iter(
+            [
+                PhysReps::new_slot(Euclidean {}.into(), 2, 2),
+                PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+            ],
+            "a".into(),
+            None,
+        ));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
@@ -1096,7 +1100,7 @@ fn sparse_addition() {
             PhysReps::new_slot(Euclidean {}.into(), 2, 1),
             PhysReps::new_slot(Euclidean {}.into(), 2, 2),
         ],
-        "b",
+        "b".into(),
         None,
     ));
 
@@ -1112,14 +1116,15 @@ fn sparse_addition() {
 #[test]
 fn sparse_sub() {
     let data_a = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
-    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
-        [
-            PhysReps::new_slot(Euclidean {}.into(), 2, 2),
-            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
-        ],
-        "a",
-        None,
-    ));
+    let structur_a: HistoryStructure<String, ()> =
+        HistoryStructure::from(NamedStructure::from_iter(
+            [
+                PhysReps::new_slot(Euclidean {}.into(), 2, 2),
+                PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+            ],
+            "a".into(),
+            None,
+        ));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
@@ -1130,7 +1135,7 @@ fn sparse_sub() {
             PhysReps::new_slot(Euclidean {}.into(), 2, 2),
             PhysReps::new_slot(Euclidean {}.into(), 2, 1),
         ],
-        "a",
+        "a".into(),
         None,
     ));
 
@@ -1169,14 +1174,15 @@ fn arithmetic_data() {
 fn contract_densor_with_spensor() {
     let data_a = [(vec![0, 0], 1.0), (vec![1, 1], 2.0)];
 
-    let structur_a: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
-        [
-            PhysReps::new_slot(Euclidean {}.into(), 2, 2),
-            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
-        ],
-        "a",
-        None,
-    ));
+    let structur_a: HistoryStructure<String, ()> =
+        HistoryStructure::from(NamedStructure::from_iter(
+            [
+                PhysReps::new_slot(Euclidean {}.into(), 2, 2),
+                PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+            ],
+            "a".into(),
+            None,
+        ));
 
     let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
 
@@ -1186,7 +1192,7 @@ fn contract_densor_with_spensor() {
             PhysReps::new_slot(Euclidean {}.into(), 2, 1),
             PhysReps::new_slot(Euclidean {}.into(), 2, 4),
         ],
-        "b",
+        "b".into(),
         None,
     ));
 
@@ -1211,7 +1217,7 @@ fn contract_densor_with_spensor() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn evaluate() {
-    let structure: NamedStructure<&str, ()> = test_structure(3, 1).to_named("a", None);
+    let structure: NamedStructure<String, ()> = test_structure(3, 1).to_named("a".into(), None);
 
     let a: TensorShell<_> = structure.clone().into();
 
@@ -1239,14 +1245,15 @@ fn convert_sym() {
             .map(|x| Complex::from(*x))
             .collect::<Vec<_>>(),
     );
-    let structur_b: HistoryStructure<&str, ()> = HistoryStructure::from(NamedStructure::from_iter(
-        [
-            PhysReps::new_slot(Euclidean {}.into(), 2, 1),
-            PhysReps::new_slot(Euclidean {}.into(), 3, 4),
-        ],
-        "b",
-        None,
-    ));
+    let structur_b: HistoryStructure<String, ()> =
+        HistoryStructure::from(NamedStructure::from_iter(
+            [
+                PhysReps::new_slot(Euclidean {}.into(), 2, 1),
+                PhysReps::new_slot(Euclidean {}.into(), 3, 4),
+            ],
+            "b".into(),
+            None,
+        ));
     let b = DenseTensor::from_data(data_b.to_vec(), structur_b).unwrap();
 
     let symb: DenseTensor<Atom, _> = b.try_into_upgrade().unwrap();
@@ -1305,13 +1312,13 @@ fn simple_multi_contract_sym() {
     )
     .unwrap();
 
-    let a: DataTensor<Atom, NamedStructure<&str, ()>> = structa
-        .to_named("a", None)
+    let a: DataTensor<Atom, NamedStructure<String, ()>> = structa
+        .to_named("a".into(), None)
         .to_dense_expanded_labels()
         .unwrap()
         .into();
-    let b: DataTensor<Atom, NamedStructure<&str, ()>> = structb
-        .to_named("b", None)
+    let b: DataTensor<Atom, NamedStructure<String, ()>> = structb
+        .to_named("b".into(), None)
         .to_dense_expanded_labels()
         .unwrap()
         .into();
@@ -1339,21 +1346,21 @@ fn complex() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn symbolic_contract() {
-    let structura: NamedStructure<&str, ()> = NamedStructure::from_iter(
+    let structura: NamedStructure<String, ()> = NamedStructure::from_iter(
         [
             PhysReps::new_slot(Euclidean {}.into(), 2, 1),
             PhysReps::new_slot(Euclidean {}.into(), 3, 4),
         ],
-        "T",
+        "T".into(),
         None,
     );
 
-    let structurb: NamedStructure<&str, ()> = NamedStructure::from_iter(
+    let structurb: NamedStructure<String, ()> = NamedStructure::from_iter(
         [
             PhysReps::new_slot(Euclidean {}.into(), 2, 3),
             PhysReps::new_slot(Euclidean {}.into(), 3, 2),
         ],
-        "P",
+        "P".into(),
         None,
     );
 
@@ -1365,9 +1372,11 @@ fn symbolic_contract() {
     let j = bis.new_slot(2).into();
     let k = bis.new_slot(9).into();
 
-    let _structure: NamedStructure<&str, ()> = NamedStructure::from_iter([mu, i, j], "γ", None);
-    let _p_struct: NamedStructure<&str, ()> = NamedStructure::from_iter([mu], "p", None);
-    let _t_struct: NamedStructure<&str, ()> = NamedStructure::from_iter([i, j, k], "T", None);
+    let _structure: NamedStructure<String, ()> =
+        NamedStructure::from_iter([mu, i, j], "γ".into(), None);
+    let _p_struct: NamedStructure<String, ()> = NamedStructure::from_iter([mu], "p".into(), None);
+    let _t_struct: NamedStructure<String, ()> =
+        NamedStructure::from_iter([i, j, k], "T".into(), None);
 
     let a = SymbolicTensor::from_named(&structura.to_shell()).unwrap();
     let b = SymbolicTensor::from_named(&structurb.to_shell()).unwrap();

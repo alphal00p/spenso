@@ -705,7 +705,7 @@ impl<S: TensorStructure + Clone> ParamTensor<S> {
         &self,
         coeff_map: F,
         const_map: &'b HashMap<AtomView<'a>, T>,
-    ) -> DataTensor<U, S>
+    ) -> Result<DataTensor<U, S>, String>
     where
         T: symbolica::domains::float::Real
             + for<'c> std::convert::From<&'c symbolica::domains::rational::Rational>,
@@ -1228,8 +1228,9 @@ impl<'a, I: TensorStructure + Clone + 'a, T: Clone> MixedTensor<T, I> {
         };
 
         if let Some(x) = content {
-            *self =
-                MixedTensor::Concrete(RealOrComplexTensor::Real(x.evaluate(coeff_map, const_map)));
+            *self = MixedTensor::Concrete(RealOrComplexTensor::Real(
+                x.evaluate(coeff_map, const_map).unwrap(),
+            ));
         }
     }
 
@@ -1249,7 +1250,7 @@ impl<'a, I: TensorStructure + Clone + 'a, T: Clone> MixedTensor<T, I> {
 
         if let Some(x) = content {
             *self = MixedTensor::Concrete(RealOrComplexTensor::Complex(
-                x.evaluate(coeff_map, const_map),
+                x.evaluate(coeff_map, const_map).unwrap(),
             ));
         }
     }
@@ -1271,7 +1272,7 @@ where
         &self,
         coeff_map: F,
         const_map: &'b HashMap<AtomView<'a>, T>,
-    ) -> DataTensor<U, I>
+    ) -> Result<DataTensor<U, I>, String>
     where
         T: symbolica::domains::float::Real
             + for<'c> std::convert::From<&'c symbolica::domains::rational::Rational>,
@@ -1280,8 +1281,8 @@ where
         'a: 'b,
     {
         match self {
-            DataTensor::Dense(x) => DataTensor::Dense(x.evaluate(coeff_map, const_map)),
-            DataTensor::Sparse(x) => DataTensor::Sparse(x.evaluate(coeff_map, const_map)),
+            DataTensor::Dense(x) => Ok(DataTensor::Dense(x.evaluate(coeff_map, const_map)?)),
+            DataTensor::Sparse(x) => Ok(DataTensor::Sparse(x.evaluate(coeff_map, const_map)?)),
         }
     }
 }
@@ -1302,7 +1303,7 @@ where
         &self,
         coeff_map: F,
         const_map: &HashMap<AtomView<'a>, T>,
-    ) -> SparseTensor<U, I>
+    ) -> Result<SparseTensor<U, I>, String>
     where
         T: symbolica::domains::float::Real
             + for<'d> std::convert::From<&'d symbolica::domains::rational::Rational>,
@@ -1311,23 +1312,21 @@ where
         let fn_map: HashMap<_, EvaluationFn<_>> = HashMap::default();
         let mut cache = HashMap::default();
         let structure = self.structure.clone();
-        let data = self
-            .elements
-            .iter()
-            .map(|(idx, x)| {
-                (
-                    *idx,
-                    x.as_view()
-                        .evaluate::<T, F>(coeff_map, const_map, &fn_map, &mut cache)
-                        .into(),
-                )
-            })
-            .collect::<AHashMap<_, _>>();
+        let mut data = AHashMap::new();
 
-        SparseTensor {
+        for (idx, x) in self.elements.iter() {
+            data.insert(
+                *idx,
+                x.as_view()
+                    .evaluate::<T, F>(coeff_map, const_map, &fn_map, &mut cache)?
+                    .into(),
+            );
+        }
+
+        Ok(SparseTensor {
             elements: data,
             structure,
-        }
+        })
     }
 }
 
@@ -1347,7 +1346,7 @@ where
         &'a self,
         coeff_map: F,
         const_map: &HashMap<AtomView<'a>, T>,
-    ) -> DenseTensor<U, I>
+    ) -> Result<DenseTensor<U, I>, String>
     where
         T: symbolica::domains::float::Real
             + for<'b> std::convert::From<&'b symbolica::domains::rational::Rational>,
@@ -1356,17 +1355,17 @@ where
         let fn_map: HashMap<_, EvaluationFn<_>> = HashMap::default();
         let mut cache = HashMap::default();
         let structure = self.structure.clone();
-        let data = self
-            .data
-            .iter()
-            .map(|x| {
-                x.as_view()
-                    .evaluate::<T, F>(coeff_map, const_map, &fn_map, &mut cache)
-                    .into()
-            })
-            .collect::<Vec<_>>();
+        let mut data = Vec::new();
 
-        DenseTensor { data, structure }
+        for d in self.data.iter() {
+            data.push(
+                d.as_view()
+                    .evaluate::<T, F>(coeff_map, const_map, &fn_map, &mut cache)?
+                    .into(),
+            )
+        }
+
+        Ok(DenseTensor { data, structure })
     }
 
     pub fn append_const_map<'a, 'b, T, U>(
@@ -1953,7 +1952,7 @@ impl SerializableExportedCode {
         }
 
         let cpp = match inline_asm {
-            InlineASM::Intel => expr.export_asm_str(function_name, include_header),
+            InlineASM::X64 => expr.export_asm_str(function_name, include_header),
             InlineASM::None => expr.export_cpp_str(function_name, include_header),
         };
 

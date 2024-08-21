@@ -1229,7 +1229,7 @@ fn evaluate() {
 
     a.append_const_map(&adata, &mut const_map);
 
-    let aev: DenseTensor<f64, _> = a.evaluate(|r| r.into(), &const_map);
+    let aev: DenseTensor<f64, _> = a.evaluate(|r| r.into(), &const_map).unwrap();
 
     assert_eq!(aev.data(), adata.data());
 }
@@ -1434,9 +1434,10 @@ fn test_fallible_mul() {
 
         const_map.insert(b.as_view(), Complex::<f64>::new(3., 1.).into());
 
-        let ev: symbolica::domains::float::Complex<f64> =
-            f.as_view()
-                .evaluate(|r| r.into(), &const_map, &function_map, &mut cache);
+        let ev: symbolica::domains::float::Complex<f64> = f
+            .as_view()
+            .evaluate(|r| r.into(), &const_map, &function_map, &mut cache)
+            .unwrap();
 
         println!("{}", ev);
         // print!("{}", f.unwrap());

@@ -1542,7 +1542,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         &'a self,
         coeff_map: F,
         const_map: &AHashMap<AtomView<'a>, D>,
-    ) -> TensorNetwork<DataTensor<D, S>, D>
+    ) -> Result<TensorNetwork<DataTensor<D, S>, D>, String>
     where
         D: Clone
             + symbolica::domains::float::Real
@@ -1550,18 +1550,19 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     {
         let mut evaluated_net = TensorNetwork::new();
         for (_, t) in &self.graph.nodes {
-            let evaluated_tensor = t.evaluate(coeff_map, const_map);
+            let evaluated_tensor = t.evaluate(coeff_map, const_map)?;
             evaluated_net.push(evaluated_tensor);
         }
         let fn_map: HashMap<_, EvaluationFn<_>> = HashMap::default();
         let mut cache = HashMap::default();
 
-        evaluated_net.scalar = self
-            .scalar
-            .as_ref()
-            .map(|x| x.0.evaluate(coeff_map, const_map, &fn_map, &mut cache));
-        // println!("{:?}", evaluated_net.scalar);
-        evaluated_net
+        evaluated_net.scalar = if let Some(s) = &self.scalar {
+            Some(s.0.evaluate(coeff_map, const_map, &fn_map, &mut cache)?)
+        } else {
+            None
+        };
+
+        Ok(evaluated_net)
     }
 }
 

@@ -12,7 +12,7 @@ use anyhow::{Error, Result};
 
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
-use serde::{de, ser::SerializeMap, ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use serde::{de, ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
 use crate::{
     complex::{Complex, RealOrComplexTensor},
@@ -1953,7 +1953,7 @@ impl SerializableExportedCode {
         }
 
         let cpp = match inline_asm {
-            InlineASM::X64 => expr.export_asm_str(function_name, include_header),
+            InlineASM::Intel => expr.export_asm_str(function_name, include_header),
             InlineASM::None => expr.export_cpp_str(function_name, include_header),
         };
 
@@ -2342,6 +2342,43 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SerializableAtom(pub Atom);
+
+impl SerializableAtom {
+    pub fn replace_repeat(&mut self, lhs: Pattern, rhs: Pattern) {
+        let atom = self.0.replace_all(&lhs, &rhs, None, None);
+        if atom != self.0 {
+            self.0 = atom;
+            self.replace_repeat(lhs, rhs);
+        }
+    }
+
+    pub fn replace_repeat_multiple(&mut self, reps: &[Replacement<'_>]) {
+        let atom = self.0.replace_all_multiple(reps);
+        // info!("expanded rep");
+        if atom != self.0 {
+            // info!("applied replacement");
+            self.0 = atom;
+            self.replace_repeat_multiple(reps);
+        }
+    }
+
+    pub fn replace_repeat_multiple_atom(expr: &mut Atom, reps: &[Replacement<'_>]) {
+        let atom = expr.replace_all_multiple(reps);
+        if atom != *expr {
+            *expr = atom;
+            Self::replace_repeat_multiple_atom(expr, reps)
+        }
+    }
+
+    pub fn replace_repeat_multiple_atom_expand(expr: &mut Atom, reps: &[Replacement<'_>]) {
+        let a = expr.expand();
+        let atom = a.replace_all_multiple(reps);
+        if atom != *expr {
+            *expr = atom;
+            Self::replace_repeat_multiple_atom_expand(expr, reps)
+        }
+    }
+}
 
 impl Display for SerializableAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

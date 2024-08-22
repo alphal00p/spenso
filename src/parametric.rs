@@ -2,6 +2,7 @@ extern crate derive_more;
 
 use std::{
     fmt::{Debug, Display},
+    io::Cursor,
     sync::Arc,
 };
 
@@ -50,7 +51,7 @@ use symbolica::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Exponent,
         Variable,
     },
-    state::State,
+    state::{State, StateMap},
 };
 
 use std::hash::Hash;
@@ -283,12 +284,22 @@ impl<Structure: TensorStructure + Serialize + Clone> Serialize for ParamTensor<S
     where
         S: serde::Serializer,
     {
-        let mut state = serializer.serialize_struct("ParamTensor", 2)?;
+        let mut state = serializer.serialize_struct("ParamTensor", 3)?;
 
         state.serialize_field("param_type", &self.param_type)?;
 
-        let serialized_tensor = self.tensor.map_data_ref(|a| a.to_string());
+        let serialized_tensor = self.tensor.map_data_ref(|a| {
+            let mut v = Vec::new();
+            a.as_view().write(&mut v).unwrap();
+            v
+        });
         state.serialize_field("tensor", &serialized_tensor)?;
+
+        let mut symbolica_state = Vec::new();
+
+        State::export(&mut symbolica_state).unwrap();
+
+        state.serialize_field("state", &symbolica_state)?;
         state.end()
     }
 }
@@ -303,14 +314,23 @@ impl<'a, Structure: TensorStructure + Deserialize<'a> + Clone> Deserialize<'a>
         #[derive(Deserialize)]
         struct ParamTensorHelper<Structure: TensorStructure> {
             param_type: ParamOrComposite,
-            tensor: DataTensor<String, Structure>,
+            tensor: DataTensor<Vec<u8>, Structure>,
+            state: Vec<u8>,
         }
 
         let helper = ParamTensorHelper::deserialize(deserializer)?;
+
+        let state = helper.state;
+
+        let mut export = vec![];
+        State::export(&mut export).unwrap();
+
+        let map = State::import(Cursor::new(&state), None).unwrap();
+
         Ok(ParamTensor {
             tensor: helper
                 .tensor
-                .map_data_ref_result(|a| Atom::parse(a))
+                .map_data_ref_result(|a| Atom::import(a.as_slice(), &map))
                 .map_err(serde::de::Error::custom)?,
             param_type: helper.param_type,
         })
@@ -1915,6 +1935,23 @@ impl<'d> Deserialize<'d> for SerializableCompiledEvaluator {
 }
 
 impl SerializableCompiledEvaluator {
+    /// Load a new function from the same library.
+    pub fn load_new_function(&self, function_name: &str) -> Result<Self, String> {
+        Ok(SerializableCompiledEvaluator {
+            evaluator: self.evaluator.load_new_function(function_name)?,
+            library_filename: self.library_filename.clone(),
+            function_name: function_name.to_string(),
+        })
+    }
+
+    /// Load a compiled evaluator from a shared library.
+    pub fn load(file: &str, function_name: &str) -> Result<Self, String> {
+        Ok(SerializableCompiledEvaluator {
+            evaluator: CompiledEvaluator::load(file, function_name).map_err(|s| s)?,
+            library_filename: file.to_string(),
+            function_name: function_name.to_string(),
+        })
+    }
     #[inline(always)]
     pub fn evaluate<T: CompiledEvaluatorFloat>(&mut self, args: &[T], out: &mut [T]) {
         self.evaluator.evaluate(args, out)
@@ -2390,7 +2427,20 @@ impl Serialize for SerializableAtom {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&self.0.to_string())
+        let mut state = serializer.serialize_struct("SerializableAtom", 3)?;
+
+        let mut serialized_atom: Vec<u8> = Vec::new();
+
+        self.0.as_view().write(&mut serialized_atom).unwrap();
+
+        state.serialize_field("atom", &serialized_atom)?;
+
+        let mut symbolica_state = Vec::new();
+
+        State::export(&mut symbolica_state).unwrap();
+
+        state.serialize_field("state", &symbolica_state)?;
+        state.end()
     }
 }
 
@@ -2399,8 +2449,21 @@ impl<'de> Deserialize<'de> for SerializableAtom {
     where
         D: serde::Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
-        Ok(SerializableAtom(Atom::parse(&s).unwrap()))
+        #[derive(Deserialize)]
+        struct SerializableAtomHelper {
+            atom: Vec<u8>,
+            state: Vec<u8>,
+        }
+
+        let helper = SerializableAtomHelper::deserialize(deserializer)?;
+
+        let state = helper.state;
+
+        let map = State::import(Cursor::new(&state), None).unwrap();
+
+        let atom = Atom::import(Cursor::new(&helper.atom), &map).unwrap();
+
+        Ok(SerializableAtom(atom))
     }
 }
 

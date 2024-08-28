@@ -659,7 +659,7 @@ where
         .map(|i| Euclidean::new_slot_selfless(4, i))
         .collect();
 
-    gamma5_data(structure)
+    gamma5_dirac_data(structure)
 }
 
 #[cfg(feature = "shadowing")]
@@ -677,10 +677,10 @@ where
         None,
     ));
 
-    gamma5_data(structure)
+    gamma5_dirac_data(structure)
 }
 
-pub fn gamma5_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
+pub fn gamma5_dirac_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Zero + One + Clone,
     N: TensorStructure,
@@ -693,6 +693,23 @@ where
     gamma5.set(&[1, 3], c1.clone()).unwrap();
     gamma5.set(&[2, 0], c1.clone()).unwrap();
     gamma5.set(&[3, 1], c1.clone()).unwrap();
+
+    gamma5
+}
+
+pub fn gamma5_weyl_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
+where
+    T: Zero + One + Clone + Neg<Output = T>,
+    N: TensorStructure,
+{
+    let c1 = Complex::<T>::new(T::one(), T::zero());
+
+    let mut gamma5 = SparseTensor::empty(structure);
+
+    gamma5.set(&[0, 0], -c1.clone()).unwrap();
+    gamma5.set(&[1, 1], -c1.clone()).unwrap();
+    gamma5.set(&[2, 2], c1.clone()).unwrap();
+    gamma5.set(&[3, 3], c1.clone()).unwrap();
 
     gamma5
 }

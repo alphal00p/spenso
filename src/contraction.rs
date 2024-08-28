@@ -12,7 +12,7 @@ use crate::{
     upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade},
 };
 
-use std::iter::Iterator;
+use std::{borrow::Borrow, iter::Iterator};
 use thiserror::Error;
 
 // pub trait LeastCommonStorage<Other: HasTensorData + SetTensorData>:
@@ -306,8 +306,8 @@ impl<T: RefZero + PartialEq> IsZero for T {
     }
 }
 
-pub trait RefZero {
-    fn ref_zero(&self) -> Self;
+pub trait RefZero<T = Self>: Borrow<T> {
+    fn ref_zero(&self) -> T;
 }
 
 pub trait RefOne {
@@ -366,6 +366,12 @@ duplicate! {
 
     impl RefZero for types{
         fn ref_zero(&self)-> Self{
+            zero
+        }
+    }
+
+    impl RefZero<types> for &types{
+        fn ref_zero(&self)-> types{
             zero
         }
     }

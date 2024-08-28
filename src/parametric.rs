@@ -51,7 +51,7 @@ use symbolica::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Exponent,
         Variable,
     },
-    state::{State, StateMap},
+    state::State,
 };
 
 use std::hash::Hash;
@@ -1947,7 +1947,7 @@ impl SerializableCompiledEvaluator {
     /// Load a compiled evaluator from a shared library.
     pub fn load(file: &str, function_name: &str) -> Result<Self, String> {
         Ok(SerializableCompiledEvaluator {
-            evaluator: CompiledEvaluator::load(file, function_name).map_err(|s| s)?,
+            evaluator: CompiledEvaluator::load(file, function_name)?,
             library_filename: file.to_string(),
             function_name: function_name.to_string(),
         })

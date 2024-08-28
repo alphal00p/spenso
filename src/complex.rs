@@ -8,6 +8,7 @@ use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
 
+use num::Float;
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "shadowing")]
@@ -473,6 +474,32 @@ impl<T: Default> Default for Complex<T> {
     }
 }
 
+pub trait SymbolicaComplex {
+    type R;
+    fn arg(&self) -> Self::R;
+}
+
+pub trait NumTraitComplex {
+    type R;
+    fn arg(&self) -> Self::R;
+}
+
+#[cfg(feature = "shadowing")]
+impl<T: Real> SymbolicaComplex for Complex<T> {
+    type R = T;
+    fn arg(&self) -> T {
+        self.im.atan2(&self.re)
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<T: Float> NumTraitComplex for Complex<T> {
+    type R = T;
+    fn arg(&self) -> T {
+        self.im.atan2(self.re)
+    }
+}
+
 impl<T> Complex<T> {
     pub fn map_ref<U>(&self, f: impl Fn(&T) -> U) -> Complex<U> {
         Complex {
@@ -635,14 +662,6 @@ impl<T> Complex<T> {
     {
         let n = self.norm_squared();
         Complex::new(self.re.ref_div(&n), -self.im.ref_div(&n))
-    }
-
-    #[inline]
-    pub fn arg(&self) -> T
-    where
-        T: num::Float,
-    {
-        self.im.atan2(self.re)
     }
 
     #[inline]

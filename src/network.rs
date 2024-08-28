@@ -51,6 +51,7 @@ use crate::{
 };
 
 use crate::{
+    arithmetic::ScalarMul,
     contraction::Contract,
     data::{DataTensor, GetTensorData, HasTensorData},
     parametric::{
@@ -1962,6 +1963,8 @@ pub enum TensorNetworkError {
     MoreThanOneNode,
     #[error("is not scalar output")]
     NotScalarOutput,
+    #[error("failed scalar multiplication")]
+    FailedScalarMul,
     #[error("scalar field is empty")]
     ScalarFieldEmpty,
     #[error(transparent)]
@@ -1988,7 +1991,8 @@ where
     T: Clone
         + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>
         + HasStructure<Scalar: From<S>>
-        + ScalarTensor,
+        + ScalarTensor
+        + ScalarMul<S, Output = T>,
 {
     pub fn result_tensor_smart(&self) -> Result<T, TensorNetworkError> {
         match self.graph.nodes.len() {
@@ -1999,7 +2003,17 @@ where
                     .ok_or(TensorNetworkError::ScalarFieldEmpty)?;
                 Ok(T::new_scalar(scalar.into()))
             }
-            1 => Ok(self.graph.nodes.iter().next().unwrap().1.clone()),
+            1 => {
+                let t = self.graph.nodes.iter().next().unwrap().1;
+
+                let res = if let Some(scalar) = self.scalar.as_ref() {
+                    t.scalar_mul(scalar)
+                        .ok_or(TensorNetworkError::FailedScalarMul)?
+                } else {
+                    t.clone()
+                };
+                Ok(res)
+            }
             _ => Err(TensorNetworkError::MoreThanOneNode),
         }
     }

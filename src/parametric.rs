@@ -16,6 +16,7 @@ use enum_try_as_inner::EnumTryAsInner;
 use serde::{de, ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
 use crate::{
+    arithmetic::ScalarMul,
     complex::{Complex, RealOrComplexTensor},
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero},
     data::{DataIterator, DataTensor, DenseTensor, HasTensorData, SetTensorData, SparseTensor},
@@ -277,6 +278,16 @@ pub struct ParamTensor<S: TensorStructure> {
     // Param(DataTensor<Atom, S>),
     // // Concrete(DataTensor<T, S>),
     // Composite(DataTensor<Atom, S>),
+}
+
+impl<S: TensorStructure + Clone> ScalarMul<SerializableAtom> for ParamTensor<S> {
+    type Output = ParamTensor<S>;
+    fn scalar_mul(&self, rhs: &SerializableAtom) -> Option<Self::Output> {
+        Some(ParamTensor {
+            tensor: self.tensor.scalar_mul(&rhs.0)?,
+            param_type: ParamOrComposite::Composite,
+        })
+    }
 }
 
 impl<Structure: TensorStructure + Serialize + Clone> Serialize for ParamTensor<Structure> {

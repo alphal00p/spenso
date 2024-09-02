@@ -1967,6 +1967,8 @@ pub enum TensorNetworkError {
     FailedScalarMul,
     #[error("scalar field is empty")]
     ScalarFieldEmpty,
+    #[error("not all scalars")]
+    NotAllScalars,
     #[error(transparent)]
     Other(#[from] anyhow::Error),
     #[error("Io error")]
@@ -2145,17 +2147,23 @@ where
     }
 }
 
+// use log::trace;
+
 #[cfg(feature = "shadowing")]
 impl<'a> TryFrom<MulView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
     type Error = TensorNetworkError;
     fn try_from(value: MulView<'a>) -> Result<Self, Self::Error> {
         // trace!("MulView: {}", value.as_view());
         let mut network: Self = TensorNetwork::new();
+
         let mut scalars = SerializableAtom(Atom::new_num(1));
+        let mut has_scalar = false;
+
         for arg in value.iter() {
             let mut net = Self::try_from(arg)?;
             net.contract();
             if let Some(ref s) = net.scalar {
+                has_scalar = true;
                 scalars = scalars.mul_fallible(s).unwrap();
             }
             match net.result_tensor() {
@@ -2166,7 +2174,10 @@ impl<'a> TryFrom<MulView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
                 Err(e) => return Err(e),
             }
         }
-        network.scalar_mul(scalars);
+        if has_scalar {
+            // trace!("scalar mul : {}", scalars);
+            network.scalar_mul(scalars);
+        }
         Ok(network)
     }
 }
@@ -2184,6 +2195,8 @@ impl<'a> TryFrom<AtomView<'a>>
             a => {
                 let mut network: Self = TensorNetwork::new();
                 let a = a.to_owned();
+
+                // trace!("scalar atomview not a: {}", a);
                 network.scalar = Some(SerializableAtom(a));
                 Ok(network)
             }
@@ -2205,7 +2218,9 @@ impl<'a> TryFrom<FunView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
             network.push(t);
         } else {
             scalar = Some(SerializableAtom(value.as_view().to_owned()));
+            // trace!("scalar fn: {}", value.as_view());
         }
+
         network.scalar = scalar;
         Ok(network)
     }
@@ -2218,32 +2233,50 @@ impl<'a> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
         // trace!("AddView: {}", value.as_view());
         let mut tensors = vec![];
         let mut scalars = SerializableAtom(Atom::new_num(0));
+        let mut is_scalar = false;
         for summand in value.iter() {
             let mut net = Self::try_from(summand)?;
             net.contract();
-            if let Some(ref s) = net.scalar {
-                scalars = scalars.add_fallible(s).unwrap();
-            }
             match net.result_tensor() {
                 Ok(t) => {
+                    if let Some(ref s) = net.scalar {
+                        t.scalar_mul(&s.0);
+                    }
                     tensors.push(t);
                 }
                 Err(TensorNetworkError::NoNodes) => {
+                    is_scalar = true;
+                    if let Some(ref s) = net.scalar {
+                        scalars = scalars.add_fallible(s).unwrap();
+                    } else {
+                        return Err(TensorNetworkError::ScalarFieldEmpty);
+                    }
+
                     // println!("{:?}", net);
                 }
                 Err(e) => return Err(e),
             }
         }
 
-        let mut net: TensorNetwork<_, _> = if let Some(sum) = tensors
+        let net: TensorNetwork<_, _> = if let Some(sum) = tensors
             .into_iter()
             .reduce(|a, b| a.add_fallible(&b).unwrap())
         {
+            if is_scalar {
+                return Err(TensorNetworkError::NotAllScalars);
+            }
             TensorNetwork::from(vec![sum])
         } else {
-            TensorNetwork::new()
+            if !is_scalar {
+                return Err(TensorNetworkError::NotAllScalars);
+            } else {
+                let mut net = TensorNetwork::new();
+                // trace!("scalars sum: {}", scalars);
+                net.scalar = Some(scalars);
+                net
+            }
         };
-        net.scalar = Some(scalars);
+
         Ok(net)
     }
 }

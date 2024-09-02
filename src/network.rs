@@ -2238,9 +2238,9 @@ impl<'a> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
             let mut net = Self::try_from(summand)?;
             net.contract();
             match net.result_tensor() {
-                Ok(t) => {
+                Ok(mut t) => {
                     if let Some(ref s) = net.scalar {
-                        t.scalar_mul(&s.0);
+                        t = t.scalar_mul(&s.0).unwrap();
                     }
                     tensors.push(t);
                 }

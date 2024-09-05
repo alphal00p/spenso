@@ -67,7 +67,7 @@ mod test {
         for i in 0..18 {
             reps.push((
                 Pattern::parse(format!("Q({},cind(0))", i).as_str()).unwrap(),
-                Pattern::parse(format!("Q{}", i).as_str()).unwrap(),
+                Pattern::parse(format!("Q{}", i).as_str()).unwrap().into(),
             ));
 
             vars.push(Variable::Symbol(State::get_symbol(
@@ -166,7 +166,7 @@ mod test {
         for i in 0..11 {
             reps.push((
                 Pattern::parse(format!("Q({},cind(0))", i).as_str()).unwrap(),
-                Pattern::parse(format!("Q{}", i).as_str()).unwrap(),
+                Pattern::parse(format!("Q{}", i).as_str()).unwrap().into(),
             ));
 
             vars.push(Variable::Symbol(State::get_symbol(

@@ -4,6 +4,7 @@ use ahash::{AHashMap, AHashSet, HashMap};
 use anyhow::anyhow;
 #[cfg(feature = "shadowing")]
 use std::sync::Arc;
+use symbolica::id::PatternOrMap;
 
 // use log::trace;
 use serde::{Deserialize, Serialize};
@@ -52,7 +53,7 @@ use crate::{
 
 use crate::{
     arithmetic::ScalarMul,
-    contraction::Contract,
+    contraction::{Contract, ContractionError},
     data::{DataTensor, GetTensorData, HasTensorData},
     parametric::{
         SerializableCompiledCode, SerializableCompiledEvaluator, SerializableExportedCode,
@@ -860,7 +861,7 @@ where
 
 impl<T: HasTensorData + GetTensorData<GetData = T::Data>> TensorNetworkSet<T, T::Data>
 where
-    T: Clone,
+    T: Clone + Contract<LCM = T>,
     T::Structure: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
 {
     pub fn result(&self) -> Result<Vec<T::Data>, TensorNetworkError> {
@@ -1235,7 +1236,7 @@ impl<T: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>, S> TensorNet
         }
     }
 
-    fn edge_to_min_degree_node(&self) -> Option<HedgeId> {
+    pub fn edge_to_min_degree_node(&self) -> Option<HedgeId> {
         let mut neighs = self.graph.reverse_nodemap.clone();
         if neighs.is_empty() {
             return None;
@@ -1367,7 +1368,7 @@ where
     fn replace_all(
         &self,
         pattern: &Pattern,
-        rhs: &Pattern,
+        rhs: &PatternOrMap,
         conditions: Option<&Condition<WildcardAndRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self {
@@ -1386,7 +1387,7 @@ where
     fn replace_all_mut(
         &mut self,
         pattern: &Pattern,
-        rhs: &Pattern,
+        rhs: &PatternOrMap,
         conditions: Option<&Condition<WildcardAndRestriction>>,
         settings: Option<&MatchSettings>,
     ) {
@@ -1929,7 +1930,7 @@ where
 }
 impl<T: HasTensorData + GetTensorData<GetData = T::Data>> TensorNetwork<T, T::Data>
 where
-    T: Clone,
+    T: Clone + Contract<LCM = T>,
     T::Structure: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
 {
     pub fn result(&self) -> Result<T::Data, TensorNetworkError> {
@@ -1955,6 +1956,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum TensorNetworkError {
+    #[error("internal edge still present, contract it first")]
+    InternalEdgePresent,
     #[error("Cannot contract edge")]
     CannotContractEdge,
     #[error("no nodes in the graph")]
@@ -1969,6 +1972,8 @@ pub enum TensorNetworkError {
     ScalarFieldEmpty,
     #[error("not all scalars")]
     NotAllScalars,
+    #[error("failed to contract")]
+    FailedContract(ContractionError),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
     #[error("Io error")]
@@ -1977,13 +1982,25 @@ pub enum TensorNetworkError {
 
 impl<T, S> TensorNetwork<T, S>
 where
-    T: Clone + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
+    T: Clone + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Contract<LCM = T>,
 {
     pub fn result_tensor(&self) -> Result<T, TensorNetworkError> {
-        match self.graph.nodes.len() {
-            0 => Err(TensorNetworkError::NoNodes),
-            1 => Ok(self.graph.nodes.iter().next().unwrap().1.clone()),
-            _ => Err(TensorNetworkError::MoreThanOneNode),
+        if self.graph.involution.iter().any(|(ni, &i)| ni != i) {
+            Err(TensorNetworkError::InternalEdgePresent)
+        } else {
+            let mut iter = self.graph.nodes.iter();
+
+            if let Some((_, t)) = iter.next() {
+                let mut res = t.clone();
+                for (_, t) in iter {
+                    res = res
+                        .contract(t)
+                        .map_err(TensorNetworkError::FailedContract)?;
+                }
+                Ok(res)
+            } else {
+                Err(TensorNetworkError::NoNodes)
+            }
         }
     }
 }
@@ -2102,7 +2119,7 @@ where
     pub fn replace_all(
         &self,
         pattern: &Pattern,
-        rhs: &Pattern,
+        rhs: &PatternOrMap,
         conditions: Option<&Condition<WildcardAndRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self
@@ -2160,7 +2177,9 @@ impl<'a> TryFrom<MulView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
         let mut has_scalar = false;
 
         for arg in value.iter() {
+            // trace!("mul arg: {}", arg);
             let mut net = Self::try_from(arg)?;
+            // trace!("mul net: {}", net.dot_nodes());
             net.contract();
             if let Some(ref s) = net.scalar {
                 has_scalar = true;
@@ -2225,7 +2244,7 @@ impl<'a> TryFrom<FunView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
         Ok(network)
     }
 }
-
+// use log::trace;
 #[cfg(feature = "shadowing")]
 impl<'a> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
     type Error = TensorNetworkError;
@@ -2235,6 +2254,7 @@ impl<'a> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
         let mut scalars = SerializableAtom(Atom::new_num(0));
         let mut is_scalar = false;
         for summand in value.iter() {
+            // trace!("summand: {}", summand);
             let mut net = Self::try_from(summand)?;
             net.contract();
             match net.result_tensor() {
@@ -2266,15 +2286,13 @@ impl<'a> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
                 return Err(TensorNetworkError::NotAllScalars);
             }
             TensorNetwork::from(vec![sum])
+        } else if !is_scalar {
+            return Err(TensorNetworkError::NotAllScalars);
         } else {
-            if !is_scalar {
-                return Err(TensorNetworkError::NotAllScalars);
-            } else {
-                let mut net = TensorNetwork::new();
-                // trace!("scalars sum: {}", scalars);
-                net.scalar = Some(scalars);
-                net
-            }
+            let mut net = TensorNetwork::new();
+            // trace!("scalars sum: {}", scalars);
+            net.scalar = Some(scalars);
+            net
         };
 
         Ok(net)
@@ -2458,6 +2476,7 @@ where
     pub fn contract_algo(&mut self, edge_choice: impl Fn(&Self) -> Option<HedgeId>) {
         if let Some(e) = edge_choice(self) {
             self.contract_edge(e);
+
             // println!("{}", self.dot());
             self.contract_algo(edge_choice);
         }

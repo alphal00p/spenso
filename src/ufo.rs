@@ -414,7 +414,7 @@ pub fn batch_replace<T: AsRef<str>, U: AsRef<str>>(
 ) -> Atom {
     for (pattern, replacement) in replacements {
         let pattern = Pattern::parse(pattern.as_ref()).unwrap();
-        let replacement = Pattern::parse(replacement.as_ref()).unwrap();
+        let replacement = Pattern::parse(replacement.as_ref()).unwrap().into();
         atom = pattern.replace_all(atom.as_view(), &replacement, None, None);
     }
 

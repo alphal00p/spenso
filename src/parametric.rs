@@ -13,6 +13,7 @@ use anyhow::{Error, Result};
 
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
+use log::trace;
 use serde::{de, ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
 use crate::{
@@ -45,9 +46,9 @@ use symbolica::{
     },
     evaluate::{
         CompileOptions, CompiledCode, CompiledEvaluator, CompiledEvaluatorFloat, EvalTree,
-        EvaluationFn, ExportedCode, ExpressionEvaluator, FunctionMap, InlineASM,
+        EvaluationFn, ExportedCode, Expression, ExpressionEvaluator, FunctionMap, InlineASM,
     },
-    id::{Condition, MatchSettings, Pattern, Replacement, WildcardAndRestriction},
+    id::{Condition, MatchSettings, Pattern, PatternOrMap, Replacement, WildcardAndRestriction},
     poly::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Exponent,
         Variable,
@@ -389,6 +390,13 @@ impl<T: HasStructure> TensorSet<T> {
             TensorSet::Scalars(t) => t.is_empty(),
         }
     }
+
+    pub fn push(&mut self, tensor: T) {
+        match self {
+            TensorSet::Scalars(t) => t.push(tensor.scalar().unwrap()),
+            TensorSet::Tensors(t) => t.push(tensor),
+        }
+    }
 }
 
 impl<T: HasStructure + Clone> FromIterator<T> for TensorSet<T> {
@@ -657,7 +665,7 @@ pub trait PatternReplacement {
     fn replace_all(
         &self,
         pattern: &Pattern,
-        rhs: &Pattern,
+        rhs: &PatternOrMap,
         conditions: Option<&Condition<WildcardAndRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self;
@@ -665,7 +673,7 @@ pub trait PatternReplacement {
     fn replace_all_mut(
         &mut self,
         pattern: &Pattern,
-        rhs: &Pattern,
+        rhs: &PatternOrMap,
         conditions: Option<&Condition<WildcardAndRestriction>>,
         settings: Option<&MatchSettings>,
     );
@@ -679,7 +687,7 @@ impl<S: TensorStructure + Clone> PatternReplacement for ParamTensor<S> {
     fn replace_all(
         &self,
         pattern: &Pattern,
-        rhs: &Pattern,
+        rhs: &PatternOrMap,
         conditions: Option<&Condition<WildcardAndRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self {
@@ -695,7 +703,7 @@ impl<S: TensorStructure + Clone> PatternReplacement for ParamTensor<S> {
     fn replace_all_mut(
         &mut self,
         pattern: &Pattern,
-        rhs: &Pattern,
+        rhs: &PatternOrMap,
         conditions: Option<&Condition<WildcardAndRestriction>>,
         settings: Option<&MatchSettings>,
     ) {
@@ -756,15 +764,20 @@ impl<S: TensorStructure + Clone> ParamTensorSet<S> {
     ) -> Result<EvalTreeTensorSet<Rational, S>> {
         match &self.tensors {
             TensorSet::Scalars(s) => {
+                trace!("turning {} scalars into eval tree", s.len());
                 let exprs = s.iter().map(|a| a.as_view()).collect::<Vec<_>>();
                 Ok(EvalTreeTensorSet {
                     tensors: TensorsOrScalars::Scalars,
-                    eval: AtomView::to_eval_tree_multiple(&exprs, fn_map, params)
-                        .map_err(|s| anyhow!(s))?,
+                    eval: (
+                        AtomView::to_eval_tree_multiple(&exprs, fn_map, params)
+                            .map_err(|s| anyhow!(s))?,
+                        None,
+                    ),
                     size: self.size,
                 })
             }
             TensorSet::Tensors(in_tensors) => {
+                trace!("turning {} tensors into eval tree", in_tensors.len());
                 let mut tensors = vec![];
 
                 let mut atoms = vec![];
@@ -798,8 +811,11 @@ impl<S: TensorStructure + Clone> ParamTensorSet<S> {
 
                 Ok(EvalTreeTensorSet {
                     tensors: TensorsOrScalars::Tensors(tensors),
-                    eval: AtomView::to_eval_tree_multiple(&atoms, fn_map, params)
-                        .map_err(|s| anyhow!(s))?,
+                    eval: (
+                        AtomView::to_eval_tree_multiple(&atoms, fn_map, params)
+                            .map_err(|s| anyhow!(s))?,
+                        None,
+                    ),
                     size: self.size,
                 })
             }
@@ -953,7 +969,7 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> Pattern
     fn replace_all(
         &self,
         pattern: &Pattern,
-        rhs: &Pattern,
+        rhs: &PatternOrMap,
         conditions: Option<&Condition<WildcardAndRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self {
@@ -977,7 +993,7 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> Pattern
     fn replace_all_mut(
         &mut self,
         pattern: &Pattern,
-        rhs: &Pattern,
+        rhs: &PatternOrMap,
         conditions: Option<&Condition<WildcardAndRestriction>>,
         settings: Option<&MatchSettings>,
     ) {
@@ -1641,11 +1657,19 @@ where
 
 pub type EvalTreeTensor<T, S> = EvalTensor<EvalTree<T>, S>;
 
-pub type EvalTreeTensorSet<T, S> = EvalTensorSet<EvalTree<T>, S>;
+pub type EvalTreeTensorSet<T, S> = EvalTensorSet<(EvalTree<T>, Option<Vec<Expression<T>>>), S>;
 
 impl<S: Clone + TensorStructure> EvalTreeTensorSet<Rational, S> {
     pub fn horner_scheme(&mut self) {
-        self.eval.horner_scheme()
+        self.eval.0.horner_scheme()
+    }
+    pub fn optimize_horner_scheme(&mut self, iterations: usize, n_cores: usize, verbose: bool) {
+        let scheme = self.eval.1.take();
+        self.eval.1 = Some(
+            self.eval
+                .0
+                .optimize_horner_scheme(iterations, n_cores, scheme, verbose),
+        );
     }
 }
 
@@ -1656,19 +1680,23 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
         S: Clone,
     {
         EvalTreeTensorSet {
-            eval: self.eval.map_coeff(f),
+            eval: (self.eval.0.map_coeff(f), None),
             tensors: self.tensors.clone(),
             size: self.size,
         }
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self, cpe_rounds: Option<usize>) -> EvalTensorSet<ExpressionEvaluator<T>, S>
+    #[allow(clippy::type_complexity)]
+    pub fn linearize(
+        self,
+        cpe_rounds: Option<usize>,
+    ) -> EvalTensorSet<(ExpressionEvaluator<T>, Option<Vec<Expression<T>>>), S>
     where
         T: Clone + Default + PartialEq,
     {
         EvalTensorSet {
-            eval: self.eval.linearize(cpe_rounds),
+            eval: (self.eval.0.linearize(cpe_rounds), self.eval.1),
             tensors: self.tensors,
             size: self.size,
         }
@@ -1678,7 +1706,7 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
     where
         T: Debug + Hash + Eq + Ord + Clone + Default,
     {
-        self.eval.common_subexpression_elimination()
+        self.eval.0.common_subexpression_elimination()
     }
 
     pub fn evaluate(&mut self, params: &[T]) -> TensorSet<DataTensor<T, S>>
@@ -1689,7 +1717,7 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
         let zero = params[0].zero();
 
         let mut elements = vec![zero; self.size];
-        self.eval.evaluate(params, &mut elements);
+        self.eval.0.evaluate(params, &mut elements);
 
         match &self.tensors {
             TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
@@ -1707,6 +1735,17 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
 impl<S: Clone> EvalTreeTensor<Rational, S> {
     pub fn horner_scheme(&mut self) {
         self.eval.horner_scheme()
+    }
+
+    pub fn optimize_horner_scheme(
+        &mut self,
+        iterations: usize,
+        n_cores: usize,
+        scheme: Option<Vec<Expression<Rational>>>,
+        verbose: bool,
+    ) -> Vec<Expression<Rational>> {
+        self.eval
+            .optimize_horner_scheme(iterations, n_cores, scheme, verbose)
     }
 }
 
@@ -1820,17 +1859,80 @@ pub struct EvalTensor<T, S> {
     structure: S,
 }
 
+impl<T, S: TensorStructure + Clone> EvalTensor<T, S> {
+    pub fn usize_tensor(&self, shift: usize) -> DataTensor<usize, S> {
+        if let Some(ref indexmap) = self.indexmap {
+            let mut sparse_tensor = SparseTensor::empty(self.structure.clone());
+            for (i, idx) in indexmap.iter().enumerate() {
+                sparse_tensor.elements.insert(*idx, shift + i);
+            }
+            DataTensor::Sparse(sparse_tensor)
+        } else {
+            let data: Vec<usize> = (shift..shift + self.structure.size().unwrap()).collect();
+            let dense_tensor = DenseTensor::from_data(data, self.structure.clone()).unwrap();
+            DataTensor::Dense(dense_tensor)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TensorsOrScalars<T, S: TensorStructure> {
     Tensors(Vec<DataTensor<T, S>>),
     Scalars,
 }
 
+impl<T, S: TensorStructure> TensorsOrScalars<T, S> {
+    pub fn push(&mut self, tensor: DataTensor<T, S>) {
+        if tensor.is_scalar() {
+            if let TensorsOrScalars::Tensors(_) = self {
+                panic!("Trying to push a scalar to a list of tensors")
+            }
+        } else {
+            match self {
+                TensorsOrScalars::Tensors(t) => t.push(tensor),
+                TensorsOrScalars::Scalars => {
+                    panic!("Trying to push a tensor to a list of scalars")
+                }
+            }
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            TensorsOrScalars::Tensors(t) => t.len(),
+            TensorsOrScalars::Scalars => 0,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            TensorsOrScalars::Tensors(t) => t.is_empty(),
+            TensorsOrScalars::Scalars => true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvalTensorSet<T, S: TensorStructure> {
-    tensors: TensorsOrScalars<usize, S>,
+    pub tensors: TensorsOrScalars<usize, S>,
     eval: T,
     size: usize, //
+}
+
+impl<S: TensorStructure, T> EvalTensorSet<T, S> {
+    pub fn len(&self) -> usize {
+        match &self.tensors {
+            TensorsOrScalars::Tensors(t) => t.len(),
+            TensorsOrScalars::Scalars => self.size,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match &self.tensors {
+            TensorsOrScalars::Tensors(t) => t.is_empty(),
+            TensorsOrScalars::Scalars => self.size == 0,
+        }
+    }
 }
 
 impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
@@ -1851,6 +1953,38 @@ impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
         } else {
             None
         }
+    }
+}
+
+impl<S: TensorStructure + Clone>
+    EvalTensorSet<
+        (
+            ExpressionEvaluator<Rational>,
+            Option<Vec<Expression<Rational>>>,
+        ),
+        S,
+    >
+{
+    pub fn push_optimize(
+        &mut self,
+        mut tensor: EvalTreeTensor<Rational, S>,
+        cpe_rounds: Option<usize>,
+        iterations: usize,
+        n_cores: usize,
+        verbose: bool,
+    ) {
+        let usize_tensor = tensor.usize_tensor(self.size);
+        trace!("adding a tensor to the list of {} tensors", self.len());
+        self.size += usize_tensor.actual_size();
+        self.tensors.push(usize_tensor);
+        self.eval.1 =
+            Some(tensor.optimize_horner_scheme(iterations, n_cores, self.eval.1.take(), verbose));
+        tensor.common_subexpression_elimination();
+
+        self.eval
+            .0
+            .merge(tensor.linearize(cpe_rounds).eval, cpe_rounds)
+            .unwrap();
     }
 }
 
@@ -2142,7 +2276,23 @@ impl<S: TensorStructure> EvalTensor<SerializableCompiledCode, S> {
     }
 }
 
-impl<T, S: TensorStructure> EvalTensorSet<ExpressionEvaluator<T>, S> {
+pub type LinearizedEvalTensorSet<T, S> =
+    EvalTensorSet<(ExpressionEvaluator<T>, Option<Vec<Expression<T>>>), S>;
+
+impl<T, S: TensorStructure> LinearizedEvalTensorSet<T, S> {
+    pub fn map_coeff<T2, F: Fn(&T) -> T2>(self, f: &F) -> LinearizedEvalTensorSet<T2, S>
+    where
+        T: Clone + PartialEq + Default,
+        S: Clone,
+    {
+        LinearizedEvalTensorSet {
+            eval: (self.eval.0.map_coeff(f), None),
+            tensors: self.tensors,
+            size: self.size,
+        }
+        // self.map_data_ref(|x| x.map_coeff(f))
+    }
+
     pub fn export_cpp(
         &self,
         filename: &str,
@@ -2156,7 +2306,7 @@ impl<T, S: TensorStructure> EvalTensorSet<ExpressionEvaluator<T>, S> {
     {
         Ok(EvalTensorSet {
             eval: SerializableExportedCode::export_cpp(
-                &self.eval,
+                &self.eval.0,
                 filename,
                 function_name,
                 include_header,
@@ -2175,12 +2325,13 @@ impl<T, S: TensorStructure> EvalTensorSet<ExpressionEvaluator<T>, S> {
         let zero = params[0].zero();
 
         let mut elements = vec![zero; self.size];
-        self.eval.evaluate(params, &mut elements);
+        self.eval.0.evaluate(params, &mut elements);
 
         match &self.tensors {
             TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
             TensorsOrScalars::Tensors(t) => {
                 let mut out_tensors = Vec::with_capacity(t.len());
+                trace!("Evaluating {} tensors", t.len());
                 for t in t.iter() {
                     out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
                 }
@@ -2378,6 +2529,7 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
             TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
             TensorsOrScalars::Tensors(t) => {
                 let mut out_tensors = Vec::with_capacity(t.len());
+                trace!("Evaluating {} tensors using compiled eval", t.len());
                 for t in t.iter() {
                     out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
                 }
@@ -2391,7 +2543,7 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
 pub struct SerializableAtom(pub Atom);
 
 impl SerializableAtom {
-    pub fn replace_repeat(&mut self, lhs: Pattern, rhs: Pattern) {
+    pub fn replace_repeat(&mut self, lhs: Pattern, rhs: PatternOrMap) {
         let atom = self.0.replace_all(&lhs, &rhs, None, None);
         if atom != self.0 {
             self.0 = atom;

@@ -137,7 +137,7 @@ fn main() {
         let name_im = Atom::new_var(State::get_symbol(k.to_string() + "_im"));
         let i = Atom::new_var(State::I);
         let pat = &name_re + i * &name_im;
-        replacements.push((Atom::new_var(*k).into_pattern(), pat.into_pattern()));
+        replacements.push((Atom::new_var(*k).into_pattern(), pat.into_pattern().into()));
 
         fn_map.add_constant(name_re, Rational::from(v.re));
         fn_map.add_constant(name_im, Rational::from(v.im));

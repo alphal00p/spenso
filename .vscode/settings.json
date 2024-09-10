@@ -14,7 +14,8 @@
     "build",
     "gammaloop",
     "structures",
-    "benchmarks"
+    "benchmarks",
+    "ufo"
   ],
   "github.copilot.enable": {
     "quarto": false,

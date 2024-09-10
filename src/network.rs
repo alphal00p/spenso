@@ -2,6 +2,7 @@
 use ahash::{AHashMap, AHashSet, HashMap};
 #[cfg(feature = "shadowing")]
 use anyhow::anyhow;
+use flexi_logger::init;
 #[cfg(feature = "shadowing")]
 use std::sync::Arc;
 use symbolica::id::PatternOrMap;
@@ -1242,21 +1243,40 @@ impl<T: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>, S> TensorNet
             return None;
         }
 
-        loop {
-            let mut all_ext = true;
-            for (node, initial) in &mut neighs {
-                *initial = self.graph.neighbors[*initial];
-                let start = self.graph.reverse_nodemap[node];
+        let mut all_ext = true;
 
-                if self.graph.involution[start] != start {
-                    all_ext = false;
-                    if *initial == start {
-                        return Some(start);
+        for (h, g) in &self.graph.involution {
+            if h != *g {
+                all_ext = false;
+                break;
+            }
+        }
+
+        if all_ext {
+            return None;
+        }
+
+        loop {
+            for (node, initial) in &mut neighs {
+                *initial = self.graph.neighbors[*initial]; //neighbors is a linked list that is cyclic, here we essentially move all the initial pointers to the next node
+
+                let start = self.graph.reverse_nodemap[node]; // get original start
+
+                if *initial == start {
+                    // first neighborhood to completely cycle
+                    let mut all_ext_in_cycle = false;
+                    while self.graph.involution[*initial] == *initial && !all_ext_in_cycle {
+                        //loop through the cycle till we find a non self involution i.e. an internal edge
+                        *initial = self.graph.neighbors[*initial];
+                        if *initial == start {
+                            // if we're back at the start then we have cycled through all the edges and they are all external
+                            all_ext_in_cycle = true;
+                        }
+                    }
+                    if !all_ext_in_cycle {
+                        return Some(*initial);
                     }
                 }
-            }
-            if all_ext {
-                return None;
             }
         }
     }
@@ -2257,6 +2277,7 @@ impl<'a> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
             // trace!("summand: {}", summand);
             let mut net = Self::try_from(summand)?;
             net.contract();
+            println!("{}", net.dot());
             match net.result_tensor() {
                 Ok(mut t) => {
                     if let Some(ref s) = net.scalar {

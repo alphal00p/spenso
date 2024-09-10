@@ -281,6 +281,30 @@ pub struct ParamTensor<S: TensorStructure> {
     // Composite(DataTensor<Atom, S>),
 }
 
+impl<S> From<DataTensor<Atom, S>> for ParamTensor<S>
+where
+    S: TensorStructure + Clone,
+{
+    fn from(tensor: DataTensor<Atom, S>) -> Self {
+        ParamTensor {
+            tensor,
+            param_type: ParamOrComposite::Composite,
+        }
+    }
+}
+
+impl<S> From<SparseTensor<Atom, S>> for ParamTensor<S>
+where
+    S: TensorStructure + Clone,
+{
+    fn from(tensor: SparseTensor<Atom, S>) -> Self {
+        ParamTensor {
+            tensor: tensor.into(),
+            param_type: ParamOrComposite::Composite,
+        }
+    }
+}
+
 impl<S: TensorStructure + Clone> ScalarMul<SerializableAtom> for ParamTensor<S> {
     type Output = ParamTensor<S>;
     fn scalar_mul(&self, rhs: &SerializableAtom) -> Option<Self::Output> {

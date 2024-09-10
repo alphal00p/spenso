@@ -1191,19 +1191,19 @@ mod iteratortests {
         let rep = Euclidean {};
 
         let structura = VecStructure::new(vec![
-            rep.new_slot(0, 4).into(),
+            rep.new_slot(4, 0).into(),
             rep.new_slot(4, 4).into(),
-            rep.new_slot(1, 5).into(),
-            rep.new_slot(3, 7).into(),
-            rep.new_slot(2, 8).into(),
+            rep.new_slot(5, 1).into(),
+            rep.new_slot(7, 3).into(),
+            rep.new_slot(8, 2).into(),
         ]);
 
         let structurb = VecStructure::new(vec![
-            rep.new_slot(2, 8).into(),
-            rep.new_slot(3, 7).into(),
-            rep.new_slot(0, 4).into(),
-            rep.new_slot(1, 5).into(),
-            rep.new_slot(5, 4).into(),
+            rep.new_slot(8, 2).into(),
+            rep.new_slot(7, 3).into(),
+            rep.new_slot(4, 0).into(),
+            rep.new_slot(5, 1).into(),
+            rep.new_slot(4, 5).into(),
         ]);
 
         let fibera = Fiber::from(
@@ -1239,7 +1239,7 @@ mod iteratortests {
     fn mutiter() {
         let rep = Euclidean {};
         let structa = VecStructure::new(vec![
-            rep.new_slot(0, 4).into(),
+            rep.new_slot(0, 2).into(),
             rep.new_slot(4, 4).into(),
             rep.new_slot(1, 5).into(),
             rep.new_slot(3, 7).into(),

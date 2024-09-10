@@ -1565,3 +1565,5 @@ fn slotmap() {
     let mut hasher = DefaultHasher::new();
     p.hash(&mut hasher);
 }
+
+

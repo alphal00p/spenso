@@ -8,7 +8,7 @@ use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
 
-use num::Float;
+use num::{Float, One, Zero};
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "shadowing")]
@@ -500,6 +500,73 @@ impl<T: Float> NumTraitComplex for Complex<T> {
     }
 }
 
+impl<T: Zero> Zero for Complex<T> {
+    fn zero() -> Self {
+        Complex {
+            re: T::zero(),
+            im: T::zero(),
+        }
+    }
+
+    fn is_zero(&self) -> bool {
+        self.re.is_zero() && self.im.is_zero()
+    }
+
+    fn set_zero(&mut self) {
+        self.re.set_zero();
+        self.im.set_zero();
+    }
+}
+
+impl<T: Zero + One + PartialEq + Sub<Output = T> + Clone> One for Complex<T> {
+    fn is_one(&self) -> bool
+    where
+        Self: PartialEq,
+    {
+        self.re.is_one() && self.im.is_zero()
+    }
+
+    fn one() -> Self {
+        Complex {
+            re: T::one(),
+            im: T::zero(),
+        }
+    }
+
+    fn set_one(&mut self) {
+        self.re.set_one();
+        self.im.set_zero();
+    }
+}
+
+pub trait FloatDerived<T: Float> {
+    fn norm(&self) -> T;
+
+    fn to_polar_coordinates(self) -> (T, T);
+    fn from_polar_coordinates(r: T, phi: T) -> Self;
+}
+
+impl<T: Float + for<'a> RefMul<&'a T, Output = T> + Add<T, Output = T>> FloatDerived<T>
+    for Complex<T>
+{
+    fn norm(&self) -> T {
+        self.norm_squared().sqrt()
+    }
+
+    #[inline]
+    fn to_polar_coordinates(self) -> (T, T)
+    where
+        T: num::Float,
+    {
+        (self.norm_squared().sqrt(), self.arg())
+    }
+
+    #[inline]
+    fn from_polar_coordinates(r: T, phi: T) -> Complex<T> {
+        Complex::new(r * phi.cos(), r * phi.sin())
+    }
+}
+
 impl<T> Complex<T> {
     pub fn map_ref<U>(&self, f: impl Fn(&T) -> U) -> Complex<U> {
         Complex {
@@ -574,26 +641,6 @@ impl<T> Complex<T> {
         }
     }
 
-    pub fn zero() -> Complex<T>
-    where
-        T: num::Zero,
-    {
-        Complex {
-            re: T::zero(),
-            im: T::zero(),
-        }
-    }
-
-    pub fn one() -> Complex<T>
-    where
-        T: num::One + num::Zero,
-    {
-        Complex {
-            re: T::one(),
-            im: T::zero(),
-        }
-    }
-
     pub fn ref_i(&self) -> Complex<T>
     where
         T: RefOne + RefZero,
@@ -627,13 +674,6 @@ impl<T> Complex<T> {
         Complex::new(self.re.clone(), -self.im.clone())
     }
 
-    pub fn norm(&self) -> T
-    where
-        T: num::Float + for<'a> RefMul<&'a T, Output = T> + Add<T, Output = T>,
-    {
-        self.norm_squared().sqrt()
-    }
-
     #[inline]
     pub fn i() -> Complex<T>
     where
@@ -662,23 +702,6 @@ impl<T> Complex<T> {
     {
         let n = self.norm_squared();
         Complex::new(self.re.ref_div(&n), -self.im.ref_div(&n))
-    }
-
-    #[inline]
-    pub fn to_polar_coordinates(self) -> (T, T)
-    where
-        T: num::Float,
-        T: for<'a> RefMul<&'a T, Output = T> + Add<T, Output = T>,
-    {
-        (self.norm_squared().sqrt(), self.arg())
-    }
-
-    #[inline]
-    pub fn from_polar_coordinates(r: T, phi: T) -> Complex<T>
-    where
-        T: num::Float,
-    {
-        Complex::new(r * phi.cos(), r * phi.sin())
     }
 }
 

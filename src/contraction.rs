@@ -470,7 +470,7 @@ where
         i: usize,
         j: usize,
     ) -> Result<Self::LCM, ContractionError> {
-        // println!("single contract dense dense");
+        trace!("single contract dense dense");
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = vec![zero.clone(); final_structure.size()?];
@@ -515,7 +515,7 @@ where
 {
     type LCM = DenseTensor<U::Out, I>;
     fn multi_contract(&self, other: &DenseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
-        // println!("multi contract dense dense");
+        trace!("multi contract dense dense");
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let (permutation, self_matches, other_matches) =
             self.structure().match_indices(other.structure()).unwrap();
@@ -607,7 +607,7 @@ where
         i: usize,
         j: usize,
     ) -> Result<Self::LCM, ContractionError> {
-        // println!("single contract sparse dense");
+        trace!("single contract sparse dense");
         if let Some((_, s)) = self.flat_iter().next() {
             let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
             let final_structure = self.structure.merge_at(&other.structure, (i, j));
@@ -666,7 +666,7 @@ where
         i: usize,
         j: usize,
     ) -> Result<Self::LCM, ContractionError> {
-        // println!("single contract dense sparse");
+        trace!("single contract dense sparse");
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = vec![zero.clone(); final_structure.size()?];
@@ -715,7 +715,7 @@ where
 {
     type LCM = DenseTensor<U::Out, I>;
     fn multi_contract(&self, other: &DenseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
-        // println!("multi contract sparse dense");
+        trace!("multi contract sparse dense");
         if let Some((_, s)) = self.flat_iter().next() {
             let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
             // let zero = other.data[0].try_upgrade().unwrap().as_ref().ref_zero();
@@ -775,7 +775,7 @@ where
     type LCM = DenseTensor<U::Out, I>;
 
     fn multi_contract(&self, other: &SparseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
-        // println!("multi contract dense sparse");
+        trace!("multi contract dense sparse");
         let zero = self.data[0].try_upgrade().unwrap().as_ref().ref_zero();
         let (permutation, self_matches, other_matches) =
             self.structure().match_indices(other.structure()).unwrap();
@@ -835,7 +835,7 @@ where
         i: usize,
         j: usize,
     ) -> Result<Self::LCM, ContractionError> {
-        // println!("single contract sparse sparse");
+        trace!("single contract sparse sparse");
 
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
         let mut result_data = AHashMap::default();
@@ -918,7 +918,7 @@ where
     type LCM = SparseTensor<U::Out, I>;
     #[allow(clippy::comparison_chain)]
     fn multi_contract(&self, other: &SparseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
-        // println!("multi contract sparse sparse");
+        trace!("multi contract sparse sparse");
         let (permutation, self_matches, other_matches) =
             self.structure().match_indices(other.structure()).unwrap();
 

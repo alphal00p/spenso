@@ -2,7 +2,6 @@
 use ahash::{AHashMap, AHashSet, HashMap};
 #[cfg(feature = "shadowing")]
 use anyhow::anyhow;
-use flexi_logger::init;
 #[cfg(feature = "shadowing")]
 use std::sync::Arc;
 use symbolica::id::PatternOrMap;
@@ -2277,7 +2276,6 @@ impl<'a> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
             // trace!("summand: {}", summand);
             let mut net = Self::try_from(summand)?;
             net.contract();
-            println!("{}", net.dot());
             match net.result_tensor() {
                 Ok(mut t) => {
                     if let Some(ref s) = net.scalar {

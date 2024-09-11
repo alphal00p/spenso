@@ -1,6 +1,6 @@
 use std::{
     iter::Sum,
-    ops::{AddAssign, Neg},
+    ops::{AddAssign, Neg, SubAssign},
 };
 
 use gat_lending_iterator::LendingIterator;
@@ -81,6 +81,18 @@ where
     fn add_assign(&mut self, rhs: DenseTensor<T, I>) {
         for (u, t) in self.data.iter_mut().zip(rhs.data.iter()) {
             *u += t;
+        }
+    }
+}
+
+impl<T, U, I> SubAssign<DenseTensor<T, I>> for DenseTensor<U, I>
+where
+    U: for<'a> SubAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn sub_assign(&mut self, rhs: DenseTensor<T, I>) {
+        for (u, t) in self.data.iter_mut().zip(rhs.data.iter()) {
+            *u -= t;
         }
     }
 }

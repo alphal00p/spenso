@@ -585,7 +585,7 @@ where
     .map(Slot::from)
     .collect();
 
-    gamma_data(structure)
+    gamma_data_dirac(structure)
 }
 #[cfg(feature = "shadowing")]
 pub fn gammasym<T>(
@@ -609,11 +609,11 @@ where
         None,
     ));
 
-    gamma_data(structure)
+    gamma_data_dirac(structure)
 }
 
 #[allow(clippy::similar_names)]
-pub fn gamma_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
+pub fn gamma_data_dirac<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Zero + One + Neg<Output = T> + Clone,
     N: TensorStructure,
@@ -648,6 +648,63 @@ where
     gamma.set(&[3, 3, 1], c1.clone()).unwrap();
 
     gamma //.to_dense()
+}
+
+#[allow(clippy::similar_names)]
+pub fn gamma_data_weyl<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
+where
+    T: Zero + One + Neg<Output = T> + Clone,
+    N: TensorStructure,
+{
+    let c1 = Complex::<T>::new(T::one(), T::zero());
+    let cn1 = Complex::<T>::new(-T::one(), T::zero());
+    let ci = Complex::<T>::new(T::zero(), T::one());
+    let cni = Complex::<T>::new(T::zero(), -T::one());
+    let mut gamma = SparseTensor::empty(structure);
+    // ! No check on actual structure, should expext bis,bis,lor
+
+    // dirac gamma matrices
+
+    gamma.set(&[0, 0, 2], c1.clone()).unwrap();
+    gamma.set(&[0, 1, 3], c1.clone()).unwrap();
+    gamma.set(&[0, 2, 0], c1.clone()).unwrap();
+    gamma.set(&[0, 3, 1], c1.clone()).unwrap();
+
+    gamma.set(&[1, 0, 3], c1.clone()).unwrap();
+    gamma.set(&[1, 1, 2], c1.clone()).unwrap();
+    gamma.set(&[1, 2, 1], cn1.clone()).unwrap();
+    gamma.set(&[1, 3, 0], cn1.clone()).unwrap();
+
+    gamma.set(&[2, 0, 3], cni.clone()).unwrap();
+    gamma.set(&[2, 1, 2], ci.clone()).unwrap();
+    gamma.set(&[2, 2, 1], ci.clone()).unwrap();
+    gamma.set(&[2, 3, 0], cni.clone()).unwrap();
+
+    gamma.set(&[3, 0, 2], c1.clone()).unwrap();
+    gamma.set(&[3, 1, 3], cn1.clone()).unwrap();
+    gamma.set(&[3, 2, 0], cn1.clone()).unwrap();
+    gamma.set(&[3, 3, 1], c1.clone()).unwrap();
+
+    gamma //.to_dense()
+}
+
+pub fn gamma0_weyl<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
+where
+    T: Zero + One + Clone,
+    N: TensorStructure,
+{
+    let c1 = Complex::<T>::new(T::one(), T::zero());
+    let mut gamma0 = SparseTensor::empty(structure);
+    // ! No check on actual structure, should expext bis,bis,lor
+
+    // dirac gamma0 matrices
+
+    gamma0.set(&[0, 2], c1.clone()).unwrap();
+    gamma0.set(&[1, 3], c1.clone()).unwrap();
+    gamma0.set(&[2, 0], c1.clone()).unwrap();
+    gamma0.set(&[3, 1], c1.clone()).unwrap();
+
+    gamma0
 }
 
 pub fn gamma5<T, I>(indices: [AbstractIndex; 2]) -> SparseTensor<Complex<T>, I>
@@ -726,7 +783,7 @@ where
         .map(|i| Euclidean::new_slot_selfless(4, i))
         .collect();
 
-    proj_m_data(structure)
+    proj_m_data_dirac(structure)
 }
 
 #[cfg(feature = "shadowing")]
@@ -744,11 +801,11 @@ where
         None,
     ));
 
-    proj_m_data(structure)
+    proj_m_data_dirac(structure)
 }
 
 #[allow(clippy::similar_names)]
-pub fn proj_m_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
+pub fn proj_m_data_dirac<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: Zero + One + NumCast + Clone,
     N: TensorStructure,
@@ -772,6 +829,22 @@ where
     proj_m
 }
 
+#[allow(clippy::similar_names)]
+pub fn proj_m_data_weyl<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
+where
+    T: Zero + One + NumCast + Clone,
+    N: TensorStructure,
+{
+    // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
+    let c1 = Complex::<T>::new(T::one(), T::zero());
+    let mut proj_m = SparseTensor::empty(structure);
+
+    proj_m.set(&[0, 0], c1.clone()).unwrap();
+    proj_m.set(&[1, 1], c1.clone()).unwrap();
+
+    proj_m
+}
+
 pub fn proj_p<T, I>(indices: [AbstractIndex; 2]) -> SparseTensor<Complex<T>, I>
 where
     T: NumCast + Zero + Clone,
@@ -783,7 +856,7 @@ where
         .map(|i| Bispinor::new_slot_selfless(4, i))
         .collect();
 
-    proj_p_data(structure)
+    proj_p_data_dirac(structure)
 }
 
 #[cfg(feature = "shadowing")]
@@ -801,10 +874,10 @@ where
         None,
     ));
 
-    proj_p_data(structure)
+    proj_p_data_dirac(structure)
 }
 
-pub fn proj_p_data<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
+pub fn proj_p_data_dirac<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
 where
     T: NumCast + Zero + Clone,
     N: TensorStructure,
@@ -841,6 +914,22 @@ where
         .unwrap_or_else(|_| unreachable!());
 
     proj_p
+}
+
+#[allow(clippy::similar_names)]
+pub fn proj_p_data_weyl<T, N>(structure: N) -> SparseTensor<Complex<T>, N>
+where
+    T: Zero + One + NumCast + Clone,
+    N: TensorStructure,
+{
+    // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
+    let c1 = Complex::<T>::new(T::one(), T::zero());
+    let mut proj_m = SparseTensor::empty(structure);
+
+    proj_m.set(&[2, 2], c1.clone()).unwrap();
+    proj_m.set(&[3, 3], c1.clone()).unwrap();
+
+    proj_m
 }
 
 pub fn sigma<T, I>(
@@ -1087,9 +1176,11 @@ mod test {
     #[test]
     fn data3() {
         let _ = env_logger::builder().is_test(true).try_init();
-        let g1 = Atom::parse("γ(aind(loru(4,1),bis(4,4),bis(4,3)))").unwrap();
+        let g1 = Atom::parse("γ(aind(loru(4,1),bis(4,3),bis(4,4)))").unwrap();
         let g2 = Atom::parse("γ(aind(loru(4,2),bis(4,3),bis(4,4)))").unwrap();
         let p = Atom::parse("p(aind(lord (4,1)))").unwrap();
+        let u = Atom::parse("u(aind(bis (4,3)))").unwrap();
+        let v = Atom::parse("v(aind(bis (4,4)))").unwrap();
 
         let q = Atom::parse("q(aind(lord (4,2)))").unwrap();
 
@@ -1123,136 +1214,150 @@ mod test {
             .result_tensor()
             .unwrap();
 
-        let g1_dense: ParamOrConcrete<RealOrComplexTensor<f64, _>, _> = g1_tensor
-            .clone()
-            .try_into_concrete()
+        let u_tensor = TensorNetwork::try_from(u.as_view())
             .unwrap()
-            .try_into_complex()
+            .result_tensor()
+            .unwrap();
+        let v_tensor = TensorNetwork::try_from(v.as_view())
             .unwrap()
-            .to_dense()
-            .into();
-
-        let g2_dense: ParamOrConcrete<RealOrComplexTensor<f64, _>, _> = g2_tensor
-            .clone()
-            .try_into_concrete()
-            .unwrap()
-            .try_into_complex()
-            .unwrap()
-            .to_dense()
-            .into();
-
-        let p_sparse: ParamOrConcrete<RealOrComplexTensor<f64, _>, _> = ParamOrConcrete::Param(
-            p_tensor
-                .clone()
-                .try_into_parametric()
-                .unwrap()
-                .tensor
-                .to_sparse()
-                .into(),
-        );
+            .result_tensor()
+            .unwrap();
 
         println!(
             "{}",
             g1_tensor
-                .contract(&g2_tensor)
-                .unwrap()
                 .contract(&p_tensor)
                 .unwrap()
-        );
-
-        println!(
-            "pslash gamma \n {}",
-            g1_tensor
-                .contract(&p_tensor)
+                .contract(&u_tensor)
                 .unwrap()
-                .contract(&g2_tensor)
-                .unwrap()
-        );
-
-        for (i, a) in g1_tensor
-            .contract(&p_tensor)
-            .unwrap()
-            .contract(&g2_tensor)
-            .unwrap()
-            .try_into_parametric()
-            .unwrap()
-            .tensor
-            .map_data(|a| a.expand())
-            .iter_flat()
-        {
-            print!("{}, ", a);
-        }
-
-        let prob = g1_tensor.contract(&p_tensor).unwrap();
-
-        println!("{}", prob);
-        println!("{:?}\n", prob.structure());
-
-        let q0 = Atom::parse("q(0)").unwrap();
-        let q1 = Atom::parse("q(1)").unwrap();
-        let q2 = Atom::parse("q(2)").unwrap();
-        let q3 = Atom::parse("q(3)").unwrap();
-        let i = Atom::parse("i").unwrap();
-        let z = Atom::new_num(0);
-        let q12 = &q1 + &i * &q2;
-        let bbar = &q1 - &i * &q2;
-
-        let spinstructureb = VecStructure::new(vec![
-            Bispinor::new_slot_selfless(4, 4).into(),
-            Bispinor::new_slot_selfless(4, 3).into(),
-        ]);
-
-        let b: DenseTensor<
-            Atom,
-            crate::structure::NamedStructure<SerializableSymbol, Vec<SerializableAtom>>,
-        > = DenseTensor::from_data(
-            vec![
-                q0.clone(),
-                z.clone(),
-                -q3.clone(),
-                -bbar.clone(), //
-                z.clone(),
-                q0.clone(),
-                -q12.clone(),
-                q3.clone(),
-                q3.clone(),
-                bbar,
-                -q0.clone(),
-                z.clone(),
-                q12,
-                -q3.clone(),
-                z,
-                -q0,
-            ],
-            spinstructureb.to_named(State::get_symbol("b").into(), None),
-        )
-        .unwrap();
-
-        println!("{}", b);
-
-        println!(
-            "pslash gamma \n {}",
-            g2_tensor
-                .contract(&p_tensor)
-                .unwrap()
-                .contract(&g1_tensor)
-                .unwrap()
-        );
-
-        let pslash = g1_tensor.contract(&p_tensor).unwrap();
-        let qslash = g2_tensor.contract(&q_tensor).unwrap();
-
-        println!(
-            "pslash * qslash\n {}",
-            pslash
-                .contract(&qslash)
+                .contract(&v_tensor)
                 .unwrap()
                 .scalar()
                 .unwrap()
                 .try_as_param()
                 .unwrap()
                 .expand()
+                .factor()
         );
+
+        println!(
+            "{}",
+            g2_tensor
+                .contract(&q_tensor)
+                .unwrap()
+                .contract(&u_tensor)
+                .unwrap()
+                .contract(&v_tensor)
+                .unwrap()
+                .scalar()
+                .unwrap()
+                .try_as_param()
+                .unwrap()
+                .expand()
+                .factor()
+        );
+        // println!(
+        //     "{}",
+        //     g1_tensor
+        //         .contract(&g2_tensor)
+        //         .unwrap()
+        //         .contract(&p_tensor)
+        //         .unwrap()
+        // );
+
+        // println!(
+        //     "pslash gamma \n {}",
+        //     g1_tensor
+        //         .contract(&p_tensor)
+        //         .unwrap()
+        //         .contract(&g2_tensor)
+        //         .unwrap()
+        // );
+
+        // for (i, a) in g1_tensor
+        //     .contract(&p_tensor)
+        //     .unwrap()
+        //     .contract(&g2_tensor)
+        //     .unwrap()
+        //     .try_into_parametric()
+        //     .unwrap()
+        //     .tensor
+        //     .map_data(|a| a.expand())
+        //     .iter_flat()
+        // {
+        //     print!("{}, ", a);
+        // }
+
+        // let prob = g1_tensor.contract(&p_tensor).unwrap();
+
+        // println!("{}", prob);
+        // println!("{:?}\n", prob.structure());
+
+        // let q0 = Atom::parse("q(0)").unwrap();
+        // let q1 = Atom::parse("q(1)").unwrap();
+        // let q2 = Atom::parse("q(2)").unwrap();
+        // let q3 = Atom::parse("q(3)").unwrap();
+        // let i = Atom::parse("i").unwrap();
+        // let z = Atom::new_num(0);
+        // let q12 = &q1 + &i * &q2;
+        // let bbar = &q1 - &i * &q2;
+
+        // let spinstructureb = VecStructure::new(vec![
+        //     Bispinor::new_slot_selfless(4, 4).into(),
+        //     Bispinor::new_slot_selfless(4, 3).into(),
+        // ]);
+
+        // let b: DenseTensor<
+        //     Atom,
+        //     crate::structure::NamedStructure<SerializableSymbol, Vec<SerializableAtom>>,
+        // > = DenseTensor::from_data(
+        //     vec![
+        //         q0.clone(),
+        //         z.clone(),
+        //         -q3.clone(),
+        //         -bbar.clone(), //
+        //         z.clone(),
+        //         q0.clone(),
+        //         -q12.clone(),
+        //         q3.clone(),
+        //         q3.clone(),
+        //         bbar,
+        //         -q0.clone(),
+        //         z.clone(),
+        //         q12,
+        //         -q3.clone(),
+        //         z,
+        //         -q0,
+        //     ],
+        //     spinstructureb.to_named(State::get_symbol("b").into(), None),
+        // )
+        // .unwrap();
+
+        // println!("{}", b);
+
+        // println!(
+        //     "pslash gamma \n {}",
+        //     g2_tensor
+        //         .contract(&p_tensor)
+        //         .unwrap()
+        //         .contract(&g1_tensor)
+        //         .unwrap()
+        // );
+
+        // let pslash = g1_tensor.contract(&p_tensor).unwrap();
+        // let qslash = g2_tensor.contract(&q_tensor).unwrap();
+
+        // println!(
+        //     "pslash * qslash\n {}",
+        //     pslash
+        //         .contract(&qslash)
+        //         .unwrap()
+        //         .scalar()
+        //         .unwrap()
+        //         .try_as_param()
+        //         .unwrap()
+        //         .expand()
+        // );
     }
 
     #[test]

@@ -1527,6 +1527,53 @@ fn parsing_addition_and_mul() {
     println!("Network res: {}", network.result_tensor().unwrap());
 }
 
+#[test]
+fn transpose() {
+    let a = DenseTensor::from_data(
+        vec![1, 2],
+        VecStructure::new(vec![Bispinor::new_slot_selfless(2, 1).into()]),
+    )
+    .unwrap();
+
+    let b = DenseTensor::from_data(
+        vec![3, 4],
+        VecStructure::new(vec![Bispinor::new_slot_selfless(2, 2).into()]),
+    )
+    .unwrap();
+    // let m = DenseTensor::from_data(
+    //     vec![0, 1, 0, 0],
+    //     VecStructure::new(vec![
+    //         Bispinor::new_slot_selfless(2, 2).into(),
+    //         Bispinor::new_slot_selfless(2, 1).into(),
+    //     ]),
+    // )
+    // .unwrap();
+
+    let mtranspose = DenseTensor::from_data(
+        vec![0, 1, 0, 0],
+        VecStructure::new(vec![
+            Bispinor::new_slot_selfless(2, 1).into(),
+            Bispinor::new_slot_selfless(2, 2).into(),
+        ]),
+    )
+    .unwrap();
+
+    let mdatatransposed = DenseTensor::from_data(
+        vec![0, 0, 1, 0],
+        VecStructure::new(vec![
+            Bispinor::new_slot_selfless(2, 2).into(),
+            Bispinor::new_slot_selfless(2, 1).into(),
+        ]),
+    )
+    .unwrap();
+
+    let ftranspose = a.contract(&mtranspose).unwrap().contract(&b).unwrap();
+
+    let fdatatransposed = a.contract(&mdatatransposed).unwrap().contract(&b).unwrap();
+
+    assert_eq!(fdatatransposed.data(), ftranspose.data());
+}
+
 #[cfg(feature = "shadowing")]
 #[test]
 fn slotmap() {
@@ -1565,5 +1612,3 @@ fn slotmap() {
     let mut hasher = DefaultHasher::new();
     p.hash(&mut hasher);
 }
-
-

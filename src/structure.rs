@@ -1799,10 +1799,10 @@ pub trait ToSymbolic: TensorStructure {
             Ok(match name {
                 _ if name == identity => ufo::identity_data::<f64, Self>(self).into(),
 
-                _ if name == gamma => ufo::gamma_data(self).into(),
+                _ if name == gamma => ufo::gamma_data_dirac(self).into(),
                 _ if name == gamma5 => ufo::gamma5_dirac_data(self).into(),
-                _ if name == proj_m => ufo::proj_m_data(self).into(),
-                _ if name == proj_p => ufo::proj_p_data(self).into(),
+                _ if name == proj_m => ufo::proj_m_data_dirac(self).into(),
+                _ if name == proj_p => ufo::proj_p_data_dirac(self).into(),
                 _ if name == sigma => ufo::sigma_data(self).into(),
                 _ if name == metric => ufo::metric_data::<f64, Self>(self).into(),
                 _ => MixedTensor::param(self.to_dense_expanded_labels()?.into()),
@@ -3564,10 +3564,10 @@ pub trait Shadowable:
                     ufo::identity_data::<f64, Self::Structure>(self.structure().clone()).into()
                 }
 
-                _ if name == gamma => ufo::gamma_data(self.structure().clone()).into(),
-                _ if name == gamma5 => ufo::gamma5_dirac_data(self.structure().clone()).into(),
-                _ if name == proj_m => ufo::proj_m_data(self.structure().clone()).into(),
-                _ if name == proj_p => ufo::proj_p_data(self.structure().clone()).into(),
+                _ if name == gamma => ufo::gamma_data_weyl(self.structure().clone()).into(),
+                _ if name == gamma5 => ufo::gamma5_weyl_data(self.structure().clone()).into(),
+                _ if name == proj_m => ufo::proj_m_data_weyl(self.structure().clone()).into(),
+                _ if name == proj_p => ufo::proj_p_data_weyl(self.structure().clone()).into(),
                 _ if name == sigma => ufo::sigma_data(self.structure().clone()).into(),
                 _ if name == metric => {
                     ufo::metric_data::<f64, Self::Structure>(self.structure().clone()).into()

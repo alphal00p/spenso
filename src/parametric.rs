@@ -48,7 +48,7 @@ use symbolica::{
         CompileOptions, CompiledCode, CompiledEvaluator, CompiledEvaluatorFloat, EvalTree,
         EvaluationFn, ExportedCode, Expression, ExpressionEvaluator, FunctionMap, InlineASM,
     },
-    id::{Condition, MatchSettings, Pattern, PatternOrMap, Replacement, WildcardAndRestriction},
+    id::{Condition, MatchSettings, Pattern, PatternOrMap, PatternRestriction, Replacement},
     poly::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Exponent,
         Variable,
@@ -560,9 +560,9 @@ pub enum ParamOrComposite {
 impl<S: TensorStructure, O: From<S> + TensorStructure> CastStructure<ParamTensor<O>>
     for ParamTensor<S>
 {
-    fn cast(self) -> ParamTensor<O> {
+    fn cast_structure(self) -> ParamTensor<O> {
         ParamTensor {
-            tensor: self.tensor.cast(),
+            tensor: self.tensor.cast_structure(),
             param_type: self.param_type,
         }
     }
@@ -690,7 +690,7 @@ pub trait PatternReplacement {
         &self,
         pattern: &Pattern,
         rhs: &PatternOrMap,
-        conditions: Option<&Condition<WildcardAndRestriction>>,
+        conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self;
 
@@ -698,7 +698,7 @@ pub trait PatternReplacement {
         &mut self,
         pattern: &Pattern,
         rhs: &PatternOrMap,
-        conditions: Option<&Condition<WildcardAndRestriction>>,
+        conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     );
 
@@ -712,7 +712,7 @@ impl<S: TensorStructure + Clone> PatternReplacement for ParamTensor<S> {
         &self,
         pattern: &Pattern,
         rhs: &PatternOrMap,
-        conditions: Option<&Condition<WildcardAndRestriction>>,
+        conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self {
         let tensor = self
@@ -728,7 +728,7 @@ impl<S: TensorStructure + Clone> PatternReplacement for ParamTensor<S> {
         &mut self,
         pattern: &Pattern,
         rhs: &PatternOrMap,
-        conditions: Option<&Condition<WildcardAndRestriction>>,
+        conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     ) {
         *self = self.replace_all(pattern, rhs, conditions, settings)
@@ -914,10 +914,10 @@ impl<
         O: From<S> + TensorStructure + Clone,
     > CastStructure<ParamOrConcrete<U, O>> for ParamOrConcrete<C, S>
 {
-    fn cast(self) -> ParamOrConcrete<U, O> {
+    fn cast_structure(self) -> ParamOrConcrete<U, O> {
         match self {
-            ParamOrConcrete::Concrete(c) => ParamOrConcrete::Concrete(c.cast()),
-            ParamOrConcrete::Param(p) => ParamOrConcrete::Param(p.cast()),
+            ParamOrConcrete::Concrete(c) => ParamOrConcrete::Concrete(c.cast_structure()),
+            ParamOrConcrete::Param(p) => ParamOrConcrete::Param(p.cast_structure()),
         }
     }
 }
@@ -994,7 +994,8 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> Pattern
         &self,
         pattern: &Pattern,
         rhs: &PatternOrMap,
-        conditions: Option<&Condition<WildcardAndRestriction>>,
+
+        conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self {
         match self {
@@ -1018,7 +1019,8 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> Pattern
         &mut self,
         pattern: &Pattern,
         rhs: &PatternOrMap,
-        conditions: Option<&Condition<WildcardAndRestriction>>,
+
+        conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     ) {
         if let ParamOrConcrete::Param(p) = self {
@@ -2012,7 +2014,21 @@ impl<S: TensorStructure + Clone>
     }
 }
 
+pub type LinearizedEvalTensor<T, S> = EvalTensor<ExpressionEvaluator<T>, S>;
+
 impl<T, S> EvalTensor<ExpressionEvaluator<T>, S> {
+    pub fn map_coeff<T2, F: Fn(&T) -> T2>(self, f: &F) -> LinearizedEvalTensor<T2, S>
+    where
+        T: Clone + PartialEq + Default,
+        S: Clone,
+    {
+        LinearizedEvalTensor {
+            eval: self.eval.map_coeff(f),
+            indexmap: self.indexmap,
+            structure: self.structure,
+        }
+        // self.map_data_ref(|x| x.map_coeff(f))
+    }
     pub fn export_cpp(
         &self,
         filename: &str,

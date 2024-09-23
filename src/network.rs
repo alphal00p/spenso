@@ -2,10 +2,9 @@
 use ahash::{AHashMap, AHashSet, HashMap};
 #[cfg(feature = "shadowing")]
 use anyhow::anyhow;
-use gat_lending_iterator::ToLendingIterator;
 #[cfg(feature = "shadowing")]
 use std::sync::Arc;
-use symbolica::id::PatternOrMap;
+use symbolica::id::{PatternOrMap, PatternRestriction};
 
 // use log::trace;
 use serde::{Deserialize, Serialize};
@@ -27,7 +26,7 @@ use symbolica::{
         CompileOptions, CompiledCode, CompiledEvaluator, EvalTree, EvaluationFn, ExportedCode,
         ExpressionEvaluator, FunctionMap, InlineASM,
     },
-    id::{Condition, MatchSettings, Pattern, Replacement, WildcardAndRestriction},
+    id::{Condition, MatchSettings, Pattern, Replacement},
     poly::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Exponent,
         Variable,
@@ -1586,7 +1585,7 @@ where
         &self,
         pattern: &Pattern,
         rhs: &PatternOrMap,
-        conditions: Option<&Condition<WildcardAndRestriction>>,
+        conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self {
         let graph = self
@@ -1605,7 +1604,7 @@ where
         &mut self,
         pattern: &Pattern,
         rhs: &PatternOrMap,
-        conditions: Option<&Condition<WildcardAndRestriction>>,
+        conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     ) {
         self.graph
@@ -2284,16 +2283,15 @@ where
                 format!("node{}", i.data().as_ffi())
             };
 
-            let id = rich.add_node_with_edges_fn(
-                name,
-                &[DisplayOption::Some(n.clone())],
-                |s, so| match (s, so) {
-                    (DisplayOption::Some(s), DisplayOption::Some(so)) => {
-                        (s.matches(so), Direction::None)
+            let id =
+                rich.add_node_with_edges_fn(name, &[DisplayOption::Some(*n)], |s, so| {
+                    match (s, so) {
+                        (DisplayOption::Some(s), DisplayOption::Some(so)) => {
+                            (s.matches(so), Direction::None)
+                        }
+                        _ => (false, Direction::None),
                     }
-                    _ => (false, Direction::None),
-                },
-            );
+                });
             node_links.entry(node).or_insert(Vec::new()).push(id);
         }
 
@@ -2379,7 +2377,7 @@ where
         &self,
         pattern: &Pattern,
         rhs: &PatternOrMap,
-        conditions: Option<&Condition<WildcardAndRestriction>>,
+        conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self
     where
@@ -2626,7 +2624,7 @@ impl<T: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>, S> TensorNet
         U::Structure: From<T::Structure> + TensorStructure<Slot = T::Slot>,
     {
         TensorNetwork {
-            graph: self.graph.map_nodes(|(_, x)| x.cast()),
+            graph: self.graph.map_nodes(|(_, x)| x.cast_structure()),
             scalar: self.scalar,
         }
     }

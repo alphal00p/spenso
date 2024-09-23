@@ -1368,10 +1368,10 @@ impl<T: Display, S: TensorStructure> Display for RealOrComplexTensor<T, S> {
 impl<T: Clone, S: TensorStructure, O: From<S> + TensorStructure>
     CastStructure<RealOrComplexTensor<T, O>> for RealOrComplexTensor<T, S>
 {
-    fn cast(self) -> RealOrComplexTensor<T, O> {
+    fn cast_structure(self) -> RealOrComplexTensor<T, O> {
         match self {
-            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.cast()),
-            RealOrComplexTensor::Complex(d) => RealOrComplexTensor::Complex(d.cast()),
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.cast_structure()),
+            RealOrComplexTensor::Complex(d) => RealOrComplexTensor::Complex(d.cast_structure()),
         }
     }
 }

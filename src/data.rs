@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use smartstring::alias::String;
 use std::{
     borrow::Cow,
-    fmt::Display,
+    fmt::{Display, LowerExp},
     hash::Hash,
     ops::{Index, IndexMut},
 };
@@ -167,7 +167,7 @@ impl<T, U: From<T> + Clone, I: TensorStructure + Clone> CastData<SparseTensor<U,
 impl<T, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<SparseTensor<T, O>>
     for SparseTensor<T, S>
 {
-    fn cast(self) -> SparseTensor<T, O> {
+    fn cast_structure(self) -> SparseTensor<T, O> {
         SparseTensor {
             elements: self.elements,
             structure: self.structure.into(),
@@ -651,7 +651,7 @@ impl<T, U: From<T> + Clone, I: TensorStructure + Clone> CastData<DenseTensor<U, 
 impl<T, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<DenseTensor<T, O>>
     for DenseTensor<T, S>
 {
-    fn cast(self) -> DenseTensor<T, O> {
+    fn cast_structure(self) -> DenseTensor<T, O> {
         DenseTensor {
             data: self.data,
             structure: self.structure.into(),
@@ -719,6 +719,16 @@ impl<T: Display, I: TensorStructure> std::fmt::Display for DenseTensor<T, I> {
         let mut s = String::new();
         for (i, v) in self.iter_expanded() {
             s.push_str(&format!("{}: {}\n", i, v));
+        }
+        write!(f, "{}", s)
+    }
+}
+
+impl<T: LowerExp, I: TensorStructure> std::fmt::LowerExp for DenseTensor<T, I> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+        for (i, v) in self.iter_expanded() {
+            s.push_str(&format!("{}: {:+e}\n", i, v));
         }
         write!(f, "{}", s)
     }
@@ -1163,10 +1173,10 @@ impl<T: Clone, U: From<T> + Clone, I: TensorStructure + Clone> CastData<DataTens
 impl<T: Clone, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<DataTensor<T, O>>
     for DataTensor<T, S>
 {
-    fn cast(self) -> DataTensor<T, O> {
+    fn cast_structure(self) -> DataTensor<T, O> {
         match self {
-            DataTensor::Dense(d) => DataTensor::Dense(d.cast()),
-            DataTensor::Sparse(d) => DataTensor::Sparse(d.cast()),
+            DataTensor::Dense(d) => DataTensor::Dense(d.cast_structure()),
+            DataTensor::Sparse(d) => DataTensor::Sparse(d.cast_structure()),
         }
     }
 }

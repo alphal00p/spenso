@@ -665,25 +665,25 @@ where
 
     // dirac gamma matrices
 
-    gamma.set(&[0, 2, 0], c1.clone()).unwrap();
-    gamma.set(&[0, 3, 1], c1.clone()).unwrap();
     gamma.set(&[0, 0, 2], c1.clone()).unwrap();
     gamma.set(&[0, 1, 3], c1.clone()).unwrap();
+    gamma.set(&[0, 2, 0], c1.clone()).unwrap();
+    gamma.set(&[0, 3, 1], c1.clone()).unwrap();
 
-    gamma.set(&[1, 3, 0], c1.clone()).unwrap();
-    gamma.set(&[1, 2, 1], c1.clone()).unwrap();
-    gamma.set(&[1, 1, 2], cn1.clone()).unwrap();
-    gamma.set(&[1, 0, 3], cn1.clone()).unwrap();
+    gamma.set(&[1, 0, 3], c1.clone()).unwrap();
+    gamma.set(&[1, 1, 2], c1.clone()).unwrap();
+    gamma.set(&[1, 2, 1], cn1.clone()).unwrap();
+    gamma.set(&[1, 3, 0], cn1.clone()).unwrap();
 
-    gamma.set(&[2, 3, 0], cni.clone()).unwrap();
-    gamma.set(&[2, 2, 1], ci.clone()).unwrap();
-    gamma.set(&[2, 1, 2], ci.clone()).unwrap();
     gamma.set(&[2, 0, 3], cni.clone()).unwrap();
+    gamma.set(&[2, 1, 2], ci.clone()).unwrap();
+    gamma.set(&[2, 2, 1], ci.clone()).unwrap();
+    gamma.set(&[2, 3, 0], cni.clone()).unwrap();
 
-    gamma.set(&[3, 2, 0], c1.clone()).unwrap();
-    gamma.set(&[3, 3, 1], cn1.clone()).unwrap();
-    gamma.set(&[3, 0, 2], cn1.clone()).unwrap();
-    gamma.set(&[3, 1, 3], c1.clone()).unwrap();
+    gamma.set(&[3, 0, 2], c1.clone()).unwrap();
+    gamma.set(&[3, 1, 3], cn1.clone()).unwrap();
+    gamma.set(&[3, 2, 0], cn1.clone()).unwrap();
+    gamma.set(&[3, 3, 1], c1.clone()).unwrap();
 
     gamma //.to_dense()
 }
@@ -1055,14 +1055,12 @@ where
 
 #[cfg(test)]
 mod test {
-    use bitvec::{access::BitSafeUsize, vec};
     use symbolica::{atom::Atom, state::State};
 
     use crate::{
-        complex::{RealOrComplex, RealOrComplexTensor},
+        complex::RealOrComplexTensor,
         contraction::Contract,
-        data::{DenseTensor, HasTensorData},
-        iterators::IteratableTensor,
+        data::DenseTensor,
         network::TensorNetwork,
         parametric::{ParamOrConcrete, SerializableAtom},
         structure::{

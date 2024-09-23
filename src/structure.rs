@@ -1642,7 +1642,7 @@ pub trait HasStructure {
 }
 
 pub trait CastStructure<O: HasStructure<Structure: From<Self::Structure>>>: HasStructure {
-    fn cast(self) -> O;
+    fn cast_structure(self) -> O;
 }
 
 pub struct Tensor<Store, Structure> {
@@ -2354,8 +2354,40 @@ impl<S: DualSlotTo<Dual = S, R: RepName>> StructureContract for Vec<S> {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub struct IndexLess<T: RepName> {
+pub struct IndexLess<T: RepName = PhysReps> {
     pub structure: Vec<Representation<T>>,
+}
+
+impl From<VecStructure> for IndexLess<PhysReps> {
+    fn from(structure: VecStructure) -> Self {
+        IndexLess {
+            structure: structure.into_iter().map(|a| a.rep).collect(),
+        }
+    }
+}
+
+impl From<ContractionCountStructure> for IndexLess {
+    fn from(structure: ContractionCountStructure) -> Self {
+        structure.structure.into()
+    }
+}
+
+impl<N, A> From<NamedStructure<N, A>> for IndexLess {
+    fn from(structure: NamedStructure<N, A>) -> Self {
+        structure.structure.into()
+    }
+}
+
+impl<N, A> From<SmartShadowStructure<N, A>> for IndexLess {
+    fn from(structure: SmartShadowStructure<N, A>) -> Self {
+        structure.structure.into()
+    }
+}
+
+impl<N, A> From<HistoryStructure<N, A>> for IndexLess {
+    fn from(structure: HistoryStructure<N, A>) -> Self {
+        structure.external.into()
+    }
 }
 
 impl<T: RepName> IndexLess<T> {
@@ -3703,7 +3735,7 @@ impl<S: TensorStructure> TensorShell<S> {
 impl<S: TensorStructure, O: From<S> + TensorStructure> CastStructure<TensorShell<O>>
     for TensorShell<S>
 {
-    fn cast(self) -> TensorShell<O> {
+    fn cast_structure(self) -> TensorShell<O> {
         TensorShell {
             structure: self.structure.into(),
         }

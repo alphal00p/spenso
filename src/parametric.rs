@@ -2681,16 +2681,16 @@ impl From<SerializableAtom> for Atom {
         atom.0
     }
 }
-impl FallibleMul for SerializableAtom {
-    type Output = SerializableAtom;
-    fn mul_fallible(&self, rhs: &Self) -> Option<Self::Output> {
-        Some(SerializableAtom(&self.0 * &rhs.0))
-    }
-}
+// impl FallibleMul for SerializableAtom {
+//     type Output = SerializableAtom;
+//     fn mul_fallible(&self, rhs: &Self) -> Option<Self::Output> {
+//         Some(SerializableAtom(&self.0 * &rhs.0))
+//     }
+// }
 
-impl FallibleAdd<SerializableAtom> for SerializableAtom {
-    type Output = SerializableAtom;
-    fn add_fallible(&self, rhs: &Self) -> Option<Self::Output> {
-        Some(SerializableAtom(&self.0 + &rhs.0))
-    }
-}
+// impl FallibleAdd<SerializableAtom> for SerializableAtom {
+//     type Output = SerializableAtom;
+//     fn add_fallible(&self, rhs: &Self) -> Option<Self::Output> {
+//         Some(SerializableAtom(&self.0 + &rhs.0))
+//     }
+// }

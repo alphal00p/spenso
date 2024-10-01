@@ -1457,15 +1457,7 @@ fn test_fallible_mul() {
 
 #[test]
 #[cfg(feature = "shadowing")]
-fn get_license_key() {
-    use symbolica::LicenseManager;
-
-    LicenseManager::new();
-
-    // let b = Euclidean {}.new(4.into());
-
-    // let matches = a.matches(&adual);
-}
+fn get_license_key() {}
 
 #[test]
 fn duals() {

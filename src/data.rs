@@ -311,6 +311,16 @@ where
 }
 
 impl<T, S: TensorStructure> SparseTensor<T, S> {
+    pub fn map_structure<S2>(self, f: impl Fn(S) -> S2) -> SparseTensor<T, S2>
+    where
+        S2: TensorStructure,
+    {
+        SparseTensor {
+            elements: self.elements,
+            structure: f(self.structure),
+        }
+    }
+
     pub fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> SparseTensor<U, S>
     where
         // T: Clone,
@@ -1041,6 +1051,16 @@ where
 }
 
 impl<T, S: TensorStructure> DenseTensor<T, S> {
+    pub fn map_structure<S2>(self, f: impl Fn(S) -> S2) -> DenseTensor<T, S2>
+    where
+        S2: TensorStructure,
+    {
+        DenseTensor {
+            data: self.data,
+            structure: f(self.structure),
+        }
+    }
+
     pub fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> DenseTensor<U, S>
     where
         // T: Clone,
@@ -1293,6 +1313,13 @@ where
 }
 
 impl<T, S: TensorStructure> DataTensor<T, S> {
+    pub fn map_structure<S2: TensorStructure>(self, f: impl Fn(S) -> S2) -> DataTensor<T, S2> {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_structure(f)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_structure(f)),
+        }
+    }
+
     pub fn map_data_ref_result<U, E>(
         &self,
         f: impl Fn(&T) -> Result<U, E>,

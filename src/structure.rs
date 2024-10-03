@@ -1299,6 +1299,26 @@ impl<T: RepName> Slot<T> {
             },
         }
     }
+
+    pub fn kroneker_atom(&self, other: &Slot<T::Dual>) -> Atom {
+        let value_builder = FunctionBuilder::new(State::get_symbol("id"));
+
+        let indices = FunctionBuilder::new(State::get_symbol("aind"))
+            .add_arg(&self.to_symbolic())
+            .add_arg(&other.to_symbolic())
+            .finish();
+        value_builder.add_arg(&indices).finish()
+    }
+
+    pub fn metric_atom(&self, other: &Slot<T>) -> Atom {
+        let value_builder = FunctionBuilder::new(State::get_symbol("metric"));
+
+        let indices = FunctionBuilder::new(State::get_symbol("aind"))
+            .add_arg(&self.to_symbolic())
+            .add_arg(&other.to_symbolic())
+            .finish();
+        value_builder.add_arg(&indices).finish()
+    }
 }
 
 #[derive(Error, Debug)]

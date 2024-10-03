@@ -2582,6 +2582,12 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SerializableAtom(pub Atom);
 
+impl Default for SerializableAtom {
+    fn default() -> Self {
+        SerializableAtom(Atom::default())
+    }
+}
+
 impl SerializableAtom {
     pub fn replace_repeat(&mut self, lhs: Pattern, rhs: PatternOrMap) {
         let atom = self.0.replace_all(&lhs, &rhs, None, None);

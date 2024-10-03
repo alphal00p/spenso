@@ -8,6 +8,7 @@ use symbolica::{atom::Atom, domains::float::Real};
 use crate::{
     data::{DataIterator, DataTensor, DenseTensor, NumTensor, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
+    parametric::SerializableAtom,
     structure::{HasStructure, IsAbstractSlot, StructureContract, TensorStructure},
     upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade},
 };
@@ -325,6 +326,13 @@ pub trait RefOne {
 impl RefZero for Atom {
     fn ref_zero(&self) -> Self {
         Atom::new_num(0)
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl RefZero for SerializableAtom {
+    fn ref_zero(&self) -> Self {
+        Atom::new_num(0).into()
     }
 }
 

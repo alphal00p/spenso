@@ -85,6 +85,13 @@ where
     fn is_zero(&self) -> bool {
         self.re.is_zero() && self.im.is_zero()
     }
+
+    fn from_rational(&self, rat: &Rational) -> Self {
+        Complex {
+            re: self.re.from_rational(rat),
+            im: self.im.zero(),
+        }
+    }
 }
 
 #[cfg(feature = "shadowing")]

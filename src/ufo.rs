@@ -1170,7 +1170,7 @@ mod test {
 
         println!("{}", net.result_tensor().unwrap());
     }
-
+    #[allow(clippy::type_complexity)]
     #[test]
     fn data3() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -1389,10 +1389,10 @@ mod test {
         let abar = &p1 - &i * &p2;
         let z = Atom::new_num(0);
 
-        let q0 = Atom::parse("q(0)").unwrap();
-        let q1 = Atom::parse("q(1)").unwrap();
-        let q2 = Atom::parse("q(2)").unwrap();
-        let q3 = Atom::parse("q(3)").unwrap();
+        let _q0 = Atom::parse("q(0)").unwrap();
+        let _q1 = Atom::parse("q(1)").unwrap();
+        let _q2 = Atom::parse("q(2)").unwrap();
+        let _q3 = Atom::parse("q(3)").unwrap();
 
         let a: DenseTensor<
             Atom,

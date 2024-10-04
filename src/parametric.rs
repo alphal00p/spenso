@@ -27,9 +27,7 @@ use crate::{
         NamedStructure, PhysicalSlots, ScalarStructure, ScalarTensor, ShadowMapping, Shadowable,
         StructureContract, TensorStructure, ToSymbolic, TracksCount,
     },
-    upgrading_arithmetic::{
-        FallibleAdd, FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade,
-    },
+    upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade},
 };
 
 use symbolica::{
@@ -2579,14 +2577,8 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct SerializableAtom(pub Atom);
-
-impl Default for SerializableAtom {
-    fn default() -> Self {
-        SerializableAtom(Atom::default())
-    }
-}
 
 impl SerializableAtom {
     pub fn replace_repeat(&mut self, lhs: Pattern, rhs: PatternOrMap) {

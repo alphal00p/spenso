@@ -104,7 +104,7 @@ where
 {
     #[inline]
     fn mul_add(&self, a: &Self, b: &Self) -> Self {
-        self.clone() + (a.clone() * b)
+        self.clone() * a + b.clone()
     }
 
     #[inline]

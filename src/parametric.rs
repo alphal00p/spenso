@@ -279,6 +279,51 @@ pub struct ParamTensor<S: TensorStructure> {
     // Composite(DataTensor<Atom, S>),
 }
 
+impl<S: TensorStructure> ParamTensor<S> {
+    pub fn map_structure<S2: TensorStructure>(self, f: impl Fn(S) -> S2) -> ParamTensor<S2> {
+        ParamTensor {
+            tensor: self.tensor.map_structure(f),
+            param_type: self.param_type,
+        }
+    }
+
+    pub fn map_data_ref(&self, f: impl Fn(&Atom) -> Atom) -> ParamTensor<S>
+    where
+        S: Clone,
+    {
+        ParamTensor {
+            tensor: self.tensor.map_data_ref(f),
+            param_type: self.param_type,
+        }
+    }
+
+    pub fn map_data(self, f: impl Fn(Atom) -> Atom) -> ParamTensor<S> {
+        ParamTensor {
+            tensor: self.tensor.map_data(f),
+            param_type: self.param_type,
+        }
+    }
+
+    pub fn map_data_mut(&mut self, f: impl FnMut(&mut Atom))
+    where
+        S: Clone,
+    {
+        self.tensor.map_data_mut(f)
+    }
+
+    pub fn map_data_ref_mut<U>(&mut self, f: impl FnMut(&mut Atom) -> Atom) -> ParamTensor<S>
+    where
+        // T: Clone,
+        // U: Clone,
+        S: Clone,
+    {
+        ParamTensor {
+            tensor: self.tensor.map_data_ref_mut(f),
+            param_type: self.param_type,
+        }
+    }
+}
+
 impl<S> From<DataTensor<Atom, S>> for ParamTensor<S>
 where
     S: TensorStructure + Clone,

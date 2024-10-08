@@ -33,8 +33,8 @@ use crate::{
     },
     network::TensorNetwork,
     structure::{
-        AbstractIndex, BaseRepName, ColorAdjoint, ColorFundamental, Dimension, DualSlotTo,
-        Euclidean, ExpandedIndex, FlatIndex, HasStructure, HistoryStructure, Lorentz,
+        AbstractIndex, BaseRepName, Bispinor, ColorAdjoint, ColorFundamental, Dimension,
+        DualSlotTo, Euclidean, ExpandedIndex, FlatIndex, HasStructure, HistoryStructure, Lorentz,
         NamedStructure, NoArgs, PhysReps, PhysicalSlots, RepName, Representation, Slot,
         StructureContract, TensorStructure, VecStructure,
     },
@@ -45,7 +45,7 @@ use crate::{
 use crate::{
     iterators::IteratableTensor,
     parametric::{MixedTensor, ParamTensor},
-    structure::{Bispinor, Shadowable, TensorShell, ToSymbolic},
+    structure::{Shadowable, TensorShell, ToSymbolic},
     symbolic::SymbolicTensor,
     upgrading_arithmetic::TryIntoUpgrade,
 };
@@ -1401,7 +1401,6 @@ fn symbolic_contract() {
 }
 
 #[test]
-
 fn test_fallible_mul() {
     let a: i32 = 4;
     let b: f64 = 4.;

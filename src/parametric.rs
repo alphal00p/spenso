@@ -25,7 +25,7 @@ use crate::{
     structure::{
         CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, IntoArgs, IntoSymbol,
         NamedStructure, PhysicalSlots, ScalarStructure, ScalarTensor, ShadowMapping, Shadowable,
-        StructureContract, TensorStructure, ToSymbolic, TracksCount,
+        StructureContract, TensorStructure, ToSymbolic, TracksCount, VecStructure,
     },
     upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade},
 };
@@ -271,7 +271,7 @@ impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<A
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ParamTensor<S: TensorStructure> {
+pub struct ParamTensor<S: TensorStructure = VecStructure> {
     pub tensor: DataTensor<Atom, S>,
     pub param_type: ParamOrComposite,
     // Param(DataTensor<Atom, S>),

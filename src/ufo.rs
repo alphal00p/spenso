@@ -1055,21 +1055,25 @@ where
 
 #[cfg(test)]
 mod test {
+    #[cfg(feature = "shadowing")]
     use symbolica::{atom::Atom, state::State};
 
+    #[cfg(feature = "shadowing")]
     use crate::{
         complex::RealOrComplexTensor,
-        contraction::Contract,
         data::DenseTensor,
         network::TensorNetwork,
+        structure::{BaseRepName, Bispinor, HasStructure, TensorStructure, VecStructure},
+    };
+
+    #[cfg(feature = "shadowing")]
+    use crate::{
         parametric::{ParamOrConcrete, SerializableAtom},
-        structure::{
-            BaseRepName, Bispinor, HasStructure, SerializableSymbol, Shadowable, TensorStructure,
-            VecStructure,
-        },
+        structure::{SerializableSymbol, Shadowable},
     };
 
     #[test]
+    #[cfg(feature = "shadowing")]
     fn clifford() {
         let expr = Atom::parse(
             "γ(aind(bis(4,4),bis(4,3),lord(4,1)))*γ(aind(bis(4,3),bis(4,4),lord(4,2)))+γ(aind(bis(4,4),bis(4,3),lord(4,2)))*γ(aind(bis(4,3),bis(4,4),lord(4,1)))",
@@ -1085,6 +1089,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "shadowing")]
     fn clifford2() {
         let expr = Atom::parse(
             "γ(aind(lord(4,1),bis(4,4),bis(4,3)))*γ(aind(lord(4,2),bis(4,3),bis(4,1)))+γ(aind(lord(4,2),bis(4,4),bis(4,3)))*γ(aind(lord(4,1),bis(4,3),bis(4,1)))",
@@ -1100,6 +1105,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "shadowing")]
     fn gamma_algebra() {
         let _ = env_logger::builder().is_test(true).try_init();
         let expr = Atom::parse("γ(aind(lord(4,1),bis(4,4),bis(4,3)))*Q(1,aind(loru(4,1)))*γ(aind(lord(4,2),bis(4,3),bis(4,4)))*Q(2,aind(loru(4,2)))").unwrap();
@@ -1120,6 +1126,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "shadowing")]
     fn gamma_algebra2() {
         let expr = Atom::parse(
             "γ(aind(loru(4,1),bis(4,4),bis(4,3)))*γ(aind(lord(4,1),bis(4,1),bis(4,2)))",
@@ -1134,6 +1141,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "shadowing")]
     fn data() {
         let _ = env_logger::builder().is_test(true).try_init();
         let expr = Atom::parse(
@@ -1157,6 +1165,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "shadowing")]
     fn data2() {
         let _ = env_logger::builder().is_test(true).try_init();
         let expr = Atom::parse(
@@ -1172,6 +1181,7 @@ mod test {
     }
     #[allow(clippy::type_complexity)]
     #[test]
+    #[cfg(feature = "shadowing")]
     fn data3() {
         let _ = env_logger::builder().is_test(true).try_init();
         let g1 = Atom::parse("γ(aind(loru(4,1),bis(4,3),bis(4,4)))").unwrap();
@@ -1359,6 +1369,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "shadowing")]
     fn data4() {
         let _ = env_logger::builder().is_test(true).try_init();
         let expr = Atom::parse("A(aind(loru(4,1),bis(4,4),bis(4,3)))*B(aind(lord(4,1)))").unwrap();
@@ -1374,6 +1385,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "shadowing")]
     fn data5() {
         let spinstructure = VecStructure::new(vec![
             Bispinor::new_slot_selfless(4, 3).into(),
@@ -1477,6 +1489,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "shadowing")]
     fn data6() {
         let spinstructure = VecStructure::new(vec![
             Bispinor::new_slot_selfless(4, 3).into(),

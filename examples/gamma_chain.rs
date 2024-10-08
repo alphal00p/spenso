@@ -1,7 +1,9 @@
 // Gamma chain example
 
+#[cfg(feature = "shadowing")]
 use std::{collections::HashSet, time::Instant};
 
+#[cfg(feature = "shadowing")]
 use num::traits::ToPrimitive;
 
 #[cfg(feature = "shadowing")]

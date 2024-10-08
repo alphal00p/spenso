@@ -43,12 +43,14 @@ use symbolica::{
 };
 
 use crate::data::SparseTensor;
-use crate::parametric::SerializableAtom;
 use crate::permutation::Permutation;
 #[cfg(feature = "shadowing")]
 use crate::{
     data::DenseTensor,
-    parametric::{ExpandedCoefficent, FlatCoefficent, MixedTensor, ParamTensor, TensorCoefficient},
+    parametric::{
+        ExpandedCoefficent, FlatCoefficent, MixedTensor, ParamTensor, SerializableAtom,
+        TensorCoefficient,
+    },
     ufo,
 };
 use std::ops::Range;
@@ -1299,7 +1301,7 @@ impl<T: RepName> Slot<T> {
             },
         }
     }
-
+    #[cfg(feature = "shadowing")]
     pub fn kroneker_atom(&self, other: &Slot<T::Dual>) -> Atom {
         let value_builder = FunctionBuilder::new(State::get_symbol("id"));
 
@@ -1310,6 +1312,7 @@ impl<T: RepName> Slot<T> {
         value_builder.add_arg(&indices).finish()
     }
 
+    #[cfg(feature = "shadowing")]
     pub fn metric_atom(&self, other: &Slot<T>) -> Atom {
         let value_builder = FunctionBuilder::new(State::get_symbol("metric"));
 
@@ -2093,7 +2096,7 @@ pub trait TensorStructure {
     ///
     /// `Mismatched order` = if the length of the indices is different from the order of the tensor,
     ///
-    /// `Index out of bounds` = if the index is out of bounds for the dimension of that index   
+    /// `Index out of bounds` = if the index is out of bounds for the dimension of that index
     ///
     fn verify_indices(&self, indices: &[ConcreteIndex]) -> Result<()> {
         if indices.len() != self.order() {

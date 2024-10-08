@@ -499,7 +499,6 @@ impl<T: Real> SymbolicaComplex for Complex<T> {
     }
 }
 
-#[cfg(feature = "shadowing")]
 impl<T: Float> NumTraitComplex for Complex<T> {
     type R = T;
     fn arg(&self) -> T {

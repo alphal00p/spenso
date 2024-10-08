@@ -4,7 +4,7 @@ use spenso::symbolic::SymbolicTensor;
 use symbolica::atom::Atom;
 
 fn main() {
-    let expr = concat!("256/81*(MT*id(aind(bis(4,186),bis(4,227)))+Q(7,aind(loru(4,237)))",
+    let _expr = concat!("256/81*(MT*id(aind(bis(4,186),bis(4,227)))+Q(7,aind(loru(4,237)))",
     "*γ(aind(lord(4,237),bis(4,186),bis(4,227))))*(MT*id(aind(bis(4,218),bis(4,185)))+Q(4,aind(loru(4,234)))",
     "*γ(aind(lord(4,234),bis(4,218),bis(4,185))))*(MT*id(aind(bis(4,223),bis(4,217)))+Q(5,aind(loru(4,235)))",
     "*γ(aind(lord(4,235),bis(4,223),bis(4,217))))*(MT*id(aind(bis(4,228),bis(4,222)))+Q(6,aind(loru(4,236)))",

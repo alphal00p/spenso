@@ -1,10 +1,12 @@
-use std::{
-    borrow::Cow,
-    ops::{Add, Div, Mul, Sub},
-};
+use std::borrow::Cow;
 
 use duplicate::duplicate;
 use ref_ops::{RefAdd, RefMul, RefSub};
+#[cfg(feature = "shadowing")]
+use std::ops::{Add, Div, Mul, Sub};
+
+#[cfg(feature = "shadowing")]
+use crate::parametric::SerializableAtom;
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -16,7 +18,6 @@ use symbolica::{
 use crate::{
     complex::{Complex, R},
     contraction::RefZero,
-    parametric::SerializableAtom,
 };
 // #[derive(Copy, Clone, PartialEq)]
 // pub struct Complex<T: Scalar> {
@@ -1057,6 +1058,7 @@ impl TrySmallestUpgrade<Atom> for Complex<f64> {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl Add for SerializableAtom {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
@@ -1064,6 +1066,7 @@ impl Add for SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> Add<&SerializableAtom> for &'a SerializableAtom {
     type Output = SerializableAtom;
     fn add(self, rhs: &SerializableAtom) -> Self::Output {
@@ -1071,6 +1074,7 @@ impl<'a> Add<&SerializableAtom> for &'a SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl Add<&SerializableAtom> for SerializableAtom {
     type Output = SerializableAtom;
     fn add(self, rhs: &SerializableAtom) -> Self::Output {
@@ -1078,6 +1082,7 @@ impl Add<&SerializableAtom> for SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> Add<SerializableAtom> for &'a SerializableAtom {
     type Output = SerializableAtom;
     fn add(self, rhs: SerializableAtom) -> Self::Output {
@@ -1085,6 +1090,7 @@ impl<'a> Add<SerializableAtom> for &'a SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl Sub for SerializableAtom {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self::Output {
@@ -1092,6 +1098,7 @@ impl Sub for SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> Sub<&SerializableAtom> for &'a SerializableAtom {
     type Output = SerializableAtom;
     fn sub(self, rhs: &SerializableAtom) -> Self::Output {
@@ -1099,6 +1106,7 @@ impl<'a> Sub<&SerializableAtom> for &'a SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl Sub<&SerializableAtom> for SerializableAtom {
     type Output = SerializableAtom;
     fn sub(self, rhs: &SerializableAtom) -> Self::Output {
@@ -1106,6 +1114,7 @@ impl Sub<&SerializableAtom> for SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> Sub<SerializableAtom> for &'a SerializableAtom {
     type Output = SerializableAtom;
     fn sub(self, rhs: SerializableAtom) -> Self::Output {
@@ -1113,6 +1122,7 @@ impl<'a> Sub<SerializableAtom> for &'a SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl Mul for SerializableAtom {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self::Output {
@@ -1120,6 +1130,7 @@ impl Mul for SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> Mul<&SerializableAtom> for &'a SerializableAtom {
     type Output = SerializableAtom;
     fn mul(self, rhs: &SerializableAtom) -> Self::Output {
@@ -1127,6 +1138,7 @@ impl<'a> Mul<&SerializableAtom> for &'a SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl Mul<&SerializableAtom> for SerializableAtom {
     type Output = SerializableAtom;
     fn mul(self, rhs: &SerializableAtom) -> Self::Output {
@@ -1134,6 +1146,7 @@ impl Mul<&SerializableAtom> for SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> Mul<SerializableAtom> for &'a SerializableAtom {
     type Output = SerializableAtom;
     fn mul(self, rhs: SerializableAtom) -> Self::Output {
@@ -1141,6 +1154,7 @@ impl<'a> Mul<SerializableAtom> for &'a SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl Div for SerializableAtom {
     type Output = Self;
     fn div(self, rhs: Self) -> Self::Output {
@@ -1148,6 +1162,7 @@ impl Div for SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> Div<&SerializableAtom> for &'a SerializableAtom {
     type Output = SerializableAtom;
     fn div(self, rhs: &SerializableAtom) -> Self::Output {
@@ -1155,6 +1170,7 @@ impl<'a> Div<&SerializableAtom> for &'a SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl Div<&SerializableAtom> for SerializableAtom {
     type Output = SerializableAtom;
     fn div(self, rhs: &SerializableAtom) -> Self::Output {
@@ -1162,6 +1178,7 @@ impl Div<&SerializableAtom> for SerializableAtom {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl<'a> Div<SerializableAtom> for &'a SerializableAtom {
     type Output = SerializableAtom;
     fn div(self, rhs: SerializableAtom) -> Self::Output {

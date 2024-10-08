@@ -1,10 +1,10 @@
+use ahash::AHashMap;
 #[cfg(feature = "shadowing")]
-use ahash::{AHashMap, AHashSet, HashMap};
+use ahash::{AHashSet, HashMap};
 #[cfg(feature = "shadowing")]
 use anyhow::anyhow;
 #[cfg(feature = "shadowing")]
 use std::sync::Arc;
-use symbolica::id::{PatternOrMap, PatternRestriction};
 
 // use log::trace;
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,7 @@ use symbolica::{
         CompileOptions, CompiledCode, CompiledEvaluator, EvalTree, EvaluationFn, ExportedCode,
         ExpressionEvaluator, FunctionMap, InlineASM,
     },
-    id::{Condition, MatchSettings, Pattern, Replacement},
+    id::{Condition, MatchSettings, Pattern, PatternOrMap, PatternRestriction, Replacement},
     poly::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Exponent,
         Variable,
@@ -42,11 +42,12 @@ use crate::{
     iterators::IteratableTensor,
     parametric::{
         AtomViewOrConcrete, CompiledEvalTensor, EvalTensor, EvalTreeTensor, MixedTensor,
-        ParamTensor, PatternReplacement, SerializableAtom,
+        ParamTensor, PatternReplacement, SerializableAtom, SerializableCompiledCode,
+        SerializableCompiledEvaluator, SerializableExportedCode,
     },
     structure::{
-        IntoArgs, IntoSymbol, NamedStructure, ShadowMapping, Shadowable, StructureContract,
-        ToSymbolic,
+        AtomStructure, IntoArgs, IntoSymbol, NamedStructure, ShadowMapping, Shadowable,
+        StructureContract, ToSymbolic,
     },
     upgrading_arithmetic::{FallibleAdd, TrySmallestUpgrade},
 };
@@ -55,12 +56,9 @@ use crate::{
     arithmetic::ScalarMul,
     contraction::{Contract, ContractionError},
     data::{DataTensor, GetTensorData, HasTensorData},
-    parametric::{
-        SerializableCompiledCode, SerializableCompiledEvaluator, SerializableExportedCode,
-    },
     structure::{
-        AtomStructure, CastStructure, DualSlotTo, HasName, HasStructure, ScalarTensor,
-        TensorStructure, TracksCount,
+        CastStructure, DualSlotTo, HasName, HasStructure, ScalarTensor, TensorStructure,
+        TracksCount,
     },
     upgrading_arithmetic::FallibleMul,
 };
@@ -1026,6 +1024,16 @@ where
     pub fn push(&mut self, network: TensorNetwork<T, S>) {
         // self.scalars.push(network.scalar);
         self.networks.push(network);
+    }
+}
+
+impl<T, S> Default for TensorNetworkSet<T, S>
+where
+    T: TensorStructure,
+    T::Slot: Serialize + for<'a> Deserialize<'a>,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2949,8 +2957,11 @@ where
 
 #[cfg(test)]
 mod test {
+
+    #[cfg(feature = "shadowing")]
     use constcat::concat;
 
+    #[cfg(feature = "shadowing")]
     use super::*;
     #[cfg(feature = "shadowing")]
     use crate::symbolic::SymbolicTensor;

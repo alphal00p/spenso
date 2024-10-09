@@ -22,10 +22,11 @@ use crate::{
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero},
     data::{DataIterator, DataTensor, DenseTensor, HasTensorData, SetTensorData, SparseTensor},
     iterators::{IteratableTensor, IteratorEnum},
+    shadowing::{ShadowMapping, Shadowable},
     structure::{
         CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, IntoArgs, IntoSymbol,
-        NamedStructure, PhysicalSlots, ScalarStructure, ScalarTensor, ShadowMapping, Shadowable,
-        StructureContract, TensorStructure, ToSymbolic, TracksCount, VecStructure,
+        NamedStructure, PhysicalSlots, ScalarStructure, ScalarTensor, StructureContract,
+        TensorStructure, ToSymbolic, TracksCount, VecStructure,
     },
     upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade},
 };
@@ -1241,6 +1242,18 @@ where
 
 pub type MixedTensor<T = f64, S = NamedStructure<Symbol, Vec<Atom>>> =
     ParamOrConcrete<RealOrComplexTensor<T, S>, S>;
+
+impl<T: Clone, S: TensorStructure + Clone> MixedTensor<T, S> {
+    pub fn map_structure<S2: TensorStructure + Clone>(
+        self,
+        f: impl Fn(S) -> S2,
+    ) -> MixedTensor<T, S2> {
+        match self {
+            ParamOrConcrete::Concrete(x) => ParamOrConcrete::Concrete(x.map_structure(f)),
+            ParamOrConcrete::Param(x) => ParamOrConcrete::Param(x.map_structure(f)),
+        }
+    }
+}
 
 // #[derive(Clone, Debug, EnumTryAsInner)]
 // #[derive_err(Debug)]

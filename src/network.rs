@@ -45,9 +45,9 @@ use crate::{
         ParamTensor, PatternReplacement, SerializableAtom, SerializableCompiledCode,
         SerializableCompiledEvaluator, SerializableExportedCode,
     },
+    shadowing::{ShadowMapping, Shadowable},
     structure::{
-        AtomStructure, IntoArgs, IntoSymbol, NamedStructure, ShadowMapping, Shadowable,
-        StructureContract, ToSymbolic,
+        AtomStructure, IntoArgs, IntoSymbol, NamedStructure, StructureContract, ToSymbolic,
     },
     upgrading_arithmetic::{FallibleAdd, TrySmallestUpgrade},
 };
@@ -997,16 +997,6 @@ where
     T::Slot: Serialize + for<'a> Deserialize<'a>,
 {
     pub networks: Vec<TensorNetwork<T, S>>,
-}
-
-#[cfg(feature = "shadowing")]
-impl Default for TensorNetworkSet<NamedStructure, Atom> {
-    fn default() -> Self {
-        TensorNetworkSet {
-            networks: vec![],
-            // scalars: vec![],
-        }
-    }
 }
 
 impl<T, S> TensorNetworkSet<T, S>

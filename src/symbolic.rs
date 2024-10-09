@@ -2,9 +2,10 @@ use crate::{
     contraction::{Contract, ContractionError},
     network::{TensorNetwork, TensorNetworkError},
     parametric::{MixedTensor, SerializableAtom},
+    shadowing::Shadowable,
     structure::{
         AtomStructure, HasName, HasStructure, IntoArgs, IntoSymbol, NamedStructure, PhysicalSlots,
-        Shadowable, StructureContract, TensorStructure, ToSymbolic, VecStructure, ABSTRACTIND,
+        StructureContract, TensorStructure, ToSymbolic, VecStructure, ABSTRACTIND,
     },
 };
 

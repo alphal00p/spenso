@@ -45,7 +45,7 @@ use crate::{
 use crate::{
     iterators::IteratableTensor,
     parametric::{MixedTensor, ParamTensor},
-    structure::{Shadowable, TensorShell, ToSymbolic},
+    structure::{TensorShell, ToSymbolic},
     symbolic::SymbolicTensor,
     upgrading_arithmetic::TryIntoUpgrade,
 };
@@ -453,7 +453,7 @@ fn sparse_diag_dense_contract() {
     ]);
 
     let a = SparseTensor::from_data(
-        &[
+        [
             (vec![0, 0], 1),
             (vec![1, 1], 2),
             (vec![2, 2], 3),
@@ -923,7 +923,7 @@ fn mixed_tensor_contraction() {
             None,
         ));
 
-    let a = SparseTensor::from_data(&data_a, structur_a.clone()).unwrap();
+    let a = SparseTensor::from_data(data_a.clone(), structur_a.clone()).unwrap();
 
     let structur_b = HistoryStructure::from(NamedStructure::from_iter(
         [
@@ -962,7 +962,7 @@ fn mixed_tensor_contraction() {
         (vec![1, 1], 2.0.mul_fallible(&im).unwrap()),
     ];
 
-    let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
+    let a = SparseTensor::from_data(data_a.clone(), structur_a).unwrap();
 
     let b = DenseTensor::from_data(vec![1.0, 2.0, 3.0, 4.0], structur_b).unwrap();
 
@@ -1058,7 +1058,7 @@ fn contract_spensor() {
             None,
         ));
 
-    let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
+    let a = SparseTensor::from_data(data_a.clone(), structur_a).unwrap();
 
     let data_b = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
     let structur_b = HistoryStructure::from(NamedStructure::from_iter(
@@ -1070,7 +1070,7 @@ fn contract_spensor() {
         None,
     ));
 
-    let b = SparseTensor::from_data(&data_b, structur_b).unwrap();
+    let b = SparseTensor::from_data(data_b.clone(), structur_b).unwrap();
 
     let f = a.contract(&b).unwrap();
 
@@ -1092,7 +1092,7 @@ fn sparse_addition() {
             None,
         ));
 
-    let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
+    let a = SparseTensor::from_data(data_a.clone(), structur_a).unwrap();
 
     let data_b = [(vec![1, 0], 1.0), (vec![0, 1], 2.0)];
     let structur_b = HistoryStructure::from(NamedStructure::from_iter(
@@ -1104,7 +1104,7 @@ fn sparse_addition() {
         None,
     ));
 
-    let b = SparseTensor::from_data(&data_b, structur_b).unwrap();
+    let b = SparseTensor::from_data(data_b.clone(), structur_b).unwrap();
 
     let f = a.add_fallible(&b).unwrap();
 
@@ -1126,7 +1126,7 @@ fn sparse_sub() {
             None,
         ));
 
-    let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
+    let a = SparseTensor::from_data(data_a.clone(), structur_a).unwrap();
 
     let data_b = [(vec![1, 0], 1.0), (vec![0, 1], 3.0)];
 
@@ -1139,7 +1139,7 @@ fn sparse_sub() {
         None,
     ));
 
-    let b = SparseTensor::from_data(&data_b, structur_b).unwrap();
+    let b = SparseTensor::from_data(data_b.clone(), structur_b).unwrap();
 
     let f = a.sub_fallible(&b).unwrap();
 
@@ -1184,7 +1184,7 @@ fn contract_densor_with_spensor() {
             None,
         ));
 
-    let a = SparseTensor::from_data(&data_a, structur_a).unwrap();
+    let a = SparseTensor::from_data(data_a.clone(), structur_a).unwrap();
 
     let data_b = [1.0, 2.0, 3.0, 4.0];
     let structur_b = HistoryStructure::from(NamedStructure::from_iter(
@@ -1217,6 +1217,8 @@ fn contract_densor_with_spensor() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn evaluate() {
+    use crate::shadowing::Shadowable;
+
     let structure: NamedStructure<String, ()> = test_structure(3, 1).to_named("a".into(), None);
 
     let a: TensorShell<_> = structure.clone().into();

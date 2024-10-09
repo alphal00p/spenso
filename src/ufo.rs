@@ -19,9 +19,12 @@ use symbolica::{
 };
 
 #[cfg(feature = "shadowing")]
-use crate::structure::{
-    HistoryStructure, IntoArgs, IntoSymbol, NamedStructure, Shadowable, ABSTRACTIND, BISPINOR,
-    COLORADJ, COLORANTIFUND, COLORANTISEXT, COLORFUND, COLORSEXT, EUCLIDEAN, SPINFUND,
+use crate::{
+    shadowing::Shadowable,
+    structure::{
+        HistoryStructure, IntoArgs, IntoSymbol, NamedStructure, ABSTRACTIND, BISPINOR, COLORADJ,
+        COLORANTIFUND, COLORANTISEXT, COLORFUND, COLORSEXT, EUCLIDEAN, SPINFUND,
+    },
 };
 
 #[allow(dead_code)]
@@ -1059,22 +1062,23 @@ mod test {
     use symbolica::{atom::Atom, state::State};
 
     #[cfg(feature = "shadowing")]
-    use crate::{
-        complex::RealOrComplexTensor,
-        data::DenseTensor,
-        network::TensorNetwork,
-        structure::{BaseRepName, Bispinor, HasStructure, TensorStructure, VecStructure},
-    };
+    use super::*;
 
     #[cfg(feature = "shadowing")]
     use crate::{
+        complex::RealOrComplexTensor,
+        contraction::Contract,
+        network::TensorNetwork,
         parametric::{ParamOrConcrete, SerializableAtom},
-        structure::{SerializableSymbol, Shadowable},
+        shadowing::Shadowable,
+        structure::{HasStructure, SerializableSymbol, VecStructure},
     };
 
     #[test]
     #[cfg(feature = "shadowing")]
     fn clifford() {
+        use crate::network::TensorNetwork;
+
         let expr = Atom::parse(
             "γ(aind(bis(4,4),bis(4,3),lord(4,1)))*γ(aind(bis(4,3),bis(4,4),lord(4,2)))+γ(aind(bis(4,4),bis(4,3),lord(4,2)))*γ(aind(bis(4,3),bis(4,4),lord(4,1)))",
         )

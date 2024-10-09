@@ -25,7 +25,8 @@ use symbolica::{
 use crate::{
     data::{DataIterator, DenseTensor},
     parametric::TensorCoefficient,
-    structure::{IntoArgs, IntoSymbol, ShadowMapping, Shadowable, ToSymbolic},
+    shadowing::{ShadowMapping, Shadowable},
+    structure::{IntoArgs, IntoSymbol, ToSymbolic},
 };
 
 #[cfg(feature = "shadowing")]
@@ -1360,6 +1361,18 @@ impl<T: LowerExp> std::fmt::LowerExp for Complex<T> {
 pub enum RealOrComplexTensor<T, S: TensorStructure> {
     Real(DataTensor<T, S>),
     Complex(DataTensor<Complex<T>, S>),
+}
+
+impl<T, S: TensorStructure> RealOrComplexTensor<T, S> {
+    pub fn map_structure<S2: TensorStructure>(
+        self,
+        f: impl Fn(S) -> S2,
+    ) -> RealOrComplexTensor<T, S2> {
+        match self {
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.map_structure(f)),
+            RealOrComplexTensor::Complex(d) => RealOrComplexTensor::Complex(d.map_structure(f)),
+        }
+    }
 }
 
 impl<T: Display, S: TensorStructure> Display for RealOrComplexTensor<T, S> {

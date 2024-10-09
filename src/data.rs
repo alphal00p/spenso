@@ -12,7 +12,8 @@ use crate::{
 #[cfg(feature = "shadowing")]
 use crate::{
     parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
-    structure::{atomic_expanded_label_id, IntoArgs, IntoSymbol, ShadowMapping, Shadowable},
+    shadowing::{ShadowMapping, Shadowable},
+    structure::{atomic_expanded_label_id, IntoArgs, IntoSymbol},
 };
 
 use ahash::AHashMap;
@@ -124,7 +125,7 @@ pub trait GetTensorData {
     fn get_linear_mut(&mut self, index: FlatIndex) -> Option<&mut Self::GetData>;
 }
 
-/// Sparse data tensor, generic on storage type `T`, and structure type `I`.  
+/// Sparse data tensor, generic on storage type `T`, and structure type `I`.
 ///
 /// Stores data in a hashmap of usize, using ahash's hashmap.
 /// The usize key is the flattened index of the corresponding position in the dense tensor
@@ -598,24 +599,16 @@ where
     }
 
     /// Generates a new sparse tensor from the given data and structure
-    pub fn from_data(data: &[(Vec<ConcreteIndex>, T)], structure: I) -> Result<Self>
-    where
-        T: Clone,
-    {
-        let mut dimensions = vec![0; structure.order()];
-        for (index, _) in data {
+    pub fn from_data(
+        data: impl IntoIterator<Item = (Vec<ConcreteIndex>, T)>,
+        structure: I,
+    ) -> Result<Self> {
+        let mut elements = AHashMap::default();
+        for (index, value) in data {
             if index.len() != structure.order() {
                 return Err(anyhow!("Mismatched order"));
             }
-            for (i, &idx) in index.iter().enumerate() {
-                if idx >= dimensions[i] {
-                    dimensions[i] = idx + 1;
-                }
-            }
-        }
-        let mut elements = AHashMap::default();
-        for (index, value) in data {
-            elements.insert(structure.flat_index(index).unwrap(), value.clone());
+            elements.insert(structure.flat_index(&index).unwrap(), value);
         }
 
         Ok(SparseTensor {

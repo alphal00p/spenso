@@ -73,6 +73,9 @@ pub mod permutation;
 pub mod ufo;
 
 #[cfg(feature = "shadowing")]
+pub mod shadowing;
+
+#[cfg(feature = "shadowing")]
 pub mod polynomial;
 #[cfg(test)]
 mod tests;

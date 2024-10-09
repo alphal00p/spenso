@@ -1,5 +1,7 @@
 use ahash::AHashMap;
+
 use anyhow::{anyhow, Result};
+use append_only_vec::AppendOnlyVec;
 use delegate::delegate;
 use derive_more::Add;
 use derive_more::AddAssign;
@@ -18,19 +20,20 @@ use duplicate::duplicate;
 use indexmap::IndexMap;
 use num::One;
 use num::Zero;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
 use smartstring::LazyCompact;
 use smartstring::SmartString;
-// use std::fmt::write;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::AddAssign;
 use std::ops::Deref;
+use std::ops::Index;
 use std::ops::Neg;
-use thiserror::Error;
-
+use std::sync::RwLock;
+use symbolica::symb;
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{
@@ -38,9 +41,9 @@ use symbolica::{
         MulView, Symbol,
     },
     coefficient::CoefficientView,
-    evaluate::FunctionMap,
     state::State,
 };
+use thiserror::Error;
 
 use crate::data::SparseTensor;
 use crate::permutation::Permutation;
@@ -48,8 +51,7 @@ use crate::permutation::Permutation;
 use crate::{
     data::DenseTensor,
     parametric::{
-        ExpandedCoefficent, FlatCoefficent, MixedTensor, ParamTensor, SerializableAtom,
-        TensorCoefficient,
+        ExpandedCoefficent, FlatCoefficent, MixedTensor, SerializableAtom, TensorCoefficient,
     },
     ufo,
 };
@@ -105,7 +107,12 @@ impl AddAssign<AbstractIndex> for AbstractIndex {
 
 impl std::fmt::Display for AbstractIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", usize::from(*self))
+        match self {
+            AbstractIndex::Normal(v) => write!(f, "{}", to_subscript(*v as isize)),
+            AbstractIndex::Dualize(v) => {
+                write!(f, "{}", to_superscript(*v as isize))
+            }
+        }
     }
 }
 
@@ -222,7 +229,7 @@ impl From<SerializableSymbol> for Symbol {
 
 /// A Dimension
 #[derive(
-    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Display, Serialize, Deserialize,
+    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Display,
 )]
 pub enum Dimension {
     Concrete(usize),
@@ -1111,6 +1118,323 @@ pub struct Representation<T: RepName> {
     pub rep: T,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Rep {
+    SelfDual(u16),
+    Dualizable(i16),
+}
+
+pub(crate) static REPS: Lazy<RwLock<ExtendibleReps>> =
+    Lazy::new(|| RwLock::new(ExtendibleReps::new()));
+static SELF_DUAL: AppendOnlyVec<RepData> = AppendOnlyVec::new();
+static DUALIZABLE: AppendOnlyVec<RepData> = AppendOnlyVec::new();
+
+impl Rep {
+    pub fn new_dual(name: &str) -> Result<Self, RepError> {
+        REPS.write().unwrap().new_dual(name)
+    }
+
+    pub fn new_self_dual(name: &str) -> Result<Self, RepError> {
+        REPS.write().unwrap().new_self_dual(name)
+    }
+}
+
+impl From<PhysReps> for Rep {
+    fn from(value: PhysReps) -> Self {
+        match value {
+            PhysReps::ColorFund(_) => ExtendibleReps::COLORFUND,
+            PhysReps::ColorAntiFund(_) => ExtendibleReps::COLORANTIFUND,
+            PhysReps::ColorSextet(_) => ExtendibleReps::COLORSEXT,
+            PhysReps::ColorAntiSextet(_) => ExtendibleReps::COLORANTISEXT,
+            PhysReps::SpinFund(_) => ExtendibleReps::SPINFUND,
+            PhysReps::SpinAntiFund(_) => ExtendibleReps::SPINANTIFUND,
+            PhysReps::Bispinor(_) => ExtendibleReps::BISPINOR,
+            PhysReps::ColorAdjoint(_) => ExtendibleReps::COLORADJ,
+            PhysReps::LorentzUp(_) => ExtendibleReps::LORENTZ_UP,
+            PhysReps::LorentzDown(_) => ExtendibleReps::LORENTZ_DOWN,
+            PhysReps::Euclidean(_) => ExtendibleReps::EUCLIDEAN,
+        }
+    }
+}
+
+pub struct RepData {
+    // metric_data: Fn(Dimension)->SparseTensor<i8,IndexLess>
+    name: String,
+    #[cfg(feature = "shadowing")]
+    symbol: Symbol,
+}
+
+pub struct ExtendibleReps {
+    name_map: AHashMap<String, Rep>,
+    #[cfg(feature = "shadowing")]
+    symbol_map: AHashMap<Symbol, Rep>,
+}
+
+#[derive(Debug, Error)]
+pub enum RepError {
+    #[error("{0} Already exists and is of different type")]
+    AlreadyExistsDifferentType(String),
+}
+
+impl ExtendibleReps {
+    pub fn reps(&self) -> impl Iterator<Item = &Rep> {
+        self.name_map.values()
+    }
+    pub fn new_dual(&mut self, name: &str) -> Result<Rep, RepError> {
+        if let Some(rep) = self.name_map.get(name) {
+            if let Rep::SelfDual(_) = rep {
+                return Err(RepError::AlreadyExistsDifferentType(name.into()));
+            } else {
+                return Ok(*rep);
+            }
+        }
+        let rep = Rep::Dualizable(DUALIZABLE.len() as i16 + 1);
+
+        #[cfg(feature = "shadowing")]
+        let symbol = symb!(name);
+        #[cfg(feature = "shadowing")]
+        self.symbol_map.insert(symbol, rep);
+
+        DUALIZABLE.push(RepData {
+            name: name.to_string(),
+            #[cfg(feature = "shadowing")]
+            symbol,
+        });
+        Ok(rep)
+    }
+
+    pub fn new_self_dual(&mut self, name: &str) -> Result<Rep, RepError> {
+        if let Some(rep) = self.name_map.get(name) {
+            if let Rep::Dualizable(_) = rep {
+                return Err(RepError::AlreadyExistsDifferentType(name.into()));
+            } else {
+                return Ok(*rep);
+            }
+        }
+
+        let rep = Rep::SelfDual(SELF_DUAL.len() as u16);
+        #[cfg(feature = "shadowing")]
+        let symbol = symb!(name);
+        #[cfg(feature = "shadowing")]
+        self.symbol_map.insert(symbol, rep);
+
+        SELF_DUAL.push(RepData {
+            name: name.to_string(),
+            #[cfg(feature = "shadowing")]
+            symbol,
+        });
+        Ok(rep)
+    }
+}
+
+impl Index<Rep> for ExtendibleReps {
+    type Output = RepData;
+
+    fn index(&self, index: Rep) -> &Self::Output {
+        match index {
+            Rep::SelfDual(l) => &SELF_DUAL[l as usize],
+            Rep::Dualizable(l) => &DUALIZABLE[l.unsigned_abs() as usize - 1],
+        }
+    }
+}
+
+impl ExtendibleReps {
+    pub const EUCLIDEAN: Rep = Rep::SelfDual(0);
+    pub const BISPINOR: Rep = Rep::SelfDual(1);
+    pub const COLORADJ: Rep = Rep::SelfDual(2);
+
+    pub const LORENTZ_UP: Rep = Rep::Dualizable(1);
+    pub const LORENTZ_DOWN: Rep = Rep::Dualizable(-1);
+    pub const SPINFUND: Rep = Rep::Dualizable(2);
+    pub const SPINANTIFUND: Rep = Rep::Dualizable(-2);
+    pub const COLORFUND: Rep = Rep::Dualizable(3);
+    pub const COLORANTIFUND: Rep = Rep::Dualizable(-3);
+    pub const COLORSEXT: Rep = Rep::Dualizable(4);
+    pub const COLORANTISEXT: Rep = Rep::Dualizable(-4);
+
+    pub const BUILTIN_SELFDUAL_NAMES: [&'static str; 3] = ["euc", "bis", "coad"];
+    pub const BUILTIN_DUALIZABLE_NAMES: [&'static str; 3] = ["lor", "spf", "cof"];
+
+    #[cfg(feature = "shadowing")]
+    pub const UP: &'static str = "u";
+    #[cfg(feature = "shadowing")]
+    pub const DOWN: &'static str = "d";
+
+    pub fn new() -> Self {
+        let mut new = Self {
+            name_map: AHashMap::new(),
+            #[cfg(feature = "shadowing")]
+            symbol_map: AHashMap::new(),
+        };
+
+        for name in Self::BUILTIN_SELFDUAL_NAMES.iter() {
+            new.new_self_dual(name).unwrap();
+        }
+
+        for name in Self::BUILTIN_DUALIZABLE_NAMES.iter() {
+            new.new_dual(name).unwrap();
+        }
+
+        new
+    }
+
+    pub fn find_symbol(&self, symbol: Symbol) -> Option<Rep> {
+        self.symbol_map.get(&symbol).cloned()
+    }
+}
+
+impl Default for ExtendibleReps {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Display for Rep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SelfDual(_) => write!(f, "{}", REPS.read().unwrap()[*self].name),
+            Self::Dualizable(l) => {
+                if *l < 0 {
+                    write!(f, "{}🠓", REPS.read().unwrap()[*self].name)
+                } else {
+                    write!(f, "{}🠑", REPS.read().unwrap()[*self].name)
+                }
+            }
+        }
+    }
+}
+
+impl RepName for Rep {
+    type Dual = Rep;
+    type Base = Rep;
+
+    fn dual(self) -> Self::Dual {
+        match self {
+            Self::SelfDual(l) => Self::SelfDual(l),
+            Self::Dualizable(l) => Self::Dualizable(-l),
+        }
+    }
+
+    fn base(&self) -> Self::Base {
+        match self {
+            Self::Dualizable(l) => Self::Dualizable(l.abs()),
+            x => *x,
+        }
+    }
+
+    fn matches(&self, other: &Self::Dual) -> bool {
+        match (self, other) {
+            (Self::SelfDual(s), Self::SelfDual(o)) => s == o,
+            (Self::Dualizable(s), Self::Dualizable(o)) => *s == -o,
+            _ => false,
+        }
+    }
+
+    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
+        &self,
+        structure: S,
+    ) -> SparseTensor<V, S> {
+        SparseTensor::empty(structure)
+    }
+
+    fn try_from_symbol(sym: Symbol) -> Result<Self> {
+        REPS.read()
+            .unwrap()
+            .find_symbol(sym)
+            .ok_or(anyhow!("Not a representation"))
+    }
+
+    #[cfg(feature = "shadowing")]
+    /// yields a function builder for the representation, adding a first variable: the dimension.
+    ///
+    fn to_fnbuilder(&self) -> FunctionBuilder {
+        FunctionBuilder::new(match self {
+            Self::SelfDual(_) => {
+                symb!("sd")
+            }
+            Self::Dualizable(l) => {
+                if *l < 0 {
+                    symb!("d")
+                } else {
+                    symb!("u")
+                }
+            }
+        })
+        .add_arg(&Atom::new_var(self.to_symbol()))
+    }
+
+    #[cfg(feature = "shadowing")]
+    fn to_symbol(&self) -> Symbol {
+        REPS.read().unwrap()[*self].symbol
+    }
+}
+
+const SUPERSCRIPT_DIGITS: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+const SUBSCRIPT_DIGITS: [char; 10] = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'];
+
+fn to_unicode(number: isize, digits: &[char; 10], minus_sign: char) -> String {
+    if number == 0 {
+        return digits[0].to_string();
+    }
+    let mut num = number;
+    let mut digit_stack = Vec::new();
+    while num != 0 {
+        let digit = (num % 10).unsigned_abs();
+        digit_stack.push(digits[digit]);
+        num /= 10;
+    }
+    let mut result = String::new();
+    if number < 0 {
+        result.push(minus_sign);
+    }
+    result.extend(digit_stack.drain(..).rev());
+    result
+}
+
+fn to_superscript(number: isize) -> String {
+    to_unicode(number, &SUPERSCRIPT_DIGITS, '⁻')
+}
+
+fn to_subscript(number: isize) -> String {
+    to_unicode(number, &SUBSCRIPT_DIGITS, '₋')
+}
+
+#[test]
+fn extendible_reps() {
+    let r = Rep::new_dual("lor").unwrap();
+    let rd = r.dual();
+    let e = Rep::new_self_dual("euc").unwrap();
+
+    println!(
+        "{r}{r:?}, {e}{e:?},{rd}{rd:?},{}",
+        ExtendibleReps::BISPINOR.base()
+    );
+
+    assert!(ExtendibleReps::LORENTZ_UP.matches(&ExtendibleReps::LORENTZ_DOWN));
+    assert!(!ExtendibleReps::LORENTZ_UP.matches(&ExtendibleReps::LORENTZ_UP));
+    assert!(ExtendibleReps::BISPINOR.matches(&ExtendibleReps::BISPINOR));
+
+    let rs = r.new_slot(10, 1);
+    let rr = r.new_dimed_rep(1);
+
+    println!("{}", rs.to_symbolic());
+    println!("{}", rs.dual());
+    println!("{}", rr)
+}
+
+// struct UserDefRep{
+//     dual: usize,
+//     name: String,
+// }
+
+// struct UserDefReps
+
+// }
+
+// impl RepName for usize{
+//     type
+// }
+
 // pub trait HasDimension: RepName {
 //     fn dim(&self) -> Dimension;
 
@@ -1535,7 +1859,7 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
 
 impl<T: RepName> std::fmt::Display for Slot<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.aind, self.rep)
+        write!(f, "{}|{}", self.rep, self.aind)
     }
 }
 
@@ -2376,9 +2700,35 @@ impl<S: DualSlotTo<Dual = S, R: RepName>> StructureContract for Vec<S> {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
 pub struct IndexLess<T: RepName = PhysReps> {
     pub structure: Vec<Representation<T>>,
+}
+impl<R: RepName> std::fmt::Display for IndexLess<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (index, item) in self.structure.iter().enumerate() {
+            if index != 0 {
+                // To avoid a newline at the start
+                writeln!(f)?;
+            }
+            write!(
+                f,
+                "({})",
+                // IDPRINTER
+                //     .encode_string(usize::from(item.index) as u64)
+                //     .unwrap(),
+                item
+            )?;
+        }
+        Ok(())
+    }
+}
+impl<R: RepName> FromIterator<Representation<R>> for IndexLess<R> {
+    fn from_iter<I: IntoIterator<Item = Representation<R>>>(iter: I) -> Self {
+        IndexLess {
+            structure: iter.into_iter().collect(),
+        }
+    }
 }
 
 impl From<VecStructure> for IndexLess<PhysReps> {
@@ -2777,6 +3127,81 @@ impl StructureContract for VecStructure {
 
     fn trace(&mut self, i: usize, j: usize) {
         self.structure.trace(i, j);
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
+pub struct IndexlessNamedStructure<Name = SmartString<LazyCompact>, Args = usize, R: RepName = Rep>
+{
+    pub structure: IndexLess<R>,
+    pub global_name: Name,
+    pub additional_args: Option<Args>,
+}
+impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructure<Name, Args, R> {
+    type Slot = Slot<R>;
+    delegate! {
+        to self.structure{
+            fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
+            fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
+            fn order(&self) -> usize;
+            fn get_slot(&self, i: usize) -> Option<Self::Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_aind(&self,i:usize)->Option<AbstractIndex>;
+            fn get_dim(&self, i: usize) -> Option<Dimension>;
+        }
+    }
+}
+
+impl<Name, Args, R: RepName> IndexlessNamedStructure<Name, Args, R> {
+    #[must_use]
+    pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> Self
+    where
+        I: Into<Representation<R>>,
+        T: IntoIterator<Item = I>,
+    {
+        Self {
+            structure: iter.into_iter().map(I::into).collect(),
+            global_name: name,
+            additional_args: args,
+        }
+    }
+}
+
+impl<N, A, R: RepName> HasName for IndexlessNamedStructure<N, A, R>
+where
+    N: Clone,
+    A: Clone,
+{
+    type Name = N;
+    type Args = A;
+
+    fn name(&self) -> Option<Self::Name> {
+        Some(self.global_name.clone())
+    }
+    fn set_name(&mut self, name: Self::Name) {
+        self.global_name = name;
+    }
+    fn args(&self) -> Option<Self::Args> {
+        self.additional_args.clone()
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for IndexlessNamedStructure<N, A, R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.global_name.ref_into_symbol())?;
+
+        write!(f, "(")?;
+        if let Some(ref args) = self.additional_args {
+            let args: Vec<std::string::String> =
+                args.ref_into_args().map(|s| s.to_string()).collect();
+            write!(f, "{},", args.join(","))?
+        }
+
+        write!(f, "{})", self.structure)?;
+        Result::Ok(())
     }
 }
 
@@ -3575,114 +4000,6 @@ impl IntoSymbol for std::string::String {
     }
 }
 
-/// Trait that enables shadowing of a tensor
-///
-/// This creates a dense tensor of atoms, where the atoms are the expanded indices of the tensor, with the global name as the name of the labels.
-#[cfg(feature = "shadowing")]
-pub trait Shadowable:
-    HasStructure<
-        Structure: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs> + Clone + Sized,
-    > + Sized
-{
-    // type Const;
-    fn expanded_shadow(&self) -> Result<DenseTensor<Atom, Self::Structure>> {
-        self.shadow(Self::Structure::expanded_coef)
-    }
-
-    fn flat_shadow(&self) -> Result<DenseTensor<Atom, Self::Structure>> {
-        self.shadow(Self::Structure::flat_coef)
-    }
-
-    fn shadow<T>(
-        &self,
-        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
-    ) -> Result<DenseTensor<Atom, Self::Structure>>
-    where
-        T: TensorCoefficient,
-    {
-        self.structure().clone().to_dense_labeled(index_to_atom)
-    }
-
-    fn to_explicit(&self) -> Option<MixedTensor<f64, Self::Structure>> {
-        let identity = State::get_symbol("id");
-        let gamma = State::get_symbol("γ");
-        let gamma5 = State::get_symbol("γ5");
-        let proj_m = State::get_symbol("ProjM");
-        let proj_p = State::get_symbol("ProjP");
-        let sigma = State::get_symbol("σ");
-        let metric = State::get_symbol("Metric");
-
-        if let Some(name) = self.structure().name() {
-            let name = name.ref_into_symbol();
-            Some(match name {
-                _ if name == identity => {
-                    ufo::identity_data::<f64, Self::Structure>(self.structure().clone()).into()
-                }
-
-                _ if name == gamma => ufo::gamma_data_weyl(self.structure().clone()).into(),
-                _ if name == gamma5 => ufo::gamma5_weyl_data(self.structure().clone()).into(),
-                _ if name == proj_m => ufo::proj_m_data_weyl(self.structure().clone()).into(),
-                _ if name == proj_p => ufo::proj_p_data_weyl(self.structure().clone()).into(),
-                _ if name == sigma => ufo::sigma_data(self.structure().clone()).into(),
-                _ if name == metric => {
-                    ufo::metric_data::<f64, Self::Structure>(self.structure().clone()).into()
-                }
-                _ => MixedTensor::param(self.expanded_shadow().unwrap().into()),
-            })
-        } else {
-            None
-        }
-        // self.structure().clone().to_explicit_rep()
-    }
-}
-
-#[cfg(feature = "shadowing")]
-pub trait ShadowMapping<Const>: Shadowable {
-    fn expanded_shadow_with_map<'a>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, Const>,
-    ) -> Result<ParamTensor<Self::Structure>> {
-        self.shadow_with_map(fn_map, Self::Structure::expanded_coef)
-    }
-
-    fn shadow_with_map<'a, T, F>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, Const>,
-        index_to_atom: F,
-    ) -> Result<ParamTensor<Self::Structure>>
-    where
-        T: TensorCoefficient,
-        F: Fn(&Self::Structure, FlatIndex) -> T + Clone,
-    {
-        // Some(ParamTensor::Param(self.shadow(index_to_atom)?.into()))
-        self.append_map(fn_map, index_to_atom.clone());
-        self.shadow(index_to_atom)
-            .map(|x| ParamTensor::param(x.into()))
-    }
-
-    fn append_map<'a, T>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, Const>,
-        index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
-    ) where
-        T: TensorCoefficient;
-
-    fn flat_append_map<'a>(&'a self, fn_map: &mut FunctionMap<'a, Const>) {
-        self.append_map(fn_map, Self::Structure::flat_coef)
-    }
-
-    fn expanded_append_map<'a>(&'a self, fn_map: &mut FunctionMap<'a, Const>) {
-        self.append_map(fn_map, Self::Structure::expanded_coef)
-    }
-
-    fn flat_shadow_with_map<'a>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, Const>,
-    ) -> Result<ParamTensor<Self::Structure>> {
-        self.shadow_with_map(fn_map, Self::Structure::flat_coef)
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct TensorShell<S: TensorStructure> {
     structure: S,
@@ -3768,30 +4085,6 @@ impl<S: TensorStructure, O: From<S> + TensorStructure> CastStructure<TensorShell
 impl<S: TensorStructure> From<S> for TensorShell<S> {
     fn from(structure: S) -> Self {
         Self::new(structure)
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<S: TensorStructure + HasName + Clone> Shadowable for TensorShell<S>
-where
-    S::Name: IntoSymbol + Clone,
-    S::Args: IntoArgs,
-{
-}
-
-#[cfg(feature = "shadowing")]
-impl<S: TensorStructure + HasName + Clone, Const> ShadowMapping<Const> for TensorShell<S>
-where
-    S::Name: IntoSymbol + Clone,
-    S::Args: IntoArgs,
-{
-    fn append_map<'a, T>(
-        &'a self,
-        _fn_map: &mut FunctionMap<'a, Const>,
-        _index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
-    ) where
-        T: TensorCoefficient,
-    {
     }
 }
 

@@ -1,11 +1,9 @@
-// Folder-specific settings
-//
-// For a full list of overridable settings, and general information on folder-specific settings,
-// see the documentation: https://zed.dev/docs/configuring-zed#folder-specific-settings
 {
-  "ui_font_family": "BlexMono Nerd Font",
-  "buffer_font_family": "BlexMono Nerd Font",
-  "soft_wrap": "editor_width",
+  "ui_font_family": "Zed Plex Mono",
+  "buffer_font_family": "Zed Plex Mono",
+  "buffer_font_weight": 800,
+
+  "soft_wrap": "preferred_line_length",
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {
@@ -21,7 +19,7 @@
           }
         },
         "cargo": {
-          "features": {}
+          "features": ["shadowing"]
         },
         "diagnostics": {
           "experimental": {
@@ -33,7 +31,7 @@
         "checkOnSave": true,
         "check": {
           "onSave": true,
-          "features": ["all"],
+          "features": ["shadowing"],
           "command": "clippy"
         }
       }
@@ -41,5 +39,6 @@
   },
   "shell": {
     "program": "nu"
-  }
+  },
+  "load_direnv": "shell_hook"
 }

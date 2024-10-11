@@ -1151,6 +1151,12 @@ where
     }
 }
 
+impl<T> From<Atom> for ConcreteOrParam<T> {
+    fn from(value: Atom) -> Self {
+        ConcreteOrParam::Param(value)
+    }
+}
+
 impl<C, S> ScalarTensor for ParamOrConcrete<C, S>
 where
     C: HasStructure<Structure = S> + Clone + ScalarTensor,

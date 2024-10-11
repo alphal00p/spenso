@@ -865,7 +865,11 @@ impl CoreFlatFiberIterator {
             }
 
             if fi.is_free() ^ conj {
-                max += (usize::try_from(dims[pos]).unwrap() - 1) * strides[pos];
+                let dimminus1: usize = match usize::try_from(dims[pos]).unwrap() {
+                    0 => 0,
+                    _ => usize::try_from(dims[pos]).unwrap() - 1,
+                };
+                max += dimminus1 * strides[pos];
                 if first {
                     increment = strides[pos];
                     first = false;
@@ -1239,11 +1243,11 @@ mod iteratortests {
     fn mutiter() {
         let rep = Euclidean {};
         let structa = VecStructure::new(vec![
-            rep.new_slot(0, 2).into(),
+            rep.new_slot(2, 0).into(),
             rep.new_slot(4, 4).into(),
-            rep.new_slot(1, 5).into(),
-            rep.new_slot(3, 7).into(),
-            rep.new_slot(2, 8).into(),
+            rep.new_slot(5, 1).into(),
+            rep.new_slot(7, 3).into(),
+            rep.new_slot(8, 3).into(),
         ]);
 
         let mut a: DenseTensor<f64> = DenseTensor::zero(structa);
@@ -1256,7 +1260,7 @@ mod iteratortests {
             *i.0 = 1.0;
         }
 
-        println!("{:?}", a);
+        // println!("{:?}", a);
     }
 }
 
@@ -1579,7 +1583,7 @@ where
     fn next(&mut self) -> Option<Self::Item<'_>> {
         self.iter.next().map(|x| {
             // println!("dense {}", x.flat_idx());
-            // println!("{}", self.fiber.structure.size());
+            // println!("{}", self.fiber.structure.size().unwrap());
             (
                 self.fiber.structure.get_linear_mut(x.flat_idx()).unwrap(),
                 x.other_data(),

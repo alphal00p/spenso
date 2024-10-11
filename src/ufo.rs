@@ -442,7 +442,7 @@ where
     I: TensorStructure + FromIterator<Slot<Lorentz>>,
 {
     // IdentityL(1,2) (Lorentz) Kronecker delta δ^μ1_μ1
-    let signature = Lorentz::new_dimed_rep_selfless(4);
+    let signature = Lorentz::rep(4);
     identity(indices, signature)
 }
 
@@ -457,7 +457,7 @@ where
                 .into_iter()
                 .collect()
         }
-        AbstractIndex::Normal(_) => [Lorentz::new_slot_selfless(4, index)].into_iter().collect(),
+        AbstractIndex::Normal(_) => [Lorentz::slot(4, index)].into_iter().collect(),
     };
     DenseTensor::from_data(p.to_vec(), structure).unwrap_or_else(|_| unreachable!())
 }
@@ -473,7 +473,7 @@ where
     DenseTensor::from_data(
         p.to_vec(),
         HistoryStructure::from(NamedStructure::from_iter(
-            [Lorentz::new_slot_selfless(4, index)],
+            [Lorentz::slot(4, index)],
             State::get_symbol("p"),
             None,
         )),
@@ -488,9 +488,7 @@ where
 {
     DenseTensor::from_data(
         p.to_vec(),
-        [Euclidean::new_slot_selfless(4, index)]
-            .into_iter()
-            .collect(),
+        [Euclidean::slot(4, index)].into_iter().collect(),
     )
     .unwrap_or_else(|_| unreachable!())
 }
@@ -506,7 +504,7 @@ where
     DenseTensor::from_data(
         p.to_vec(),
         HistoryStructure::from(NamedStructure::from_iter(
-            [Euclidean::new_slot_selfless(4, index)],
+            [Euclidean::slot(4, index)],
             State::get_symbol("p"),
             None,
         )),
@@ -525,7 +523,7 @@ where
     A: Clone + IntoArgs,
 {
     HistoryStructure::from(NamedStructure::from_iter(
-        [Lorentz::new_slot_selfless(4, index)],
+        [Lorentz::slot(4, index)],
         name,
         args,
     ))
@@ -544,7 +542,7 @@ where
     A: Clone + IntoArgs,
 {
     HistoryStructure::from(NamedStructure::from_iter(
-        [Euclidean::new_slot_selfless(4, index)],
+        [Euclidean::slot(4, index)],
         name,
         None,
     ))
@@ -561,7 +559,7 @@ where
     I: TensorStructure + FromIterator<Slot<Euclidean>>,
 {
     // Identity(1,2) (Spinorial) Kronecker delta δ_s1_s2
-    let signature = Euclidean::new_dimed_rep_selfless(4);
+    let signature = Euclidean::rep(4);
     identity(indices, signature)
 }
 
@@ -577,12 +575,12 @@ where
     // Gamma(1,2,3) Dirac matrix (γ^μ1)_s2_s3
     let mu = match minkindex {
         AbstractIndex::Dualize(d) => Lorentz::selfless_dual().new_slot(4, d).into(),
-        AbstractIndex::Normal(n) => Lorentz::new_slot_selfless(4, n).into(),
+        AbstractIndex::Normal(n) => Lorentz::slot(4, n).into(),
     };
     let structure = [
         mu, // Lorentz::new_slot_selfless(4, minkindex).into(),
-        Slot::<PhysReps>::from(Euclidean::new_slot_selfless(4, indices[0])),
-        Euclidean::new_slot_selfless(4, indices[1]).into(),
+        Slot::<PhysReps>::from(Euclidean::slot(4, indices[0])),
+        Euclidean::slot(4, indices[1]).into(),
     ]
     .into_iter()
     .map(Slot::from)
@@ -600,13 +598,13 @@ where
 {
     let mu = match minkindex {
         AbstractIndex::Dualize(d) => Lorentz::selfless_dual().new_slot(4, d).into(),
-        AbstractIndex::Normal(n) => Lorentz::new_slot_selfless(4, n).into(),
+        AbstractIndex::Normal(n) => Lorentz::slot(4, n).into(),
     };
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         [
             mu,
-            Slot::<PhysReps>::from(Euclidean::new_slot_selfless(4, indices[0])),
-            Euclidean::new_slot_selfless(4, indices[1]).into(),
+            Slot::<PhysReps>::from(Euclidean::slot(4, indices[0])),
+            Euclidean::slot(4, indices[1]).into(),
         ],
         State::get_symbol("γ"),
         None,
@@ -715,10 +713,7 @@ where
     T: One + Zero + Copy,
     I: TensorStructure + FromIterator<Slot<Euclidean>>,
 {
-    let structure = indices
-        .into_iter()
-        .map(|i| Euclidean::new_slot_selfless(4, i))
-        .collect();
+    let structure = indices.into_iter().map(|i| Euclidean::slot(4, i)).collect();
 
     gamma5_dirac_data(structure)
 }
@@ -731,9 +726,7 @@ where
     T: One + Zero + Copy,
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
-        indices
-            .into_iter()
-            .map(|i| Euclidean::new_slot_selfless(4, i)),
+        indices.into_iter().map(|i| Euclidean::slot(4, i)),
         State::get_symbol("γ5"),
         None,
     ));
@@ -781,10 +774,7 @@ where
     I: TensorStructure + FromIterator<Slot<Euclidean>>,
 {
     // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
-    let structure = indices
-        .into_iter()
-        .map(|i| Euclidean::new_slot_selfless(4, i))
-        .collect();
+    let structure = indices.into_iter().map(|i| Euclidean::slot(4, i)).collect();
 
     proj_m_data_dirac(structure)
 }
@@ -797,9 +787,7 @@ where
     T: Zero + One + NumCast + Clone,
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
-        indices
-            .into_iter()
-            .map(|i| Euclidean::new_slot_selfless(4, i)),
+        indices.into_iter().map(|i| Euclidean::slot(4, i)),
         State::get_symbol("ProjM"),
         None,
     ));
@@ -854,10 +842,7 @@ where
     I: TensorStructure + FromIterator<Slot<Bispinor>>,
 {
     // ProjP(1,2) Right chirality projector (( 1+γ5)/ 2 )_s1_s2
-    let structure = indices
-        .into_iter()
-        .map(|i| Bispinor::new_slot_selfless(4, i))
-        .collect();
+    let structure = indices.into_iter().map(|i| Bispinor::slot(4, i)).collect();
 
     proj_p_data_dirac(structure)
 }
@@ -870,9 +855,7 @@ where
     T: Zero + Clone + NumCast,
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
-        indices
-            .into_iter()
-            .map(|i| Bispinor::new_slot_selfless(4, i)),
+        indices.into_iter().map(|i| Bispinor::slot(4, i)),
         State::get_symbol("ProjP"),
         None,
     ));
@@ -944,10 +927,10 @@ where
     I: TensorStructure + FromIterator<Slot<PhysReps>>,
 {
     let structure = [
-        Slot::<PhysReps>::from(Bispinor::new_slot_selfless(4, indices[0])),
-        Bispinor::new_slot_selfless(4, indices[1]).into(),
-        Lorentz::new_slot_selfless(4, minkdices[0]).into(),
-        Lorentz::new_slot_selfless(4, minkdices[1]).into(),
+        Slot::<PhysReps>::from(Bispinor::slot(4, indices[0])),
+        Bispinor::slot(4, indices[1]).into(),
+        Lorentz::slot(4, minkdices[0]).into(),
+        Lorentz::slot(4, minkdices[1]).into(),
     ]
     .into_iter()
     .map(Slot::from)
@@ -966,10 +949,10 @@ where
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         [
-            Slot::<PhysReps>::from(Bispinor::new_slot_selfless(4, indices[0])),
-            Bispinor::new_slot_selfless(4, indices[1]).into(),
-            Lorentz::new_slot_selfless(4, minkdices[0]).into(),
-            Lorentz::new_slot_selfless(4, minkdices[1]).into(),
+            Slot::<PhysReps>::from(Bispinor::slot(4, indices[0])),
+            Bispinor::slot(4, indices[1]).into(),
+            Lorentz::slot(4, minkdices[0]).into(),
+            Lorentz::slot(4, minkdices[1]).into(),
         ],
         State::get_symbol("σ"),
         None,
@@ -1040,20 +1023,6 @@ where
     sigma.set(&[3, 3, 2, 1], cni).unwrap();
 
     sigma
-}
-
-pub fn metric_data<T, N>(structure: N) -> SparseTensor<T, N>
-where
-    T: One + Clone + Neg<Output = T>,
-    N: TensorStructure,
-{
-    let reps = structure.reps();
-
-    if reps[0] == reps[1] && reps.len() == 2 {
-        reps[0].metric_data(structure)
-    } else {
-        panic!("Metric tensor must have equal indices")
-    }
 }
 
 #[cfg(test)]
@@ -1392,8 +1361,8 @@ mod test {
     #[cfg(feature = "shadowing")]
     fn data5() {
         let spinstructure = VecStructure::new(vec![
-            Bispinor::new_slot_selfless(4, 3).into(),
-            Bispinor::new_slot_selfless(4, 4).into(),
+            Bispinor::slot(4, 3).into(),
+            Bispinor::slot(4, 4).into(),
         ]);
 
         let p0 = Atom::parse("p(0)").unwrap();
@@ -1439,8 +1408,8 @@ mod test {
         let ashadow = a.expanded_shadow().unwrap();
 
         let spinstructureb = VecStructure::new(vec![
-            Bispinor::new_slot_selfless(4, 4).into(),
-            Bispinor::new_slot_selfless(4, 3).into(),
+            Bispinor::slot(4, 4).into(),
+            Bispinor::slot(4, 3).into(),
         ]);
 
         let q0 = Atom::parse("q(0)").unwrap();
@@ -1496,8 +1465,8 @@ mod test {
     #[cfg(feature = "shadowing")]
     fn data6() {
         let spinstructure = VecStructure::new(vec![
-            Bispinor::new_slot_selfless(4, 3).into(),
-            Bispinor::new_slot_selfless(4, 4).into(),
+            Bispinor::slot(4, 3).into(),
+            Bispinor::slot(4, 4).into(),
         ]);
 
         let a00 = Atom::parse("a(0,0)").unwrap();
@@ -1531,8 +1500,8 @@ mod test {
         let ashadow = a.expanded_shadow().unwrap();
 
         let spinstructureb = VecStructure::new(vec![
-            Bispinor::new_slot_selfless(4, 4).into(),
-            Bispinor::new_slot_selfless(4, 3).into(),
+            Bispinor::slot(4, 4).into(),
+            Bispinor::slot(4, 3).into(),
         ]);
 
         let b00 = Atom::parse("b(0,0)").unwrap();

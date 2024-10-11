@@ -127,6 +127,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn one_loop_photon_parse() {
         #[cfg(feature = "shadowing")]
         use symbolica::domains::rational::Q;

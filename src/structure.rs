@@ -18,8 +18,7 @@ use derive_more::Sub;
 use derive_more::SubAssign;
 use duplicate::duplicate;
 use indexmap::IndexMap;
-use num::One;
-use num::Zero;
+
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
@@ -31,9 +30,7 @@ use std::hash::Hash;
 use std::ops::AddAssign;
 use std::ops::Deref;
 use std::ops::Index;
-use std::ops::Neg;
 use std::sync::RwLock;
-use symbolica::symb;
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{
@@ -42,26 +39,21 @@ use symbolica::{
     },
     coefficient::CoefficientView,
     state::State,
+    symb,
 };
 use thiserror::Error;
 
-use crate::data::SparseTensor;
 use crate::permutation::Permutation;
 #[cfg(feature = "shadowing")]
 use crate::{
     data::DenseTensor,
-    parametric::{
-        ExpandedCoefficent, FlatCoefficent, MixedTensor, SerializableAtom, TensorCoefficient,
-    },
-    ufo,
+    parametric::{ExpandedCoefficent, FlatCoefficent, SerializableAtom, TensorCoefficient},
 };
 use std::ops::Range;
 
+use crate::iterators::TensorStructureIndexIterator;
 use std::collections::HashMap;
 use std::collections::HashSet;
-
-use crate::data::SetTensorData;
-use crate::iterators::TensorStructureIndexIterator;
 
 // use smartstring::alias::String;
 /// A type that represents the name of an index in a tensor.
@@ -457,7 +449,7 @@ pub trait BaseRepName: RepName<Dual: RepName> + Default {
         State::get_symbol(Self::NAME)
     }
     fn selfless_dual() -> Self::Dual;
-    fn new_dimed_rep_selfless<D: Into<Dimension>>(dim: D) -> Representation<Self>
+    fn rep<D: Into<Dimension>>(dim: D) -> Representation<Self>
     where
         Self: Sized,
     {
@@ -467,20 +459,16 @@ pub trait BaseRepName: RepName<Dual: RepName> + Default {
         }
     }
 
-    fn new_slot_selfless<D: Into<Dimension>, A: Into<AbstractIndex>>(dim: D, aind: A) -> Slot<Self>
+    fn slot<D: Into<Dimension>, A: Into<AbstractIndex>>(dim: D, aind: A) -> Slot<Self>
     where
         Self: Sized,
     {
         let aind: AbstractIndex = aind.into();
         Slot {
-            rep: Self::new_dimed_rep_selfless(dim),
+            rep: Self::rep(dim),
             aind,
         }
     }
-
-    fn base_metric<S, V: One + Neg<Output = V>>(&self, structure: S) -> SparseTensor<V, S>
-    where
-        S: TensorStructure;
 
     #[cfg(feature = "shadowing")]
     fn new_slot_from(
@@ -538,24 +526,6 @@ pub trait RepName: Copy + Clone + Debug + PartialEq + Eq + Hash + Display {
     fn matches(&self, other: &Self::Dual) -> bool;
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol) -> Result<Self>;
-    fn metric<S, V: One + Zero + Neg<Output = V>>(
-        &self,
-        size: usize,
-        aind: [AbstractIndex; 2],
-    ) -> SparseTensor<V, S>
-    where
-        S: TensorStructure + FromIterator<Slot<Self>> + FromIterator<Slot<Self::Dual>>,
-    {
-        let structure: S = [self.new_slot(size, aind[0]), self.new_slot(size, aind[1])]
-            .into_iter()
-            .collect();
-        self.metric_data(structure)
-    }
-
-    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
-        &self,
-        structure: S,
-    ) -> SparseTensor<V, S>;
 
     // fn try_from<B: BaseRepName>(b: B) -> Result<B, SlotError>;
 
@@ -585,12 +555,12 @@ pub trait RepName: Copy + Clone + Debug + PartialEq + Eq + Hash + Display {
         Self: Sized,
     {
         Slot {
-            rep: self.new_dimed_rep(dim),
+            rep: self.new_rep(dim),
             aind: aind.into(),
         }
     }
 
-    fn new_dimed_rep<D: Into<Dimension>>(&self, dim: D) -> Representation<Self>
+    fn new_rep<D: Into<Dimension>>(&self, dim: D) -> Representation<Self>
     where
         Self: Sized,
     {
@@ -608,80 +578,20 @@ pub struct Dual<T> {
     inner: T,
 }
 
-// impl<T: RepName<Dual: RepName>> Display for Dual<T> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.inner.dual())
-//     }
-// }
-
-// impl<T: BaseRepName<Dual = Dual<T>, Base = T>> BaseRepName for Dual<T> {
-//     fn selfless_name() -> String {
-//         format!("dual{}", T::selfless_name())
-//     }
-
-//     fn selfless_base() -> Self::Base {
-//         T::selfless_base()
-//     }
-
-//     fn selfless_pair() -> DualPair<Self::Base> {
-//         DualPair::DualRep(Dual {
-//             inner: T::selfless_base(),
-//         })
-//     }
-
-//     fn selfless_dual() -> Self::Dual {
-//         T::selfless_base()
-//     }
-// }
-
-// impl<T: BaseRepName<Dual = Dual<T>, Base = T>> RepName for Dual<T> {
-//     type Dual = T;
-//     type Base = T::Base;
-//     fn dual(self) -> Self::Dual {
-//         self.inner
-//     }
-
-//     fn metric<S,V:One+Zero+Neg<Output=V>>
-//     (&self,size:usize,aind:[AbstractIndex;2])-> SparseTensor<V,S> where S:TensorStructure+FromIterator<Slot<Self>>+FromIterator<Slot<Self::Dual>> {
-//         self.inner.metric(size,aind)
-//     }
-
-//     fn base(&self) -> Self::Base {
-//         self.inner.base()
-//     }
-
-//     fn try_from_symbol(sym: Symbol) -> Result<Self> {
-//         if Self::selfless_symbol() == sym {
-//             Ok(Dual {
-//                 inner: T::default(),
-//             })
-//         } else {
-//             Err(anyhow!("Not a dual representation"))
-//         }
-//     }
-
-//     fn is_neg(self, i: usize) -> bool {
-//         self.is_neg(i)
-//     }
-// }
-
 duplicate! {
    [isnotselfdual isneg constname varname varnamedual dualconstname;
     [Lorentz] [_i > 0] ["loru"] [LorentzUp] [LorentzDown] ["lord"];
     [SpinFundamental] [false] ["spin"] [SpinFund] [SpinAntiFund] ["spina"];
     [ColorFundamental] [false] ["cof"] [ColorFund] [ColorAntiFund] ["coaf"];
     [ColorSextet] [false] ["cos"] [ColorSextet] [ColorAntiSextet]["coas"]]
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,Default)]
 
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,Default)]
     pub struct isnotselfdual {}
+
     #[allow(unused_variables)]
     impl BaseRepName for isnotselfdual {
         const NAME: &'static str = constname;
-
-
-        // fn selfless_name() -> String {
-        //     constname.to_string()
-        // }
 
         fn selfless_base() -> Self::Base {
             Self::default()
@@ -694,25 +604,6 @@ duplicate! {
         fn selfless_dual() -> Self::Dual {
             Dual{inner:isnotselfdual::default()}
         }
-
-
-
-        fn base_metric<S,V:One+Neg<Output=V>>
-        (&self,structure:S)-> SparseTensor<V,S> where S:TensorStructure {
-        let size = usize::try_from(structure.get_dim(0).unwrap()).unwrap();
-        let mut tensor= SparseTensor::empty(structure);
-            for i in 0..size{
-                if self.is_neg(i){
-
-                    tensor.set(&[i,i],V::one().neg()).unwrap();
-                } else {
-                    tensor.set(&[i,i],V::one()).unwrap();
-                }
-            }
-        tensor
-        }
-
-
     }
 
     impl RepName for isnotselfdual {
@@ -727,12 +618,7 @@ duplicate! {
         true
     }
 
-    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
-            &self,
-            structure: S,
-        ) -> SparseTensor<V, S> {
-        self.base_metric(structure)
-    }
+
 
     fn dual(self) -> Self::Dual {
         isnotselfdual::selfless_dual()
@@ -749,10 +635,11 @@ duplicate! {
             Err(anyhow!("Not a representation"))
         }
     }
+    }
 
 
 
-}
+
 
 
     impl BaseRepName for Dual<isnotselfdual>{
@@ -772,20 +659,7 @@ duplicate! {
             DualPair::DualRep(Dual{inner:isnotselfdual::default()})
         }
 
-        fn base_metric<S,V:One+Neg<Output=V>>
-        (&self,structure:S)-> SparseTensor<V,S> where S:TensorStructure {
- let size = usize::try_from(structure.get_dim(0).unwrap()).unwrap();
-        let mut tensor= SparseTensor::empty(structure);
-            for i in 0..size{
-                if self.is_neg(i){
 
-                    tensor.set(&[i,i],V::one().neg()).unwrap();
-                } else {
-                    tensor.set(&[i,i],V::one()).unwrap();
-                }
-            }
-        tensor
-        }
     }
 
     impl RepName for Dual<isnotselfdual>{
@@ -796,12 +670,6 @@ duplicate! {
             self.inner
         }
 
-       fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
-               &self,
-               structure: S,
-           ) -> SparseTensor<V, S> {
-           self.base_metric(structure)
-       }
 
         fn base(&self) -> Self::Base {
             self.inner
@@ -896,21 +764,6 @@ duplicate! {
             Self::default()
         }
 
-fn base_metric<S,V:One+Neg<Output=V>>
-        (&self,structure:S)-> SparseTensor<V,S> where S:TensorStructure {
- let size = usize::try_from(structure.get_dim(0).unwrap()).unwrap();
-        let mut tensor= SparseTensor::empty(structure);
-            for i in 0..size{
-                if self.is_neg(i){
-
-                    tensor.set(&[i,i],V::one().neg()).unwrap();
-                } else {
-                    tensor.set(&[i,i],V::one()).unwrap();
-                }
-            }
-        tensor
-        }
-
     }
 
     impl RepName for isselfdual {
@@ -938,12 +791,7 @@ fn base_metric<S,V:One+Neg<Output=V>>
         }
     }
 
-    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
-               &self,
-               structure: S,
-           ) -> SparseTensor<V, S> {
-           self.base_metric(structure)
-       }
+
 
 }
 
@@ -1084,25 +932,6 @@ impl RepName for PhysReps {
         }
     }
 
-    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
-        &self,
-        structure: S,
-    ) -> SparseTensor<V, S> {
-        match self {
-            Self::Bispinor(s) => s.base_metric(structure),
-            Self::ColorAntiFund(s) => s.base_metric(structure),
-            Self::ColorAntiSextet(s) => s.base_metric(structure),
-            Self::ColorFund(s) => s.base_metric(structure),
-            Self::ColorSextet(s) => s.base_metric(structure),
-            Self::Euclidean(s) => s.base_metric(structure),
-            Self::ColorAdjoint(s) => s.base_metric(structure),
-            Self::LorentzDown(s) => s.base_metric(structure),
-            Self::SpinFund(s) => s.base_metric(structure),
-            Self::SpinAntiFund(s) => s.base_metric(structure),
-            Self::LorentzUp(s) => s.base_metric(structure),
-        }
-    }
-
     fn is_neg(self, i: usize) -> bool {
         match self {
             Self::LorentzUp(l) => l.is_neg(i),
@@ -1131,7 +960,7 @@ static DUALIZABLE: AppendOnlyVec<RepData> = AppendOnlyVec::new();
 
 impl Rep {
     pub fn new_dual(name: &str) -> Result<Self, RepError> {
-        REPS.write().unwrap().new_dual(name)
+        REPS.write().unwrap().new_dual_impl(name)
     }
 
     pub fn new_self_dual(name: &str) -> Result<Self, RepError> {
@@ -1180,7 +1009,7 @@ impl ExtendibleReps {
     pub fn reps(&self) -> impl Iterator<Item = &Rep> {
         self.name_map.values()
     }
-    pub fn new_dual(&mut self, name: &str) -> Result<Rep, RepError> {
+    pub fn new_dual_impl(&mut self, name: &str) -> Result<Rep, RepError> {
         if let Some(rep) = self.name_map.get(name) {
             if let Rep::SelfDual(_) = rep {
                 return Err(RepError::AlreadyExistsDifferentType(name.into()));
@@ -1201,6 +1030,10 @@ impl ExtendibleReps {
             symbol,
         });
         Ok(rep)
+    }
+
+    pub fn new_dual(name: &str) -> Result<Rep, RepError> {
+        REPS.write().unwrap().new_dual_impl(name)
     }
 
     pub fn new_self_dual(&mut self, name: &str) -> Result<Rep, RepError> {
@@ -1272,12 +1105,13 @@ impl ExtendibleReps {
         }
 
         for name in Self::BUILTIN_DUALIZABLE_NAMES.iter() {
-            new.new_dual(name).unwrap();
+            new.new_dual_impl(name).unwrap();
         }
 
         new
     }
 
+    #[cfg(feature = "shadowing")]
     pub fn find_symbol(&self, symbol: Symbol) -> Option<Rep> {
         self.symbol_map.get(&symbol).cloned()
     }
@@ -1330,13 +1164,7 @@ impl RepName for Rep {
         }
     }
 
-    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
-        &self,
-        structure: S,
-    ) -> SparseTensor<V, S> {
-        SparseTensor::empty(structure)
-    }
-
+    #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol) -> Result<Self> {
         REPS.read()
             .unwrap()
@@ -1414,12 +1242,12 @@ fn extendible_reps() {
     assert!(!ExtendibleReps::LORENTZ_UP.matches(&ExtendibleReps::LORENTZ_UP));
     assert!(ExtendibleReps::BISPINOR.matches(&ExtendibleReps::BISPINOR));
 
-    let rs = r.new_slot(10, 1);
-    let rr = r.new_dimed_rep(1);
+    // let rs = r.new_slot(10, 1);
+    // let rr = r.new_dimed_rep(1);
 
-    println!("{}", rs.to_symbolic());
-    println!("{}", rs.dual());
-    println!("{}", rr)
+    // // println!("{}", rs.to_symbolic());
+    // println!("{}", rs.dual());
+    // println!("{}", rr)
 }
 
 // struct UserDefRep{
@@ -1482,23 +1310,6 @@ impl<T: RepName> Representation<T> {
         }
     }
 
-    pub fn metric<S, V: One + Zero + Neg<Output = V>>(
-        &self,
-        aind: [AbstractIndex; 2],
-    ) -> SparseTensor<V, S>
-    where
-        S: TensorStructure + FromIterator<Slot<T>> + FromIterator<Slot<T::Dual>>,
-    {
-        self.rep.metric(self.dim.try_into().unwrap(), aind)
-    }
-
-    pub fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
-        &self,
-        structure: S,
-    ) -> SparseTensor<V, S> {
-        self.rep.metric_data(structure)
-    }
-
     pub fn is_neg(&self, i: usize) -> bool {
         self.rep.is_neg(i)
     }
@@ -1516,19 +1327,20 @@ impl<T: RepName> Representation<T> {
     ///
     /// # Example
     /// ```
-    /// # use spenso::Representation;
-    /// # use spenso::Dimension;
-    /// let spin = Representation::Bispinor(Dimension(5));
+    /// # use spenso::structure::Bispinor;
+    /// # use spenso::structure::BaseRepName;
+    /// # use spenso::structure::Representation;
+    /// let spin: Representation<Bispinor> = Bispinor::rep(5);
     ///
-    /// let metric_diag = spin.negative();
+    /// let metric_diag: Vec<bool> = spin.negative().unwrap();
     ///
-    /// let mut agree= true;
+    /// let mut agree = true;
     ///
-    ///     for (i,r) in metric_diag.iter().enumerate(){
-    ///         if (r ^ spin.is_neg(i)) {
-    ///             agree = false;
-    ///         }
+    /// for (i, r) in metric_diag.iter().enumerate() {
+    ///   if r ^ spin.is_neg(i) {
+    ///        agree = false;
     ///     }
+    /// }
     ///
     /// assert!(agree);
     /// ```
@@ -1537,6 +1349,23 @@ impl<T: RepName> Representation<T> {
             .map(|i| self.is_neg(i))
             .collect())
     }
+}
+
+#[test]
+fn test_negative() {
+    let spin: Representation<Bispinor> = Bispinor::rep(5);
+
+    let metric_diag: Vec<bool> = spin.negative().unwrap();
+
+    let mut agree = true;
+
+    for (i, r) in metric_diag.iter().enumerate() {
+        if r ^ spin.is_neg(i) {
+            agree = false;
+        }
+    }
+
+    assert!(agree);
 }
 
 impl<T: RepName> Display for Representation<T> {
@@ -1589,30 +1418,52 @@ where
 /// A [`Slot`] is an index, identified by a `usize` and a [`Representation`].
 ///
 /// A vector of slots thus identifies the shape and type of the tensor.
-/// Two indices are considered matching if *both* the `usize` and the [`Representation`] matches.
+/// Two indices are considered matching if *both* the `Dimension` and the [`Representation`] matches.
 ///
 /// # Example
 ///
-/// It can be built from a tuple of `usize` and `Representation`
+/// It can be built from a `Representation` calling one of the built in representations e.g.
 /// ```
-/// # use spenso::{Representation,Slot,Dimension,AbstractIndex};
-/// let mink = Representation::Lorentz(Dimension(4));
-/// let mu = Slot::from((AbstractIndex(0),mink));
-/// let nu = Slot::from((AbstractIndex(1),mink));
+/// # use spenso::structure::{Representation,Slot,Dimension,AbstractIndex,Lorentz,Dual,RepName,BaseRepName,DualSlotTo};
+/// let mink: Representation<Lorentz> = Lorentz::rep(4);
+/// let mud: Slot<Lorentz> = mink.new_slot(0);
+/// let muu: Slot<Dual<Lorentz>> = mink.new_slot(0).dual();
+/// assert!(mud.matches(&muu));
+/// assert_eq!("lord4|₀", format!("{muu}"));
+/// ```
+/// Or one can define custom representations{}
+/// ```
+/// # use spenso::structure::{Rep,Slot,RepName,DualSlotTo};
+/// let custom_mink = Rep::new_dual("custom_lor").unwrap();
 ///
-/// assert_eq!("id0lor4",format!("{}",mu));
-/// assert_eq!("id1lor4",format!("{}",nu));
-/// ```
+/// let nud: Slot<Rep> = custom_mink.new_slot(4, 0);
+/// let nuu: Slot<Rep> = nud.dual();
 ///
-/// It can also be built from a tuple of `usize` and `usize`, where we default to `Representation::Euclidean`
-/// ```
-/// # use spenso::{Representation,Slot};
-/// let mu = Slot::from((0,4));
-/// assert_eq!("id0euc4",format!("{}",mu));
+/// assert!(nuu.matches(&nud));
+/// assert_eq!("custom_lor🠓4|₀", format!("{nuu}"));
 /// ```
 pub struct Slot<T: RepName> {
     pub aind: AbstractIndex,
     rep: Representation<T>,
+}
+
+#[test]
+fn doc_slot() {
+    let mink: Representation<Lorentz> = Lorentz::rep(4);
+
+    let mud: Slot<Lorentz> = mink.new_slot(0);
+    let muu: Slot<Dual<Lorentz>> = mink.new_slot(0).dual();
+
+    assert!(mud.matches(&muu));
+    assert_eq!("lord4|₀", format!("{muu}"));
+
+    let custom_mink = Rep::new_dual("custom_lor").unwrap();
+
+    let nud: Slot<Rep> = custom_mink.new_slot(4, 0);
+    let nuu: Slot<Rep> = nud.dual();
+
+    assert!(nuu.matches(&nud));
+    assert_eq!("custom_lor🠓4|₀", format!("{nuu}"));
 }
 
 impl<T: RepName> Slot<T> {
@@ -1677,11 +1528,11 @@ pub enum SlotError {
 ///
 /// ```
 ///
-/// # use spenso::{Representation,Slot,Dimension,AbstractIndex};
+/// # use spenso::structure::{Representation,Slot,Dimension,AbstractIndex,ToSymbolic,Lorentz,RepName,BaseRepName,IsAbstractSlot};
 /// # use symbolica::atom::AtomView;
 
-///    let mink = Representation::Lorentz(Dimension(4));
-///    let mu = Slot::from((AbstractIndex(0), mink));
+///    let mink = Lorentz::rep(4);
+///    let mu = mink.new_slot(0);
 ///    let atom = mu.to_symbolic();
 ///    let slot = Slot::try_from(atom.as_view()).unwrap();
 ///    assert_eq!(slot, mu);
@@ -1735,6 +1586,15 @@ impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
     }
 }
 
+#[cfg(feature = "shadowing")]
+#[test]
+fn feature() {
+    let mink = Lorentz::rep(4);
+    let mu = mink.new_slot(0);
+    let atom = mu.to_symbolic();
+    let slot = Slot::try_from(atom.as_view()).unwrap();
+    assert_eq!(slot, mu);
+}
 impl<T: BaseRepName<Base = T>> Slot<T>
 where
     Dual<T>: BaseRepName<Base = T, Dual = T>,
@@ -1801,18 +1661,28 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash {
     ///
     /// ```
     /// # use symbolica::state::{State, Workspace};
-    /// # use spenso::{Representation,Slot,Dimension,AbstractIndex};
-    /// let mink = Representation::Lorentz(Dimension(4));
-    /// let mu = Slot::from((AbstractIndex(0),mink));
-    ///
-    /// assert_eq!("lor(4,0)",format!("{}",mu.to_symbolic()));
-    /// assert_eq!("id0lor4",format!("{}",mu));
+    /// # use spenso::structure::{Representation,Slot,Dimension,AbstractIndex,Lorentz,ToSymbolic,IsAbstractSlot,BaseRepName};
+    /// let mink = Lorentz::rep(4);
+    /// let mu = mink.new_slot(0);
+    /// println!("{}", mu.to_symbolic());
+    /// assert_eq!("loru(4,0)", mu.to_symbolic().to_string());
+    /// assert_eq!("loru4|₀", mu.to_string());
     /// ```
     fn to_symbolic(&self) -> Atom;
     #[cfg(feature = "shadowing")]
     fn to_symbolic_wrapped(&self) -> Atom;
     #[cfg(feature = "shadowing")]
     fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError>;
+}
+
+#[cfg(feature = "shadowing")]
+#[test]
+fn to_symbolic() {
+    let mink = Lorentz::rep(4);
+    let mu = mink.new_slot(0);
+    println!("{}", mu.to_symbolic());
+    assert_eq!("loru(4,0)", mu.to_symbolic().to_string());
+    assert_eq!("loru4|₀", mu.to_string());
 }
 
 pub trait DualSlotTo: IsAbstractSlot {
@@ -1905,15 +1775,6 @@ where
     type Dual = DualPair<R>;
     type Base = R::Base;
 
-    fn metric_data<V: One + Neg<Output = V>, S: TensorStructure>(
-        &self,
-        structure: S,
-    ) -> SparseTensor<V, S> {
-        match self {
-            Self::DualRep(d) => d.base_metric(structure),
-            Self::Rep(r) => r.base_metric(structure),
-        }
-    }
     fn dual(self) -> Self::Dual {
         match self {
             Self::Rep(r) => Self::DualRep(r.dual()),
@@ -2127,36 +1988,6 @@ pub trait ToSymbolic: TensorStructure {
         Self: std::marker::Sized + Clone,
     {
         self.to_dense_labeled(Self::flat_atom)
-    }
-    fn to_explicit_rep(self) -> Result<MixedTensor<f64, Self>>
-    where
-        Self: std::marker::Sized + Clone + HasName,
-        Self::Name: IntoSymbol,
-    {
-        let identity = State::get_symbol("id");
-        let gamma = State::get_symbol("γ");
-        let gamma5 = State::get_symbol("γ5");
-        let proj_m = State::get_symbol("ProjM");
-        let proj_p = State::get_symbol("ProjP");
-        let sigma = State::get_symbol("σ");
-        let metric = State::get_symbol("Metric");
-
-        if let Some(name) = self.name() {
-            let name = name.ref_into_symbol();
-            Ok(match name {
-                _ if name == identity => ufo::identity_data::<f64, Self>(self).into(),
-
-                _ if name == gamma => ufo::gamma_data_dirac(self).into(),
-                _ if name == gamma5 => ufo::gamma5_dirac_data(self).into(),
-                _ if name == proj_m => ufo::proj_m_data_dirac(self).into(),
-                _ if name == proj_p => ufo::proj_p_data_dirac(self).into(),
-                _ if name == sigma => ufo::sigma_data(self).into(),
-                _ if name == metric => ufo::metric_data::<f64, Self>(self).into(),
-                _ => MixedTensor::param(self.to_dense_expanded_labels()?.into()),
-            })
-        } else {
-            Err(anyhow!("No name"))
-        }
     }
 
     fn to_symbolic(&self) -> Option<Atom>
@@ -3260,7 +3091,9 @@ impl<'a> TryFrom<FunView<'a>> for AtomStructure {
                     }
                 }
 
-                structure.additional_args = Some(args);
+                if !args.is_empty() {
+                    structure.additional_args = Some(args);
+                }
 
                 Ok(structure)
             }

@@ -178,7 +178,7 @@
           # pkgs.ripgrep
           pkgs.quarto
           pkgs.deno
-          pkgs.jj
+          pkgs.jujutsu
           pkgs.nixd
           pkgs.bfg-repo-cleaner
         ];

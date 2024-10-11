@@ -51,13 +51,17 @@ pub trait Shadowable:
     where
         Rep: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::R>,
     {
-        let key = ExplicitKey::from_structure(self.structure().clone());
-        EXPLICIT_TENSOR_MAP
-            .read()
-            .unwrap()
-            .get(&key)
-            .ok()
-            .map(|t| t.map_structure(|_| self.structure().clone()))
+        let key = ExplicitKey::from_structure(self.structure().clone())?;
+        println!("{key:?}");
+
+        Some(
+            EXPLICIT_TENSOR_MAP
+                .read()
+                .unwrap()
+                .get(&key)
+                .map(|t| t.map_structure(|_| self.structure().clone()))
+                .unwrap_or(MixedTensor::param(self.expanded_shadow().unwrap().into())),
+        )
     }
 }
 
@@ -66,15 +70,15 @@ pub type ExplicitKey = IndexlessNamedStructure<Symbol, Vec<Atom>, Rep>;
 impl ExplicitKey {
     pub fn from_structure<S: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs>>(
         structure: S,
-    ) -> Self
+    ) -> Option<Self>
     where
         Rep: From<<S::Slot as IsAbstractSlot>::R>,
     {
-        IndexlessNamedStructure::from_iter(
+        Some(IndexlessNamedStructure::from_iter(
             structure.reps().into_iter().map(|r| r.cast()),
-            structure.name().unwrap().ref_into_symbol(),
+            structure.name()?.ref_into_symbol(),
             structure.args().map(|a| a.args()),
-        )
+        ))
     }
 }
 
@@ -151,6 +155,8 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
             Self::identity,
         );
 
+        println!("{:?}", Self::gamma_key());
+
         new.insert_explicit_complex_sparse(Self::gamma_key(), Self::gamma_data_weyl_transposed());
         new.insert_explicit_complex_sparse(Self::gamma_five_key(), Self::gamma_five_data_weyl());
         new.insert_explicit_real_sparse(Self::proj_m_key(), Self::proj_m_data_weyl());
@@ -163,9 +169,9 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
     fn gamma_key() -> ExplicitKey {
         ExplicitKey::from_iter(
             [
-                ExtendibleReps::LORENTZ_UP.new_dimed_rep(4),
-                ExtendibleReps::BISPINOR.new_dimed_rep(4),
-                ExtendibleReps::BISPINOR.new_dimed_rep(4),
+                ExtendibleReps::LORENTZ_UP.new_rep(4),
+                ExtendibleReps::BISPINOR.new_rep(4),
+                ExtendibleReps::BISPINOR.new_rep(4),
             ],
             symb!(Self::GAMMA_NAME),
             None,
@@ -174,7 +180,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
 
     fn metric_key(rep: Rep) -> ExplicitKey {
         ExplicitKey::from_iter(
-            [rep.new_dimed_rep(4), rep.new_dimed_rep(4)],
+            [rep.new_rep(4), rep.new_rep(4)],
             symb!(Self::METRIC_NAME),
             None,
         )
@@ -229,8 +235,8 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
     fn gamma_five_key() -> ExplicitKey {
         ExplicitKey::from_iter(
             [
-                ExtendibleReps::BISPINOR.new_dimed_rep(4),
-                ExtendibleReps::BISPINOR.new_dimed_rep(4),
+                ExtendibleReps::BISPINOR.new_rep(4),
+                ExtendibleReps::BISPINOR.new_rep(4),
             ],
             symb!(Self::GAMMA5_NAME),
             None,
@@ -254,8 +260,8 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
     fn proj_m_key() -> ExplicitKey {
         ExplicitKey::from_iter(
             [
-                ExtendibleReps::BISPINOR.new_dimed_rep(4),
-                ExtendibleReps::BISPINOR.new_dimed_rep(4),
+                ExtendibleReps::BISPINOR.new_rep(4),
+                ExtendibleReps::BISPINOR.new_rep(4),
             ],
             symb!(Self::PROJ_M_NAME),
             None,
@@ -265,8 +271,8 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
     fn proj_p_key() -> ExplicitKey {
         ExplicitKey::from_iter(
             [
-                ExtendibleReps::BISPINOR.new_dimed_rep(4),
-                ExtendibleReps::BISPINOR.new_dimed_rep(4),
+                ExtendibleReps::BISPINOR.new_rep(4),
+                ExtendibleReps::BISPINOR.new_rep(4),
             ],
             symb!(Self::PROJ_P_NAME),
             None,
@@ -290,10 +296,10 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
     fn sigma_key() -> ExplicitKey {
         ExplicitKey::from_iter(
             [
-                ExtendibleReps::LORENTZ_UP.new_dimed_rep(4),
-                ExtendibleReps::LORENTZ_UP.new_dimed_rep(4),
-                ExtendibleReps::BISPINOR.new_dimed_rep(4),
-                ExtendibleReps::BISPINOR.new_dimed_rep(4),
+                ExtendibleReps::LORENTZ_UP.new_rep(4),
+                ExtendibleReps::LORENTZ_UP.new_rep(4),
+                ExtendibleReps::BISPINOR.new_rep(4),
+                ExtendibleReps::BISPINOR.new_rep(4),
             ],
             symb!(Self::SIGMA_NAME),
             None,

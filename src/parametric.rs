@@ -1279,7 +1279,7 @@ impl<'a> TryFrom<FunView<'a>> for MixedTensor {
             }
         }
         let s = NamedStructure::from_iter(structure, f_id, Some(args));
-        s.to_explicit_rep()
+        s.to_shell().to_explicit().ok_or(anyhow!("Cannot shadow"))
     }
 }
 

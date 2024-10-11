@@ -991,6 +991,21 @@ where
     pub scalar: Option<S>,
 }
 
+impl<T: TensorStructure, S> TensorNetwork<T, S>
+where
+    T::Slot: Serialize + for<'a> Deserialize<'a>,
+{
+    pub fn map_scalar<F, U>(self, f: F) -> TensorNetwork<T, U>
+    where
+        F: FnOnce(S) -> U,
+    {
+        TensorNetwork {
+            graph: self.graph,
+            scalar: self.scalar.map(f),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TensorNetworkSet<T: TensorStructure, S>
 where

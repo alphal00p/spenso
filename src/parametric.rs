@@ -18,7 +18,7 @@ use serde::{de, ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
 use crate::{
     arithmetic::ScalarMul,
-    complex::{Complex, RealOrComplexTensor},
+    complex::{Complex, RealOrComplex, RealOrComplexTensor},
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero},
     data::{DataIterator, DataTensor, DenseTensor, HasTensorData, SetTensorData, SparseTensor},
     iterators::{IteratableTensor, IteratorEnum},
@@ -33,7 +33,7 @@ use crate::{
 
 use symbolica::{
     atom::{representation::FunView, Atom, AtomOrView, AtomView, FunctionBuilder, Symbol},
-    coefficient::ConvertToRing,
+    coefficient::{Coefficient, ConvertToRing},
     domains::{
         factorized_rational_polynomial::{
             FactorizedRationalPolynomial, FromNumeratorAndFactorizedDenominator,
@@ -1154,6 +1154,28 @@ where
 impl<T> From<Atom> for ConcreteOrParam<T> {
     fn from(value: Atom) -> Self {
         ConcreteOrParam::Param(value)
+    }
+}
+
+impl<T: Into<Atom>> From<ConcreteOrParam<T>> for Atom {
+    fn from(value: ConcreteOrParam<T>) -> Self {
+        match value {
+            ConcreteOrParam::Concrete(x) => x.into(),
+            ConcreteOrParam::Param(x) => x,
+        }
+    }
+}
+
+impl<T: Into<Coefficient>> From<RealOrComplex<T>> for Atom {
+    fn from(value: RealOrComplex<T>) -> Self {
+        match value {
+            RealOrComplex::Real(x) => Atom::new_num(x),
+            RealOrComplex::Complex(x) => {
+                let (re, im) = (Atom::new_num(x.re), Atom::new_num(x.im));
+                let i = Atom::new_var(State::I);
+                re + im * i
+            }
+        }
     }
 }
 

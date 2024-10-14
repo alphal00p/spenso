@@ -5,6 +5,7 @@ use ahash::{AHashSet, HashMap};
 use anyhow::anyhow;
 #[cfg(feature = "shadowing")]
 use std::sync::Arc;
+use symbolica::atom::PowView;
 
 // use log::trace;
 use serde::{Deserialize, Serialize};
@@ -2206,6 +2207,8 @@ pub enum TensorNetworkError {
     NotAllScalars,
     #[error("failed to contract")]
     FailedContract(ContractionError),
+    #[error("negative exponent not yet supported")]
+    NegativeExponent,
     #[error(transparent)]
     Other(#[from] anyhow::Error),
     #[error("Io error")]
@@ -2243,6 +2246,7 @@ where
         + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>
         + HasStructure<Scalar: From<S>>
         + ScalarTensor
+        + Contract<LCM = T>
         + ScalarMul<S, Output = T>,
 {
     pub fn result_tensor_smart(&self) -> Result<T, TensorNetworkError> {
@@ -2265,7 +2269,23 @@ where
                 };
                 Ok(res)
             }
-            _ => Err(TensorNetworkError::MoreThanOneNode),
+            _ => {
+                let mut iter = self.graph.nodes.iter();
+
+                let mut res = iter.next().unwrap().1.clone();
+                for (_, t) in iter {
+                    res = res
+                        .contract(t)
+                        .map_err(TensorNetworkError::FailedContract)?;
+                }
+                let res = if let Some(scalar) = self.scalar.as_ref() {
+                    res.scalar_mul(scalar)
+                        .ok_or(TensorNetworkError::FailedScalarMul)?
+                } else {
+                    res
+                };
+                Ok(res)
+            }
         }
     }
 }
@@ -2484,6 +2504,7 @@ impl<'a> TryFrom<AtomView<'a>>
             AtomView::Mul(m) => m.try_into(),
             AtomView::Fun(f) => f.try_into(),
             AtomView::Add(a) => a.try_into(),
+            AtomView::Pow(p) => p.try_into(),
             a => {
                 let mut network: Self = TensorNetwork::new();
                 let a = a.to_owned();
@@ -2493,6 +2514,48 @@ impl<'a> TryFrom<AtomView<'a>>
                 Ok(network)
             }
         }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<'a> TryFrom<PowView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
+    type Error = TensorNetworkError;
+
+    fn try_from(value: PowView<'a>) -> std::result::Result<Self, Self::Error> {
+        let mut new = TensorNetwork::new();
+
+        let (base, exp) = value.get_base_exp();
+
+        if let Ok(mut n) = i64::try_from(exp) {
+            if n < 0 {
+                return Err(TensorNetworkError::NegativeExponent);
+            }
+            if n == 0 {
+                new.scalar = Some(SerializableAtom(Atom::new_num(1)));
+                return Ok(new);
+            } else if n == 1 {
+                return base.try_into();
+            }
+            let mut net: TensorNetwork<_, _> = base.try_into()?;
+
+            net.contract();
+
+            let res = net.result_tensor()?;
+            new.push(res.clone());
+            while n > 1 {
+                if n % 2 == 0 {
+                    new.push(res.clone().dual());
+                } else {
+                    new.push(res.clone());
+                }
+                new.contract();
+                n -= 1;
+            }
+        } else {
+            new.scalar = Some(SerializableAtom(value.as_view().to_owned()));
+        }
+
+        Ok(new)
     }
 }
 

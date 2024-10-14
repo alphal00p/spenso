@@ -528,6 +528,13 @@ where
         &self.structure
     }
 
+    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
+        SparseTensor {
+            elements: self.elements,
+            structure: f(self.structure),
+        }
+    }
+
     fn mut_structure(&mut self) -> &mut Self::Structure {
         &mut self.structure
     }
@@ -795,6 +802,13 @@ where
     type Structure = I;
     fn structure(&self) -> &Self::Structure {
         &self.structure
+    }
+
+    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
+        DenseTensor {
+            data: self.data,
+            structure: f(self.structure),
+        }
     }
     fn mut_structure(&mut self) -> &mut Self::Structure {
         &mut self.structure
@@ -1447,6 +1461,13 @@ where
             DataTensor::Sparse(s) => s.scalar(),
         }
     }
+
+    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_same_structure(f)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_same_structure(f)),
+        }
+    }
 }
 
 impl<T, I> ScalarTensor for DataTensor<T, I>
@@ -1623,6 +1644,13 @@ where
         match self {
             NumTensor::Float(f) => f.structure(),
             NumTensor::Complex(c) => c.structure(),
+        }
+    }
+
+    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
+        match self {
+            NumTensor::Float(v) => NumTensor::Float(v.map_same_structure(f)),
+            NumTensor::Complex(c) => NumTensor::Complex(c.map_same_structure(f)),
         }
     }
 

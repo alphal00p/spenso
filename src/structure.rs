@@ -1824,6 +1824,7 @@ pub trait HasStructure {
     fn structure(&self) -> &Self::Structure;
     fn mut_structure(&mut self) -> &mut Self::Structure;
     fn scalar(self) -> Option<Self::Scalar>;
+    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self;
 
     fn set_structure_name<N>(&mut self, name: N)
     where
@@ -1877,6 +1878,9 @@ where
 {
     // type R = <T::Structure as TensorStructure>::R;
     type Slot = <T::Structure as TensorStructure>::Slot;
+    fn dual(self) -> Self {
+        self.map_same_structure(|s| s.dual())
+    }
 
     delegate! {
         to self.structure() {
@@ -2026,6 +2030,8 @@ pub trait ScalarStructure {
 pub trait TensorStructure {
     type Slot: IsAbstractSlot + DualSlotTo<Dual = Self::Slot>;
     // type R: Rep;
+    //
+    fn dual(self) -> Self;
 
     fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
     fn external_dims_iter(&self) -> impl Iterator<Item = Dimension>;
@@ -2374,6 +2380,9 @@ impl<S: IsAbstractSlot<R: RepName> + DualSlotTo<Dual = S>> TensorStructure for V
     type Slot = S;
     // type R = S::R;
 
+    fn dual(self) -> Self {
+        self.into_iter().map(|s| s.dual()).collect()
+    }
     fn external_reps_iter(
         &self,
     ) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>> {
@@ -2625,6 +2634,10 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
 {
     type Slot = Slot<T>;
     // type R = T;
+    //
+    fn dual(self) -> Self {
+        self.structure.into_iter().map(|r| r.dual()).collect()
+    }
 
     fn external_reps_iter(
         &self,
@@ -2923,10 +2936,15 @@ impl ScalarStructure for VecStructure {
 impl TensorStructure for VecStructure {
     type Slot = PhysicalSlots;
     // type R = PhysicalReps;
+    //
+    fn dual(self) -> Self {
+        self.structure.dual().into()
+    }
 
     delegate! {
         to self.structure{
             fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+
             fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
             fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
             fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
@@ -2970,6 +2988,15 @@ pub struct IndexlessNamedStructure<Name = SmartString<LazyCompact>, Args = usize
 }
 impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructure<Name, Args, R> {
     type Slot = Slot<R>;
+
+    fn dual(self) -> Self {
+        Self {
+            structure: self.structure.dual(),
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+        }
+    }
+
     delegate! {
         to self.structure{
             fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
@@ -3198,6 +3225,13 @@ impl<N, A> TensorStructure for NamedStructure<N, A> {
     type Slot = PhysicalSlots;
     // type R = PhysicalReps;
 
+    fn dual(self) -> Self {
+        NamedStructure {
+            structure: self.structure.dual(),
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+        }
+    }
     delegate! {
         to self.structure{
             fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
@@ -3279,6 +3313,13 @@ impl ScalarStructure for ContractionCountStructure {
 impl TensorStructure for ContractionCountStructure {
     type Slot = PhysicalSlots;
     // type R = PhysicalReps;
+    //
+    fn dual(self) -> Self {
+        ContractionCountStructure {
+            structure: self.structure.dual(),
+            contractions: self.contractions,
+        }
+    }
 
     delegate! {
         to self.structure{
@@ -3395,6 +3436,15 @@ impl<N, A> ScalarStructure for SmartShadowStructure<N, A> {
 impl<N, A> TensorStructure for SmartShadowStructure<N, A> {
     type Slot = PhysicalSlots;
     // type R = PhysicalReps;
+    //
+    fn dual(self) -> Self {
+        SmartShadowStructure {
+            structure: self.structure.dual(),
+            contractions: self.contractions,
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+        }
+    }
 
     delegate! {
         to self.structure{
@@ -3544,6 +3594,14 @@ impl<N, A> ScalarStructure for HistoryStructure<N, A> {
 impl<N, A> TensorStructure for HistoryStructure<N, A> {
     type Slot = PhysicalSlots;
     // type R = PhysicalReps;
+    //
+    fn dual(self) -> Self {
+        Self {
+            internal: self.internal,
+            names: self.names,
+            external: self.external.dual(),
+        }
+    }
 
     delegate! {
         to self.external{
@@ -3851,6 +3909,11 @@ impl<S: TensorStructure> HasStructure for TensorShell<S> {
     type Scalar = ();
     fn structure(&self) -> &S {
         &self.structure
+    }
+
+    fn map_same_structure(mut self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
+        self.structure = f(self.structure);
+        self
     }
 
     fn scalar(self) -> Option<Self::Scalar> {

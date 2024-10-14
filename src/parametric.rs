@@ -1153,6 +1153,13 @@ where
         }
     }
 
+    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
+        match self {
+            ParamOrConcrete::Concrete(x) => ParamOrConcrete::Concrete(x.map_same_structure(f)),
+            ParamOrConcrete::Param(x) => ParamOrConcrete::Param(x.map_same_structure(f)),
+        }
+    }
+
     fn mut_structure(&mut self) -> &mut Self::Structure {
         match self {
             ParamOrConcrete::Concrete(x) => x.mut_structure(),
@@ -1674,6 +1681,13 @@ where
 
     fn mut_structure(&mut self) -> &mut Self::Structure {
         self.tensor.mut_structure()
+    }
+
+    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
+        ParamTensor {
+            tensor: self.tensor.map_same_structure(f),
+            ..self
+        }
     }
 
     fn scalar(self) -> Option<Self::Scalar> {
@@ -2226,6 +2240,14 @@ impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
 
     fn mut_structure(&mut self) -> &mut Self::Structure {
         &mut self.structure
+    }
+
+    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
+        Self {
+            eval: self.eval,
+            indexmap: self.indexmap,
+            structure: f(self.structure),
+        }
     }
 
     fn scalar(self) -> Option<Self::Scalar> {

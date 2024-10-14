@@ -7,7 +7,6 @@ use anyhow::{anyhow, Result};
 use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
-use thiserror::Error;
 
 use num::{Float, One, Zero};
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
@@ -1657,6 +1656,15 @@ impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
         match self {
             RealOrComplexTensor::Real(r) => r.structure(),
             RealOrComplexTensor::Complex(r) => r.structure(),
+        }
+    }
+
+    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
+        match self {
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.map_same_structure(f)),
+            RealOrComplexTensor::Complex(d) => {
+                RealOrComplexTensor::Complex(d.map_same_structure(f))
+            }
         }
     }
 

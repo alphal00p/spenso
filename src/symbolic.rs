@@ -38,6 +38,13 @@ impl HasStructure for SymbolicTensor {
         &mut self.structure
     }
 
+    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
+        SymbolicTensor {
+            structure: f(self.structure),
+            expression: self.expression,
+        }
+    }
+
     fn scalar(self) -> Option<Self::Scalar> {
         if self.is_scalar() {
             Some(self.expression)

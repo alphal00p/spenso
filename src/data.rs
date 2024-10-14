@@ -116,13 +116,29 @@ pub trait SetTensorData {
 
 /// Trait for getting the data of a tensor
 pub trait GetTensorData {
-    type GetData;
+    type GetDataRef<'a>
+    where
+        Self: 'a;
 
-    fn get(&self, indices: &[ConcreteIndex]) -> Result<&Self::GetData>;
+    type GetDataRefMut<'a>
+    where
+        Self: 'a;
 
-    fn get_linear(&self, index: FlatIndex) -> Option<&Self::GetData>;
+    type GetDataOwned;
 
-    fn get_linear_mut(&mut self, index: FlatIndex) -> Option<&mut Self::GetData>;
+    fn get_ref<'a>(&'a self, indices: &[ConcreteIndex]) -> Result<Self::GetDataRef<'a>>;
+
+    fn get_ref_linear(&self, index: FlatIndex) -> Option<Self::GetDataRef<'_>>;
+
+    fn get_mut_linear(&mut self, index: FlatIndex) -> Option<Self::GetDataRefMut<'_>>;
+
+    fn get_owned(&self, indices: &[ConcreteIndex]) -> Result<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone;
+
+    fn get_owned_linear(&self, index: FlatIndex) -> Option<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone;
 }
 
 /// Sparse data tensor, generic on storage type `T`, and structure type `I`.
@@ -444,8 +460,12 @@ impl<T, I> GetTensorData for SparseTensor<T, I>
 where
     I: TensorStructure,
 {
-    type GetData = T;
-    fn get(&self, indices: &[ConcreteIndex]) -> Result<&T> {
+    type GetDataRef<'a> = &'a T where Self: 'a;
+    type GetDataRefMut<'a> = &'a mut T where
+        Self: 'a;
+
+    type GetDataOwned = T;
+    fn get_ref(&self, indices: &[ConcreteIndex]) -> Result<&T> {
         if let Ok(idx) = self.flat_index(indices) {
             self.elements
                 .get(&idx)
@@ -461,12 +481,26 @@ where
         }
     }
 
-    fn get_linear(&self, index: FlatIndex) -> Option<&T> {
+    fn get_ref_linear(&self, index: FlatIndex) -> Option<&T> {
         self.elements.get(&index)
     }
 
-    fn get_linear_mut(&mut self, index: FlatIndex) -> Option<&mut T> {
+    fn get_mut_linear(&mut self, index: FlatIndex) -> Option<&mut T> {
         self.elements.get_mut(&index)
+    }
+
+    fn get_owned(&self, indices: &[ConcreteIndex]) -> Result<Self::GetDataOwned>
+    where
+        T: Clone,
+    {
+        self.get_ref(indices).cloned()
+    }
+
+    fn get_owned_linear(&self, index: FlatIndex) -> Option<Self::GetDataOwned>
+    where
+        T: Clone,
+    {
+        self.elements.get(&index).cloned()
     }
 }
 
@@ -1141,13 +1175,17 @@ impl<T, I> GetTensorData for DenseTensor<T, I>
 where
     I: TensorStructure,
 {
-    type GetData = T;
-    fn get_linear(&self, index: FlatIndex) -> Option<&T> {
+    type GetDataRef<'a> = &'a T where Self: 'a;
+    type GetDataRefMut<'a> = &'a mut T where
+        Self: 'a;
+
+    type GetDataOwned = T;
+    fn get_ref_linear(&self, index: FlatIndex) -> Option<&T> {
         let i: usize = index.into();
         self.data.get(i)
     }
 
-    fn get(&self, indices: &[ConcreteIndex]) -> Result<&T> {
+    fn get_ref(&self, indices: &[ConcreteIndex]) -> Result<&T> {
         if let Ok(idx) = self.flat_index(indices) {
             Ok(&self[idx])
         } else if self.structure.is_scalar() && indices.is_empty() {
@@ -1157,9 +1195,23 @@ where
         }
     }
 
-    fn get_linear_mut(&mut self, index: FlatIndex) -> Option<&mut Self::GetData> {
+    fn get_mut_linear(&mut self, index: FlatIndex) -> Option<&mut T> {
         let i: usize = index.into();
         self.data.get_mut(i)
+    }
+
+    fn get_owned(&self, indices: &[ConcreteIndex]) -> Result<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone,
+    {
+        self.get_ref(indices).cloned()
+    }
+
+    fn get_owned_linear(&self, index: FlatIndex) -> Option<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone,
+    {
+        self.get_ref_linear(index).cloned()
     }
 }
 
@@ -1512,27 +1564,44 @@ impl<T, S> GetTensorData for DataTensor<T, S>
 where
     S: TensorStructure,
 {
-    type GetData = T;
+    type GetDataRef<'a> =  &'a T where Self:'a;
+    type GetDataRefMut<'a> = &'a mut T where
+        Self: 'a;
 
-    fn get(&self, indices: &[ConcreteIndex]) -> Result<&Self::GetData> {
+    type GetDataOwned = T;
+    fn get_ref(&self, indices: &[ConcreteIndex]) -> Result<&T> {
         match self {
-            DataTensor::Dense(d) => d.get(indices),
-            DataTensor::Sparse(s) => s.get(indices),
+            DataTensor::Dense(d) => d.get_ref(indices),
+            DataTensor::Sparse(s) => s.get_ref(indices),
         }
     }
 
-    fn get_linear(&self, index: FlatIndex) -> Option<&Self::GetData> {
+    fn get_ref_linear(&self, index: FlatIndex) -> Option<&T> {
         match self {
-            DataTensor::Dense(d) => d.get_linear(index),
-            DataTensor::Sparse(s) => s.get_linear(index),
+            DataTensor::Dense(d) => d.get_ref_linear(index),
+            DataTensor::Sparse(s) => s.get_ref_linear(index),
         }
     }
 
-    fn get_linear_mut(&mut self, index: FlatIndex) -> Option<&mut Self::GetData> {
+    fn get_mut_linear(&mut self, index: FlatIndex) -> Option<&mut T> {
         match self {
-            DataTensor::Dense(d) => d.get_linear_mut(index),
-            DataTensor::Sparse(s) => s.get_linear_mut(index),
+            DataTensor::Dense(d) => d.get_mut_linear(index),
+            DataTensor::Sparse(s) => s.get_mut_linear(index),
         }
+    }
+
+    fn get_owned(&self, indices: &[ConcreteIndex]) -> Result<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone,
+    {
+        self.get_ref(indices).cloned()
+    }
+
+    fn get_owned_linear(&self, index: FlatIndex) -> Option<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone,
+    {
+        self.get_ref_linear(index).cloned()
     }
 }
 

@@ -1488,7 +1488,7 @@ where
         self.iter.next().map(|x| {
             // trace!("dense {}", x.flat_idx());
             // trace!("{}", self.fiber.structure.size().unwrap());
-            if let Some(t) = self.fiber.structure.get_linear(x.flat_idx()) {
+            if let Some(t) = self.fiber.structure.get_ref_linear(x.flat_idx()) {
                 (t, x.other_data())
             } else {
                 panic!(
@@ -1515,7 +1515,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(i) = self.iter.next() {
             // println!("sparse {}", i.flat_idx());
-            if let Some(t) = self.fiber.structure.get_linear(i.flat_idx()) {
+            if let Some(t) = self.fiber.structure.get_ref_linear(i.flat_idx()) {
                 let skipped = self.skipped;
                 self.skipped = 0;
                 return Some((t, skipped, i.other_data()));
@@ -1557,7 +1557,7 @@ where
             return Some((
                 self.fiber
                     .structure
-                    .get_linear_mut(flat.flat_idx())
+                    .get_mut_linear(flat.flat_idx())
                     .unwrap(),
                 skipped,
                 flat.other_data(),
@@ -1585,7 +1585,7 @@ where
             // println!("dense {}", x.flat_idx());
             // println!("{}", self.fiber.structure.size().unwrap());
             (
-                self.fiber.structure.get_linear_mut(x.flat_idx()).unwrap(),
+                self.fiber.structure.get_mut_linear(x.flat_idx()).unwrap(),
                 x.other_data(),
             )
         })
@@ -1869,7 +1869,7 @@ where
             sign = signint;
         }
 
-        let value = self.tensor.get(&indices).unwrap(); //Should now be safe to unwrap
+        let value = self.tensor.get_ref(&indices).unwrap(); //Should now be safe to unwrap
         let zero = value.ref_zero();
 
         let mut trace = if *sign {
@@ -1883,7 +1883,7 @@ where
         for (i, sign) in iter {
             indices[self.trace_indices[0]] = i;
             indices[self.trace_indices[1]] = i;
-            if let Ok(value) = self.tensor.get(&indices) {
+            if let Ok(value) = self.tensor.get_ref(&indices) {
                 if *sign {
                     trace.sub_assign_fallible(value);
                 } else {
@@ -1975,7 +1975,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Ok(indices) = self.tensor.expanded_index(self.current_flat_index) {
-            let value = self.tensor.get_linear(self.current_flat_index).unwrap();
+            let value = self.tensor.get_ref_linear(self.current_flat_index).unwrap();
 
             self.current_flat_index += 1.into();
 
@@ -2011,7 +2011,7 @@ where
     type Item = (FlatIndex, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let value = self.tensor.get_linear(self.current_flat_index)?;
+        let value = self.tensor.get_ref_linear(self.current_flat_index)?;
         let index = self.current_flat_index;
         self.current_flat_index += 1.into();
         Some((index, value))
@@ -2164,7 +2164,7 @@ where
             indices[pos] = 0;
         }
 
-        let value = self.tensor.get(&indices).unwrap();
+        let value = self.tensor.get_ref(&indices).unwrap();
         let zero = value.ref_zero();
 
         let mut trace = if *sign {
@@ -2180,7 +2180,7 @@ where
                 indices[pos] = i;
             }
 
-            if let Ok(value) = self.tensor.get(&indices) {
+            if let Ok(value) = self.tensor.get_ref(&indices) {
                 if *sign {
                     trace.sub_assign_fallible(value);
                 } else {

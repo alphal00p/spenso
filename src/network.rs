@@ -1061,12 +1061,14 @@ where
     pub len: usize,
 }
 
-impl<T: HasTensorData + GetTensorData<GetData = T::Data>> TensorNetworkSet<T, T::Data>
+impl<'a, T: HasTensorData + GetTensorData<GetDataOwned = T::Data>> TensorNetworkSet<T, T::Data>
 where
     T: Clone + Contract<LCM = T>,
-    T::Structure: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
+    T::Structure: TensorStructure<Slot: Serialize + for<'c> Deserialize<'c>>,
+    T::Data: Clone,
+    // T::GetData<'a>: &'a T::Data,
 {
-    pub fn result(&self) -> Result<Vec<T::Data>, TensorNetworkError> {
+    pub fn result(&'a self) -> Result<Vec<T::Data>, TensorNetworkError> {
         let mut data = vec![];
         for n in &self.networks {
             data.push(n.result()?);
@@ -2157,10 +2159,11 @@ where
         }
     }
 }
-impl<T: HasTensorData + GetTensorData<GetData = T::Data>> TensorNetwork<T, T::Data>
+impl<T: HasTensorData + GetTensorData<GetDataOwned = T::Data>> TensorNetwork<T, T::Data>
 where
     T: Clone + Contract<LCM = T>,
-    T::Structure: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
+    T::Structure: TensorStructure<Slot: Serialize + for<'d> Deserialize<'d>>,
+    T::Data: Clone,
 {
     pub fn result(&self) -> Result<T::Data, TensorNetworkError> {
         match self.graph.nodes.len() {
@@ -2171,7 +2174,7 @@ where
             1 => {
                 let t = self.result_tensor()?;
                 if t.is_scalar() {
-                    Ok(t.get_linear(0.into()).unwrap().clone())
+                    Ok(t.get_owned_linear(0.into()).unwrap())
                 } else {
                     Err(TensorNetworkError::NotScalarOutput)
                 }
@@ -2859,7 +2862,7 @@ where
             self.levels.push(new_level);
 
             self.contract_levels(depth);
-            println!("levels {}", self.levels.len());
+            // println!("levels {}", self.levels.len());
             self.generate_fn_map(fn_map);
             self.levels.last().unwrap().result_tensor().unwrap()
         } else {
@@ -2940,7 +2943,7 @@ where
             self.levels.push(new_level);
 
             self.contract_levels(depth);
-            println!("levels {}", self.levels.len());
+            // println!("levels {}", self.levels.len());
             self.generate_fn_map(fn_map);
             self.levels.last().unwrap().result_tensor().unwrap()
         } else {

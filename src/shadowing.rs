@@ -52,7 +52,7 @@ pub trait Shadowable:
         Rep: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::R>,
     {
         let key = ExplicitKey::from_structure(self.structure().clone())?;
-        println!("{key:?}");
+        // println!("{key:?}");
 
         Some(
             EXPLICIT_TENSOR_MAP
@@ -155,7 +155,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
             Self::identity,
         );
 
-        println!("{:?}", Self::gamma_key());
+        // println!("{:?}", Self::gamma_key());
 
         new.insert_explicit_complex_sparse(Self::gamma_key(), Self::gamma_data_weyl_transposed());
         new.insert_explicit_complex_sparse(Self::gamma_five_key(), Self::gamma_five_data_weyl());

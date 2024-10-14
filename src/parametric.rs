@@ -20,7 +20,10 @@ use crate::{
     arithmetic::ScalarMul,
     complex::{Complex, RealOrComplex, RealOrComplexTensor},
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero},
-    data::{DataIterator, DataTensor, DenseTensor, HasTensorData, SetTensorData, SparseTensor},
+    data::{
+        DataIterator, DataTensor, DenseTensor, GetTensorData, HasTensorData, SetTensorData,
+        SparseTensor,
+    },
     iterators::{IteratableTensor, IteratorEnum},
     shadowing::{ShadowMapping, Shadowable},
     structure::{
@@ -1112,6 +1115,20 @@ pub enum ConcreteOrParam<C> {
     Param(Atom),
 }
 
+#[derive(Clone, Debug, EnumTryAsInner)]
+#[derive_err(Debug)]
+pub enum ConcreteOrParamView<'a, C> {
+    Concrete(C),
+    Param(AtomView<'a>),
+}
+
+#[derive(Debug, EnumTryAsInner)]
+#[derive_err(Debug)]
+pub enum ConcreteOrParamViewMut<'a, C> {
+    Concrete(C),
+    Param(&'a mut Atom),
+}
+
 impl<D: Display> Display for ConcreteOrParam<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1147,6 +1164,67 @@ where
         match self {
             ParamOrConcrete::Concrete(x) => x.scalar().map(ConcreteOrParam::Concrete),
             ParamOrConcrete::Param(x) => x.scalar().map(ConcreteOrParam::Param),
+        }
+    }
+}
+
+impl<C, S> GetTensorData for ParamOrConcrete<C, S>
+where
+    C: HasStructure<Structure = S> + Clone + GetTensorData<GetDataOwned: Clone>,
+    S: TensorStructure + Clone,
+{
+    type GetDataRef<'a> = ConcreteOrParamView<'a,C::GetDataRef<'a>> where Self: 'a;
+    type GetDataRefMut<'a> = ConcreteOrParamViewMut<'a,C::GetDataRefMut<'a>>
+    where
+        Self: 'a;
+    type GetDataOwned = ConcreteOrParam<C::GetDataOwned>;
+    fn get_ref<'a>(
+        &'a self,
+        indices: &[crate::structure::ConcreteIndex],
+    ) -> Result<Self::GetDataRef<'a>> {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.get_ref(indices).map(ConcreteOrParamView::Concrete),
+            ParamOrConcrete::Param(x) => x.get_ref(indices).map(ConcreteOrParamView::Param),
+        }
+    }
+
+    fn get_ref_linear(&self, index: FlatIndex) -> Option<Self::GetDataRef<'_>> {
+        match self {
+            ParamOrConcrete::Concrete(x) => {
+                x.get_ref_linear(index).map(ConcreteOrParamView::Concrete)
+            }
+            ParamOrConcrete::Param(x) => x.get_ref_linear(index).map(ConcreteOrParamView::Param),
+        }
+    }
+
+    fn get_mut_linear(&mut self, index: FlatIndex) -> Option<Self::GetDataRefMut<'_>> {
+        match self {
+            ParamOrConcrete::Concrete(x) => x
+                .get_mut_linear(index)
+                .map(ConcreteOrParamViewMut::Concrete),
+            ParamOrConcrete::Param(x) => x.get_mut_linear(index).map(ConcreteOrParamViewMut::Param),
+        }
+    }
+
+    fn get_owned(&self, indices: &[crate::structure::ConcreteIndex]) -> Result<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone,
+    {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.get_owned(indices).map(ConcreteOrParam::Concrete),
+            ParamOrConcrete::Param(x) => x.get_owned(indices).map(ConcreteOrParam::Param),
+        }
+    }
+
+    fn get_owned_linear(&self, index: FlatIndex) -> Option<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone,
+    {
+        match self {
+            ParamOrConcrete::Concrete(x) => {
+                x.get_owned_linear(index).map(ConcreteOrParam::Concrete)
+            }
+            ParamOrConcrete::Param(x) => x.get_owned_linear(index).map(ConcreteOrParam::Param),
         }
     }
 }
@@ -1558,6 +1636,57 @@ where
 
     fn scalar(self) -> Option<Self::Scalar> {
         self.tensor.scalar()
+    }
+}
+
+impl<S: TensorStructure> GetTensorData for ParamTensor<S> {
+    type GetDataRef<'a> = AtomView<'a> where Self: 'a;
+    type GetDataRefMut<'a> = &'a mut Atom  where
+        Self: 'a;
+    type GetDataOwned = Atom;
+    fn get_ref<'a>(
+        &'a self,
+        indices: &[crate::structure::ConcreteIndex],
+    ) -> Result<Self::GetDataRef<'a>> {
+        self.tensor.get_ref(indices).map(|x| x.as_view())
+    }
+
+    fn get_ref_linear(&self, index: FlatIndex) -> Option<Self::GetDataRef<'_>> {
+        self.tensor.get_ref_linear(index).map(|x| x.as_view())
+    }
+
+    fn get_mut_linear(&mut self, index: FlatIndex) -> Option<&mut Atom> {
+        self.tensor.get_mut_linear(index)
+    }
+
+    fn get_owned(&self, indices: &[crate::structure::ConcreteIndex]) -> Result<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone,
+    {
+        self.tensor.get_owned(indices)
+    }
+
+    fn get_owned_linear(&self, index: FlatIndex) -> Option<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone,
+    {
+        self.tensor.get_owned_linear(index)
+    }
+}
+
+impl<S: TensorStructure> SetTensorData for ParamTensor<S> {
+    type SetData = Atom;
+
+    fn set(
+        &mut self,
+        indices: &[crate::structure::ConcreteIndex],
+        value: Self::SetData,
+    ) -> Result<()> {
+        self.tensor.set(indices, value)
+    }
+
+    fn set_flat(&mut self, index: FlatIndex, value: Self::SetData) -> Result<()> {
+        self.tensor.set_flat(index, value)
     }
 }
 

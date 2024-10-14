@@ -1331,7 +1331,7 @@ fn empty_densor() {
 
     let empty: DenseTensor<f64> = DenseTensor::default(empty_structure.into());
 
-    assert_eq!(*empty.get(&[]).unwrap(), 0.0);
+    assert_eq!(*empty.get_ref(&[]).unwrap(), 0.0);
 }
 
 #[test]

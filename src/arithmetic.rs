@@ -64,7 +64,7 @@ where
             .map(|(indices, u)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
-                let t = rhs.get(&permuted_indices).unwrap();
+                let t = rhs.get_ref(&permuted_indices).unwrap();
                 u.add_fallible(t)
             })
             .collect();
@@ -140,7 +140,7 @@ where
 {
     fn add_assign(&mut self, rhs: SparseTensor<T, I>) {
         for (i, u) in self.elements.iter_mut() {
-            if let Some(t) = rhs.get_linear(*i) {
+            if let Some(t) = rhs.get_ref_linear(*i) {
                 *u += t;
             }
         }
@@ -154,7 +154,7 @@ where
 {
     fn add_assign(&mut self, rhs: &SparseTensor<T, I>) {
         for (i, u) in self.elements.iter_mut() {
-            if let Some(t) = rhs.get_linear(*i) {
+            if let Some(t) = rhs.get_ref_linear(*i) {
                 *u += t;
             }
         }
@@ -320,7 +320,7 @@ where
             .map(|(indices, u)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
-                let t = rhs.get(&permuted_indices);
+                let t = rhs.get_ref(&permuted_indices);
                 if let Ok(t) = t {
                     u.add_fallible(t)
                 } else {
@@ -352,7 +352,7 @@ where
             .map(|(indices, t)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
-                let u = self.get(&permuted_indices);
+                let u = self.get_ref(&permuted_indices);
                 if let Ok(u) = u {
                     u.add_fallible(t)
                 } else {
@@ -381,7 +381,7 @@ where
         for (indices, u) in self.iter_expanded() {
             let permuted_indices: Vec<ConcreteIndex> =
                 permutation.iter().map(|&index| indices[index]).collect();
-            let t = rhs.get(&permuted_indices);
+            let t = rhs.get_ref(&permuted_indices);
             if let Ok(t) = t {
                 data.smart_set(&indices, u.add_fallible(t)?).unwrap();
             } else {
@@ -397,7 +397,7 @@ where
             let permuted_indices: Vec<ConcreteIndex> =
                 permutation.iter().map(|&index| i[index]).collect();
 
-            if self.get(&permuted_indices).is_err() {
+            if self.get_ref(&permuted_indices).is_err() {
                 data.smart_set(&i, t.try_upgrade().unwrap().into_owned())
                     .unwrap();
             }
@@ -548,7 +548,7 @@ where
             .map(|(indices, u)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
-                let t = rhs.get(&permuted_indices).unwrap();
+                let t = rhs.get_ref(&permuted_indices).unwrap();
                 u.sub_fallible(t)
             })
             .collect();
@@ -575,7 +575,7 @@ where
             .map(|(indices, t)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
-                let u = self.get(&permuted_indices);
+                let u = self.get_ref(&permuted_indices);
                 if let Ok(u) = u {
                     u.sub_fallible(t)
                 } else {
@@ -606,7 +606,7 @@ where
             .map(|(indices, u)| {
                 let permuted_indices: Vec<ConcreteIndex> =
                     permutation.iter().map(|&index| indices[index]).collect();
-                let t = rhs.get(&permuted_indices);
+                let t = rhs.get_ref(&permuted_indices);
                 if let Ok(t) = t {
                     u.sub_fallible(t)
                 } else {
@@ -635,7 +635,7 @@ where
         for (indices, u) in self.iter_expanded() {
             let permuted_indices: Vec<ConcreteIndex> =
                 permutation.iter().map(|&index| indices[index]).collect();
-            let t = rhs.get(&permuted_indices);
+            let t = rhs.get_ref(&permuted_indices);
             if let Ok(t) = t {
                 data.smart_set(&indices, u.sub_fallible(t)?).unwrap();
             } else {
@@ -648,7 +648,7 @@ where
             let permuted_indices: Vec<ConcreteIndex> =
                 permutation.iter().map(|&index| i[index]).collect();
 
-            if self.get(&permuted_indices).is_err() {
+            if self.get_ref(&permuted_indices).is_err() {
                 data.smart_set(&i, t.try_upgrade().unwrap().into_owned().neg())
                     .unwrap();
             }

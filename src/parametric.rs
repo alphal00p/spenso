@@ -1168,6 +1168,48 @@ where
     }
 }
 
+impl<C, S> SetTensorData for ParamOrConcrete<C, S>
+where
+    C: HasStructure<Structure = S> + Clone + SetTensorData,
+    S: TensorStructure + Clone,
+{
+    type SetData = ConcreteOrParam<C::SetData>;
+
+    fn set(
+        &mut self,
+        indices: &[crate::structure::ConcreteIndex],
+        value: Self::SetData,
+    ) -> Result<()> {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.set(
+                indices,
+                value
+                    .try_into_concrete()
+                    .map_err(|r| anyhow!(r.to_string()))?,
+            ),
+            ParamOrConcrete::Param(x) => x.set(
+                indices,
+                value.try_into_param().map_err(|r| anyhow!(r.to_string()))?,
+            ),
+        }
+    }
+
+    fn set_flat(&mut self, index: FlatIndex, value: Self::SetData) -> Result<()> {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.set_flat(
+                index,
+                value
+                    .try_into_concrete()
+                    .map_err(|r| anyhow!(r.to_string()))?,
+            ),
+            ParamOrConcrete::Param(x) => x.set_flat(
+                index,
+                value.try_into_param().map_err(|r| anyhow!(r.to_string()))?,
+            ),
+        }
+    }
+}
+
 impl<C, S> GetTensorData for ParamOrConcrete<C, S>
 where
     C: HasStructure<Structure = S> + Clone + GetTensorData<GetDataOwned: Clone>,

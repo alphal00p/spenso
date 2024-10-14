@@ -3,10 +3,11 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
+use thiserror::Error;
 
 use num::{Float, One, Zero};
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
@@ -34,7 +35,7 @@ use rand::Rng;
 
 use crate::{
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefOne, RefZero},
-    data::{DataTensor, GetTensorData, HasTensorData},
+    data::{DataTensor, GetTensorData, HasTensorData, SetTensorData},
     iterators::{IteratableTensor, IteratorEnum},
     structure::{
         CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, ScalarStructure,
@@ -1375,6 +1376,46 @@ pub enum RealOrComplexRef<'a, T> {
 pub enum RealOrComplexMut<'a, T> {
     Real(&'a mut T),
     Complex(&'a mut Complex<T>),
+}
+
+impl<T: Clone, S: TensorStructure> SetTensorData for RealOrComplexTensor<T, S> {
+    type SetData = RealOrComplex<T>;
+
+    fn set(
+        &mut self,
+        indices: &[crate::structure::ConcreteIndex],
+        value: Self::SetData,
+    ) -> Result<()> {
+        match self {
+            RealOrComplexTensor::Real(d) => d.set(
+                indices,
+                value.try_into_real().map_err(|r| anyhow!(r.to_string()))?,
+            )?,
+            RealOrComplexTensor::Complex(d) => d.set(
+                indices,
+                value
+                    .try_into_complex()
+                    .map_err(|r| anyhow!(r.to_string()))?,
+            )?,
+        }
+        Ok(())
+    }
+
+    fn set_flat(&mut self, index: FlatIndex, value: Self::SetData) -> Result<()> {
+        match self {
+            RealOrComplexTensor::Real(d) => d.set_flat(
+                index,
+                value.try_into_real().map_err(|r| anyhow!(r.to_string()))?,
+            )?,
+            RealOrComplexTensor::Complex(d) => d.set_flat(
+                index,
+                value
+                    .try_into_complex()
+                    .map_err(|r| anyhow!(r.to_string()))?,
+            )?,
+        }
+        Ok(())
+    }
 }
 
 impl<T: Clone, S: TensorStructure> GetTensorData for RealOrComplexTensor<T, S> {

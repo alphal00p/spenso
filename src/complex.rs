@@ -34,7 +34,7 @@ use rand::Rng;
 
 use crate::{
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefOne, RefZero},
-    data::DataTensor,
+    data::{DataTensor, GetTensorData, HasTensorData},
     iterators::{IteratableTensor, IteratorEnum},
     structure::{
         CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, ScalarStructure,
@@ -1363,6 +1363,136 @@ pub enum RealOrComplexTensor<T, S: TensorStructure> {
     Complex(DataTensor<Complex<T>, S>),
 }
 
+#[derive(Clone, Debug, EnumTryAsInner)]
+#[derive_err(Debug)]
+pub enum RealOrComplexRef<'a, T> {
+    Real(&'a T),
+    Complex(&'a Complex<T>),
+}
+
+#[derive(Debug, EnumTryAsInner)]
+#[derive_err(Debug)]
+pub enum RealOrComplexMut<'a, T> {
+    Real(&'a mut T),
+    Complex(&'a mut Complex<T>),
+}
+
+impl<T: Clone, S: TensorStructure> GetTensorData for RealOrComplexTensor<T, S> {
+    type GetDataRef<'a> = RealOrComplexRef<'a, T>
+    where
+        Self: 'a;
+
+    type GetDataRefMut<'a> = RealOrComplexMut<'a, T>
+    where
+        Self: 'a;
+
+    type GetDataOwned = RealOrComplex<T>;
+
+    fn get_ref<'a>(
+        &'a self,
+        indices: &[crate::structure::ConcreteIndex],
+    ) -> Result<Self::GetDataRef<'a>> {
+        match self {
+            RealOrComplexTensor::Real(d) => Ok(RealOrComplexRef::Real(d.get_ref(indices)?)),
+            RealOrComplexTensor::Complex(d) => Ok(RealOrComplexRef::Complex(d.get_ref(indices)?)),
+        }
+    }
+
+    fn get_ref_linear(&self, index: FlatIndex) -> Option<Self::GetDataRef<'_>> {
+        match self {
+            RealOrComplexTensor::Real(d) => d.get_ref_linear(index).map(RealOrComplexRef::Real),
+            RealOrComplexTensor::Complex(d) => {
+                d.get_ref_linear(index).map(RealOrComplexRef::Complex)
+            }
+        }
+    }
+
+    fn get_mut_linear(&mut self, index: FlatIndex) -> Option<Self::GetDataRefMut<'_>> {
+        match self {
+            RealOrComplexTensor::Real(d) => d.get_mut_linear(index).map(RealOrComplexMut::Real),
+            RealOrComplexTensor::Complex(d) => {
+                d.get_mut_linear(index).map(RealOrComplexMut::Complex)
+            }
+        }
+    }
+
+    fn get_owned(&self, indices: &[crate::structure::ConcreteIndex]) -> Result<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone,
+    {
+        match self {
+            RealOrComplexTensor::Real(d) => Ok(RealOrComplex::Real(d.get_owned(indices)?)),
+            RealOrComplexTensor::Complex(d) => Ok(RealOrComplex::Complex(d.get_owned(indices)?)),
+        }
+    }
+
+    fn get_owned_linear(&self, index: FlatIndex) -> Option<Self::GetDataOwned>
+    where
+        Self::GetDataOwned: Clone,
+    {
+        match self {
+            RealOrComplexTensor::Real(d) => Some(RealOrComplex::Real(d.get_owned_linear(index)?)),
+            RealOrComplexTensor::Complex(d) => {
+                Some(RealOrComplex::Complex(d.get_owned_linear(index)?))
+            }
+        }
+    }
+}
+
+impl<T: Clone, S: TensorStructure + Clone> HasTensorData for RealOrComplexTensor<T, S> {
+    type Data = RealOrComplex<T>;
+
+    fn data(&self) -> Vec<Self::Data> {
+        match self {
+            RealOrComplexTensor::Real(d) => d.data().into_iter().map(RealOrComplex::Real).collect(),
+            RealOrComplexTensor::Complex(d) => {
+                d.data().into_iter().map(RealOrComplex::Complex).collect()
+            }
+        }
+    }
+
+    fn hashmap(&self) -> indexmap::IndexMap<ExpandedIndex, Self::Data> {
+        match self {
+            RealOrComplexTensor::Real(d) => d
+                .hashmap()
+                .into_iter()
+                .map(|(k, v)| (k, RealOrComplex::Real(v)))
+                .collect(),
+            RealOrComplexTensor::Complex(d) => d
+                .hashmap()
+                .into_iter()
+                .map(|(k, v)| (k, RealOrComplex::Complex(v)))
+                .collect(),
+        }
+    }
+
+    fn indices(&self) -> Vec<ExpandedIndex> {
+        match self {
+            RealOrComplexTensor::Real(d) => d.indices(),
+            RealOrComplexTensor::Complex(d) => d.indices(),
+        }
+    }
+
+    fn symhashmap(
+        &self,
+        name: symbolica::atom::Symbol,
+        args: &[Atom],
+    ) -> std::collections::HashMap<Atom, Self::Data> {
+        match self {
+            RealOrComplexTensor::Real(d) => d
+                .symhashmap(name, args)
+                .into_iter()
+                .map(|(k, v)| (k, RealOrComplex::Real(v)))
+                .collect(),
+            RealOrComplexTensor::Complex(d) => d
+                .symhashmap(name, args)
+                .into_iter()
+                .map(|(k, v)| (k, RealOrComplex::Complex(v)))
+                .collect(),
+        }
+    }
+}
+
 impl<T, S: TensorStructure> RealOrComplexTensor<T, S> {
     pub fn map_structure<S2: TensorStructure>(
         self,
@@ -1461,11 +1591,6 @@ where
             }, // p.append_map(fn_map, index_to_atom),
         }
     }
-}
-
-pub enum RealOrComplexRef<'a, T> {
-    Real(&'a T),
-    Complex(&'a Complex<T>),
 }
 
 #[derive(Clone, Debug, EnumTryAsInner)]

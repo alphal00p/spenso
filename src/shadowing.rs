@@ -54,8 +54,6 @@ pub trait Shadowable:
         Rep: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::R>,
     {
         let key = ExplicitKey::from_structure(self.structure().clone())?;
-        println!("trying explict of {key}");
-        println!("{key:?}");
 
         Some(
             EXPLICIT_TENSOR_MAP

@@ -26,7 +26,8 @@ use crate::{
     data::{DataIterator, DenseTensor},
     parametric::TensorCoefficient,
     shadowing::{ShadowMapping, Shadowable},
-    structure::{IntoArgs, IntoSymbol, ToSymbolic},
+    structure::ToSymbolic,
+    symbolica_utils::{IntoArgs, IntoSymbol},
 };
 
 #[cfg(feature = "shadowing")]
@@ -37,8 +38,9 @@ use crate::{
     data::{DataTensor, GetTensorData, HasTensorData, SetTensorData},
     iterators::{IteratableTensor, IteratorEnum},
     structure::{
-        CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, ScalarStructure,
-        ScalarTensor, StructureContract, TensorStructure, TracksCount,
+        concrete_index::{ExpandedIndex, FlatIndex},
+        CastStructure, HasName, HasStructure, ScalarStructure, ScalarTensor, StructureContract,
+        TensorStructure, TracksCount,
     },
     upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign},
 };
@@ -1382,7 +1384,7 @@ impl<T: Clone, S: TensorStructure> SetTensorData for RealOrComplexTensor<T, S> {
 
     fn set(
         &mut self,
-        indices: &[crate::structure::ConcreteIndex],
+        indices: &[crate::structure::concrete_index::ConcreteIndex],
         value: Self::SetData,
     ) -> Result<()> {
         match self {
@@ -1430,7 +1432,7 @@ impl<T: Clone, S: TensorStructure> GetTensorData for RealOrComplexTensor<T, S> {
 
     fn get_ref<'a>(
         &'a self,
-        indices: &[crate::structure::ConcreteIndex],
+        indices: &[crate::structure::concrete_index::ConcreteIndex],
     ) -> Result<Self::GetDataRef<'a>> {
         match self {
             RealOrComplexTensor::Real(d) => Ok(RealOrComplexRef::Real(d.get_ref(indices)?)),
@@ -1456,7 +1458,10 @@ impl<T: Clone, S: TensorStructure> GetTensorData for RealOrComplexTensor<T, S> {
         }
     }
 
-    fn get_owned(&self, indices: &[crate::structure::ConcreteIndex]) -> Result<Self::GetDataOwned>
+    fn get_owned(
+        &self,
+        indices: &[crate::structure::concrete_index::ConcreteIndex],
+    ) -> Result<Self::GetDataOwned>
     where
         Self::GetDataOwned: Clone,
     {

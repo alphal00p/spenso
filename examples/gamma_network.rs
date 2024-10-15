@@ -5,7 +5,7 @@ use spenso::{
     complex::Complex,
     data::NumTensor,
     network::TensorNetwork,
-    structure::{AbstractIndex, ContractionCountStructure},
+    structure::{abstract_index::AbstractIndex, ContractionCountStructure},
     ufo::{euclidean_four_vector, gamma, mink_four_vector},
     upgrading_arithmetic::FallibleMul,
 };

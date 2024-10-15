@@ -25,6 +25,10 @@ Namely
 /// All tooling for tensor structures, indices and representations
 pub mod structure;
 // pub use structure::*;
+//
+
+#[cfg(feature = "shadowing")]
+pub mod symbolica_utils;
 
 /// More ergonomic, and smart arithmatic with symbolic types
 pub mod upgrading_arithmetic;
@@ -44,6 +48,7 @@ pub mod iterators;
 #[cfg(feature = "shadowing")]
 pub mod parametric;
 
+pub mod utils;
 // pub use parametric::*;
 
 /// Symbolic tensors
@@ -77,5 +82,6 @@ pub mod shadowing;
 
 #[cfg(feature = "shadowing")]
 pub mod polynomial;
+
 #[cfg(test)]
 mod tests;

@@ -5,8 +5,13 @@ use spenso::{
     complex::Complex,
     data::HasTensorData,
     network::TensorNetwork,
-    parametric::{FlatCoefficent, MixedTensor, SerializableAtom},
-    structure::{AbstractIndex, ContractionCountStructure, Lorentz, PhysReps, RepName, ToSymbolic},
+    parametric::{FlatCoefficent, MixedTensor},
+    structure::{
+        abstract_index::AbstractIndex,
+        representation::{Lorentz, PhysReps, RepName},
+        ContractionCountStructure, ToSymbolic,
+    },
+    symbolica_utils::SerializableAtom,
     ufo::{euclidean_four_vector, gamma},
     upgrading_arithmetic::FallibleMul,
 };

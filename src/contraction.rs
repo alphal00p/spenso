@@ -3,14 +3,14 @@ use duplicate::duplicate;
 use log::trace;
 // use num::Zero;
 #[cfg(feature = "shadowing")]
-use crate::parametric::SerializableAtom;
+use crate::symbolica_utils::SerializableAtom;
 #[cfg(feature = "shadowing")]
 use symbolica::{atom::Atom, domains::float::Real};
 
 use crate::{
     data::{DataIterator, DataTensor, DenseTensor, NumTensor, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
-    structure::{HasStructure, IsAbstractSlot, StructureContract, TensorStructure},
+    structure::{slot::IsAbstractSlot, HasStructure, StructureContract, TensorStructure},
     upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade},
 };
 

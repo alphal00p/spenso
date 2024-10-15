@@ -5,10 +5,12 @@ use crate::{
     data::{DenseTensor, SetTensorData, SparseTensor},
     parametric::{MixedTensor, ParamTensor, TensorCoefficient},
     structure::{
-        ConcreteIndex, ExtendibleReps, FlatIndex, HasName, HasStructure, IndexlessNamedStructure,
-        IntoArgs, IntoSymbol, IsAbstractSlot, Rep, RepName, TensorShell, TensorStructure,
-        ToSymbolic, REPS,
+        concrete_index::{ConcreteIndex, FlatIndex},
+        representation::{ExtendibleReps, Rep, RepName, REPS},
+        slot::IsAbstractSlot,
+        HasName, HasStructure, IndexlessNamedStructure, TensorShell, TensorStructure, ToSymbolic,
     },
+    symbolica_utils::{IntoArgs, IntoSymbol},
 };
 use ahash::AHashMap;
 use anyhow::Result;

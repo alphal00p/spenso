@@ -6,9 +6,10 @@ use approx::{assert_relative_eq, RelativeEq};
 use spenso::{
     complex::Complex,
     network::{Levels, TensorNetwork},
-    parametric::{MixedTensor, SerializableAtom},
+    parametric::MixedTensor,
     structure::{HasStructure, SmartShadowStructure},
     symbolic::SymbolicTensor,
+    symbolica_utils::SerializableAtom,
 };
 use symbolica::{
     atom::{Atom, AtomView, Symbol},

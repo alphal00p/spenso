@@ -33,11 +33,18 @@ use crate::{
     },
     network::TensorNetwork,
     structure::{
-        AbstractIndex, BaseRepName, Bispinor, ColorAdjoint, ColorFundamental, Dimension,
-        DualSlotTo, Euclidean, ExpandedIndex, FlatIndex, HasStructure, HistoryStructure, Lorentz,
-        NamedStructure, NoArgs, PhysReps, PhysicalSlots, RepName, Representation, Slot,
-        StructureContract, TensorStructure, VecStructure,
+        abstract_index::AbstractIndex,
+        concrete_index::{ExpandedIndex, FlatIndex},
+        dimension::Dimension,
+        representation::{
+            BaseRepName, Bispinor, ColorAdjoint, ColorFundamental, Euclidean, Lorentz, PhysReps,
+            RepName, Representation,
+        },
+        slot::{DualSlotTo, PhysicalSlots, Slot},
+        HasStructure, HistoryStructure, NamedStructure, StructureContract, TensorStructure,
+        VecStructure,
     },
+    symbolica_utils::NoArgs,
     ufo::{self, mink_four_vector},
     upgrading_arithmetic::{FallibleAdd, FallibleAddAssign, FallibleMul, FallibleSub},
 };

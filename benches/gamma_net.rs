@@ -3,7 +3,7 @@ use spenso::{
     complex::Complex,
     data::NumTensor,
     network::TensorNetwork,
-    structure::{AbstractIndex, HistoryStructure},
+    structure::{abstract_index::AbstractIndex, HistoryStructure},
     ufo::{
         euclidean_four_vector, euclidean_four_vector_sym, gamma, gammasym, mink_four_vector,
         mink_four_vector_sym,

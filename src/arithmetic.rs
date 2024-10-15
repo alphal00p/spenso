@@ -15,7 +15,7 @@ use crate::{
     contraction::{IsZero, RefZero},
     data::{DataTensor, DenseTensor, GetTensorData, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
-    structure::{ConcreteIndex, HasStructure, TensorStructure},
+    structure::{concrete_index::ConcreteIndex, HasStructure, TensorStructure},
     upgrading_arithmetic::{FallibleAdd, FallibleMul, FallibleSub, TrySmallestUpgrade},
 };
 

@@ -43,13 +43,12 @@ use crate::{
     iterators::IteratableTensor,
     parametric::{
         AtomViewOrConcrete, CompiledEvalTensor, EvalTensor, EvalTreeTensor, MixedTensor,
-        ParamTensor, PatternReplacement, SerializableAtom, SerializableCompiledCode,
-        SerializableCompiledEvaluator, SerializableExportedCode,
+        ParamTensor, PatternReplacement, SerializableCompiledCode, SerializableCompiledEvaluator,
+        SerializableExportedCode,
     },
     shadowing::{ShadowMapping, Shadowable},
-    structure::{
-        AtomStructure, IntoArgs, IntoSymbol, NamedStructure, StructureContract, ToSymbolic,
-    },
+    structure::{AtomStructure, NamedStructure, StructureContract, ToSymbolic},
+    symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
     upgrading_arithmetic::{FallibleAdd, TrySmallestUpgrade},
 };
 
@@ -58,7 +57,7 @@ use crate::{
     contraction::{Contract, ContractionError},
     data::{DataTensor, GetTensorData, HasTensorData},
     structure::{
-        CastStructure, DualSlotTo, HasName, HasStructure, ScalarTensor, TensorStructure,
+        slot::DualSlotTo, CastStructure, HasName, HasStructure, ScalarTensor, TensorStructure,
         TracksCount,
     },
     upgrading_arithmetic::FallibleMul,

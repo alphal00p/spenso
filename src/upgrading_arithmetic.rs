@@ -6,7 +6,7 @@ use ref_ops::{RefAdd, RefMul, RefSub};
 use std::ops::{Add, Div, Mul, Sub};
 
 #[cfg(feature = "shadowing")]
-use crate::parametric::SerializableAtom;
+use crate::symbolica_utils::SerializableAtom;
 
 #[cfg(feature = "shadowing")]
 use symbolica::{

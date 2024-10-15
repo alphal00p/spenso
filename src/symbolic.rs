@@ -1,12 +1,13 @@
 use crate::{
     contraction::{Contract, ContractionError},
     network::{TensorNetwork, TensorNetworkError},
-    parametric::{MixedTensor, SerializableAtom},
+    parametric::MixedTensor,
     shadowing::Shadowable,
     structure::{
-        AtomStructure, HasName, HasStructure, IntoArgs, IntoSymbol, NamedStructure, PhysicalSlots,
-        StructureContract, TensorStructure, ToSymbolic, VecStructure, ABSTRACTIND,
+        abstract_index::ABSTRACTIND, slot::PhysicalSlots, AtomStructure, HasName, HasStructure,
+        NamedStructure, StructureContract, TensorStructure, ToSymbolic, VecStructure,
     },
+    symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
 };
 
 use symbolica::{

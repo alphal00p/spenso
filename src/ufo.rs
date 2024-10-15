@@ -6,8 +6,13 @@ use crate::{
     complex::Complex,
     data::{DenseTensor, SetTensorData, SparseTensor},
     structure::{
-        AbstractIndex, BaseRepName, Bispinor, Dimension, Dual, Euclidean, Lorentz, PhysReps,
-        RepName, Representation, Slot, TensorStructure,
+        abstract_index::AbstractIndex,
+        dimension::Dimension,
+        representation::{
+            BaseRepName, Bispinor, Dual, Euclidean, Lorentz, PhysReps, RepName, Representation,
+        },
+        slot::Slot,
+        TensorStructure,
     },
 };
 
@@ -22,9 +27,14 @@ use symbolica::{
 use crate::{
     shadowing::Shadowable,
     structure::{
-        HistoryStructure, IntoArgs, IntoSymbol, NamedStructure, ABSTRACTIND, BISPINOR, COLORADJ,
-        COLORANTIFUND, COLORANTISEXT, COLORFUND, COLORSEXT, EUCLIDEAN, SPINFUND,
+        abstract_index::ABSTRACTIND,
+        representation::{
+            BISPINOR, COLORADJ, COLORANTIFUND, COLORANTISEXT, COLORFUND, COLORSEXT, EUCLIDEAN,
+            SPINFUND,
+        },
+        HistoryStructure, NamedStructure,
     },
+    symbolica_utils::{IntoArgs, IntoSymbol},
 };
 
 #[allow(dead_code)]
@@ -458,6 +468,7 @@ where
                 .collect()
         }
         AbstractIndex::Normal(_) => [Lorentz::slot(4, index)].into_iter().collect(),
+        _ => panic!("Invalid index"),
     };
     DenseTensor::from_data(p.to_vec(), structure).unwrap_or_else(|_| unreachable!())
 }
@@ -576,6 +587,7 @@ where
     let mu = match minkindex {
         AbstractIndex::Dualize(d) => Lorentz::selfless_dual().new_slot(4, d).into(),
         AbstractIndex::Normal(n) => Lorentz::slot(4, n).into(),
+        _ => panic!("Invalid index"),
     };
     let structure = [
         mu, // Lorentz::new_slot_selfless(4, minkindex).into(),
@@ -599,6 +611,7 @@ where
     let mu = match minkindex {
         AbstractIndex::Dualize(d) => Lorentz::selfless_dual().new_slot(4, d).into(),
         AbstractIndex::Normal(n) => Lorentz::slot(4, n).into(),
+        _ => panic!("Invalid index"),
     };
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         [
@@ -1038,9 +1051,10 @@ mod test {
         complex::RealOrComplexTensor,
         contraction::Contract,
         network::TensorNetwork,
-        parametric::{ParamOrConcrete, SerializableAtom},
+        parametric::ParamOrConcrete,
         shadowing::Shadowable,
-        structure::{HasStructure, SerializableSymbol, VecStructure},
+        structure::{HasStructure, VecStructure},
+        symbolica_utils::{SerializableAtom, SerializableSymbol},
     };
 
     #[test]
@@ -1169,13 +1183,13 @@ mod test {
             RealOrComplexTensor<
                 f64,
                 crate::structure::NamedStructure<
-                    crate::structure::SerializableSymbol,
-                    Vec<crate::parametric::SerializableAtom>,
+                    crate::symbolica_utils::SerializableSymbol,
+                    Vec<crate::symbolica_utils::SerializableAtom>,
                 >,
             >,
             crate::structure::NamedStructure<
-                crate::structure::SerializableSymbol,
-                Vec<crate::parametric::SerializableAtom>,
+                crate::symbolica_utils::SerializableSymbol,
+                Vec<crate::symbolica_utils::SerializableAtom>,
             >,
         > = TensorNetwork::try_from(g1.as_view())
             .unwrap()

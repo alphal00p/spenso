@@ -17,8 +17,9 @@ use spenso::{
     network::TensorNetwork,
     parametric::{FlatCoefficent, MixedTensor},
     structure::{
-        AbstractIndex, ContractionCountStructure, HistoryStructure, Lorentz, PhysReps, RepName,
-        ToSymbolic,
+        abstract_index::AbstractIndex,
+        representation::{Lorentz, PhysReps, RepName},
+        ContractionCountStructure, HistoryStructure, ToSymbolic,
     },
     ufo::{
         euclidean_four_vector, euclidean_four_vector_sym, gamma, gammasym, mink_four_vector,

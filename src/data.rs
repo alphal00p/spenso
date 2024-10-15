@@ -3,8 +3,9 @@ use crate::{
     contraction::IsZero,
     iterators::{DenseTensorLinearIterator, IteratableTensor, SparseTensorLinearIterator},
     structure::{
-        CastStructure, ConcreteIndex, ExpandedIndex, FlatIndex, HasName, HasStructure,
-        ScalarStructure, ScalarTensor, TensorStructure, TracksCount, VecStructure,
+        concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
+        CastStructure, HasName, HasStructure, ScalarStructure, ScalarTensor, TensorStructure,
+        TracksCount, VecStructure,
     },
     upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
 };
@@ -13,7 +14,7 @@ use crate::{
 use crate::{
     parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
     shadowing::{ShadowMapping, Shadowable},
-    structure::{atomic_expanded_label_id, IntoArgs, IntoSymbol},
+    symbolica_utils::{atomic_expanded_label_id, IntoArgs, IntoSymbol},
 };
 
 use ahash::AHashMap;

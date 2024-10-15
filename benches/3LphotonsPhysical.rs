@@ -6,9 +6,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use spenso::{
     complex::Complex,
     network::{Levels, TensorNetwork},
-    parametric::{MixedTensor, SerializableAtom},
+    parametric::MixedTensor,
     structure::{HasStructure, SmartShadowStructure},
     symbolic::SymbolicTensor,
+    symbolica_utils::SerializableAtom,
 };
 use symbolica::{
     atom::{Atom, AtomView, Symbol},

@@ -27,10 +27,12 @@ use crate::{
     iterators::{IteratableTensor, IteratorEnum},
     shadowing::{ShadowMapping, Shadowable},
     structure::{
-        CastStructure, ExpandedIndex, FlatIndex, HasName, HasStructure, IntoArgs, IntoSymbol,
-        NamedStructure, PhysicalSlots, ScalarStructure, ScalarTensor, StructureContract,
-        TensorStructure, ToSymbolic, TracksCount, VecStructure,
+        concrete_index::{ExpandedIndex, FlatIndex},
+        slot::PhysicalSlots,
+        CastStructure, HasName, HasStructure, NamedStructure, ScalarStructure, ScalarTensor,
+        StructureContract, TensorStructure, ToSymbolic, TracksCount, VecStructure,
     },
+    symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
     upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade},
 };
 
@@ -1184,7 +1186,7 @@ where
 
     fn set(
         &mut self,
-        indices: &[crate::structure::ConcreteIndex],
+        indices: &[crate::structure::concrete_index::ConcreteIndex],
         value: Self::SetData,
     ) -> Result<()> {
         match self {
@@ -1229,7 +1231,7 @@ where
     type GetDataOwned = ConcreteOrParam<C::GetDataOwned>;
     fn get_ref<'a>(
         &'a self,
-        indices: &[crate::structure::ConcreteIndex],
+        indices: &[crate::structure::concrete_index::ConcreteIndex],
     ) -> Result<Self::GetDataRef<'a>> {
         match self {
             ParamOrConcrete::Concrete(x) => x.get_ref(indices).map(ConcreteOrParamView::Concrete),
@@ -1255,7 +1257,10 @@ where
         }
     }
 
-    fn get_owned(&self, indices: &[crate::structure::ConcreteIndex]) -> Result<Self::GetDataOwned>
+    fn get_owned(
+        &self,
+        indices: &[crate::structure::concrete_index::ConcreteIndex],
+    ) -> Result<Self::GetDataOwned>
     where
         Self::GetDataOwned: Clone,
     {
@@ -1702,7 +1707,7 @@ impl<S: TensorStructure> GetTensorData for ParamTensor<S> {
     type GetDataOwned = Atom;
     fn get_ref<'a>(
         &'a self,
-        indices: &[crate::structure::ConcreteIndex],
+        indices: &[crate::structure::concrete_index::ConcreteIndex],
     ) -> Result<Self::GetDataRef<'a>> {
         self.tensor.get_ref(indices).map(|x| x.as_view())
     }
@@ -1715,7 +1720,10 @@ impl<S: TensorStructure> GetTensorData for ParamTensor<S> {
         self.tensor.get_mut_linear(index)
     }
 
-    fn get_owned(&self, indices: &[crate::structure::ConcreteIndex]) -> Result<Self::GetDataOwned>
+    fn get_owned(
+        &self,
+        indices: &[crate::structure::concrete_index::ConcreteIndex],
+    ) -> Result<Self::GetDataOwned>
     where
         Self::GetDataOwned: Clone,
     {
@@ -1735,7 +1743,7 @@ impl<S: TensorStructure> SetTensorData for ParamTensor<S> {
 
     fn set(
         &mut self,
-        indices: &[crate::structure::ConcreteIndex],
+        indices: &[crate::structure::concrete_index::ConcreteIndex],
         value: Self::SetData,
     ) -> Result<()> {
         self.tensor.set(indices, value)
@@ -2856,108 +2864,6 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct SerializableAtom(pub Atom);
-
-impl SerializableAtom {
-    pub fn replace_repeat(&mut self, lhs: Pattern, rhs: PatternOrMap) {
-        let atom = self.0.replace_all(&lhs, &rhs, None, None);
-        if atom != self.0 {
-            self.0 = atom;
-            self.replace_repeat(lhs, rhs);
-        }
-    }
-
-    pub fn replace_repeat_multiple(&mut self, reps: &[Replacement<'_>]) {
-        let atom = self.0.replace_all_multiple(reps);
-        // info!("expanded rep");
-        if atom != self.0 {
-            // info!("applied replacement");
-            self.0 = atom;
-            self.replace_repeat_multiple(reps);
-        }
-    }
-
-    pub fn replace_repeat_multiple_atom(expr: &mut Atom, reps: &[Replacement<'_>]) {
-        let atom = expr.replace_all_multiple(reps);
-        if atom != *expr {
-            *expr = atom;
-            Self::replace_repeat_multiple_atom(expr, reps)
-        }
-    }
-
-    pub fn replace_repeat_multiple_atom_expand(expr: &mut Atom, reps: &[Replacement<'_>]) {
-        let a = expr.expand();
-        let atom = a.replace_all_multiple(reps);
-        if atom != *expr {
-            *expr = atom;
-            Self::replace_repeat_multiple_atom_expand(expr, reps)
-        }
-    }
-}
-
-impl Display for SerializableAtom {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Serialize for SerializableAtom {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut state = serializer.serialize_struct("SerializableAtom", 3)?;
-
-        let mut serialized_atom: Vec<u8> = Vec::new();
-
-        self.0.as_view().write(&mut serialized_atom).unwrap();
-
-        state.serialize_field("atom", &serialized_atom)?;
-
-        let mut symbolica_state = Vec::new();
-
-        State::export(&mut symbolica_state).unwrap();
-
-        state.serialize_field("state", &symbolica_state)?;
-        state.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for SerializableAtom {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<SerializableAtom, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct SerializableAtomHelper {
-            atom: Vec<u8>,
-            state: Vec<u8>,
-        }
-
-        let helper = SerializableAtomHelper::deserialize(deserializer)?;
-
-        let state = helper.state;
-
-        let map = State::import(Cursor::new(&state), None).unwrap();
-
-        let atom = Atom::import(Cursor::new(&helper.atom), &map).unwrap();
-
-        Ok(SerializableAtom(atom))
-    }
-}
-
-impl From<Atom> for SerializableAtom {
-    fn from(atom: Atom) -> Self {
-        SerializableAtom(atom)
-    }
-}
-
-impl From<SerializableAtom> for Atom {
-    fn from(atom: SerializableAtom) -> Self {
-        atom.0
-    }
-}
 // impl FallibleMul for SerializableAtom {
 //     type Output = SerializableAtom;
 //     fn mul_fallible(&self, rhs: &Self) -> Option<Self::Output> {

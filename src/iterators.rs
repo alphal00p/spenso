@@ -17,8 +17,11 @@ use crate::{
     data::{DataTensor, DenseTensor, GetTensorData, SparseTensor},
     permutation::Permutation,
     structure::{
-        ConcreteIndex, Dimension, ExpandedIndex, FlatIndex, HasStructure, IsAbstractSlot, PhysReps,
-        RepName, Representation, TensorStructure, VecStructure,
+        concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
+        dimension::Dimension,
+        representation::{PhysReps, RepName, Representation},
+        slot::IsAbstractSlot,
+        HasStructure, TensorStructure, VecStructure,
     },
     upgrading_arithmetic::{FallibleAddAssign, FallibleSubAssign},
 };
@@ -1186,7 +1189,7 @@ impl<R: RepName> Iterator for CoreExpandedFiberIterator<R> {
 #[cfg(test)]
 mod iteratortests {
     use super::*;
-    use crate::structure::Euclidean;
+    use crate::structure::representation::Euclidean;
 
     #[test]
     fn test() {

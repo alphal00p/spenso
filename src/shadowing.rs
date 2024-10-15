@@ -54,7 +54,8 @@ pub trait Shadowable:
         Rep: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::R>,
     {
         let key = ExplicitKey::from_structure(self.structure().clone())?;
-        // println!("{key:?}");
+        println!("trying explict of {key}");
+        println!("{key:?}");
 
         Some(
             EXPLICIT_TENSOR_MAP
@@ -530,5 +531,13 @@ where
     ) where
         T: TensorCoefficient,
     {
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn mem_size_test() {
+        // EXPLICIT_TENSOR_MAP.read();
     }
 }

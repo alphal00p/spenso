@@ -3,16 +3,13 @@ use super::{
     dimension::DimensionError,
     representation::{BaseRepName, Dual, DualPair, PhysReps, RepName, Representation},
 };
-use crate::structure::{
-    dimension::Dimension,
-    representation::{Lorentz, Rep},
-};
+use crate::structure::dimension::Dimension;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::hash::Hash;
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{AsAtomView, Atom, AtomView, FunctionBuilder, ListIterator, Symbol},
+    atom::{AsAtomView, Atom, AtomView, FunctionBuilder, ListIterator},
     coefficient::CoefficientView,
     state::State,
 };
@@ -50,25 +47,6 @@ use thiserror::Error;
 pub struct Slot<T: RepName> {
     pub aind: AbstractIndex,
     pub(crate) rep: Representation<T>,
-}
-
-#[test]
-fn doc_slot() {
-    let mink: Representation<Lorentz> = Lorentz::rep(4);
-
-    let mud: Slot<Lorentz> = mink.new_slot(0);
-    let muu: Slot<Dual<Lorentz>> = mink.new_slot(0).dual();
-
-    assert!(mud.matches(&muu));
-    assert_eq!("lord4|₀", format!("{muu}"));
-
-    let custom_mink = Rep::new_dual("custom_lor").unwrap();
-
-    let nud: Slot<Rep> = custom_mink.new_slot(4, 0);
-    let nuu: Slot<Rep> = nud.dual();
-
-    assert!(nuu.matches(&nud));
-    assert_eq!("custom_lor🠓4|₀", format!("{nuu}"));
 }
 
 impl<T: RepName> Slot<T> {
@@ -191,15 +169,6 @@ impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
     }
 }
 
-#[cfg(feature = "shadowing")]
-#[test]
-fn feature() {
-    let mink = Lorentz::rep(4);
-    let mu = mink.new_slot(0);
-    let atom = mu.to_symbolic();
-    let slot = Slot::try_from(atom.as_view()).unwrap();
-    assert_eq!(slot, mu);
-}
 impl<T: BaseRepName<Base = T>> Slot<T>
 where
     Dual<T>: BaseRepName<Base = T, Dual = T>,
@@ -280,16 +249,6 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash {
     fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError>;
 }
 
-#[cfg(feature = "shadowing")]
-#[test]
-fn to_symbolic() {
-    let mink = Lorentz::rep(4);
-    let mu = mink.new_slot(0);
-    println!("{}", mu.to_symbolic());
-    assert_eq!("loru(4,0)", mu.to_symbolic().to_string());
-    assert_eq!("loru4|₀", mu.to_string());
-}
-
 pub trait DualSlotTo: IsAbstractSlot {
     type Dual: IsAbstractSlot;
     fn dual(&self) -> Self::Dual;
@@ -352,3 +311,49 @@ impl<T: RepName> DualSlotTo for Slot<T> {
 }
 
 pub type PhysicalSlots = Slot<PhysReps>;
+
+#[cfg(test)]
+#[cfg(feature = "shadowing")]
+mod shadowing_tests {
+    use crate::structure::{
+        representation::{BaseRepName, Dual, Lorentz, Rep, RepName, Representation},
+        slot::{DualSlotTo, IsAbstractSlot, Slot},
+    };
+
+    #[test]
+    fn doc_slot() {
+        let mink: Representation<Lorentz> = Lorentz::rep(4);
+
+        let mud: Slot<Lorentz> = mink.new_slot(0);
+        let muu: Slot<Dual<Lorentz>> = mink.new_slot(0).dual();
+
+        assert!(mud.matches(&muu));
+        assert_eq!("lord4|₀", format!("{muu}"));
+
+        let custom_mink = Rep::new_dual("custom_lor").unwrap();
+
+        let nud: Slot<Rep> = custom_mink.new_slot(4, 0);
+        let nuu: Slot<Rep> = nud.dual();
+
+        assert!(nuu.matches(&nud));
+        assert_eq!("custom_lor🠓4|₀", format!("{nuu}"));
+    }
+
+    #[test]
+    fn to_symbolic() {
+        let mink = Lorentz::rep(4);
+        let mu = mink.new_slot(0);
+        println!("{}", mu.to_symbolic());
+        assert_eq!("loru(4,0)", mu.to_symbolic().to_string());
+        assert_eq!("loru4|₀", mu.to_string());
+    }
+
+    #[test]
+    fn feature() {
+        let mink = Lorentz::rep(4);
+        let mu = mink.new_slot(0);
+        let atom = mu.to_symbolic();
+        let slot = Slot::try_from(atom.as_view()).unwrap();
+        assert_eq!(slot, mu);
+    }
+}

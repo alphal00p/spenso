@@ -15,7 +15,7 @@ use std::{hash::Hash, ops::Index};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{AsAtomView, Atom, FunctionBuilder, Symbol},
+    atom::{AsAtomView, FunctionBuilder, Symbol},
     state::State,
     symb,
 };
@@ -642,6 +642,7 @@ impl ExtendibleReps {
         }
         let rep = Rep::Dualizable(DUALIZABLE.len() as i16 + 1);
 
+        self.name_map.insert(name.into(), rep);
         #[cfg(feature = "shadowing")]
         let symbol = symb!(name);
         #[cfg(feature = "shadowing")]
@@ -669,6 +670,7 @@ impl ExtendibleReps {
         }
 
         let rep = Rep::SelfDual(SELF_DUAL.len() as u16);
+        self.name_map.insert(name.into(), rep);
         #[cfg(feature = "shadowing")]
         let symbol = symb!(name);
         #[cfg(feature = "shadowing")]
@@ -723,14 +725,13 @@ impl ExtendibleReps {
             symbol_map: AHashMap::new(),
         };
 
-        for name in Self::BUILTIN_SELFDUAL_NAMES.iter() {
+        for &name in Self::BUILTIN_SELFDUAL_NAMES.iter() {
             new.new_self_dual(name).unwrap();
         }
 
-        for name in Self::BUILTIN_DUALIZABLE_NAMES.iter() {
+        for &name in Self::BUILTIN_DUALIZABLE_NAMES.iter() {
             new.new_dual_impl(name).unwrap();
         }
-
         new
     }
 
@@ -818,8 +819,6 @@ impl RepName for Rep {
 
     #[cfg(feature = "shadowing")]
     fn to_symbol(&self) -> Symbol {
-        use symbolica::atom::Symbol;
-
         REPS.read().unwrap()[*self].symbol
     }
 }
@@ -889,8 +888,6 @@ impl<T: RepName> Representation<T> {
     /// yields a function builder for the representation, adding a first variable: the dimension.
     ///
     pub fn to_fnbuilder(&self) -> FunctionBuilder {
-        use symbolica::atom::FunctionBuilder;
-
         self.rep
             .to_fnbuilder()
             .add_arg(self.dim.to_symbolic().as_atom_view())

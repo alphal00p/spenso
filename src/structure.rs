@@ -3,17 +3,21 @@ use abstract_index::ABSTRACTIND;
 use ahash::AHashMap;
 
 use anyhow::{anyhow, Result};
-use append_only_vec::AppendOnlyVec;
 use concrete_index::ConcreteIndex;
 use concrete_index::ExpandedIndex;
 use concrete_index::FlatIndex;
 use delegate::delegate;
 
 use dimension::Dimension;
-use duplicate::duplicate;
 use indexmap::IndexMap;
 
-use once_cell::sync::Lazy;
+use crate::permutation::Permutation;
+#[cfg(feature = "shadowing")]
+use crate::{
+    data::DenseTensor,
+    parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
+    symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom, SerializableSymbol},
+};
 use representation::{Dual, Euclidean, Lorentz, PhysReps, Rep, RepName, Representation};
 use serde::Deserialize;
 use serde::Serialize;
@@ -28,30 +32,12 @@ use smartstring::SmartString;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::hash::Hash;
-use std::ops::AddAssign;
-use std::ops::Deref;
-use std::ops::Index;
-use std::sync::RwLock;
+use std::ops::Range;
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{
-        representation::FunView, AsAtomView, Atom, AtomView, FunctionBuilder, ListIterator,
-        MulView, Symbol,
-    },
-    coefficient::CoefficientView,
+    atom::{representation::FunView, Atom, AtomView, FunctionBuilder, MulView, Symbol},
     state::State,
-    symb,
 };
-use thiserror::Error;
-
-use crate::permutation::Permutation;
-#[cfg(feature = "shadowing")]
-use crate::{
-    data::DenseTensor,
-    parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
-    symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom, SerializableSymbol},
-};
-use std::ops::Range;
 
 use crate::iterators::TensorStructureIndexIterator;
 use std::collections::HashMap;
@@ -1012,17 +998,6 @@ impl TryFrom<AtomView<'_>> for VecStructure {
 //         VecStructure { structure: value }
 //     }
 // }
-
-#[cfg(test)]
-#[test]
-#[cfg(feature = "shadowing")]
-fn test_from_atom() {
-    let a = Atom::parse("f(aind(lor(4,1)))").unwrap();
-
-    let b = VecStructure::try_from(a.as_atom_view()).unwrap();
-
-    print!("{}", b);
-}
 
 #[cfg(feature = "shadowing")]
 impl TryFrom<FunView<'_>> for VecStructure {
@@ -2086,3 +2061,19 @@ where
 // impl Kroneker {
 //     pub fn new<T: Rep>(i: GenSlot<T>, j: GenSlot<T::Dual>) -> Self {}
 // }
+
+#[cfg(test)]
+#[cfg(feature = "shadowing")]
+mod shadowing_tests {
+    use super::*;
+    use symbolica::atom::{AsAtomView, Atom};
+
+    #[test]
+    fn test_from_atom() {
+        let a = Atom::parse("f(aind(lor(4,1)))").unwrap();
+
+        let b = VecStructure::try_from(a.as_atom_view()).unwrap();
+
+        print!("{}", b);
+    }
+}

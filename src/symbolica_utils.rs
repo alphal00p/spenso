@@ -18,7 +18,7 @@ use std::{
 use anyhow::Result;
 
 // use anyhow::Ok;
-use serde::{ser::SerializeStruct, Serializer};
+use serde::ser::SerializeStruct;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Display)]
 pub struct SerializableSymbol {

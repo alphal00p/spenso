@@ -202,11 +202,11 @@ pub struct Dual<T> {
 }
 
 duplicate! {
-   [isnotselfdual isneg constname varname varnamedual dualconstname;
-    [Lorentz] [_i > 0] ["loru"] [LorentzUp] [LorentzDown] ["lord"];
-    [SpinFundamental] [false] ["spin"] [SpinFund] [SpinAntiFund] ["spina"];
-    [ColorFundamental] [false] ["cof"] [ColorFund] [ColorAntiFund] ["coaf"];
-    [ColorSextet] [false] ["cos"] [ColorSextet] [ColorAntiSextet]["coas"]]
+   [isnotselfdual  constname varname varnamedual dualconstname;
+    [Lorentz]  ["loru"] [LorentzUp] [LorentzDown] ["lord"];
+    [SpinFundamental] ["spin"] [SpinFund] [SpinAntiFund] ["spina"];
+    [ColorFundamental]  ["cof"] [ColorFund] [ColorAntiFund] ["coaf"];
+    [ColorSextet]  ["cos"] [ColorSextet] [ColorAntiSextet]["coas"]]
 
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,Default)]
@@ -247,9 +247,7 @@ duplicate! {
         isnotselfdual::selfless_dual()
     }
 
-    fn is_neg(self,_i:usize)->bool{
-        isneg
-    }
+
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol) -> Result<Self> {
         if Self::selfless_symbol() == sym {
@@ -360,11 +358,85 @@ duplicate! {
     }
 }
 
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
+)]
+pub struct Minkowski {}
+
+impl RepName for Minkowski {
+    type Base = Minkowski;
+    type Dual = Minkowski;
+
+    fn base(&self) -> Self::Base {
+        Minkowski::selfless_base()
+    }
+
+    fn dual(self) -> Self::Dual {
+        Minkowski::selfless_dual()
+    }
+
+    fn matches(&self, _: &Self::Dual) -> bool {
+        true
+    }
+
+    fn is_neg(self, i: usize) -> bool {
+        i > 0
+    }
+
+    #[cfg(feature = "shadowing")]
+    fn try_from_symbol(sym: Symbol) -> Result<Self> {
+        if Self::selfless_symbol() == sym {
+            Ok(Minkowski::default())
+        } else {
+            Err(anyhow!("Not a representation"))
+        }
+    }
+}
+
+impl Display for Minkowski {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "mink")
+    }
+}
+
+impl From<Minkowski> for PhysReps {
+    fn from(value: Minkowski) -> Self {
+        PhysReps::Minkowski(value)
+    }
+}
+
+impl From<Slot<Minkowski>> for PhysicalSlots {
+    fn from(value: Slot<Minkowski>) -> Self {
+        value.cast() //RecSlotEnum::A(value.dual_pair()).into()
+    }
+}
+
+impl BaseRepName for Minkowski {
+    const NAME: &'static str = "mink";
+
+    // fn selfless_name() -> String {
+    //     constname.to_string()
+    // }
+
+    fn selfless_base() -> Self::Base {
+        Self::default()
+    }
+
+    fn selfless_pair() -> DualPair<Self::Base> {
+        DualPair::Rep(Self::default())
+    }
+
+    fn selfless_dual() -> Self::Dual {
+        Self::default()
+    }
+}
+
 duplicate! {
    [isselfdual constname;
     [Euclidean] ["euc"];
     [Bispinor] ["bis"];
-    [ColorAdjoint] ["coad"]]
+    [ColorAdjoint] ["coad"]
+   ]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,Default)]
     pub struct isselfdual {}
 
@@ -445,6 +517,7 @@ duplicate! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum PhysReps {
     Euclidean(Euclidean),
+    Minkowski(Minkowski),
     LorentzUp(Lorentz),
     LorentzDown(Dual<Lorentz>),
     SpinFund(SpinFundamental),
@@ -473,6 +546,7 @@ impl Display for PhysReps {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Bispinor(_) => write!(f, "bis"),
+            Self::Minkowski(_) => write!(f, "mink"),
             Self::Euclidean(_) => write!(f, "euc"),
             Self::ColorAdjoint(_) => write!(f, "coad"),
             Self::ColorFund(_) => write!(f, "cof"),
@@ -519,6 +593,7 @@ impl RepName for PhysReps {
                 | (PhysReps::ColorAntiSextet(_), PhysReps::ColorSextet(_))
                 | (PhysReps::SpinAntiFund(_), PhysReps::SpinFund(_))
                 | (PhysReps::SpinFund(_), PhysReps::SpinAntiFund(_))
+                | (PhysReps::Minkowski(_), PhysReps::Minkowski(_))
         )
     }
 
@@ -595,6 +670,7 @@ impl From<PhysReps> for Rep {
     fn from(value: PhysReps) -> Self {
         match value {
             PhysReps::ColorFund(_) => ExtendibleReps::COLORFUND,
+            PhysReps::Minkowski(_) => ExtendibleReps::MINKOWSKI,
             PhysReps::ColorAntiFund(_) => ExtendibleReps::COLORANTIFUND,
             PhysReps::ColorSextet(_) => ExtendibleReps::COLORSEXT,
             PhysReps::ColorAntiSextet(_) => ExtendibleReps::COLORANTISEXT,
@@ -700,6 +776,7 @@ impl ExtendibleReps {
     pub const EUCLIDEAN: Rep = Rep::SelfDual(0);
     pub const BISPINOR: Rep = Rep::SelfDual(1);
     pub const COLORADJ: Rep = Rep::SelfDual(2);
+    pub const MINKOWSKI: Rep = Rep::SelfDual(3);
 
     pub const LORENTZ_UP: Rep = Rep::Dualizable(1);
     pub const LORENTZ_DOWN: Rep = Rep::Dualizable(-1);
@@ -710,13 +787,15 @@ impl ExtendibleReps {
     pub const COLORSEXT: Rep = Rep::Dualizable(4);
     pub const COLORANTISEXT: Rep = Rep::Dualizable(-4);
 
-    pub const BUILTIN_SELFDUAL_NAMES: [&'static str; 3] = ["euc", "bis", "coad"];
+    pub const BUILTIN_SELFDUAL_NAMES: [&'static str; 4] = ["euc", "bis", "coad", "mink"];
     pub const BUILTIN_DUALIZABLE_NAMES: [&'static str; 3] = ["lor", "spf", "cof"];
 
-    #[cfg(feature = "shadowing")]
+    // #[cfg(feature = "shadowing")]
     pub const UP: &'static str = "u";
-    #[cfg(feature = "shadowing")]
+    // #[cfg(feature = "shadowing")]
     pub const DOWN: &'static str = "d";
+
+    pub const SD: &'static str = "sd";
 
     pub fn new() -> Self {
         let mut new = Self {

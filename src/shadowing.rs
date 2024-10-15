@@ -147,6 +147,11 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
         );
 
         new.insert_generic_real(
+            Self::metric_key(ExtendibleReps::MINKOWSKI).into(),
+            Self::generic_lor_metric,
+        );
+
+        new.insert_generic_real(
             Self::metric_key(ExtendibleReps::LORENTZ_DOWN).into(),
             Self::generic_lor_metric,
         );
@@ -170,7 +175,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
     fn gamma_key() -> ExplicitKey {
         ExplicitKey::from_iter(
             [
-                ExtendibleReps::LORENTZ_UP.new_rep(4),
+                ExtendibleReps::MINKOWSKI.new_rep(4),
                 ExtendibleReps::BISPINOR.new_rep(4),
                 ExtendibleReps::BISPINOR.new_rep(4),
             ],
@@ -297,8 +302,8 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
     fn sigma_key() -> ExplicitKey {
         ExplicitKey::from_iter(
             [
-                ExtendibleReps::LORENTZ_UP.new_rep(4),
-                ExtendibleReps::LORENTZ_UP.new_rep(4),
+                ExtendibleReps::MINKOWSKI.new_rep(4),
+                ExtendibleReps::MINKOWSKI.new_rep(4),
                 ExtendibleReps::BISPINOR.new_rep(4),
                 ExtendibleReps::BISPINOR.new_rep(4),
             ],

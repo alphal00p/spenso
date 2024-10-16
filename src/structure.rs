@@ -7,9 +7,9 @@ use concrete_index::ConcreteIndex;
 use concrete_index::ExpandedIndex;
 use concrete_index::FlatIndex;
 use delegate::delegate;
-
 use dimension::Dimension;
 use indexmap::IndexMap;
+use thiserror::Error;
 
 use crate::permutation::Permutation;
 #[cfg(feature = "shadowing")]
@@ -1077,6 +1077,10 @@ impl VecStructure {
         Self { structure }
     }
 
+    pub fn push(&mut self, item: PhysicalSlots) {
+        self.structure.push(item)
+    }
+
     fn extend(&mut self, other: Self) {
         self.structure.extend(other.structure)
     }
@@ -1316,9 +1320,17 @@ impl<Name, Args> NamedStructure<Name, Args> {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum StructureError {
+    #[error("SlotError: {0}")]
+    SlotError(#[from] SlotError),
+    #[error("empty structure {0}")]
+    EmptyStructure(SlotError),
+}
+
 #[cfg(feature = "shadowing")]
 impl<'a> TryFrom<FunView<'a>> for AtomStructure {
-    type Error = SlotError;
+    type Error = StructureError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         match value.get_symbol() {
             s if s == State::get_symbol(ABSTRACTIND) => {
@@ -1334,20 +1346,31 @@ impl<'a> TryFrom<FunView<'a>> for AtomStructure {
                 let mut structure: AtomStructure = VecStructure::default().into();
                 structure.set_name(name.into());
                 let mut args = vec![];
+                let mut is_structure = Some(SlotError::EmptyStructure);
 
                 for arg in value.iter() {
-                    if let AtomView::Fun(fun) = arg {
-                        structure.structure.extend(fun.try_into()?);
-                    } else {
-                        args.push(arg.to_owned().into());
+                    let slot: Result<PhysicalSlots, _> = arg.try_into();
+
+                    match slot {
+                        Ok(slot) => {
+                            is_structure = None;
+                            structure.structure.push(slot);
+                        }
+                        Err(e) => {
+                            is_structure = Some(e);
+                            args.push(arg.to_owned().into());
+                        }
                     }
                 }
 
                 if !args.is_empty() {
                     structure.additional_args = Some(args);
                 }
-
-                Ok(structure)
+                if let Some(e) = is_structure {
+                    Err(StructureError::EmptyStructure(e))
+                } else {
+                    Ok(structure)
+                }
             }
         }
     }
@@ -1472,6 +1495,23 @@ impl<N, A> TensorStructure for NamedStructure<N, A> {
     }
 }
 
+#[cfg(feature = "shadowing")]
+impl<N: IntoSymbol, A: IntoArgs> Display for NamedStructure<N, A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(ref name) = self.global_name {
+            write!(f, "{}", name.ref_into_symbol())?
+        }
+        write!(f, "(")?;
+        if let Some(ref args) = self.additional_args {
+            let args: Vec<std::string::String> =
+                args.ref_into_args().map(|s| s.to_string()).collect();
+            write!(f, "{},", args.join(","))?
+        }
+
+        write!(f, "{})", self.structure)?;
+        Result::Ok(())
+    }
+}
 impl<N, A> StructureContract for NamedStructure<N, A> {
     delegate! {
         to self.structure{
@@ -2069,11 +2109,15 @@ mod shadowing_tests {
     use symbolica::atom::{AsAtomView, Atom};
 
     #[test]
-    fn test_from_atom() {
-        let a = Atom::parse("f(aind(lor(4,1)))").unwrap();
+    fn named_structure_from_atom() {
+        let expr = Atom::parse("p(1,mu,lor(4,4))").unwrap();
 
-        let b = VecStructure::try_from(a.as_atom_view()).unwrap();
-
-        print!("{}", b);
+        if let AtomView::Fun(f) = expr.as_atom_view() {
+            let named_structure = AtomStructure::try_from(f);
+            match named_structure {
+                Ok(named_structure) => println!("{}", named_structure),
+                Err(e) => println!("{}{e:?}", e),
+            }
+        }
     }
 }

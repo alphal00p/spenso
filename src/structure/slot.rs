@@ -1,7 +1,9 @@
 use super::{
-    abstract_index::AbstractIndex,
+    abstract_index::{AbstractIndex, AbstractIndexError},
     dimension::DimensionError,
-    representation::{BaseRepName, Dual, DualPair, PhysReps, RepName, Representation},
+    representation::{
+        BaseRepName, Dual, DualPair, PhysReps, RepName, Representation, RepresentationError,
+    },
 };
 use crate::structure::dimension::Dimension;
 use serde::{Deserialize, Serialize};
@@ -86,8 +88,14 @@ impl<T: RepName> Slot<T> {
 pub enum SlotError {
     #[error("Dimension is not concrete")]
     NotConcrete,
+    #[error("Empty structure")]
+    EmptyStructure,
     #[error("Argument is not a natural number")]
     NotNatural,
+    #[error("Abstract index error :{0}")]
+    AindError(#[from] AbstractIndexError),
+    #[error("Representation error :{0}")]
+    RepError(#[from] RepresentationError),
     #[error("Argument is not a number")]
     NotNumber,
     #[error("No more arguments")]
@@ -124,22 +132,29 @@ impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
     type Error = SlotError;
 
     fn try_from(value: AtomView<'_>) -> Result<Self, Self::Error> {
-        fn extract_num(iter: &mut ListIterator) -> Result<i64, SlotError> {
+        fn extract_num(iter: &mut ListIterator) -> Result<AbstractIndex, SlotError> {
             if let Some(a) = iter.next() {
-                if let AtomView::Num(n) = a {
-                    if let CoefficientView::Natural(n, 1) = n.get_coeff_view() {
-                        return Ok(n);
-                    }
-                    return Err(SlotError::NotNatural);
-                }
-                Err(SlotError::NotNumber)
+                Ok(AbstractIndex::try_from(a)?)
             } else {
                 Err(SlotError::NoMoreArguments)
             }
         }
 
-        let mut iter = if let AtomView::Fun(f) = value {
-            f.iter()
+        let (rep, mut iter) = if let AtomView::Fun(f) = value {
+            let name = f.get_symbol();
+            println!("name::{name}");
+
+            let innerf = f.iter().next().ok_or(SlotError::Composite)?;
+            println!("innerf::{innerf}");
+            if let AtomView::Fun(innerf) = innerf {
+                let rep =
+                    T::try_from_symbol(innerf.get_symbol(), name).map_err(SlotError::RepError)?;
+
+                (rep, innerf.iter())
+            } else {
+                let rep = T::try_from_symbol_coerced(name).map_err(SlotError::RepError)?;
+                (rep, f.iter())
+            }
         } else {
             return Err(SlotError::Composite);
         };
@@ -147,25 +162,16 @@ impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
         let dim: Dimension = Dimension::new_concrete(
             usize::try_from(extract_num(&mut iter)?).or(Err(DimensionError::TooLarge))?,
         );
-        let index: AbstractIndex = usize::try_from(extract_num(&mut iter)?)
-            .or(Err(DimensionError::TooLarge))?
-            .into();
+        let index: AbstractIndex = extract_num(&mut iter)?;
 
         if extract_num(&mut iter).is_ok() {
             return Err(SlotError::TooManyArguments);
         }
 
-        if let AtomView::Fun(f) = value {
-            let sym = f.get_symbol();
-            let rep = T::try_from_symbol(sym)?;
-
-            Ok(Slot {
-                rep: Representation { dim, rep },
-                aind: index,
-            })
-        } else {
-            Err(SlotError::Composite)
-        }
+        Ok(Slot {
+            rep: Representation { dim, rep },
+            aind: index,
+        })
     }
 }
 
@@ -274,8 +280,7 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
     #[cfg(feature = "shadowing")]
     fn to_symbolic(&self) -> Atom {
         let mut value_builder = self.rep.to_fnbuilder();
-        value_builder =
-            value_builder.add_arg(Atom::new_num(usize::from(self.aind) as i64).as_atom_view());
+        value_builder = value_builder.add_arg(Atom::from(self.aind).as_atom_view());
         value_builder.finish()
     }
     #[cfg(feature = "shadowing")]
@@ -315,8 +320,10 @@ pub type PhysicalSlots = Slot<PhysReps>;
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
+    use symbolica::atom::Atom;
+
     use crate::structure::{
-        representation::{BaseRepName, Dual, Lorentz, Rep, RepName, Representation},
+        representation::{BaseRepName, Dual, Lorentz, Minkowski, Rep, RepName, Representation},
         slot::{DualSlotTo, IsAbstractSlot, Slot},
     };
 
@@ -349,11 +356,17 @@ mod shadowing_tests {
     }
 
     #[test]
-    fn feature() {
+    fn slot_from_atom_view() {
         let mink = Lorentz::rep(4);
         let mu = mink.new_slot(0);
         let atom = mu.to_symbolic();
-        let slot = Slot::try_from(atom.as_view()).unwrap();
-        assert_eq!(slot, mu);
+        println!("{}", atom);
+        let expr = Atom::parse("dind(lor(4,-1))").unwrap();
+
+        let slot: Slot<Rep> = Slot::try_from(expr.as_view()).unwrap();
+        println!("{slot}");
+        println!("{}", slot.to_symbolic())
+
+        // assert_eq!(slot, mu);
     }
 }

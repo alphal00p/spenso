@@ -9,7 +9,8 @@ use crate::{
         abstract_index::AbstractIndex,
         dimension::Dimension,
         representation::{
-            BaseRepName, Bispinor, Dual, Euclidean, Lorentz, PhysReps, RepName, Representation,
+            BaseRepName, Bispinor, ColorAdjoint, ColorFundamental, ColorSextet, Dual, Euclidean,
+            Lorentz, PhysReps, RepName, Representation, SpinFundamental,
         },
         slot::Slot,
         TensorStructure,
@@ -26,14 +27,7 @@ use symbolica::{
 #[cfg(feature = "shadowing")]
 use crate::{
     shadowing::Shadowable,
-    structure::{
-        abstract_index::ABSTRACTIND,
-        representation::{
-            BISPINOR, COLORADJ, COLORANTIFUND, COLORANTISEXT, COLORFUND, COLORSEXT, EUCLIDEAN,
-            SPINFUND,
-        },
-        HistoryStructure, NamedStructure,
-    },
+    structure::{abstract_index::ABSTRACTIND, HistoryStructure, NamedStructure},
     symbolica_utils::{IntoArgs, IntoSymbol},
 };
 
@@ -249,12 +243,12 @@ fn rep_string(rep: &str, rep_args: ReplacementArgs) -> String {
 #[allow(dead_code)]
 #[cfg(feature = "shadowing")]
 fn euc(rep_args: ReplacementArgs) -> String {
-    rep_string(EUCLIDEAN, rep_args)
+    rep_string(Euclidean::NAME, rep_args)
 }
 
 #[cfg(feature = "shadowing")]
 fn bis(rep_args: ReplacementArgs) -> String {
-    rep_string(BISPINOR, rep_args)
+    rep_string(Bispinor::NAME, rep_args)
 }
 
 #[cfg(feature = "shadowing")]
@@ -272,47 +266,49 @@ impl<R: BaseRepName> ReprRepl for R {
 #[allow(dead_code)]
 #[cfg(feature = "shadowing")]
 fn spin(rep_args: ReplacementArgs) -> String {
-    rep_string(SPINFUND, rep_args)
+    rep_string(SpinFundamental::NAME, rep_args)
 }
 #[cfg(feature = "shadowing")]
 fn coad(ind: &'static str, wrapped: bool) -> String {
     if wrapped {
-        rep_string(COLORADJ, ReplacementArgs::Wrapped(8, ind))
+        rep_string(ColorAdjoint::NAME, ReplacementArgs::Wrapped(8, ind))
     } else {
-        rep_string(COLORADJ, ReplacementArgs::Bare(ind))
+        rep_string(ColorAdjoint::NAME, ReplacementArgs::Bare(ind))
     }
 }
 #[cfg(feature = "shadowing")]
 fn cof(ind: &'static str, wrapped: bool) -> String {
     if wrapped {
-        rep_string(COLORFUND, ReplacementArgs::Wrapped(3, ind))
+        rep_string(ColorFundamental::NAME, ReplacementArgs::Wrapped(3, ind))
     } else {
-        rep_string(COLORFUND, ReplacementArgs::Bare(ind))
+        rep_string(ColorFundamental::NAME, ReplacementArgs::Bare(ind))
     }
 }
 #[cfg(feature = "shadowing")]
 fn coaf(ind: &'static str, wrapped: bool) -> String {
-    if wrapped {
-        rep_string(COLORANTIFUND, ReplacementArgs::Wrapped(3, ind))
-    } else {
-        rep_string(COLORANTIFUND, ReplacementArgs::Bare(ind))
-    }
+    unimplemented!("need to use a different rep");
+    // if wrapped {
+    //     rep_string(COLORANTIFUND, ReplacementArgs::Wrapped(3, ind))
+    // } else {
+    //     rep_string(COLORANTIFUND, ReplacementArgs::Bare(ind))
+    // }
 }
 #[cfg(feature = "shadowing")]
 fn cos(ind: &'static str, wrapped: bool) -> String {
     if wrapped {
-        rep_string(COLORSEXT, ReplacementArgs::Wrapped(6, ind))
+        rep_string(ColorSextet::NAME, ReplacementArgs::Wrapped(6, ind))
     } else {
-        rep_string(COLORSEXT, ReplacementArgs::Bare(ind))
+        rep_string(ColorSextet::NAME, ReplacementArgs::Bare(ind))
     }
 }
 #[cfg(feature = "shadowing")]
 fn coas(ind: &'static str, wrapped: bool) -> String {
-    if wrapped {
-        rep_string(COLORANTISEXT, ReplacementArgs::Wrapped(6, ind))
-    } else {
-        rep_string(COLORANTISEXT, ReplacementArgs::Bare(ind))
-    }
+    unimplemented!("need to use a different rep rule");
+    // if wrapped {
+    //     rep_string(COLORANTISEXT, ReplacementArgs::Wrapped(6, ind))
+    // } else {
+    //     rep_string(COLORANTISEXT, ReplacementArgs::Bare(ind))
+    // }
 }
 
 #[cfg(feature = "shadowing")]

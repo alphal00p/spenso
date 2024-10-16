@@ -7,13 +7,22 @@ use std::hash::Hash;
 use std::ops::AddAssign;
 #[cfg(feature = "shadowing")]
 use symbolica::atom::{Atom, AtomView};
+use symbolica::coefficient::CoefficientView;
 
 #[cfg(feature = "shadowing")]
 use crate::symbolica_utils::SerializableSymbol;
 
 use crate::utils::{to_subscript, to_superscript};
 
+use thiserror::Error;
+
 pub const ABSTRACTIND: &str = "aind";
+
+pub const UPIND: &str = "uind";
+
+pub const DOWNIND: &str = "dind";
+
+pub const SELFDUALIND: &str = "sind";
 
 /// A type that represents the name of an index in a tensor.
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, Serialize, Deserialize)]
@@ -89,6 +98,16 @@ impl From<usize> for AbstractIndex {
     }
 }
 
+impl From<AbstractIndex> for Atom {
+    fn from(value: AbstractIndex) -> Self {
+        match value {
+            AbstractIndex::Normal(v) => Atom::new_num(v as i64),
+            AbstractIndex::Dualize(v) => Atom::new_num(-(v as i64)),
+            #[cfg(feature = "shadowing")]
+            AbstractIndex::Symbol(v) => Atom::new_var(v.into()),
+        }
+    }
+}
 impl From<AbstractIndex> for usize {
     fn from(value: AbstractIndex) -> Self {
         match value {
@@ -120,35 +139,50 @@ impl From<i32> for AbstractIndex {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum AbstractIndexError {
+    #[error("Argument is not a natural number")]
+    NotNatural,
+    #[error("Argument  {0} is not a valid index")]
+    NotIndex(String),
+    #[error("parsing error")]
+    ParsingError(String),
+}
+
 #[cfg(feature = "shadowing")]
 impl TryFrom<AtomView<'_>> for AbstractIndex {
-    type Error = String;
+    type Error = AbstractIndexError;
 
     fn try_from(view: AtomView<'_>) -> Result<Self, Self::Error> {
-        if let AtomView::Var(v) = view {
-            Ok(AbstractIndex::Normal(v.get_symbol().get_id() as usize))
-        } else {
-            Err("Not a var".to_string())
+        match view {
+            AtomView::Num(n) => {
+                if let CoefficientView::Natural(n, 1) = n.get_coeff_view() {
+                    return Ok(AbstractIndex::from(n as i32));
+                }
+                Err(AbstractIndexError::NotNatural)
+            }
+            AtomView::Var(v) => Ok(AbstractIndex::Symbol(v.get_symbol().into())),
+            _ => Err(AbstractIndexError::NotIndex(view.to_string())),
         }
     }
 }
 
 #[cfg(feature = "shadowing")]
 impl TryFrom<std::string::String> for AbstractIndex {
-    type Error = String;
+    type Error = AbstractIndexError;
 
     fn try_from(value: std::string::String) -> Result<Self, Self::Error> {
-        let atom = Atom::parse(&value)?;
+        let atom = Atom::parse(&value).map_err(AbstractIndexError::ParsingError)?;
         Self::try_from(atom.as_view())
     }
 }
 
 #[cfg(feature = "shadowing")]
 impl TryFrom<&'_ str> for AbstractIndex {
-    type Error = String;
+    type Error = AbstractIndexError;
 
     fn try_from(value: &'_ str) -> Result<Self, Self::Error> {
-        let atom = Atom::parse(value)?;
+        let atom = Atom::parse(value).map_err(AbstractIndexError::ParsingError)?;
         Self::try_from(atom.as_view())
     }
 }

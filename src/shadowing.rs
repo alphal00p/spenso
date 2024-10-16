@@ -378,12 +378,20 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
         Data: num::One,
     {
         for rep in REPS.read().unwrap().reps() {
-            self.insert_generic_real(Self::id(*rep), Self::checked_identity)
+            self.insert_generic_real(Self::id(*rep), Self::checked_identity);
+            let id_metric = GenericKey::new(symb!(Self::METRIC_NAME), None, vec![*rep, rep.dual()]);
+            self.insert_generic_real(id_metric, Self::checked_identity);
+            if rep.dual() != *rep {
+                self.insert_generic_real(Self::id(rep.dual()), Self::checked_identity);
+                let id_metric =
+                    GenericKey::new(symb!(Self::METRIC_NAME), None, vec![rep.dual(), *rep]);
+                self.insert_generic_real(id_metric, Self::checked_identity);
+            }
         }
     }
 
     pub fn id(rep: Rep) -> GenericKey {
-        GenericKey::new(symb!(Self::ID_NAME), None, vec![rep, rep])
+        GenericKey::new(symb!(Self::ID_NAME), None, vec![rep, rep.dual()])
     }
 
     pub fn checked_identity(key: ExplicitKey) -> MixedTensor<Data, ExplicitKey>
@@ -538,9 +546,98 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
+    use symbolica::atom::Atom;
+
+    use crate::{
+        contraction::Contract,
+        network::TensorNetwork,
+        structure::{
+            representation::{Rep, RepName, REPS},
+            HasStructure, IndexlessNamedStructure, TensorStructure,
+        },
+    };
+
+    use super::{ExplicitKey, EXPLICIT_TENSOR_MAP};
+
     #[test]
-    fn mem_size_test() {
-        // EXPLICIT_TENSOR_MAP.read();
+    fn test_identity() {
+        EXPLICIT_TENSOR_MAP.write().unwrap().update_ids();
+
+        for rep in REPS.read().unwrap().reps() {
+            let structure = [rep.new_rep(4), rep.new_rep(4).dual()];
+
+            let idstructure: IndexlessNamedStructure<String, (), Rep> =
+                IndexlessNamedStructure::from_iter(structure, "id".into(), None);
+
+            let idkey = ExplicitKey::from_structure(idstructure).unwrap();
+
+            let id = EXPLICIT_TENSOR_MAP.read().unwrap().get(&idkey).unwrap();
+
+            let trace_structure = vec![
+                rep.new_rep(4).new_slot(3),
+                rep.new_rep(4).dual().new_slot(4),
+            ];
+            let id1 = id.map_structure(|_| trace_structure.clone());
+            let id2 = id1
+                .clone()
+                .map_structure(|_| trace_structure.clone().dual());
+
+            assert_eq!(
+                4.,
+                id1.contract(&id2)
+                    .unwrap()
+                    .scalar()
+                    .unwrap()
+                    .try_into_concrete()
+                    .unwrap()
+                    .try_into_real()
+                    .unwrap(),
+                "trace of 4-dim identity should be 4 for rep {}",
+                rep
+            );
+
+            let idstructure: IndexlessNamedStructure<String, (), Rep> =
+                IndexlessNamedStructure::from_iter(structure, "Metric".into(), None);
+
+            let idkey = ExplicitKey::from_structure(idstructure).unwrap();
+
+            let id = EXPLICIT_TENSOR_MAP.read().unwrap().get(&idkey).unwrap();
+
+            let trace_structure = vec![
+                rep.new_rep(4).new_slot(3),
+                rep.new_rep(4).dual().new_slot(4),
+            ];
+            let id1 = id.map_structure(|_| trace_structure.clone());
+            let id2 = id1
+                .clone()
+                .map_structure(|_| trace_structure.clone().dual());
+
+            assert_eq!(
+                4.,
+                id1.contract(&id2)
+                    .unwrap()
+                    .scalar()
+                    .unwrap()
+                    .try_into_concrete()
+                    .unwrap()
+                    .try_into_real()
+                    .unwrap(),
+                "trace of 4-dim identity should be 4 for rep {}",
+                rep
+            );
+        }
+    }
+
+    #[test]
+    fn pslash() {
+        let expr =
+            Atom::parse("p(1,aind(mink(4,4)))* γ(aind(mink(4,4),bis(4,1),bis(4,2)))").unwrap();
+        let mut network: TensorNetwork<_, _> = expr.as_view().try_into().unwrap();
+
+        println!("{}", network.rich_graph().dot());
+        network.contract();
+        let result = network.result_tensor().unwrap();
+        println!("{}", result);
     }
 }

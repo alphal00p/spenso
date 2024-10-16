@@ -2462,7 +2462,7 @@ where
 impl<'a> TryFrom<MulView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
     type Error = TensorNetworkError;
     fn try_from(value: MulView<'a>) -> Result<Self, Self::Error> {
-        // trace!("MulView: {}", value.as_view());
+        println!("MulView: {}", value.as_view());
         let mut network: Self = TensorNetwork::new();
 
         let mut scalars = SerializableAtom(Atom::new_num(1));
@@ -2562,7 +2562,7 @@ impl<'a> TryFrom<PowView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
 impl<'a> TryFrom<FunView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
     type Error = TensorNetworkError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
-        // trace!("FunView: {}", value.as_view());
+        println!("FunView: {}", value.as_view());
         let mut network: Self = TensorNetwork::new();
         let s: Result<NamedStructure<_, _>, _> = value.try_into();
 
@@ -2572,7 +2572,7 @@ impl<'a> TryFrom<FunView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
             network.push(t);
         } else {
             scalar = Some(SerializableAtom(value.as_view().to_owned()));
-            // trace!("scalar fn: {}", value.as_view());
+            println!("scalar fn: {}", value.as_view());
         }
 
         network.scalar = scalar;

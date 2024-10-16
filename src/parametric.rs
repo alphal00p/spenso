@@ -22,7 +22,7 @@ use crate::{
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero, Trace},
     data::{
         DataIterator, DataTensor, DenseTensor, GetTensorData, HasTensorData, SetTensorData,
-        SparseTensor,
+        SparseOrDense, SparseTensor,
     },
     iterators::{IteratableTensor, IteratorEnum},
     shadowing::{ShadowMapping, Shadowable},
@@ -1157,6 +1157,41 @@ impl<D: Display> Display for ConcreteOrParam<D> {
     }
 }
 
+impl<S: TensorStructure + Clone> SparseOrDense for ParamTensor<S> {
+    fn to_dense(self) -> Self {
+        ParamTensor {
+            tensor: self.tensor.to_dense(),
+            param_type: self.param_type,
+        }
+    }
+
+    fn to_sparse(self) -> Self {
+        ParamTensor {
+            tensor: self.tensor.to_sparse(),
+            param_type: self.param_type,
+        }
+    }
+}
+
+impl<C, S> SparseOrDense for ParamOrConcrete<C, S>
+where
+    C: SparseOrDense + Clone + HasStructure<Structure = S>,
+    S: TensorStructure + Clone,
+{
+    fn to_dense(self) -> Self {
+        match self {
+            ParamOrConcrete::Concrete(x) => ParamOrConcrete::Concrete(x.to_dense()),
+            ParamOrConcrete::Param(x) => ParamOrConcrete::Param(x.to_dense()),
+        }
+    }
+
+    fn to_sparse(self) -> Self {
+        match self {
+            ParamOrConcrete::Concrete(x) => ParamOrConcrete::Concrete(x.to_sparse()),
+            ParamOrConcrete::Param(x) => ParamOrConcrete::Param(x.to_sparse()),
+        }
+    }
+}
 impl<C, S> HasStructure for ParamOrConcrete<C, S>
 where
     C: HasStructure<Structure = S> + Clone,

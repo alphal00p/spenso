@@ -1238,6 +1238,11 @@ pub enum DataTensor<T, I: TensorStructure = VecStructure> {
     Sparse(SparseTensor<T, I>),
 }
 
+pub trait SparseOrDense {
+    fn to_sparse(self) -> Self;
+    fn to_dense(self) -> Self;
+}
+
 impl<T: Clone, U: From<T> + Clone, I: TensorStructure + Clone> CastData<DataTensor<U, I>>
     for DataTensor<T, I>
 {
@@ -1316,7 +1321,7 @@ where
             DataTensor::Sparse(s) => s.elements.len(),
         }
     }
-    pub fn to_sparse(self) -> SparseTensor<T, I>
+    pub fn to_bare_sparse(self) -> SparseTensor<T, I>
     where
         T: Clone + Default + PartialEq,
     {
@@ -1326,7 +1331,7 @@ where
         }
     }
 
-    pub fn to_dense(self) -> DenseTensor<T, I>
+    pub fn to_bare_dense(self) -> DenseTensor<T, I>
     where
         T: Clone + Default + PartialEq,
     {
@@ -1334,6 +1339,20 @@ where
             DataTensor::Dense(d) => d,
             DataTensor::Sparse(s) => s.to_dense(),
         }
+    }
+}
+
+impl<T, I> SparseOrDense for DataTensor<T, I>
+where
+    I: TensorStructure + Clone,
+    T: Clone + Default + PartialEq,
+{
+    fn to_dense(self) -> Self {
+        DataTensor::Dense(self.to_bare_dense())
+    }
+
+    fn to_sparse(self) -> Self {
+        DataTensor::Sparse(self.to_bare_sparse())
     }
 }
 

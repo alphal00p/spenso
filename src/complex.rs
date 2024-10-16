@@ -35,7 +35,7 @@ use rand::Rng;
 
 use crate::{
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefOne, RefZero, Trace},
-    data::{DataTensor, GetTensorData, HasTensorData, SetTensorData},
+    data::{DataTensor, GetTensorData, HasTensorData, SetTensorData, SparseOrDense},
     iterators::{IteratableTensor, IteratorEnum},
     structure::{
         concrete_index::{ExpandedIndex, FlatIndex},
@@ -1593,6 +1593,24 @@ where
                 .to_dense_labeled_complex(index_to_atom)?),
         }
         // Some(self.structure().clone().to_dense_labeled(index_to_atom))
+    }
+}
+
+impl<T: Default + Clone + PartialEq, S: TensorStructure + Clone> SparseOrDense
+    for RealOrComplexTensor<T, S>
+{
+    fn to_sparse(self) -> Self {
+        match self {
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.to_sparse()),
+            RealOrComplexTensor::Complex(d) => RealOrComplexTensor::Complex(d.to_sparse()),
+        }
+    }
+
+    fn to_dense(self) -> Self {
+        match self {
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.to_dense()),
+            RealOrComplexTensor::Complex(d) => RealOrComplexTensor::Complex(d.to_dense()),
+        }
     }
 }
 

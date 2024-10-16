@@ -4,11 +4,16 @@ use ahash::AHashMap;
 
 use anyhow::{anyhow, Result};
 use concrete_index::ConcreteIndex;
+use concrete_index::DualConciousExpandedIndex;
+use concrete_index::DualConciousIndex;
 use concrete_index::ExpandedIndex;
 use concrete_index::FlatIndex;
 use delegate::delegate;
 use dimension::Dimension;
 use indexmap::IndexMap;
+
+#[cfg(feature = "shadowing")]
+use symbolica::symb;
 use thiserror::Error;
 
 use crate::permutation::Permutation;
@@ -143,7 +148,7 @@ where
     fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
         ExpandedCoefficent {
             name: self.name().map(|n| n.ref_into_symbol()),
-            index: self.expanded_index(id).unwrap(),
+            index: self.co_expanded_index(id).unwrap(),
             args: None,
         }
     }
@@ -162,7 +167,7 @@ pub trait ToSymbolic: TensorStructure {
     fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
         ExpandedCoefficent {
             name: None,
-            index: self.expanded_index(id).unwrap(),
+            index: self.co_expanded_index(id).unwrap(),
             args: None,
         }
     }
@@ -554,6 +559,24 @@ pub trait TensorStructure {
         } else {
             Err(anyhow!("Index {flat_index} out of bounds"))
         }
+    }
+
+    fn co_expanded_index(&self, flat_index: FlatIndex) -> Result<DualConciousExpandedIndex> {
+        let mut indices = vec![];
+
+        for (r, i) in self
+            .external_reps_iter()
+            .zip(self.expanded_index(flat_index)?.iter())
+        {
+            if r.rep.is_base() && r.rep.is_dual() {
+                indices.push(DualConciousIndex::SelfDual(*i));
+            } else if r.rep.is_base() {
+                indices.push(DualConciousIndex::Up(*i));
+            } else {
+                indices.push(DualConciousIndex::Down(*i));
+            }
+        }
+        Ok(indices.into())
     }
 
     /// yields an iterator over the indices of the tensor
@@ -1357,6 +1380,17 @@ impl<'a> TryFrom<FunView<'a>> for AtomStructure {
                             structure.structure.push(slot);
                         }
                         Err(e) => {
+                            if let AtomView::Fun(f) = arg {
+                                if f.get_symbol() == symb!(ABSTRACTIND) {
+                                    let internal_s = AtomStructure::try_from(f);
+
+                                    if let Ok(s) = internal_s {
+                                        structure.extend(s);
+                                        is_structure = None;
+                                        continue;
+                                    }
+                                }
+                            }
                             is_structure = Some(e);
                             args.push(arg.to_owned().into());
                         }
@@ -1439,7 +1473,7 @@ pub trait HasName {
     {
         ExpandedCoefficent {
             name: self.name().map(|n| n.ref_into_symbol()),
-            index: self.expanded_index(id).unwrap(),
+            index: self.co_expanded_index(id).unwrap(),
             args: self.args(),
         }
     }
@@ -2110,13 +2144,13 @@ mod shadowing_tests {
 
     #[test]
     fn named_structure_from_atom() {
-        let expr = Atom::parse("p(1,mu,lor(4,4))").unwrap();
+        let expr = Atom::parse("p(1,mu,aind(lor(4,4)))").unwrap();
 
         if let AtomView::Fun(f) = expr.as_atom_view() {
             let named_structure = AtomStructure::try_from(f);
             match named_structure {
                 Ok(named_structure) => println!("{}", named_structure),
-                Err(e) => println!("{}{e:?}", e),
+                Err(e) => println!("{}", e),
             }
         }
     }

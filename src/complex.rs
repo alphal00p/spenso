@@ -1518,6 +1518,8 @@ impl<T: Clone, S: TensorStructure + Clone> HasTensorData for RealOrComplexTensor
         }
     }
 
+
+    #[cfg(feature = "shadowing")]
     fn symhashmap(
         &self,
         name: symbolica::atom::Symbol,

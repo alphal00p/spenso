@@ -27,7 +27,7 @@ use crate::{
     iterators::{IteratableTensor, IteratorEnum},
     shadowing::{ShadowMapping, Shadowable},
     structure::{
-        concrete_index::{ExpandedIndex, FlatIndex},
+        concrete_index::{DualConciousExpandedIndex, ExpandedIndex, FlatIndex},
         slot::PhysicalSlots,
         CastStructure, HasName, HasStructure, NamedStructure, ScalarStructure, ScalarTensor,
         StructureContract, TensorStructure, ToSymbolic, TracksCount, VecStructure,
@@ -178,7 +178,7 @@ impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
 
 pub struct ExpandedCoefficent<Args: IntoArgs> {
     pub name: Option<Symbol>,
-    pub index: ExpandedIndex,
+    pub index: DualConciousExpandedIndex,
     pub args: Option<Args>,
 }
 
@@ -363,6 +363,17 @@ impl<S: TensorStructure + Clone> ScalarMul<SerializableAtom> for ParamTensor<S> 
         })
     }
 }
+
+// impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> ScalarMul<SerializableAtom>
+//     for ParamOrConcrete<C, S> where C
+// {
+//     type Output = ParamTensor<S>;
+//     fn scalar_mul(&self, rhs: &SerializableAtom) -> Option<Self::Output> {
+//         match self{
+
+//         }
+//     }
+// }
 
 impl<Structure: TensorStructure + Serialize + Clone> Serialize for ParamTensor<Structure> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -1115,6 +1126,12 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> ParamOr
 pub enum ConcreteOrParam<C> {
     Concrete(C),
     Param(Atom),
+}
+
+impl<C> From<SerializableAtom> for ConcreteOrParam<C> {
+    fn from(value: SerializableAtom) -> Self {
+        ConcreteOrParam::Param(value.into())
+    }
 }
 
 #[derive(Clone, Debug, EnumTryAsInner)]

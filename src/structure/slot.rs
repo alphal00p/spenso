@@ -28,7 +28,12 @@ use thiserror::Error;
 ///
 /// It can be built from a `Representation` calling one of the built in representations e.g.
 /// ```
-/// # use spenso::structure::{Representation,Slot,Dimension,AbstractIndex,Lorentz,Dual,RepName,BaseRepName,DualSlotTo};
+/// # use spenso::structure::*;
+/// # use spenso::structure::representation::*;
+/// # use spenso::structure::dimension::*;
+/// # use spenso::structure::abstract_index::*;
+/// # use spenso::structure::slot::*;
+/// # use spenso::structure::concrete_index::*;
 /// let mink: Representation<Lorentz> = Lorentz::rep(4);
 /// let mud: Slot<Lorentz> = mink.new_slot(0);
 /// let muu: Slot<Dual<Lorentz>> = mink.new_slot(0).dual();
@@ -37,7 +42,12 @@ use thiserror::Error;
 /// ```
 /// Or one can define custom representations{}
 /// ```
-/// # use spenso::structure::{Rep,Slot,RepName,DualSlotTo};
+/// # use spenso::structure::*;
+/// # use spenso::structure::representation::*;
+/// # use spenso::structure::dimension::*;
+/// # use spenso::structure::abstract_index::*;
+/// # use spenso::structure::slot::*;
+/// # use spenso::structure::concrete_index::*;
 /// let custom_mink = Rep::new_dual("custom_lor").unwrap();
 ///
 /// let nud: Slot<Rep> = custom_mink.new_slot(4, 0);
@@ -118,8 +128,12 @@ pub enum SlotError {
 /// # Example
 ///
 /// ```
-///
-/// # use spenso::structure::{Representation,Slot,Dimension,AbstractIndex,ToSymbolic,Lorentz,RepName,BaseRepName,IsAbstractSlot};
+/// # use spenso::structure::*;
+/// # use spenso::structure::representation::*;
+/// # use spenso::structure::dimension::*;
+/// # use spenso::structure::abstract_index::*;
+/// # use spenso::structure::slot::*;
+/// # use spenso::structure::concrete_index::*;
 /// # use symbolica::atom::AtomView;
 
 ///    let mink = Lorentz::rep(4);
@@ -243,12 +257,17 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash {
     ///
     /// ```
     /// # use symbolica::state::{State, Workspace};
-    /// # use spenso::structure::{Representation,Slot,Dimension,AbstractIndex,Lorentz,ToSymbolic,IsAbstractSlot,BaseRepName};
+    /// # use spenso::structure::*;
+    /// # use spenso::structure::representation::*;
+    /// # use spenso::structure::dimension::*;
+    /// # use spenso::structure::abstract_index::*;
+    /// # use spenso::structure::slot::*;
+    /// # use spenso::structure::concrete_index::*;
     /// let mink = Lorentz::rep(4);
     /// let mu = mink.new_slot(0);
     /// println!("{}", mu.to_symbolic());
-    /// assert_eq!("loru(4,0)", mu.to_symbolic().to_string());
-    /// assert_eq!("loru4|₀", mu.to_string());
+    /// assert_eq!("lor(4,0)", mu.to_symbolic().to_string());
+    /// assert_eq!("lor4|₀", mu.to_string());
     /// ```
     fn to_symbolic(&self) -> Atom;
     #[cfg(feature = "shadowing")]
@@ -353,8 +372,8 @@ mod shadowing_tests {
         let mink = Lorentz::rep(4);
         let mu = mink.new_slot(0);
         println!("{}", mu.to_symbolic());
-        assert_eq!("loru(4,0)", mu.to_symbolic().to_string());
-        assert_eq!("loru4|₀", mu.to_string());
+        assert_eq!("lor(4,0)", mu.to_symbolic().to_string());
+        assert_eq!("lor4|₀", mu.to_string());
     }
 
     #[test]

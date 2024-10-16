@@ -44,7 +44,6 @@ use crate::{
         HasStructure, HistoryStructure, NamedStructure, StructureContract, TensorStructure,
         VecStructure,
     },
-    symbolica_utils::NoArgs,
     ufo::{self, mink_four_vector},
     upgrading_arithmetic::{FallibleAdd, FallibleAddAssign, FallibleMul, FallibleSub},
 };
@@ -54,6 +53,7 @@ use crate::{
     parametric::{MixedTensor, ParamTensor},
     structure::{TensorShell, ToSymbolic},
     symbolic::SymbolicTensor,
+    symbolica_utils::NoArgs,
     upgrading_arithmetic::TryIntoUpgrade,
 };
 
@@ -296,7 +296,7 @@ fn permutation() {
 
 #[test]
 fn trace() {
-    let structura: HistoryStructure<String, NoArgs> =
+    let structura: HistoryStructure<String, ()> =
         HistoryStructure::from(NamedStructure::from_iter(
             [Euclidean::slot(5, 1), Euclidean::slot(5, 1)],
             "a".into(),
@@ -1500,7 +1500,7 @@ fn parsing_scalar_mul() {
 #[cfg(feature = "shadowing")]
 #[test]
 fn parsing_single_contract() {
-    let expr = "Q(15,aind(loru(4,192)))*γ(aind(lord(4,192),bis(4,105),bis(4,175)))";
+    let expr = "Q(15,mink(4,192))*γ(aind(mink(4,192),bis(4,105),bis(4,175)))";
     let atom = Atom::parse(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
@@ -1515,7 +1515,7 @@ fn parsing_single_contract() {
 #[cfg(feature = "shadowing")]
 #[test]
 fn parsing_addition_and_mul() {
-    let expr = "(MT*id(aind(bis(4,105),bis(4,175)))+Q(15,aind(loru(4,192)))*γ(aind(lord(4,192),bis(4,105),bis(4,175))))";
+    let expr = "(MT*id(aind(bis(4,105),bis(4,175)))+Q(15,aind(mink(4,192)))*γ(aind(mink(4,192),bis(4,105),bis(4,175))))";
     let atom = Atom::parse(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();

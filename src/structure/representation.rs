@@ -133,10 +133,13 @@ pub trait BaseRepName: RepName<Dual: RepName> + Default {
 //
 #[derive(Error, Debug)]
 pub enum RepresentationError {
+    #[cfg(feature = "shadowing")]
     #[error("Symbol {0} isn't one of [sind,uind,dind]")]
     SymbolError(Symbol),
+    #[cfg(feature = "shadowing")]
     #[error("Expected dual state: {0} but got {1}")]
     ExpectedDualStateError(Symbol, Symbol),
+    #[cfg(feature = "shadowing")]
     #[error("{0} is not a possible Representation")]
     NotRepresentationError(Symbol),
     #[error("Abstract index error :{0}")]
@@ -151,7 +154,9 @@ pub trait RepName: Copy + Clone + Debug + PartialEq + Eq + Hash + Display + Into
     type Dual: RepName<Dual = Self, Base = Self::Base>;
     type Base: RepName;
     fn dual(self) -> Self::Dual;
+    fn is_dual(self) -> bool;
     fn base(&self) -> Self::Base;
+    fn is_base(&self) -> bool;
     fn matches(&self, other: &Self::Dual) -> bool;
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError>;
@@ -250,6 +255,14 @@ duplicate! {
         isnotselfdual::selfless_base()
     }
 
+    fn is_base(&self) -> bool {
+        true
+    }
+
+    fn is_dual(self) -> bool {
+        false
+    }
+
     fn matches(&self, _: &Self::Dual) -> bool {
         true
     }
@@ -323,6 +336,14 @@ duplicate! {
 
         fn dual(self) -> Self::Dual {
             self.inner
+        }
+
+        fn is_base(&self) -> bool {
+            false
+        }
+
+        fn is_dual(self) -> bool {
+            true
         }
 
 
@@ -431,8 +452,16 @@ impl RepName for Minkowski {
         Minkowski::selfless_base()
     }
 
+    fn is_base(&self) -> bool {
+        true
+    }
+
     fn dual(self) -> Self::Dual {
         Minkowski::selfless_dual()
+    }
+
+    fn is_dual(self) -> bool {
+        true
     }
 
     fn matches(&self, _: &Self::Dual) -> bool {
@@ -554,8 +583,16 @@ duplicate! {
         isselfdual::selfless_base()
     }
 
+    fn is_base(&self) -> bool {
+        true
+    }
+
     fn dual(self) -> Self::Dual {
         isselfdual::selfless_dual()
+    }
+
+    fn is_dual(self) -> bool {
+        true
     }
 
     fn matches(&self, _: &Self::Dual) -> bool {
@@ -682,6 +719,34 @@ impl RepName for PhysReps {
             Self::ColorAntiSextet(l) => Self::ColorSextet(l.dual()),
             x => x,
         }
+    }
+
+    fn is_base(&self) -> bool {
+        matches!(
+            self,
+            PhysReps::Euclidean(_)
+                | PhysReps::Minkowski(_)
+                | PhysReps::SpinFund(_)
+                | PhysReps::ColorFund(_)
+                | PhysReps::ColorSextet(_)
+                | PhysReps::Bispinor(_)
+                | PhysReps::ColorAdjoint(_)
+                | PhysReps::LorentzUp(_)
+        )
+    }
+
+    fn is_dual(self) -> bool {
+        matches!(
+            self,
+            PhysReps::LorentzDown(_)
+                | PhysReps::SpinAntiFund(_)
+                | PhysReps::ColorAntiFund(_)
+                | PhysReps::ColorAntiSextet(_)
+                | PhysReps::Bispinor(_)
+                | PhysReps::Euclidean(_)
+                | PhysReps::Minkowski(_)
+                | PhysReps::ColorAdjoint(_)
+        )
     }
 
     fn matches(&self, other: &Self::Dual) -> bool {
@@ -939,13 +1004,6 @@ impl ExtendibleReps {
     pub const BUILTIN_SELFDUAL_NAMES: [&'static str; 4] = ["euc", "bis", "coad", "mink"];
     pub const BUILTIN_DUALIZABLE_NAMES: [&'static str; 4] = ["lor", "spf", "cof", "cos"];
 
-    // #[cfg(feature = "shadowing")]
-    pub const UP: &'static str = "u";
-    // #[cfg(feature = "shadowing")]
-    pub const DOWN: &'static str = "d";
-
-    pub const SD: &'static str = "sd";
-
     pub const fn euc_name() -> &'static str {
         Self::BUILTIN_SELFDUAL_NAMES[0]
     }
@@ -1030,6 +1088,20 @@ impl RepName for Rep {
         match self {
             Self::SelfDual(l) => Self::SelfDual(l),
             Self::Dualizable(l) => Self::Dualizable(-l),
+        }
+    }
+
+    fn is_base(&self) -> bool {
+        match self {
+            Self::Dualizable(l) => *l > 0,
+            _ => true,
+        }
+    }
+
+    fn is_dual(self) -> bool {
+        match self {
+            Self::Dualizable(l) => l < 0,
+            _ => true,
         }
     }
 
@@ -1216,9 +1288,12 @@ impl<T: RepName> Representation<T> {
     ///
     /// # Example
     /// ```
-    /// # use spenso::structure::Bispinor;
-    /// # use spenso::structure::BaseRepName;
-    /// # use spenso::structure::Representation;
+    /// # use spenso::structure::*;
+    /// # use spenso::structure::representation::*;
+    /// # use spenso::structure::dimension::*;
+    /// # use spenso::structure::abstract_index::*;
+    /// # use spenso::structure::slot::*;
+    /// # use spenso::structure::concrete_index::*;
     /// let spin: Representation<Bispinor> = Bispinor::rep(5);
     ///
     /// let metric_diag: Vec<bool> = spin.negative().unwrap();
@@ -1347,6 +1422,21 @@ where
             Self::DualRep(d) => Self::Rep(d.dual()),
         }
     }
+
+    fn is_base(&self) -> bool {
+        match self {
+            Self::Rep(r) => r.is_base(),
+            Self::DualRep(d) => d.is_base(),
+        }
+    }
+
+    fn is_dual(self) -> bool {
+        match self {
+            Self::Rep(r) => r.is_dual(),
+            Self::DualRep(d) => d.is_dual(),
+        }
+    }
+
     fn matches(&self, other: &Self::Dual) -> bool {
         matches!(
             (self, other),

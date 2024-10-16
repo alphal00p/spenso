@@ -1,8 +1,12 @@
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "shadowing")]
 use symbolica::{atom::AtomView, coefficient::CoefficientView};
 use thiserror::Error;
 
+#[cfg(feature = "shadowing")]
+use crate::parametric::AtomViewOrConcrete;
 #[cfg(feature = "shadowing")]
 use crate::symbolica_utils::SerializableSymbol;
 
@@ -43,6 +47,10 @@ pub enum DimensionError {
     Negative,
     #[error("Dimension is not natural")]
     NotNatural,
+
+    #[cfg(feature = "shadowing")]
+    #[error("Dimension is not a var or int: {0}")]
+    NotVarOrInt(Atom),
 }
 
 #[allow(unreachable_patterns)]
@@ -83,9 +91,17 @@ impl<'a> TryFrom<AtomView<'a>> for Dimension {
                     }
                     Ok(Dimension::Concrete(n as usize))
                 }
-                _ => return Err(DimensionError::NotNatural),
+                _ => {
+                    let mut err = Atom::new();
+                    err.set_from_view(&value);
+                    Err(DimensionError::NotVarOrInt(err))
+                }
             },
-            a => Err(DimensionError::NotNatural),
+            _ => {
+                let mut err = Atom::new();
+                err.set_from_view(&value);
+                Err(DimensionError::NotVarOrInt(err))
+            }
         }
     }
 }
@@ -107,5 +123,34 @@ impl PartialEq<Dimension> for usize {
             Dimension::Concrete(c) => c == self,
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "shadowing")]
+mod shadowing_tests {
+    use symbolica::{atom::Atom, fun, symb};
+
+    use super::Dimension;
+
+    #[test]
+    fn dimension_from_view() {
+        let a = Atom::new_num(5);
+        let b = Atom::new_var(symb!("b"));
+        let c = fun!(symb!("a"), symb!("b"));
+        let d = Atom::new_num(-1);
+        let e = Atom::new_num((1, 2));
+
+        let dima = Dimension::try_from(a.as_view()).unwrap();
+
+        assert_eq!(dima, Dimension::Concrete(5));
+        let dimb = Dimension::try_from(b.as_view()).unwrap();
+        assert_eq!(dimb, Dimension::Symbolic(symb!("b").into()));
+        let dimc = Dimension::try_from(c.as_view());
+        assert!(dimc.is_err());
+        let dimd = Dimension::try_from(d.as_view());
+        assert!(dimd.is_err());
+        let dime = Dimension::try_from(e.as_view());
+        assert!(dime.is_err());
     }
 }

@@ -1059,39 +1059,53 @@ mod test {
         use crate::network::TensorNetwork;
 
         let expr = Atom::parse(
-            "γ(aind(bis(4,4),bis(4,3),lord(4,1)))*γ(aind(bis(4,3),bis(4,4),lord(4,2)))+γ(aind(bis(4,4),bis(4,3),lord(4,2)))*γ(aind(bis(4,3),bis(4,4),lord(4,1)))",
+            "γ(mink(4,1),bis(4,4),bis(4,3))*γ(mink(4,2),bis(4,3),bis(4,4))+γ(mink(4,2),bis(4,4),bis(4,3))*γ(mink(4,1),bis(4,3),bis(4,4))",
         )
         .unwrap();
-        // +γ(aind(bis(4,4),bis(4,3),lord(4,2)))*γ(aind(bis(4,3),bis(4,4),lord(4,1))))
         let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
-        println!("{}", net.dot());
-        net.contract();
-        println!("{}", net.dot());
 
-        println!("{}", net.result_tensor().unwrap());
+        net.contract();
+
+        insta::assert_ron_snapshot!(net
+            .result_tensor()
+            .unwrap()
+            .try_into_concrete()
+            .unwrap()
+            .try_into_complex()
+            .unwrap()
+            .to_dense());
     }
 
     #[test]
     #[cfg(feature = "shadowing")]
     fn clifford2() {
         let expr = Atom::parse(
-            "γ(aind(lord(4,1),bis(4,4),bis(4,3)))*γ(aind(lord(4,2),bis(4,3),bis(4,1)))+γ(aind(lord(4,2),bis(4,4),bis(4,3)))*γ(aind(lord(4,1),bis(4,3),bis(4,1)))",
+            "γ(mink(4,1),bis(4,4),bis(4,3))*γ(mink(4,2),bis(4,3),bis(4,1))+γ(mink(4,2),bis(4,4),bis(4,3))*γ(mink(4,1),bis(4,3),bis(4,1))",
         )
         .unwrap();
-        // +γ(aind(bis(4,4),bis(4,3),lord(4,2)))*γ(aind(bis(4,3),bis(4,4),lord(4,1))))
+        // +γ(aind(bis(4,4),bis(4,3),mink(4,2)))*γ(aind(bis(4,3),bis(4,4),mink(4,1))))
         let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
-        println!("{}", net.dot());
-        net.contract();
-        println!("{}", net.dot());
 
-        println!("{}", net.result_tensor().unwrap());
+        net.contract();
+        let other = Atom::parse("2*Metric(mink(4,1),mink(4,2))*id(bis(4,4),bis(4,3))").unwrap();
+
+        let mut net = TensorNetwork::try_from(other.as_view()).unwrap();
+
+        net.contract();
+
+        // println!(
+        //     "{}",
+        //     net.to_fully_parametric().result_tensor_smart().unwrap()
+        // );
+        //
+        //TODO need to be able to compare these!
     }
 
     #[test]
     #[cfg(feature = "shadowing")]
     fn gamma_algebra() {
         let _ = env_logger::builder().is_test(true).try_init();
-        let expr = Atom::parse("γ(aind(lord(4,1),bis(4,4),bis(4,3)))*Q(1,aind(loru(4,1)))*γ(aind(lord(4,2),bis(4,3),bis(4,4)))*Q(2,aind(loru(4,2)))").unwrap();
+        let expr = Atom::parse("γ(aind(mink(4,1),bis(4,4),bis(4,3)))*Q(1,aind(mink(4,1)))*γ(aind(mink(4,2),bis(4,3),bis(4,4)))*Q(2,aind(mink(4,2)))").unwrap();
 
         let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
 
@@ -1112,7 +1126,7 @@ mod test {
     #[cfg(feature = "shadowing")]
     fn gamma_algebra2() {
         let expr = Atom::parse(
-            "γ(aind(loru(4,1),bis(4,4),bis(4,3)))*γ(aind(lord(4,1),bis(4,1),bis(4,2)))",
+            "γ(aind(mink(4,1),bis(4,4),bis(4,3)))*γ(aind(mink(4,1),bis(4,1),bis(4,2)))",
         )
         .unwrap();
 
@@ -1128,7 +1142,7 @@ mod test {
     fn data() {
         let _ = env_logger::builder().is_test(true).try_init();
         let expr = Atom::parse(
-            "γ(aind(loru(4,1),bis(4,4),bis(4,3)))*γ(aind(loru(4,2),bis(4,3),bis(4,4)))",
+            "γ(aind(mink(4,1),bis(4,4),bis(4,3)))*γ(aind(mink(4,2),bis(4,3),bis(4,4)))",
         )
         .unwrap();
 
@@ -1137,7 +1151,7 @@ mod test {
         net.contract();
 
         let mut other =
-            TensorNetwork::try_from(Atom::parse("p(aind(lord (4,1)))").unwrap().as_view()).unwrap();
+            TensorNetwork::try_from(Atom::parse("p(aind(mink (4,1)))").unwrap().as_view()).unwrap();
         other.contract();
 
         net.push(other.result_tensor().unwrap());
@@ -1152,7 +1166,7 @@ mod test {
     fn data2() {
         let _ = env_logger::builder().is_test(true).try_init();
         let expr = Atom::parse(
-            "γ(aind(loru(4,1),bis(4,4),bis(4,3)))*γ(aind(lord(4,2),bis(4,3),bis(4,4)))",
+            "γ(aind(mink(4,1),bis(4,4),bis(4,3)))*γ(aind(mink(4,2),bis(4,3),bis(4,4)))",
         )
         .unwrap();
 
@@ -1167,13 +1181,13 @@ mod test {
     #[cfg(feature = "shadowing")]
     fn data3() {
         let _ = env_logger::builder().is_test(true).try_init();
-        let g1 = Atom::parse("γ(aind(loru(4,1),bis(4,3),bis(4,4)))").unwrap();
-        let g2 = Atom::parse("γ(aind(loru(4,2),bis(4,3),bis(4,4)))").unwrap();
-        let p = Atom::parse("p(aind(lord (4,1)))").unwrap();
+        let g1 = Atom::parse("γ(aind(mink(4,1),bis(4,3),bis(4,4)))").unwrap();
+        let g2 = Atom::parse("γ(aind(mink(4,2),bis(4,3),bis(4,4)))").unwrap();
+        let p = Atom::parse("p(aind(mink (4,1)))").unwrap();
         let u = Atom::parse("u(aind(bis (4,3)))").unwrap();
         let v = Atom::parse("v(aind(bis (4,4)))").unwrap();
 
-        let q = Atom::parse("q(aind(lord (4,2)))").unwrap();
+        let q = Atom::parse("q(aind(mink (4,2)))").unwrap();
 
         let g1_tensor: ParamOrConcrete<
             RealOrComplexTensor<
@@ -1355,7 +1369,7 @@ mod test {
     #[cfg(feature = "shadowing")]
     fn data4() {
         let _ = env_logger::builder().is_test(true).try_init();
-        let expr = Atom::parse("A(aind(loru(4,1),bis(4,4),bis(4,3)))*B(aind(lord(4,1)))").unwrap();
+        let expr = Atom::parse("A(aind(mink(4,1),bis(4,4),bis(4,3)))*B(aind(mink(4,1)))").unwrap();
 
         let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
         println!("{}", net.dot());

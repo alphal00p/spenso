@@ -17,15 +17,78 @@ use derive_more::SubAssign;
 use symbolica::{
     atom::{AsAtomView, Atom, FunctionBuilder},
     state::State,
+    {fun, symb},
 };
 
 use serde::{Deserialize, Serialize};
 
 pub const CONCRETEIND: &str = "cind";
 pub const FLATIND: &str = "find";
+pub const UP: &str = "u";
+pub const DOWN: &str = "d";
 
 /// A  concrete index, i.e. the concrete usize/index of the corresponding abstract index
 pub type ConcreteIndex = usize;
+
+#[derive(
+    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Display,
+)]
+pub enum DualConciousIndex {
+    Up(ConcreteIndex),
+    Down(ConcreteIndex),
+    SelfDual(ConcreteIndex),
+}
+
+#[cfg(feature = "shadowing")]
+impl From<DualConciousIndex> for Atom {
+    fn from(value: DualConciousIndex) -> Self {
+        match value {
+            DualConciousIndex::Up(s) => Atom::new_num(s as i64),
+            DualConciousIndex::Down(s) => fun!(symb!(DOWN), Atom::new_num(s as i64)),
+            DualConciousIndex::SelfDual(s) => Atom::new_num(s as i64),
+        }
+    }
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Hash,
+    Index,
+    Serialize,
+    Deserialize,
+    From,
+    Into,
+    Display,
+    IntoIterator,
+)]
+#[display(fmt = "{:?}", indices)]
+pub struct DualConciousExpandedIndex {
+    indices: Vec<DualConciousIndex>,
+}
+
+impl Deref for DualConciousExpandedIndex {
+    type Target = [DualConciousIndex];
+
+    fn deref(&self) -> &Self::Target {
+        &self.indices
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl From<DualConciousExpandedIndex> for Atom {
+    fn from(value: DualConciousExpandedIndex) -> Self {
+        let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
+        for i in value.iter() {
+            cind = cind.add_arg(Atom::from(*i).as_atom_view());
+        }
+        cind.finish()
+    }
+}
 
 #[derive(
     Debug,
@@ -49,16 +112,16 @@ pub struct ExpandedIndex {
     indices: Vec<ConcreteIndex>,
 }
 
-#[cfg(feature = "shadowing")]
-impl From<ExpandedIndex> for Atom {
-    fn from(value: ExpandedIndex) -> Self {
-        let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
-        for i in value.iter() {
-            cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
-        }
-        cind.finish()
-    }
-}
+// #[cfg(feature = "shadowing")]
+// impl From<ExpandedIndex> for Atom {
+//     fn from(value: ExpandedIndex) -> Self {
+//         let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
+//         for i in value.iter() {
+//             cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
+//         }
+//         cind.finish()
+//     }
+// }
 
 impl Deref for ExpandedIndex {
     type Target = [ConcreteIndex];

@@ -7,6 +7,8 @@ use std::hash::Hash;
 use std::ops::AddAssign;
 #[cfg(feature = "shadowing")]
 use symbolica::atom::{Atom, AtomView};
+
+#[cfg(feature = "shadowing")]
 use symbolica::coefficient::CoefficientView;
 
 #[cfg(feature = "shadowing")]
@@ -98,6 +100,7 @@ impl From<usize> for AbstractIndex {
     }
 }
 
+#[cfg(feature = "shadowing")]
 impl From<AbstractIndex> for Atom {
     fn from(value: AbstractIndex) -> Self {
         match value {

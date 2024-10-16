@@ -143,17 +143,17 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
 
         new.insert_generic_real(
             Self::metric_key(ExtendibleReps::LORENTZ_UP).into(),
-            Self::generic_lor_metric,
+            Self::generic_mink_metric,
         );
 
         new.insert_generic_real(
             Self::metric_key(ExtendibleReps::MINKOWSKI).into(),
-            Self::generic_lor_metric,
+            Self::generic_mink_metric,
         );
 
         new.insert_generic_real(
             Self::metric_key(ExtendibleReps::LORENTZ_DOWN).into(),
-            Self::generic_lor_metric,
+            Self::generic_mink_metric,
         );
 
         new.insert_generic_real(
@@ -192,7 +192,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
         )
     }
 
-    fn generic_lor_metric(key: ExplicitKey) -> MixedTensor<Data, ExplicitKey>
+    fn generic_mink_metric(key: ExplicitKey) -> MixedTensor<Data, ExplicitKey>
     where
         Data: num::One + Neg<Output = Data>,
     {
@@ -201,7 +201,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
         let mut tensor = SparseTensor::empty(key);
 
         for i in 0..dim {
-            if rep.is_neg(i) {
+            if i > 0 {
                 tensor.set(&[i, i], -Data::one()).unwrap();
             } else {
                 tensor.set(&[i, i], Data::one()).unwrap();
@@ -554,7 +554,7 @@ mod test {
         network::TensorNetwork,
         structure::{
             representation::{Rep, RepName, REPS},
-            HasStructure, IndexlessNamedStructure, TensorStructure,
+            HasStructure, IndexlessNamedStructure, TensorStructure, VecStructure,
         },
     };
 
@@ -631,13 +631,18 @@ mod test {
 
     #[test]
     fn pslash() {
-        let expr =
-            Atom::parse("p(1,aind(mink(4,4)))* γ(aind(mink(4,4),bis(4,1),bis(4,2)))").unwrap();
+        let expr = Atom::parse("p(1,mink(4,mu))*γ(mink(4,mu),bis(4,i),bis(4,j))").unwrap();
         let mut network: TensorNetwork<_, _> = expr.as_view().try_into().unwrap();
-
-        println!("{}", network.rich_graph().dot());
         network.contract();
-        let result = network.result_tensor().unwrap();
-        println!("{}", result);
+        let result = network
+            .result_tensor()
+            .unwrap()
+            .try_into_parametric()
+            .unwrap()
+            .tensor
+            .map_data(|a| a.to_string())
+            .map_structure(VecStructure::from);
+
+        insta::assert_ron_snapshot!(result);
     }
 }

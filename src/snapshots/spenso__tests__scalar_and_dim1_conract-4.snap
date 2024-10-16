@@ -2,5 +2,5 @@
 source: src/tests.rs
 expression: f.structure().to_string()
 ---
-102 (loru4)
-28  (loru5)
+102 (lor4)
+28  (lor5)

@@ -142,10 +142,9 @@ impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
 
         let (rep, mut iter) = if let AtomView::Fun(f) = value {
             let name = f.get_symbol();
-            println!("name::{name}");
 
             let innerf = f.iter().next().ok_or(SlotError::Composite)?;
-            println!("innerf::{innerf}");
+
             if let AtomView::Fun(innerf) = innerf {
                 let rep =
                     T::try_from_symbol(innerf.get_symbol(), name).map_err(SlotError::RepError)?;
@@ -159,9 +158,12 @@ impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
             return Err(SlotError::Composite);
         };
 
-        let dim: Dimension = Dimension::new_concrete(
-            usize::try_from(extract_num(&mut iter)?).or(Err(DimensionError::TooLarge))?,
-        );
+        let dim: Dimension = if let Some(a) = iter.next() {
+            Dimension::try_from(a).map_err(SlotError::DimErr)?
+        } else {
+            return Err(SlotError::NoMoreArguments);
+        };
+
         let index: AbstractIndex = extract_num(&mut iter)?;
 
         if extract_num(&mut iter).is_ok() {
@@ -361,12 +363,19 @@ mod shadowing_tests {
         let mu = mink.new_slot(0);
         let atom = mu.to_symbolic();
         println!("{}", atom);
+        assert_eq!(Slot::try_from(atom.as_view()).unwrap(), mu);
+        assert_eq!(
+            Slot::<Lorentz>::try_from(atom.as_view()).unwrap().dual(),
+            mu.dual()
+        );
+        assert_eq!(
+            Slot::try_from(mu.dual().to_symbolic().as_view()).unwrap(),
+            mu.dual()
+        );
         let expr = Atom::parse("dind(lor(4,-1))").unwrap();
 
         let slot: Slot<Rep> = Slot::try_from(expr.as_view()).unwrap();
         println!("{slot}");
         println!("{}", slot.to_symbolic())
-
-        // assert_eq!(slot, mu);
     }
 }

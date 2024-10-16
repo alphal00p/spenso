@@ -1,5 +1,6 @@
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
+use symbolica::{atom::AtomView, coefficient::CoefficientView};
 use thiserror::Error;
 
 #[cfg(feature = "shadowing")]
@@ -38,6 +39,10 @@ pub enum DimensionError {
     NotConcrete,
     #[error("Dimension too large")]
     TooLarge,
+    #[error("Dimension negative")]
+    Negative,
+    #[error("Dimension is not natural")]
+    NotNatural,
 }
 
 #[allow(unreachable_patterns)]
@@ -62,6 +67,26 @@ impl From<usize> for Dimension {
 impl From<Symbol> for Dimension {
     fn from(value: Symbol) -> Self {
         Dimension::Symbolic(value.into())
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<'a> TryFrom<AtomView<'a>> for Dimension {
+    type Error = DimensionError;
+    fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
+        match value {
+            AtomView::Var(a) => Ok(Dimension::Symbolic(a.get_symbol().into())),
+            AtomView::Num(n) => match n.get_coeff_view() {
+                CoefficientView::Natural(n, 1) => {
+                    if n < 0 {
+                        return Err(DimensionError::Negative);
+                    }
+                    Ok(Dimension::Concrete(n as usize))
+                }
+                _ => return Err(DimensionError::NotNatural),
+            },
+            a => Err(DimensionError::NotNatural),
+        }
     }
 }
 

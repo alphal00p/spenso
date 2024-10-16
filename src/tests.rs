@@ -22,7 +22,7 @@ use std::hash::{DefaultHasher, Hash};
 
 use crate::{
     complex::{Complex, RealOrComplexTensor},
-    contraction::Contract,
+    contraction::{Contract, Trace},
     data::{
         DataTensor, DenseTensor, GetTensorData, HasTensorData, NumTensor, SetTensorData,
         SparseTensor,
@@ -1039,7 +1039,7 @@ fn tensor_net() {
     assert_eq!(0, n.graph.neighbors.len());
     assert_eq!(
         Complex::new(400., 0.),
-        n.result_tensor().unwrap().try_as_complex().unwrap().data()[0]
+        n.result().unwrap().0.try_as_complex().unwrap().data()[0]
     )
 }
 
@@ -1494,7 +1494,7 @@ fn parsing_scalar_mul() {
     let mut network = sym_tensor.to_network().unwrap();
 
     network.contract();
-    println!("Network res: {}", network.result_tensor().unwrap());
+    println!("Network res: {}", network.result().unwrap().0);
 }
 
 #[cfg(feature = "shadowing")]
@@ -1509,7 +1509,7 @@ fn parsing_single_contract() {
 
     println!("{}", network.dot());
     network.contract();
-    println!("Network res: {}", network.result_tensor().unwrap());
+    println!("Network res: {}", network.result().unwrap().0);
 }
 
 #[cfg(feature = "shadowing")]
@@ -1523,7 +1523,7 @@ fn parsing_addition_and_mul() {
     let mut network = sym_tensor.to_network().unwrap();
 
     network.contract();
-    println!("Network res: {}", network.result_tensor().unwrap());
+    println!("Network res: {}", network.result().unwrap().0);
 }
 
 #[test]

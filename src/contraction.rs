@@ -269,7 +269,7 @@ where
     }
 }
 
-impl<T, I> DenseTensor<T, I>
+impl<T, I> Trace for DenseTensor<T, I>
 where
     T: ContractableWith<T, Out = T> + Clone + RefZero + FallibleAddAssign<T> + FallibleSubAssign<T>,
     I: TensorStructure + Clone + StructureContract,
@@ -277,7 +277,7 @@ where
     #[must_use]
 
     /// Contract the tensor with itself, i.e. trace over all matching indices.
-    pub fn internal_contract(&self) -> Self {
+    fn internal_contract(&self) -> Self {
         let mut result: DenseTensor<T, I> = self.clone();
         for trace in self.traces() {
             let mut new_structure = self.structure.clone();
@@ -392,7 +392,7 @@ duplicate! {
     }
 }
 
-impl<T, I> SparseTensor<T, I>
+impl<T, I> Trace for SparseTensor<T, I>
 where
     T: ContractableWith<T, Out = T>
         + Clone
@@ -402,10 +402,13 @@ where
         + FallibleSubAssign<T>,
     I: TensorStructure + Clone + StructureContract,
 {
-    #[must_use]
     /// Contract the tensor with itself, i.e. trace over all matching indices.
-    pub fn internal_contract(&self) -> Self {
-        let trace = self.traces()[0];
+    fn internal_contract(&self) -> Self {
+        let trace = if let Some(e) = self.traces().get(0) {
+            *e
+        } else {
+            return self.clone();
+        };
 
         // println!("trace {:?}", trace);
         let mut new_structure = self.structure.clone();
@@ -427,6 +430,11 @@ where
 pub trait Contract<T = Self> {
     type LCM;
     fn contract(&self, other: &T) -> Result<Self::LCM, ContractionError>;
+}
+
+pub trait Trace {
+    #[must_use]
+    fn internal_contract(&self) -> Self;
 }
 
 #[derive(Error, Debug)]
@@ -1001,6 +1009,20 @@ where
         };
 
         Ok(result)
+    }
+}
+
+impl<T, I> Trace for DataTensor<T, I>
+where
+    T: ContractableWith<T, Out = T>,
+    T: FallibleAddAssign<T> + FallibleSubAssign<T> + Clone + RefZero + IsZero,
+    I: TensorStructure + Clone + StructureContract,
+{
+    fn internal_contract(&self) -> Self {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.internal_contract()),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.internal_contract()),
+        }
     }
 }
 

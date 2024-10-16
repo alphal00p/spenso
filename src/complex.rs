@@ -34,7 +34,7 @@ use crate::{
 use rand::Rng;
 
 use crate::{
-    contraction::{Contract, ContractableWith, ContractionError, IsZero, RefOne, RefZero},
+    contraction::{Contract, ContractableWith, ContractionError, IsZero, RefOne, RefZero, Trace},
     data::{DataTensor, GetTensorData, HasTensorData, SetTensorData},
     iterators::{IteratableTensor, IteratorEnum},
     structure::{
@@ -1518,7 +1518,6 @@ impl<T: Clone, S: TensorStructure + Clone> HasTensorData for RealOrComplexTensor
         }
     }
 
-
     #[cfg(feature = "shadowing")]
     fn symhashmap(
         &self,
@@ -1769,6 +1768,32 @@ impl<T: Clone, S: TensorStructure> IteratableTensor for RealOrComplexTensor<T, S
                 x.iter_flat()
                     .map(|(i, x)| (i, RealOrComplexRef::Complex(x))),
             ),
+        }
+    }
+}
+
+impl<S, T> Trace for RealOrComplexTensor<T, S>
+where
+    S: TensorStructure + Clone + StructureContract,
+    T: ContractableWith<T, Out = T>
+        + Clone
+        + FallibleMul<Output = T>
+        + FallibleAddAssign<T>
+        + FallibleSubAssign<T>
+        + RefZero
+        + IsZero,
+    Complex<T>: ContractableWith<Complex<T>, Out = Complex<T>>
+        + Clone
+        + FallibleMul<Output = Complex<T>>
+        + FallibleAddAssign<Complex<T>>
+        + FallibleSubAssign<Complex<T>>
+        + RefZero
+        + IsZero,
+{
+    fn internal_contract(&self) -> Self {
+        match self {
+            RealOrComplexTensor::Real(x) => RealOrComplexTensor::Real(x.internal_contract()),
+            RealOrComplexTensor::Complex(x) => RealOrComplexTensor::Complex(x.internal_contract()),
         }
     }
 }

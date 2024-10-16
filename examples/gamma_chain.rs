@@ -386,8 +386,9 @@ fn main() {
             println!(
                 "Result: {:?}",
                 chain
-                    .result_tensor()
+                    .result()
                     .unwrap()
+                    .0
                     .try_into_concrete()
                     .unwrap()
                     .try_into_complex()

@@ -157,8 +157,9 @@ fn main() {
     truth_net.evaluate_complex(|i| i.into(), &const_map);
     truth_net.contract();
     let truth = truth_net
-        .result_tensor()
+        .result()
         .unwrap()
+        .0
         .scalar()
         .unwrap()
         .try_into_concrete()
@@ -170,8 +171,9 @@ fn main() {
     assert_relative_eq!(
         truth,
         postcontracted
-            .result_tensor()
+            .result()
             .unwrap()
+            .0
             .scalar()
             .unwrap()
             .try_into_concrete()
@@ -205,7 +207,7 @@ fn main() {
     out.contract();
     assert_relative_eq!(
         truth,
-        out.result_tensor().unwrap().scalar().unwrap().into(),
+        out.result().unwrap().0.scalar().unwrap().into(),
         epsilon = 0.1
     );
 
@@ -245,8 +247,9 @@ fn main() {
     precontracted.evaluate_complex(|i| i.into(), &const_map);
     assert!(truth.relative_eq(
         &precontracted
-            .result_tensor()
+            .result()
             .unwrap()
+            .0
             .scalar()
             .unwrap()
             .try_into_concrete()
@@ -273,20 +276,12 @@ fn main() {
         precontracted_eval_tree_net.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
     let out = mapped_precontracted_eval_tree_net.evaluate(&values);
-    assert!(truth.relative_eq(
-        &out.result_tensor().unwrap().scalar().unwrap().into(),
-        0.1,
-        1.
-    ));
+    assert!(truth.relative_eq(&out.result().unwrap().0.scalar().unwrap().into(), 0.1, 1.));
 
     let mut mapped_precontracted_eval_net = mapped_precontracted_eval_tree_net.linearize(Some(1));
 
     let out = mapped_precontracted_eval_net.evaluate(&values);
-    assert!(truth.relative_eq(
-        &out.result_tensor().unwrap().scalar().unwrap().into(),
-        0.1,
-        1.
-    ));
+    assert!(truth.relative_eq(&out.result().unwrap().0.scalar().unwrap().into(), 0.1, 1.));
 
     let mut neeet = precontracted_eval_tree_net
         .map_coeff::<f64, _>(&|r| r.into())
@@ -302,9 +297,5 @@ fn main() {
         .unwrap();
 
     let out = neeet.evaluate_complex(&values);
-    assert!(truth.relative_eq(
-        &(out.result_tensor().unwrap().scalar().unwrap()).into(),
-        0.1,
-        1.
-    ),);
+    assert!(truth.relative_eq(&(out.result().unwrap().0.scalar().unwrap()).into(), 0.1, 1.),);
 }

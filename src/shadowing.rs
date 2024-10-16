@@ -635,8 +635,9 @@ mod test {
         let mut network: TensorNetwork<_, _> = expr.as_view().try_into().unwrap();
         network.contract();
         let result = network
-            .result_tensor()
+            .result()
             .unwrap()
+            .0
             .try_into_parametric()
             .unwrap()
             .tensor

@@ -165,8 +165,9 @@ fn main() {
     println!("Time: {:?}", now.elapsed());
     println!(
         "finished {:?}",
-        net.result_tensor()
+        net.result()
             .unwrap()
+            .0
             .try_into_concrete()
             .unwrap()
             .try_as_complex()

@@ -52,8 +52,9 @@ mod test {
         println!("{}", network.graph.nodes.len());
 
         let mut res = network
-            .result_tensor()
+            .result()
             .unwrap()
+            .0
             .scalar()
             .unwrap()
             .try_as_param()
@@ -152,8 +153,9 @@ mod test {
         println!("{}", network.graph.nodes.len());
 
         let mut res = network
-            .result_tensor()
+            .result()
             .unwrap()
+            .0
             .scalar()
             .unwrap()
             .try_as_param()

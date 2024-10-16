@@ -56,7 +56,7 @@ use crate::{
 
 use crate::{
     arithmetic::ScalarMul,
-    contraction::{Contract, ContractionError},
+    contraction::{Contract, ContractionError, Trace},
     data::{DataTensor, GetTensorData, HasTensorData},
     structure::{
         slot::DualSlotTo, CastStructure, HasName, HasStructure, ScalarTensor, TensorStructure,
@@ -1065,7 +1065,7 @@ where
 
 impl<'a, T: HasTensorData + GetTensorData<GetDataOwned = T::Data>> TensorNetworkSet<T, T::Data>
 where
-    T: Clone + Contract<LCM = T>,
+    T: Clone + Contract<LCM = T> + Trace,
     T::Structure: TensorStructure<Slot: Serialize + for<'c> Deserialize<'c>>,
     T::Data: Clone,
     // T::GetData<'a>: &'a T::Data,
@@ -1073,7 +1073,7 @@ where
     pub fn result(&'a self) -> Result<Vec<T::Data>, TensorNetworkError> {
         let mut data = vec![];
         for n in &self.networks {
-            data.push(n.result()?);
+            data.push(n.result_scalar()?);
         }
         Ok(data)
     }
@@ -2163,18 +2163,18 @@ where
 }
 impl<T: HasTensorData + GetTensorData<GetDataOwned = T::Data>> TensorNetwork<T, T::Data>
 where
-    T: Clone + Contract<LCM = T>,
+    T: Clone + Contract<LCM = T> + Trace,
     T::Structure: TensorStructure<Slot: Serialize + for<'d> Deserialize<'d>>,
     T::Data: Clone,
 {
-    pub fn result(&self) -> Result<T::Data, TensorNetworkError> {
+    pub fn result_scalar(&self) -> Result<T::Data, TensorNetworkError> {
         match self.graph.nodes.len() {
             0 => self
                 .scalar
                 .clone()
                 .ok_or(TensorNetworkError::ScalarFieldEmpty),
             1 => {
-                let t = self.result_tensor()?;
+                let t = self.result()?.0;
                 if t.is_scalar() {
                     Ok(t.get_owned_linear(0.into()).unwrap())
                 } else {
@@ -2218,22 +2218,26 @@ pub enum TensorNetworkError {
 
 impl<T, S> TensorNetwork<T, S>
 where
-    T: Clone + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Contract<LCM = T>,
+    S: Clone,
+    T: Clone
+        + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>
+        + Contract<LCM = T>
+        + Trace,
 {
-    pub fn result_tensor(&self) -> Result<T, TensorNetworkError> {
+    pub fn result(&self) -> Result<(T, Option<S>), TensorNetworkError> {
         if self.graph.involution.iter().any(|(ni, i)| ni != i.data) {
             Err(TensorNetworkError::InternalEdgePresent)
         } else {
             let mut iter = self.graph.nodes.iter();
 
             if let Some((_, t)) = iter.next() {
-                let mut res = t.clone();
+                let mut res = t.internal_contract();
                 for (_, t) in iter {
                     res = res
-                        .contract(t)
+                        .contract(&t.internal_contract())
                         .map_err(TensorNetworkError::FailedContract)?;
                 }
-                Ok(res)
+                Ok((res, self.scalar.clone()))
             } else {
                 Err(TensorNetworkError::NoNodes)
             }
@@ -2248,45 +2252,15 @@ where
         + HasStructure<Scalar: From<S>>
         + ScalarTensor
         + Contract<LCM = T>
+        + Trace
         + ScalarMul<S, Output = T>,
 {
     pub fn result_tensor_smart(&self) -> Result<T, TensorNetworkError> {
-        match self.graph.nodes.len() {
-            0 => {
-                let scalar = self
-                    .scalar
-                    .clone()
-                    .ok_or(TensorNetworkError::ScalarFieldEmpty)?;
-                Ok(T::new_scalar(scalar.into()))
-            }
-            1 => {
-                let t = self.graph.nodes.iter().next().unwrap().1;
-
-                let res = if let Some(scalar) = self.scalar.as_ref() {
-                    t.scalar_mul(scalar)
-                        .ok_or(TensorNetworkError::FailedScalarMul)?
-                } else {
-                    t.clone()
-                };
-                Ok(res)
-            }
-            _ => {
-                let mut iter = self.graph.nodes.iter();
-
-                let mut res = iter.next().unwrap().1.clone();
-                for (_, t) in iter {
-                    res = res
-                        .contract(t)
-                        .map_err(TensorNetworkError::FailedContract)?;
-                }
-                let res = if let Some(scalar) = self.scalar.as_ref() {
-                    res.scalar_mul(scalar)
-                        .ok_or(TensorNetworkError::FailedScalarMul)?
-                } else {
-                    res
-                };
-                Ok(res)
-            }
+        let (t, s) = self.result()?;
+        if let Some(s) = s {
+            Ok(t.scalar_mul(&s).unwrap())
+        } else {
+            Ok(t)
         }
     }
 }
@@ -2477,8 +2451,8 @@ impl<'a> TryFrom<MulView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
                 has_scalar = true;
                 scalars = scalars.mul_fallible(s).unwrap();
             }
-            match net.result_tensor() {
-                Ok(t) => {
+            match net.result() {
+                Ok((t, s)) => {
                     network.push(t);
                 }
                 Err(TensorNetworkError::NoNodes) => {}
@@ -2539,8 +2513,8 @@ impl<'a> TryFrom<PowView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
 
             net.contract();
 
-            match net.result_tensor() {
-                Ok(res) => {
+            match net.result() {
+                Ok((res, s)) => {
                     new.push(res.clone());
                     while n > 1 {
                         if n % 2 == 0 {
@@ -2597,9 +2571,9 @@ impl<'a> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
             // trace!("summand: {}", summand);
             let mut net = Self::try_from(summand)?;
             net.contract();
-            match net.result_tensor() {
-                Ok(mut t) => {
-                    if let Some(ref s) = net.scalar {
+            match net.result() {
+                Ok((mut t, s)) => {
+                    if let Some(s) = s {
                         t = t.scalar_mul(&s.0).unwrap();
                     }
                     tensors.push(t);
@@ -2873,7 +2847,7 @@ impl<
         S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone + TracksCount + Display,
     > Levels<MixedTensor<T, S>, S>
 where
-    MixedTensor<T, S>: Contract<LCM = MixedTensor<T, S>>,
+    MixedTensor<T, S>: Contract<LCM = MixedTensor<T, S>> + Trace,
 
     S: HasName<Name: IntoSymbol, Args: IntoArgs> + ToSymbolic + StructureContract,
 {
@@ -2931,7 +2905,7 @@ where
             self.contract_levels(depth);
             // println!("levels {}", self.levels.len());
             self.generate_fn_map(fn_map);
-            self.levels.last().unwrap().result_tensor().unwrap()
+            self.levels.last().unwrap().result().unwrap().0
         } else {
             self.initial
                 .result_tensor_ref()
@@ -3012,7 +2986,7 @@ where
             self.contract_levels(depth);
             // println!("levels {}", self.levels.len());
             self.generate_fn_map(fn_map);
-            self.levels.last().unwrap().result_tensor().unwrap()
+            self.levels.last().unwrap().result().unwrap().0
         } else {
             self.initial
                 .result_tensor_ref()

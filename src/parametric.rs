@@ -19,7 +19,7 @@ use serde::{de, ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use crate::{
     arithmetic::ScalarMul,
     complex::{Complex, RealOrComplex, RealOrComplexTensor},
-    contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero},
+    contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero, Trace},
     data::{
         DataIterator, DataTensor, DenseTensor, GetTensorData, HasTensorData, SetTensorData,
         SparseTensor,
@@ -1843,6 +1843,18 @@ where
     }
 }
 
+impl<I> Trace for ParamTensor<I>
+where
+    I: TensorStructure + Clone + StructureContract,
+{
+    fn internal_contract(&self) -> Self {
+        ParamTensor {
+            tensor: self.tensor.internal_contract(),
+            param_type: self.param_type.clone(),
+        }
+    }
+}
+
 impl<I> Contract<ParamTensor<I>> for ParamTensor<I>
 where
     I: TensorStructure + Clone + StructureContract,
@@ -1858,6 +1870,26 @@ where
             }
             (ParamOrComposite::Param, ParamOrComposite::Composite) => Ok(ParamTensor::composite(s)),
             (ParamOrComposite::Composite, ParamOrComposite::Param) => Ok(ParamTensor::composite(s)),
+        }
+    }
+}
+
+impl<I, T> Trace for ParamOrConcrete<DataTensor<T, I>, I>
+where
+    I: TensorStructure + Clone + StructureContract,
+    T: ContractableWith<Atom, Out = Atom>
+        + ContractableWith<T, Out = T>
+        + Clone
+        + FallibleMul<Output = T>
+        + FallibleAddAssign<T>
+        + FallibleSubAssign<T>
+        + RefZero
+        + IsZero,
+{
+    fn internal_contract(&self) -> Self {
+        match self {
+            ParamOrConcrete::Param(p) => ParamOrConcrete::Param(p.internal_contract()),
+            ParamOrConcrete::Concrete(c) => ParamOrConcrete::Concrete(c.internal_contract()),
         }
     }
 }
@@ -1903,6 +1935,36 @@ where
             (ParamOrConcrete::Concrete(s), ParamOrConcrete::Concrete(o)) => {
                 Ok(ParamOrConcrete::Concrete(s.contract(o)?))
             }
+        }
+    }
+}
+impl<I, T> Trace for ParamOrConcrete<RealOrComplexTensor<T, I>, I>
+where
+    I: TensorStructure + Clone + StructureContract,
+    T: ContractableWith<Atom, Out = Atom>
+        + ContractableWith<T, Out = T>
+        + ContractableWith<Complex<T>, Out = Complex<T>>
+        + Clone
+        + FallibleMul<Output = T>
+        + FallibleAddAssign<T>
+        + FallibleSubAssign<T>
+        + RefZero
+        + IsZero,
+    Complex<T>: ContractableWith<Atom, Out = Atom>
+        + ContractableWith<T, Out = Complex<T>>
+        + ContractableWith<Complex<T>, Out = Complex<T>>
+        + Clone
+        + FallibleMul<Output = Complex<T>>
+        + FallibleAddAssign<Complex<T>>
+        + FallibleSubAssign<Complex<T>>
+        + RefZero
+        + IsZero,
+    Atom: TrySmallestUpgrade<T, LCM = Atom> + TrySmallestUpgrade<Complex<T>, LCM = Atom>,
+{
+    fn internal_contract(&self) -> Self {
+        match self {
+            ParamOrConcrete::Param(p) => ParamOrConcrete::Param(p.internal_contract()),
+            ParamOrConcrete::Concrete(c) => ParamOrConcrete::Concrete(c.internal_contract()),
         }
     }
 }

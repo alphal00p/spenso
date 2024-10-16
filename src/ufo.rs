@@ -1067,8 +1067,9 @@ mod test {
         net.contract();
 
         insta::assert_ron_snapshot!(net
-            .result_tensor()
+            .result()
             .unwrap()
+            .0
             .try_into_concrete()
             .unwrap()
             .try_into_complex()
@@ -1111,7 +1112,7 @@ mod test {
 
         net.contract();
 
-        println!("{}", net.result_tensor().unwrap());
+        println!("{}", net.result().unwrap().0);
 
         let expr = Atom::parse("γ(aind(bis(4,1),bis(4,4),bis(4,3)))*Q(1,aind(bis(4,1)))*γ(aind(bis(4,2),bis(4,3),bis(4,4)))*Q(2,aind(bis(4,2)))").unwrap();
 
@@ -1119,7 +1120,7 @@ mod test {
 
         net.contract();
 
-        println!("{}", net.result_tensor().unwrap());
+        println!("{}", net.result().unwrap().0);
     }
 
     #[test]
@@ -1134,7 +1135,7 @@ mod test {
 
         net.contract();
 
-        println!("{}", net.result_tensor().unwrap());
+        println!("{}", net.result().unwrap().0);
     }
 
     #[test]
@@ -1154,11 +1155,11 @@ mod test {
             TensorNetwork::try_from(Atom::parse("p(aind(mink (4,1)))").unwrap().as_view()).unwrap();
         other.contract();
 
-        net.push(other.result_tensor().unwrap());
+        net.push(other.result().unwrap().0);
 
         net.contract();
 
-        println!("{}", net.result_tensor().unwrap());
+        println!("{}", net.result().unwrap().0);
     }
 
     #[test]
@@ -1174,7 +1175,7 @@ mod test {
         println!("{}", net.dot());
         net.contract();
 
-        println!("{}", net.result_tensor().unwrap());
+        println!("{}", net.result().unwrap().0);
     }
     #[allow(clippy::type_complexity)]
     #[test]
@@ -1203,30 +1204,36 @@ mod test {
             >,
         > = TensorNetwork::try_from(g1.as_view())
             .unwrap()
-            .result_tensor()
-            .unwrap();
+            .result()
+            .unwrap()
+            .0;
         let g2_tensor = TensorNetwork::try_from(g2.as_view())
             .unwrap()
-            .result_tensor()
-            .unwrap();
+            .result()
+            .unwrap()
+            .0;
         let p_tensor = TensorNetwork::try_from(p.as_view())
             .unwrap()
-            .result_tensor()
-            .unwrap();
+            .result()
+            .unwrap()
+            .0;
 
         let q_tensor = TensorNetwork::try_from(q.as_view())
             .unwrap()
-            .result_tensor()
-            .unwrap();
+            .result()
+            .unwrap()
+            .0;
 
         let u_tensor = TensorNetwork::try_from(u.as_view())
             .unwrap()
-            .result_tensor()
-            .unwrap();
+            .result()
+            .unwrap()
+            .0;
         let v_tensor = TensorNetwork::try_from(v.as_view())
             .unwrap()
-            .result_tensor()
-            .unwrap();
+            .result()
+            .unwrap()
+            .0;
 
         println!(
             "{}",
@@ -1374,7 +1381,7 @@ mod test {
         let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
         println!("{}", net.dot());
         net.contract();
-        let res = net.result_tensor().unwrap();
+        let res = net.result().unwrap().0;
 
         println!("{}", res);
 

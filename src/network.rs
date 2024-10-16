@@ -2548,7 +2548,11 @@ impl<'a> TryFrom<FunView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
 
         let mut scalar = None;
         if let Ok(s) = s {
-            let t = s.to_shell().to_explicit().ok_or(anyhow!("Cannot shadow"))?;
+            let t = s
+                .to_shell()
+                .to_explicit()
+                .ok_or(anyhow!("Cannot shadow"))?
+                .internal_contract();
             network.push(t);
         } else {
             scalar = Some(SerializableAtom(value.as_view().to_owned()));

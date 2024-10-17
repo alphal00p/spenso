@@ -14,6 +14,7 @@ use symbolica::{
     atom::{AsAtomView, Atom, AtomView, FunctionBuilder, ListIterator},
     coefficient::CoefficientView,
     state::State,
+    {fun, symb},
 };
 
 use thiserror::Error;
@@ -300,16 +301,12 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
     }
     #[cfg(feature = "shadowing")]
     fn to_symbolic(&self) -> Atom {
-        let mut value_builder = self.rep.to_fnbuilder();
-        value_builder = value_builder.add_arg(Atom::from(self.aind).as_atom_view());
-        value_builder.finish()
+        self.rep.to_symbolic([Atom::from(self.aind)])
     }
     #[cfg(feature = "shadowing")]
     fn to_symbolic_wrapped(&self) -> Atom {
-        let mut value_builder = self.rep.to_fnbuilder();
-        let id = Atom::parse(&format!("indexid({})", self.aind)).unwrap();
-        value_builder = value_builder.add_arg(&id);
-        value_builder.finish()
+        self.rep
+            .to_symbolic([fun!(symb!("indexid"), Atom::from(self.aind))])
     }
     #[cfg(feature = "shadowing")]
     fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError> {
@@ -381,7 +378,6 @@ mod shadowing_tests {
         let mink = Lorentz::rep(4);
         let mu = mink.new_slot(0);
         let atom = mu.to_symbolic();
-        println!("{}", atom);
         assert_eq!(Slot::try_from(atom.as_view()).unwrap(), mu);
         assert_eq!(
             Slot::<Lorentz>::try_from(atom.as_view()).unwrap().dual(),
@@ -391,10 +387,12 @@ mod shadowing_tests {
             Slot::try_from(mu.dual().to_symbolic().as_view()).unwrap(),
             mu.dual()
         );
+
         let expr = Atom::parse("dind(lor(4,-1))").unwrap();
 
-        let slot: Slot<Rep> = Slot::try_from(expr.as_view()).unwrap();
-        println!("{slot}");
-        println!("{}", slot.to_symbolic())
+        let _slot: Slot<Rep> = Slot::try_from(expr.as_view()).unwrap();
+        let _slot: Slot<Dual<Lorentz>> = Slot::try_from(expr.as_view()).unwrap();
+
+        println!("{}", _slot.to_symbolic_wrapped());
     }
 }

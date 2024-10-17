@@ -1166,7 +1166,7 @@ fn arithmetic_data() {
 
     let c = a.add_fallible(&b).unwrap();
 
-    assert_ron_snapshot!(c.to_dense().data());
+    assert_ron_snapshot!(c.to_bare_dense().data());
 
     // let syma = sa.clone().shadow_with("a".into_id());
     // let symb = sa.clone().shadow_with("b".into_id());

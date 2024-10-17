@@ -15,9 +15,9 @@ use std::{hash::Hash, ops::Index};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{AsAtomView, FunctionBuilder, Symbol},
+    atom::{AsAtomView, Atom, AtomView, FunctionBuilder, Symbol},
     state::State,
-    symb,
+    {fun, symb},
 };
 
 use thiserror::Error;
@@ -177,9 +177,12 @@ pub trait RepName: Copy + Clone + Debug + PartialEq + Eq + Hash + Display + Into
     #[cfg(feature = "shadowing")]
     /// yields a function builder for the representation, adding a first variable: the dimension.
     ///
-    fn to_fnbuilder(&self) -> FunctionBuilder {
-        FunctionBuilder::new(State::get_symbol(self.to_string()))
-    }
+    fn to_symbolic(&self, args: impl IntoIterator<Item = Atom>) -> Atom;
+    // {
+    //     FunctionBuilder::new(symb!(self.to_string()))
+    //         .add_args(args)
+    //         .finish()
+    // }
 
     fn new_slot<D: Into<Dimension>, A: Into<AbstractIndex>>(self, dim: D, aind: A) -> Slot<Self>
     where
@@ -272,7 +275,14 @@ duplicate! {
     fn dual(self) -> Self::Dual {
         isnotselfdual::selfless_dual()
     }
-
+    #[cfg(feature = "shadowing")]
+    fn to_symbolic(&self, args: impl IntoIterator<Item=Atom>) -> Atom{
+        let mut fun = FunctionBuilder::new(symb!(constname));
+        for a in args {
+            fun = fun.add_arg(&a);
+        }
+        fun.finish()
+    }
 
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol,aind:Symbol) -> Result<Self,RepresentationError> {
@@ -360,7 +370,7 @@ duplicate! {
             let dind = State::get_symbol(DOWNIND);
             let sind = State::get_symbol(SELFDUALIND);
             if aind == dind {
-                if Self::selfless_symbol() == sym {
+                if symb!(constname) == sym {
                     Ok(Dual{inner:isnotselfdual::default()})
                 } else {
                     Err(RepresentationError::NotRepresentationError(sym))
@@ -383,6 +393,15 @@ duplicate! {
             } else {
                 Err(RepresentationError::NotRepresentationError(sym))
             }
+        }
+
+        #[cfg(feature = "shadowing")]
+        fn to_symbolic(&self, args: impl IntoIterator<Item= Atom>) -> Atom{
+            let mut fun = FunctionBuilder::new(symb!(constname));
+            for a in args {
+                fun = fun.add_arg(&a);
+            }
+            FunctionBuilder::new(symb!(DOWNIND)).add_arg(&fun.finish()).finish()
         }
 
         fn is_neg(self, i: usize) -> bool {
@@ -499,6 +518,15 @@ impl RepName for Minkowski {
         } else {
             Err(RepresentationError::NotRepresentationError(sym))
         }
+    }
+
+    #[cfg(feature = "shadowing")]
+    fn to_symbolic(&self, args: impl IntoIterator<Item = Atom>) -> Atom {
+        let mut fun = FunctionBuilder::new(symb!(ExtendibleReps::mink_name()));
+        for a in args {
+            fun = fun.add_arg(&a);
+        }
+        fun.finish()
     }
 }
 
@@ -628,8 +656,14 @@ duplicate! {
             Err(RepresentationError::NotRepresentationError(sym))
         }}
 
-
-
+    #[cfg(feature = "shadowing")]
+    fn to_symbolic(&self, args: impl IntoIterator<Item=Atom>) -> Atom{
+        let mut fun = FunctionBuilder::new(symb!(constname));
+        for a in args {
+            fun = fun.add_arg(&a);
+        }
+        fun.finish()
+    }
 }
 
 
@@ -778,6 +812,24 @@ impl RepName for PhysReps {
             Self::ColorSextet(l) => Self::ColorSextet(l.base()),
             Self::ColorAntiSextet(l) => Self::ColorSextet(l.base()),
             x => *x,
+        }
+    }
+
+    #[cfg(feature = "shadowing")]
+    fn to_symbolic(&self, args: impl IntoIterator<Item = Atom>) -> Atom {
+        match self {
+            Self::Bispinor(b) => b.to_symbolic(args),
+            Self::Minkowski(b) => b.to_symbolic(args),
+            Self::Euclidean(b) => b.to_symbolic(args),
+            Self::ColorAdjoint(b) => b.to_symbolic(args),
+            Self::ColorFund(b) => b.to_symbolic(args),
+            Self::ColorAntiFund(b) => b.to_symbolic(args),
+            Self::ColorSextet(b) => b.to_symbolic(args),
+            Self::ColorAntiSextet(b) => b.to_symbolic(args),
+            Self::SpinFund(b) => b.to_symbolic(args),
+            Self::SpinAntiFund(b) => b.to_symbolic(args),
+            Self::LorentzUp(b) => b.to_symbolic(args),
+            Self::LorentzDown(b) => b.to_symbolic(args),
         }
     }
 
@@ -1169,22 +1221,24 @@ impl RepName for Rep {
     #[cfg(feature = "shadowing")]
     /// yields a function builder for the representation, adding a first variable: the dimension.
     ///
-    fn to_fnbuilder(&self) -> FunctionBuilder {
-        use symbolica::{atom::Atom, symb};
 
-        FunctionBuilder::new(match self {
-            Self::SelfDual(_) => {
-                symb!(SELFDUALIND)
-            }
+    fn to_symbolic(&self, args: impl IntoIterator<Item = Atom>) -> Atom {
+        let mut fun = FunctionBuilder::new(REPS.read().unwrap()[*self].symbol);
+        for a in args {
+            fun = fun.add_arg(&a);
+        }
+        let inner = fun.finish();
+
+        match self {
+            Self::SelfDual(_) => inner,
             Self::Dualizable(l) => {
                 if *l < 0 {
-                    symb!(DOWNIND)
+                    fun!(symb!(DOWNIND), &inner)
                 } else {
-                    symb!(UPIND)
+                    inner
                 }
             }
-        })
-        .add_arg(&Atom::new_var(REPS.read().unwrap()[*self].symbol))
+        }
     }
 }
 
@@ -1252,10 +1306,9 @@ impl<T: RepName> Representation<T> {
     #[cfg(feature = "shadowing")]
     /// yields a function builder for the representation, adding a first variable: the dimension.
     ///
-    pub fn to_fnbuilder(&self) -> FunctionBuilder {
+    pub fn to_symbolic(&self, args: impl IntoIterator<Item = Atom>) -> Atom {
         self.rep
-            .to_fnbuilder()
-            .add_arg(self.dim.to_symbolic().as_atom_view())
+            .to_symbolic([self.dim.to_symbolic()].into_iter().chain(args))
     }
     pub fn dual(self) -> Representation<T::Dual> {
         Representation {
@@ -1474,6 +1527,13 @@ where
             Ok(DualPair::DualRep(d))
         } else {
             Err(RepresentationError::NotRepresentationError(sym))
+        }
+    }
+    #[cfg(feature = "shadowing")]
+    fn to_symbolic(&self, args: impl IntoIterator<Item = Atom>) -> Atom {
+        match self {
+            Self::Rep(r) => r.to_symbolic(args),
+            Self::DualRep(d) => d.to_symbolic(args),
         }
     }
 }

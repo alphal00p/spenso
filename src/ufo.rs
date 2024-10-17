@@ -1074,7 +1074,7 @@ mod test {
             .unwrap()
             .try_into_complex()
             .unwrap()
-            .to_dense());
+            .to_bare_dense());
     }
 
     #[test]

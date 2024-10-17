@@ -115,8 +115,9 @@ fn criterion_benchmark(c: &mut Criterion) {
     truth_net.evaluate_complex(|i| i.into(), &const_map);
     truth_net.contract();
     let truth = truth_net
-        .result_tensor()
+        .result()
         .unwrap()
+        .0
         .scalar()
         .unwrap()
         .try_into_concrete()
@@ -133,8 +134,9 @@ fn criterion_benchmark(c: &mut Criterion) {
                 assert_relative_eq!(
                     truth,
                     network
-                        .result_tensor()
+                        .result()
                         .unwrap()
+                        .0
                         .scalar()
                         .unwrap()
                         .try_into_concrete()
@@ -174,7 +176,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             out.contract();
             assert_relative_eq!(
                 truth,
-                out.result_tensor().unwrap().scalar().unwrap().into(),
+                out.result().unwrap().0.scalar().unwrap().into(),
                 epsilon = 0.1
             );
         })
@@ -226,8 +228,9 @@ fn criterion_benchmark(c: &mut Criterion) {
                 network.evaluate_complex(|i| i.into(), &const_map);
                 assert!(truth.relative_eq(
                     &network
-                        .result_tensor()
+                        .result()
                         .unwrap()
+                        .0
                         .scalar()
                         .unwrap()
                         .try_into_concrete()
@@ -260,11 +263,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.bench_function("3LPhysical precontracted new optimized", |b| {
         b.iter(|| {
             let out = mapped_precontracted_eval_tree_net.evaluate(&values);
-            assert!(truth.relative_eq(
-                &out.result_tensor().unwrap().scalar().unwrap().into(),
-                0.1,
-                1.
-            ));
+            assert!(truth.relative_eq(&out.result().unwrap().0.scalar().unwrap().into(), 0.1, 1.));
         })
     });
 
@@ -273,11 +272,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.bench_function("3LPhysical precontracted new lin", |b| {
         b.iter(|| {
             let out = mapped_precontracted_eval_net.evaluate(&values);
-            assert!(truth.relative_eq(
-                &out.result_tensor().unwrap().scalar().unwrap().into(),
-                0.1,
-                1.
-            ));
+            assert!(truth.relative_eq(&out.result().unwrap().0.scalar().unwrap().into(), 0.1, 1.));
         })
     });
 
@@ -325,7 +320,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.bench_function("3LPhysical precontracted new compiled asm", |b| {
         b.iter(|| {
             let out = neeet.evaluate(&values);
-            assert!(truth.relative_eq(&(out.result_tensor().unwrap().scalar().unwrap()), 0.1, 1.),);
+            assert!(truth.relative_eq(&(out.result().unwrap().0.scalar().unwrap()), 0.1, 1.),);
         })
     });
 }

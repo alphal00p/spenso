@@ -909,6 +909,7 @@ impl RepName for PhysReps {
 
     fn is_neg(self, i: usize) -> bool {
         match self {
+            Self::Minkowski(m) => m.is_neg(i),
             Self::LorentzUp(l) => l.is_neg(i),
             Self::LorentzDown(l) => l.is_neg(i),
             _ => false,

@@ -11,12 +11,13 @@ use std::fmt::Debug;
 use std::hash::Hash;
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{AsAtomView, Atom, AtomView, FunctionBuilder, ListIterator},
+    atom::{AsAtomView, Atom, AtomView, FunctionBuilder, ListIterator, Symbol},
     coefficient::CoefficientView,
     state::State,
     {fun, symb},
 };
 
+use crate::shadowing::ETS;
 use thiserror::Error;
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
@@ -74,24 +75,12 @@ impl<T: RepName> Slot<T> {
     }
     #[cfg(feature = "shadowing")]
     pub fn kroneker_atom(&self, other: &Slot<T::Dual>) -> Atom {
-        let value_builder = FunctionBuilder::new(State::get_symbol("id"));
-
-        let indices = FunctionBuilder::new(State::get_symbol("aind"))
-            .add_arg(&self.to_symbolic())
-            .add_arg(&other.to_symbolic())
-            .finish();
-        value_builder.add_arg(&indices).finish()
+        fun!(ETS.id, self.to_atom(), other.to_atom())
     }
 
     #[cfg(feature = "shadowing")]
     pub fn metric_atom(&self, other: &Slot<T>) -> Atom {
-        let value_builder = FunctionBuilder::new(State::get_symbol("metric"));
-
-        let indices = FunctionBuilder::new(State::get_symbol("aind"))
-            .add_arg(&self.to_symbolic())
-            .add_arg(&other.to_symbolic())
-            .finish();
-        value_builder.add_arg(&indices).finish()
+        fun!(ETS.metric, self.to_atom(), other.to_atom())
     }
 }
 
@@ -270,7 +259,7 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash {
     /// assert_eq!("lor(4,0)", mu.to_symbolic().to_string());
     /// assert_eq!("lor4|₀", mu.to_string());
     /// ```
-    fn to_symbolic(&self) -> Atom;
+    fn to_atom(&self) -> Atom;
     #[cfg(feature = "shadowing")]
     fn to_symbolic_wrapped(&self) -> Atom;
     #[cfg(feature = "shadowing")]
@@ -300,7 +289,7 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
         self.aind = aind;
     }
     #[cfg(feature = "shadowing")]
-    fn to_symbolic(&self) -> Atom {
+    fn to_atom(&self) -> Atom {
         self.rep.to_symbolic([Atom::from(self.aind)])
     }
     #[cfg(feature = "shadowing")]
@@ -317,6 +306,15 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
 impl<T: RepName> std::fmt::Display for Slot<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}|{}", self.rep, self.aind)
+    }
+}
+
+impl<T: RepName> Slot<T> {
+    #[cfg(feature = "shadowing")]
+    pub fn to_pattern(&self, dimension: Symbol) -> Atom {
+        self.rep
+            .rep
+            .to_symbolic([Atom::new_var(dimension), Atom::from(self.aind)])
     }
 }
 
@@ -338,7 +336,7 @@ pub type PhysicalSlots = Slot<PhysReps>;
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
-    use symbolica::atom::Atom;
+    use symbolica::{atom::Atom, symb};
 
     use crate::structure::{
         representation::{BaseRepName, Dual, Lorentz, Minkowski, Rep, RepName, Representation},
@@ -368,8 +366,8 @@ mod shadowing_tests {
     fn to_symbolic() {
         let mink = Lorentz::rep(4);
         let mu = mink.new_slot(0);
-        println!("{}", mu.to_symbolic());
-        assert_eq!("lor(4,0)", mu.to_symbolic().to_string());
+        println!("{}", mu.to_atom());
+        assert_eq!("lor(4,0)", mu.to_atom().to_string());
         assert_eq!("lor4|₀", mu.to_string());
     }
 
@@ -377,14 +375,14 @@ mod shadowing_tests {
     fn slot_from_atom_view() {
         let mink = Lorentz::rep(4);
         let mu = mink.new_slot(0);
-        let atom = mu.to_symbolic();
+        let atom = mu.to_atom();
         assert_eq!(Slot::try_from(atom.as_view()).unwrap(), mu);
         assert_eq!(
             Slot::<Lorentz>::try_from(atom.as_view()).unwrap().dual(),
             mu.dual()
         );
         assert_eq!(
-            Slot::try_from(mu.dual().to_symbolic().as_view()).unwrap(),
+            Slot::try_from(mu.dual().to_atom().as_view()).unwrap(),
             mu.dual()
         );
 
@@ -394,5 +392,6 @@ mod shadowing_tests {
         let _slot: Slot<Dual<Lorentz>> = Slot::try_from(expr.as_view()).unwrap();
 
         println!("{}", _slot.to_symbolic_wrapped());
+        println!("{}", _slot.to_pattern(symb!("d_")));
     }
 }

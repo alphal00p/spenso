@@ -23,7 +23,7 @@ use crate::{
     parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom, SerializableSymbol},
 };
-use representation::{Dual, Euclidean, Lorentz, PhysReps, Rep, RepName, Representation};
+use representation::{Dual, Euclidean, Lorentz, PhysReps, Rep, RepName, Representation,Minkowski};
 use serde::Deserialize;
 use serde::Serialize;
 use slot::ConstructibleSlot;
@@ -247,21 +247,19 @@ pub trait ToSymbolic: TensorStructure {
     fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
         let slots = self
             .external_structure_iter()
-            .map(|slot| slot.to_symbolic())
+            .map(|slot| slot.to_atom())
             .collect::<Vec<_>>();
 
         let mut value_builder = FunctionBuilder::new(name.ref_into_symbol());
 
-        let mut index_func = FunctionBuilder::new(State::get_symbol("aind"));
         for arg in args {
             value_builder = value_builder.add_arg(arg);
         }
 
         for s in slots {
-            index_func = index_func.add_arg(&s);
+            value_builder = value_builder.add_arg(&s);
         }
-        let indices = index_func.finish();
-        value_builder.add_arg(&indices).finish()
+        value_builder.finish()
     }
 }
 
@@ -982,6 +980,13 @@ pub struct VecStructure {
 
 impl FromIterator<Slot<Lorentz>> for VecStructure {
     fn from_iter<T: IntoIterator<Item = Slot<Lorentz>>>(iter: T) -> Self {
+        let vec = iter.into_iter().map(Slot::<PhysReps>::from).collect();
+        Self { structure: vec }
+    }
+}
+
+impl FromIterator<Slot<Minkowski>> for VecStructure {
+    fn from_iter<T: IntoIterator<Item = Slot<Minkowski>>>(iter: T) -> Self {
         let vec = iter.into_iter().map(Slot::<PhysReps>::from).collect();
         Self { structure: vec }
     }

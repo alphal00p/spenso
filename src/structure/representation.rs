@@ -72,6 +72,11 @@ pub trait BaseRepName: RepName<Dual: RepName> + Default {
         }
     }
 
+    #[cfg(feature = "shadowing")]
+    fn pattern(symbol: Symbol) -> Atom {
+        Self::default().to_symbolic([Atom::new_var(symbol)])
+    }
+
     fn slot<D: Into<Dimension>, A: Into<AbstractIndex>>(dim: D, aind: A) -> Slot<Self>
     where
         Self: Sized,
@@ -183,6 +188,12 @@ pub trait RepName: Copy + Clone + Debug + PartialEq + Eq + Hash + Display + Into
     //         .add_args(args)
     //         .finish()
     // }
+    //
+
+    #[cfg(feature = "shadowing")]
+    fn to_pattern(&self, symbol: Symbol) -> Atom {
+        self.to_symbolic([Atom::new_var(symbol)])
+    }
 
     fn new_slot<D: Into<Dimension>, A: Into<AbstractIndex>>(self, dim: D, aind: A) -> Slot<Self>
     where
@@ -911,6 +922,23 @@ pub struct Representation<T: RepName> {
     pub rep: T,
 }
 
+impl<T: RepName> Representation<T> {
+    #[cfg(feature = "shadowing")]
+    pub fn pattern<'b, A: AsAtomView<'b>>(&self, aind: A) -> Atom {
+        let mut atom = Atom::new();
+        atom.set_from_view(&aind.as_atom_view());
+        self.rep.to_symbolic([self.dim.to_symbolic(), atom])
+    }
+
+    #[cfg(feature = "shadowing")]
+    pub fn to_pattern_wrapped(&self, aind: Symbol) -> Atom {
+        self.rep.to_symbolic([
+            self.dim.to_symbolic(),
+            fun!(symb!("indexid"), Atom::new_var(aind)),
+        ])
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Rep {
     SelfDual(u16),
@@ -1535,5 +1563,23 @@ where
             Self::Rep(r) => r.to_symbolic(args),
             Self::DualRep(d) => d.to_symbolic(args),
         }
+    }
+}
+#[cfg(test)]
+#[cfg(feature = "shadowing")]
+mod shadowing_tests {
+    use symbolica::symb;
+
+    use crate::structure::representation::{BaseRepName, Dual};
+
+    use super::Lorentz;
+
+    #[test]
+    fn rep_pattern() {
+        println!("{}", Dual::<Lorentz>::pattern(symb!("d_")));
+        println!(
+            "{}",
+            Dual::<Lorentz>::rep(3).to_pattern_wrapped(symb!("d_"))
+        );
     }
 }

@@ -200,6 +200,34 @@ where
         + RefOne
         + RefZero,
 {
+    fn e(&self) -> Self {
+        Complex {
+            re: self.re.e(),
+            im: self.im.zero(),
+        }
+    }
+
+    fn pi(&self) -> Self {
+        Complex {
+            re: self.re.pi(),
+            im: self.im.zero(),
+        }
+    }
+
+    fn phi(&self) -> Self {
+        Complex {
+            re: self.re.phi(),
+            im: self.im.zero(),
+        }
+    }
+
+    fn euler(&self) -> Self {
+        Complex {
+            re: self.re.euler(),
+            im: self.im.zero(),
+        }
+    }
+
     #[inline]
     fn norm(&self) -> Self {
         Complex::new(self.norm_squared().sqrt(), self.im.zero())

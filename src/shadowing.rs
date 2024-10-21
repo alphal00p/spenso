@@ -1,4 +1,7 @@
-use std::{ops::Neg, sync::RwLock};
+use std::{
+    ops::Neg,
+    sync::{LazyLock, RwLock},
+};
 
 use crate::{
     complex::Complex,
@@ -18,6 +21,7 @@ use once_cell::sync::Lazy;
 use symbolica::{
     atom::{Atom, Symbol},
     evaluate::FunctionMap,
+    state::{FunctionAttribute, State},
     symb,
 };
 use thiserror::Error;
@@ -121,6 +125,34 @@ pub enum ExplicitTensorError {
     #[error("The key {0} is not present")]
     KeyNotFound(ExplicitKey),
 }
+
+pub struct ExplicitTensorSymbols {
+    pub id: Symbol,
+    pub gamma: Symbol,
+    pub gamma5: Symbol,
+    pub proj_m: Symbol,
+    pub proj_p: Symbol,
+    pub sigma: Symbol,
+    pub metric: Symbol,
+}
+
+pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTensorSymbols {
+    id: State::get_symbol_with_attributes(
+        ExplicitTensorMap::<f64>::ID_NAME,
+        &[FunctionAttribute::Symmetric],
+    )
+    .unwrap(),
+    gamma: symb!(ExplicitTensorMap::<f64>::GAMMA_NAME),
+    gamma5: symb!(ExplicitTensorMap::<f64>::GAMMA5_NAME),
+    proj_m: symb!(ExplicitTensorMap::<f64>::PROJ_M_NAME),
+    proj_p: symb!(ExplicitTensorMap::<f64>::PROJ_P_NAME),
+    sigma: symb!(ExplicitTensorMap::<f64>::SIGMA_NAME),
+    metric: State::get_symbol_with_attributes(
+        ExplicitTensorMap::<f64>::METRIC_NAME,
+        &[FunctionAttribute::Symmetric],
+    )
+    .unwrap(),
+});
 
 impl<Data: Clone> ExplicitTensorMap<Data> {
     pub const ID_NAME: &'static str = "id";

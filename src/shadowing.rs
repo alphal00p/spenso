@@ -228,7 +228,6 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
     where
         Data: num::One + Neg<Output = Data>,
     {
-        let rep = key.get_rep(0).unwrap();
         let dim: usize = key.get_dim(0).unwrap().try_into().unwrap();
         let mut tensor = SparseTensor::empty(key);
 

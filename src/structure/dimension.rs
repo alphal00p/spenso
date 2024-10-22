@@ -6,8 +6,6 @@ use symbolica::{atom::AtomView, coefficient::CoefficientView};
 use thiserror::Error;
 
 #[cfg(feature = "shadowing")]
-use crate::parametric::AtomViewOrConcrete;
-#[cfg(feature = "shadowing")]
 use crate::symbolica_utils::SerializableSymbol;
 
 #[cfg(feature = "shadowing")]

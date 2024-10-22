@@ -53,7 +53,6 @@ use crate::{
     parametric::{MixedTensor, ParamTensor},
     structure::{TensorShell, ToSymbolic},
     symbolic::SymbolicTensor,
-    symbolica_utils::NoArgs,
     upgrading_arithmetic::TryIntoUpgrade,
 };
 

@@ -404,7 +404,7 @@ where
 {
     /// Contract the tensor with itself, i.e. trace over all matching indices.
     fn internal_contract(&self) -> Self {
-        let trace = if let Some(e) = self.traces().get(0) {
+        let trace = if let Some(e) = self.traces().first() {
             *e
         } else {
             return self.clone();

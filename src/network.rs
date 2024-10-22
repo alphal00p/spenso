@@ -2196,6 +2196,8 @@ pub enum TensorNetworkError {
     CannotContractEdge,
     #[error("no nodes in the graph")]
     NoNodes,
+    #[error("no scalar present")]
+    NoScalar,
     #[error("more than one node in the graph")]
     MoreThanOneNode,
     #[error("is not scalar output")]
@@ -2256,11 +2258,23 @@ where
         + ScalarMul<S, Output = T>,
 {
     pub fn result_tensor_smart(&self) -> Result<T, TensorNetworkError> {
-        let (t, s) = self.result()?;
-        if let Some(s) = s {
-            Ok(t.scalar_mul(&s).unwrap())
-        } else {
-            Ok(t)
+        match self.result() {
+            Err(TensorNetworkError::NoNodes) => {
+                let s = self
+                    .scalar
+                    .as_ref()
+                    .ok_or(TensorNetworkError::NoScalar)?
+                    .clone();
+                Ok(T::new_scalar(s.into()))
+            }
+            Ok((t, s)) => {
+                if let Some(s) = s {
+                    Ok(t.scalar_mul(&s).unwrap())
+                } else {
+                    Ok(t)
+                }
+            }
+            Err(e) => Err(e),
         }
     }
 }
@@ -3078,7 +3092,7 @@ mod test {
 
         let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-        let network = sym_tensor.to_network().unwrap();
+        let _network = sym_tensor.to_network().unwrap();
 
         // println!("{}", network.rich_graph().dot());
     }

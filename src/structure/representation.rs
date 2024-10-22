@@ -15,14 +15,14 @@ use std::{hash::Hash, ops::Index};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{AsAtomView, Atom, AtomView, FunctionBuilder, Symbol},
+    atom::{AsAtomView, Atom, FunctionBuilder, Symbol},
     state::State,
     {fun, symb},
 };
 
 use thiserror::Error;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use duplicate::duplicate;
 
 // /// A Representation/Dimension of the index.
@@ -306,9 +306,7 @@ duplicate! {
             } else {
                 Err(RepresentationError::NotRepresentationError(sym))
             }
-        } else if aind == dind {
-            Err(RepresentationError::ExpectedDualStateError(uind,aind))
-        } else if aind == sind {
+        } else if aind == dind && aind == sind {
             Err(RepresentationError::ExpectedDualStateError(uind,aind))
         } else {
             Err(RepresentationError::SymbolError(aind))
@@ -386,9 +384,7 @@ duplicate! {
                 } else {
                     Err(RepresentationError::NotRepresentationError(sym))
                 }
-            } else if aind == uind {
-                Err(RepresentationError::ExpectedDualStateError(dind,aind))
-            } else if aind == sind {
+            } else if aind == uind && aind == sind{
                 Err(RepresentationError::ExpectedDualStateError(dind,aind))
             } else {
                 Err(RepresentationError::SymbolError(aind))
@@ -513,10 +509,8 @@ impl RepName for Minkowski {
             } else {
                 Err(RepresentationError::NotRepresentationError(sym))
             }
-        } else if aind == dind {
-            Err(RepresentationError::ExpectedDualStateError(uind, aind))
-        } else if aind == uind {
-            Err(RepresentationError::ExpectedDualStateError(uind, aind))
+        } else if aind == dind && aind == uind {
+            Err(RepresentationError::ExpectedDualStateError(sind, aind))
         } else {
             Err(RepresentationError::SymbolError(aind))
         }
@@ -649,10 +643,8 @@ duplicate! {
             } else {
                 Err(RepresentationError::NotRepresentationError(sym))
             }
-        } else if aind == dind {
-            Err(RepresentationError::ExpectedDualStateError(uind, aind))
-        } else if aind == uind {
-            Err(RepresentationError::ExpectedDualStateError(uind, aind))
+        } else if aind == dind && aind == uind {
+            Err(RepresentationError::ExpectedDualStateError(sind, aind))
         } else {
             Err(RepresentationError::SymbolError(aind))
         }

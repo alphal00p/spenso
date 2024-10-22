@@ -1885,7 +1885,7 @@ where
     fn internal_contract(&self) -> Self {
         ParamTensor {
             tensor: self.tensor.internal_contract(),
-            param_type: self.param_type.clone(),
+            param_type: self.param_type,
         }
     }
 }

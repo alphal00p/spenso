@@ -11,9 +11,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{AsAtomView, Atom, AtomView, FunctionBuilder, ListIterator, Symbol},
-    coefficient::CoefficientView,
-    state::State,
+    atom::{Atom, AtomView, ListIterator, Symbol},
     {fun, symb},
 };
 
@@ -339,7 +337,7 @@ mod shadowing_tests {
     use symbolica::{atom::Atom, symb};
 
     use crate::structure::{
-        representation::{BaseRepName, Dual, Lorentz, Minkowski, Rep, RepName, Representation},
+        representation::{BaseRepName, Dual, Lorentz, Rep, RepName, Representation},
         slot::{DualSlotTo, IsAbstractSlot, Slot},
     };
 

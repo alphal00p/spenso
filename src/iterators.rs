@@ -1197,7 +1197,7 @@ mod iteratortests {
 
         let rep = Euclidean {};
 
-        let structura = VecStructure::new(vec![
+        let structura: VecStructure<Euclidean> = VecStructure::new(vec![
             rep.new_slot(4, 0).into(),
             rep.new_slot(4, 4).into(),
             rep.new_slot(5, 1).into(),

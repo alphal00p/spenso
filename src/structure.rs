@@ -23,7 +23,7 @@ use crate::{
     parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom, SerializableSymbol},
 };
-use representation::{Dual, Euclidean, Lorentz, PhysReps, Rep, RepName, Representation,Minkowski};
+use representation::{Dual, Euclidean, Lorentz, Minkowski, PhysReps, Rep, RepName, Representation};
 use serde::Deserialize;
 use serde::Serialize;
 use slot::ConstructibleSlot;
@@ -828,34 +828,34 @@ impl<R: RepName> FromIterator<Representation<R>> for IndexLess<R> {
     }
 }
 
-impl From<VecStructure> for IndexLess<PhysReps> {
-    fn from(structure: VecStructure) -> Self {
+impl<R: RepName> From<VecStructure<R>> for IndexLess<R> {
+    fn from(structure: VecStructure<R>) -> Self {
         IndexLess {
             structure: structure.into_iter().map(|a| a.rep).collect(),
         }
     }
 }
 
-impl From<ContractionCountStructure> for IndexLess {
-    fn from(structure: ContractionCountStructure) -> Self {
+impl<R: RepName> From<ContractionCountStructure<R>> for IndexLess<R> {
+    fn from(structure: ContractionCountStructure<R>) -> Self {
         structure.structure.into()
     }
 }
 
-impl<N, A> From<NamedStructure<N, A>> for IndexLess {
-    fn from(structure: NamedStructure<N, A>) -> Self {
+impl<N, A, R: RepName> From<NamedStructure<N, A, R>> for IndexLess<R> {
+    fn from(structure: NamedStructure<N, A, R>) -> Self {
         structure.structure.into()
     }
 }
 
-impl<N, A> From<SmartShadowStructure<N, A>> for IndexLess {
-    fn from(structure: SmartShadowStructure<N, A>) -> Self {
+impl<N, A, R: RepName> From<SmartShadowStructure<N, A, R>> for IndexLess<R> {
+    fn from(structure: SmartShadowStructure<N, A, R>) -> Self {
         structure.structure.into()
     }
 }
 
-impl<N, A> From<HistoryStructure<N, A>> for IndexLess {
-    fn from(structure: HistoryStructure<N, A>) -> Self {
+impl<N, A, R: RepName> From<HistoryStructure<N, A, R>> for IndexLess<R> {
+    fn from(structure: HistoryStructure<N, A, R>) -> Self {
         structure.external.into()
     }
 }
@@ -973,48 +973,26 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
 #[cfg(feature = "shadowing")]
 impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {}
 
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
-pub struct VecStructure {
-    pub structure: Vec<PhysicalSlots>,
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Hash)]
+pub struct VecStructure<R: RepName = PhysReps> {
+    pub structure: Vec<Slot<R>>,
 }
 
-impl FromIterator<Slot<Lorentz>> for VecStructure {
-    fn from_iter<T: IntoIterator<Item = Slot<Lorentz>>>(iter: T) -> Self {
-        let vec = iter.into_iter().map(Slot::<PhysReps>::from).collect();
-        Self { structure: vec }
-    }
-}
-
-impl FromIterator<Slot<Minkowski>> for VecStructure {
-    fn from_iter<T: IntoIterator<Item = Slot<Minkowski>>>(iter: T) -> Self {
-        let vec = iter.into_iter().map(Slot::<PhysReps>::from).collect();
-        Self { structure: vec }
-    }
-}
-
-impl FromIterator<Slot<Dual<Lorentz>>> for VecStructure {
-    fn from_iter<T: IntoIterator<Item = Slot<Dual<Lorentz>>>>(iter: T) -> Self {
-        let vec = iter.into_iter().map(Slot::<PhysReps>::from).collect();
-        Self { structure: vec }
-    }
-}
-
-impl FromIterator<Slot<Euclidean>> for VecStructure {
-    fn from_iter<T: IntoIterator<Item = Slot<Euclidean>>>(iter: T) -> Self {
-        let vec = iter.into_iter().map(Slot::<PhysReps>::from).collect();
-        Self { structure: vec }
+impl<R: RepName> Default for VecStructure<R> {
+    fn default() -> Self {
+        Self { structure: vec![] }
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl TryFrom<AtomView<'_>> for VecStructure {
+impl<R: RepName> TryFrom<AtomView<'_>> for VecStructure<R> {
     type Error = SlotError;
     fn try_from(value: AtomView) -> Result<Self, Self::Error> {
         match value {
             AtomView::Mul(mul) => mul.try_into(),
             AtomView::Fun(fun) => fun.try_into(),
             AtomView::Pow(_) => {
-                Ok(VecStructure::default()) // powers do not have a structure
+                Ok(VecStructure::<R>::default()) // powers do not have a structure
             }
             _ => Err(anyhow!("Not a structure: {value}").into()), // could check if it
         }
@@ -1028,11 +1006,11 @@ impl TryFrom<AtomView<'_>> for VecStructure {
 // }
 
 #[cfg(feature = "shadowing")]
-impl TryFrom<FunView<'_>> for VecStructure {
+impl<R: RepName> TryFrom<FunView<'_>> for VecStructure<R> {
     type Error = SlotError;
     fn try_from(value: FunView) -> Result<Self, Self::Error> {
         if value.get_symbol() == State::get_symbol(ABSTRACTIND) {
-            let mut structure: Vec<PhysicalSlots> = vec![];
+            let mut structure: Vec<Slot<R>> = vec![];
 
             for arg in value.iter() {
                 structure.push(arg.try_into()?);
@@ -1050,7 +1028,7 @@ impl TryFrom<FunView<'_>> for VecStructure {
 }
 
 #[cfg(feature = "shadowing")]
-impl TryFrom<MulView<'_>> for VecStructure {
+impl<R: RepName> TryFrom<MulView<'_>> for VecStructure<R> {
     type Error = SlotError;
     fn try_from(value: MulView) -> Result<Self, Self::Error> {
         let mut structure: Self = vec![].into();
@@ -1062,50 +1040,50 @@ impl TryFrom<MulView<'_>> for VecStructure {
     }
 }
 
-impl FromIterator<PhysicalSlots> for VecStructure {
-    fn from_iter<T: IntoIterator<Item = PhysicalSlots>>(iter: T) -> Self {
+impl<R: RepName> FromIterator<Slot<R>> for VecStructure<R> {
+    fn from_iter<T: IntoIterator<Item = Slot<R>>>(iter: T) -> Self {
         Self {
             structure: iter.into_iter().collect(),
         }
     }
 }
 
-impl From<Vec<PhysicalSlots>> for VecStructure {
-    fn from(structure: Vec<PhysicalSlots>) -> Self {
+impl<R: RepName> From<Vec<Slot<R>>> for VecStructure<R> {
+    fn from(structure: Vec<Slot<R>>) -> Self {
         Self { structure }
     }
 }
 
-impl IntoIterator for VecStructure {
-    type Item = PhysicalSlots;
-    type IntoIter = std::vec::IntoIter<PhysicalSlots>;
-    fn into_iter(self) -> std::vec::IntoIter<PhysicalSlots> {
+impl<R: RepName> IntoIterator for VecStructure<R> {
+    type Item = Slot<R>;
+    type IntoIter = std::vec::IntoIter<Slot<R>>;
+    fn into_iter(self) -> std::vec::IntoIter<Slot<R>> {
         self.structure.into_iter()
     }
 }
 
-impl<'a> IntoIterator for &'a VecStructure {
-    type Item = &'a PhysicalSlots;
-    type IntoIter = std::slice::Iter<'a, PhysicalSlots>;
-    fn into_iter(self) -> std::slice::Iter<'a, PhysicalSlots> {
+impl<'a, R: RepName> IntoIterator for &'a VecStructure<R> {
+    type Item = &'a Slot<R>;
+    type IntoIter = std::slice::Iter<'a, Slot<R>>;
+    fn into_iter(self) -> std::slice::Iter<'a, Slot<R>> {
         self.structure.iter()
     }
 }
 
-impl<'a> IntoIterator for &'a mut VecStructure {
-    type Item = &'a mut PhysicalSlots;
-    type IntoIter = std::slice::IterMut<'a, PhysicalSlots>;
-    fn into_iter(self) -> std::slice::IterMut<'a, PhysicalSlots> {
+impl<'a, R: RepName> IntoIterator for &'a mut VecStructure<R> {
+    type Item = &'a mut Slot<R>;
+    type IntoIter = std::slice::IterMut<'a, Slot<R>>;
+    fn into_iter(self) -> std::slice::IterMut<'a, Slot<R>> {
         self.structure.iter_mut()
     }
 }
 
-impl VecStructure {
-    pub fn new(structure: Vec<PhysicalSlots>) -> Self {
+impl<R: RepName> VecStructure<R> {
+    pub fn new(structure: Vec<Slot<R>>) -> Self {
         Self { structure }
     }
 
-    pub fn push(&mut self, item: PhysicalSlots) {
+    pub fn push(&mut self, item: Slot<R>) {
         self.structure.push(item)
     }
 
@@ -1113,7 +1091,7 @@ impl VecStructure {
         self.structure.extend(other.structure)
     }
 
-    pub fn to_named<N, A>(self, name: N, args: Option<A>) -> NamedStructure<N, A> {
+    pub fn to_named<N, A>(self, name: N, args: Option<A>) -> NamedStructure<N, A, R> {
         NamedStructure::from_iter(self, name, args)
     }
 
@@ -1122,32 +1100,32 @@ impl VecStructure {
     }
 }
 
-impl From<ContractionCountStructure> for VecStructure {
-    fn from(structure: ContractionCountStructure) -> Self {
+impl<R: RepName> From<ContractionCountStructure<R>> for VecStructure<R> {
+    fn from(structure: ContractionCountStructure<R>) -> Self {
         structure.structure
     }
 }
 
-impl<N, A> From<NamedStructure<N, A>> for VecStructure {
-    fn from(structure: NamedStructure<N, A>) -> Self {
+impl<N, A, R: RepName> From<NamedStructure<N, A, R>> for VecStructure<R> {
+    fn from(structure: NamedStructure<N, A, R>) -> Self {
         structure.structure
     }
 }
 
-impl<N, A> From<SmartShadowStructure<N, A>> for VecStructure {
-    fn from(structure: SmartShadowStructure<N, A>) -> Self {
+impl<N, A, R: RepName> From<SmartShadowStructure<N, A, R>> for VecStructure<R> {
+    fn from(structure: SmartShadowStructure<N, A, R>) -> Self {
         structure.structure
     }
 }
 
-impl<N, A> From<HistoryStructure<N, A>> for VecStructure {
-    fn from(structure: HistoryStructure<N, A>) -> Self {
+impl<N, A, R: RepName> From<HistoryStructure<N, A, R>> for VecStructure<R> {
+    fn from(structure: HistoryStructure<N, A, R>) -> Self {
         structure.external.into()
     }
 }
 
-impl From<VecStructure> for ContractionCountStructure {
-    fn from(structure: VecStructure) -> Self {
+impl<R: RepName> From<VecStructure<R>> for ContractionCountStructure<R> {
+    fn from(structure: VecStructure<R>) -> Self {
         Self {
             structure,
             contractions: 0,
@@ -1155,15 +1133,15 @@ impl From<VecStructure> for ContractionCountStructure {
     }
 }
 
-impl From<VecStructure> for Vec<PhysicalSlots> {
-    fn from(structure: VecStructure) -> Self {
+impl<R: RepName> From<VecStructure<R>> for Vec<Slot<R>> {
+    fn from(structure: VecStructure<R>) -> Self {
         structure.structure
     }
 }
 
 // const IDPRINTER: Lazy<BlockId<char>> = Lazy::new(|| BlockId::new(Alphabet::alphanumeric(), 1, 1));
 
-impl std::fmt::Display for VecStructure {
+impl<R: RepName> std::fmt::Display for VecStructure<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (index, item) in self.structure.iter().enumerate() {
             if index != 0 {
@@ -1184,14 +1162,14 @@ impl std::fmt::Display for VecStructure {
     }
 }
 
-impl ScalarStructure for VecStructure {
+impl<R: RepName> ScalarStructure for VecStructure<R> {
     fn scalar_structure() -> Self {
         VecStructure { structure: vec![] }
     }
 }
 
-impl TensorStructure for VecStructure {
-    type Slot = PhysicalSlots;
+impl<R: RepName<Dual = R>> TensorStructure for VecStructure<R> {
+    type Slot = Slot<R>;
     // type R = PhysicalReps;
     //
     fn dual(self) -> Self {
@@ -1214,9 +1192,9 @@ impl TensorStructure for VecStructure {
     }
 }
 #[cfg(feature = "shadowing")]
-impl ToSymbolic for VecStructure {}
+impl<R: RepName<Dual = R>> ToSymbolic for VecStructure<R> {}
 
-impl StructureContract for VecStructure {
+impl<R: RepName<Dual = R>> StructureContract for VecStructure<R> {
     fn merge(&mut self, other: &Self) -> Option<usize> {
         self.structure.merge(&other.structure)
     }
@@ -1324,20 +1302,20 @@ impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for IndexlessNamedStructure
 ///
 /// It is useful when you want to shadow tensors, to nest tensor network contraction operations.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
-pub struct NamedStructure<Name = SmartString<LazyCompact>, Args = usize> {
-    pub structure: VecStructure,
+pub struct NamedStructure<Name = SmartString<LazyCompact>, Args = usize, R: RepName = PhysReps> {
+    pub structure: VecStructure<R>,
     pub global_name: Option<Name>,
     pub additional_args: Option<Args>,
 }
 
 #[cfg(feature = "shadowing")]
-pub type AtomStructure = NamedStructure<SerializableSymbol, Vec<SerializableAtom>>;
+pub type AtomStructure<R> = NamedStructure<SerializableSymbol, Vec<SerializableAtom>, R>;
 
-impl<Name, Args> NamedStructure<Name, Args> {
+impl<Name, Args, R: RepName> NamedStructure<Name, Args, R> {
     #[must_use]
     pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> Self
     where
-        I: Into<PhysicalSlots>,
+        I: Into<Slot<R>>,
         T: IntoIterator<Item = I>,
     {
         Self {
@@ -1357,12 +1335,12 @@ pub enum StructureError {
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> TryFrom<FunView<'a>> for AtomStructure {
+impl<'a, R: RepName> TryFrom<FunView<'a>> for AtomStructure<R> {
     type Error = StructureError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         match value.get_symbol() {
             s if s == State::get_symbol(ABSTRACTIND) => {
-                let mut structure: Vec<PhysicalSlots> = vec![];
+                let mut structure: Vec<Slot<R>> = vec![];
 
                 for arg in value.iter() {
                     structure.push(arg.try_into()?);
@@ -1371,13 +1349,13 @@ impl<'a> TryFrom<FunView<'a>> for AtomStructure {
                 Ok(VecStructure::from(structure).into())
             }
             name => {
-                let mut structure: AtomStructure = VecStructure::default().into();
+                let mut structure: AtomStructure<R> = VecStructure::default().into();
                 structure.set_name(name.into());
                 let mut args = vec![];
                 let mut is_structure = Some(SlotError::EmptyStructure);
 
                 for arg in value.iter() {
-                    let slot: Result<PhysicalSlots, _> = arg.try_into();
+                    let slot: Result<Slot<R>, _> = arg.try_into();
 
                     match slot {
                         Ok(slot) => {
@@ -1415,7 +1393,7 @@ impl<'a> TryFrom<FunView<'a>> for AtomStructure {
     }
 }
 
-impl<N, A> NamedStructure<N, Vec<A>> {
+impl<N, A, R: RepName> NamedStructure<N, Vec<A>, R> {
     pub fn extend(&mut self, other: Self) {
         let result = match (self.additional_args.take(), other.additional_args) {
             (Some(mut v1), Some(v2)) => {
@@ -1431,8 +1409,8 @@ impl<N, A> NamedStructure<N, Vec<A>> {
     }
 }
 
-impl<N, A> From<VecStructure> for NamedStructure<N, A> {
-    fn from(value: VecStructure) -> Self {
+impl<N, A, R: RepName> From<VecStructure<R>> for NamedStructure<N, A, R> {
+    fn from(value: VecStructure<R>) -> Self {
         Self {
             structure: value,
             global_name: None,
@@ -1443,7 +1421,7 @@ impl<N, A> From<VecStructure> for NamedStructure<N, A> {
 
 /// A trait for a structure that has a name
 
-impl<N, A> HasName for NamedStructure<N, A>
+impl<N, A, R: RepName> HasName for NamedStructure<N, A, R>
 where
     N: Clone,
     A: Clone,
@@ -1498,7 +1476,7 @@ pub trait HasName {
     }
 }
 
-impl<N, A> ScalarStructure for NamedStructure<N, A> {
+impl<N, A, R: RepName> ScalarStructure for NamedStructure<N, A, R> {
     fn scalar_structure() -> Self {
         NamedStructure {
             structure: VecStructure::default(),
@@ -1508,8 +1486,8 @@ impl<N, A> ScalarStructure for NamedStructure<N, A> {
     }
 }
 
-impl<N, A> TensorStructure for NamedStructure<N, A> {
-    type Slot = PhysicalSlots;
+impl<N, A, R: RepName<Dual = R>> TensorStructure for NamedStructure<N, A, R> {
+    type Slot = Slot<R>;
     // type R = PhysicalReps;
 
     fn dual(self) -> Self {
@@ -1535,7 +1513,7 @@ impl<N, A> TensorStructure for NamedStructure<N, A> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<N: IntoSymbol, A: IntoArgs> Display for NamedStructure<N, A> {
+impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for NamedStructure<N, A, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(ref name) = self.global_name {
             write!(f, "{}", name.ref_into_symbol())?
@@ -1551,7 +1529,7 @@ impl<N: IntoSymbol, A: IntoArgs> Display for NamedStructure<N, A> {
         Result::Ok(())
     }
 }
-impl<N, A> StructureContract for NamedStructure<N, A> {
+impl<N, A, R: RepName<Dual = R>> StructureContract for NamedStructure<N, A, R> {
     delegate! {
         to self.structure{
             fn trace_out(&mut self);
@@ -1577,12 +1555,12 @@ impl<N, A> StructureContract for NamedStructure<N, A> {
 ///
 /// Useful for tensor network contraction algorithm.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub struct ContractionCountStructure {
-    pub structure: VecStructure,
+pub struct ContractionCountStructure<R: RepName> {
+    pub structure: VecStructure<R>,
     pub contractions: usize,
 }
 
-impl<I: Into<PhysicalSlots>> FromIterator<I> for ContractionCountStructure {
+impl<R: RepName, I: Into<Slot<R>>> FromIterator<I> for ContractionCountStructure<R> {
     fn from_iter<T: IntoIterator<Item = I>>(iter: T) -> Self {
         Self {
             structure: iter.into_iter().map(I::into).collect(),
@@ -1599,13 +1577,13 @@ pub trait TracksCount {
     }
 }
 
-impl TracksCount for ContractionCountStructure {
+impl<R: RepName> TracksCount for ContractionCountStructure<R> {
     fn contractions_num(&self) -> usize {
         self.contractions
     }
 }
 
-impl ScalarStructure for ContractionCountStructure {
+impl<R: RepName> ScalarStructure for ContractionCountStructure<R> {
     fn scalar_structure() -> Self {
         ContractionCountStructure {
             structure: VecStructure::default(),
@@ -1614,8 +1592,8 @@ impl ScalarStructure for ContractionCountStructure {
     }
 }
 
-impl TensorStructure for ContractionCountStructure {
-    type Slot = PhysicalSlots;
+impl<R: RepName<Dual = R>> TensorStructure for ContractionCountStructure<R> {
+    type Slot = Slot<R>;
     // type R = PhysicalReps;
     //
     fn dual(self) -> Self {
@@ -1641,9 +1619,9 @@ impl TensorStructure for ContractionCountStructure {
 }
 
 #[cfg(feature = "shadowing")]
-impl ToSymbolic for ContractionCountStructure {}
+impl<R: RepName<Dual = R>> ToSymbolic for ContractionCountStructure<R> {}
 
-impl StructureContract for ContractionCountStructure {
+impl<R: RepName<Dual = R>> StructureContract for ContractionCountStructure<R> {
     delegate! {
         to self.structure{
             fn trace_out(&mut self);
@@ -1665,19 +1643,23 @@ impl StructureContract for ContractionCountStructure {
 
 /// A structure to enable smart shadowing of tensors in a tensor network contraction algorithm.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Hash)]
-pub struct SmartShadowStructure<Name = SmartString<LazyCompact>, Args = usize> {
-    pub structure: VecStructure,
+pub struct SmartShadowStructure<
+    Name = SmartString<LazyCompact>,
+    Args = usize,
+    R: RepName = PhysReps,
+> {
+    pub structure: VecStructure<R>,
     pub contractions: usize,
     pub global_name: Option<Name>,
     additional_args: Option<Args>,
 }
 
-impl<Name, Args> SmartShadowStructure<Name, Args> {
+impl<Name, Args, R: RepName> SmartShadowStructure<Name, Args, R> {
     /// Constructs a new [`SmartShadow`] from a list of tuples of indices and dimension (assumes they are all euclidean), along with a name
     #[must_use]
     pub fn from_iter<I, T>(iter: T, name: Option<Name>, args: Option<Args>) -> Self
     where
-        I: Into<PhysicalSlots>,
+        I: Into<Slot<R>>,
         T: IntoIterator<Item = I>,
     {
         Self {
@@ -1689,7 +1671,7 @@ impl<Name, Args> SmartShadowStructure<Name, Args> {
     }
 }
 
-impl<N, A> HasName for SmartShadowStructure<N, A>
+impl<N, A, R: RepName> HasName for SmartShadowStructure<N, A, R>
 where
     N: Clone,
     A: Clone,
@@ -1709,7 +1691,7 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<N: IntoSymbol, A: IntoArgs> Display for SmartShadowStructure<N, A> {
+impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for SmartShadowStructure<N, A, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(ref name) = self.global_name {
             write!(f, "{}", name.ref_into_symbol())?
@@ -1726,7 +1708,7 @@ impl<N: IntoSymbol, A: IntoArgs> Display for SmartShadowStructure<N, A> {
     }
 }
 
-impl<N, A> ScalarStructure for SmartShadowStructure<N, A> {
+impl<N, A, R: RepName> ScalarStructure for SmartShadowStructure<N, A, R> {
     fn scalar_structure() -> Self {
         SmartShadowStructure {
             structure: VecStructure::default(),
@@ -1737,8 +1719,8 @@ impl<N, A> ScalarStructure for SmartShadowStructure<N, A> {
     }
 }
 
-impl<N, A> TensorStructure for SmartShadowStructure<N, A> {
-    type Slot = PhysicalSlots;
+impl<N, A, R: RepName<Dual = R>> TensorStructure for SmartShadowStructure<N, A, R> {
+    type Slot = Slot<R>;
     // type R = PhysicalReps;
     //
     fn dual(self) -> Self {
@@ -1765,13 +1747,13 @@ impl<N, A> TensorStructure for SmartShadowStructure<N, A> {
     }
 }
 
-impl<N, A> TracksCount for SmartShadowStructure<N, A> {
+impl<N, A, R: RepName> TracksCount for SmartShadowStructure<N, A, R> {
     fn contractions_num(&self) -> usize {
         self.contractions
     }
 }
 
-impl<N, A> StructureContract for SmartShadowStructure<N, A> {
+impl<N, A, R: RepName<Dual = R>> StructureContract for SmartShadowStructure<N, A, R> {
     fn merge(&mut self, other: &Self) -> Option<usize> {
         self.contractions += other.contractions;
         self.structure.merge(&other.structure)
@@ -1794,8 +1776,8 @@ impl<N, A> StructureContract for SmartShadowStructure<N, A> {
     }
 }
 
-impl<N, A> From<NamedStructure<N, A>> for SmartShadowStructure<N, A> {
-    fn from(value: NamedStructure<N, A>) -> Self {
+impl<N, A, R: RepName<Dual = R>> From<NamedStructure<N, A, R>> for SmartShadowStructure<N, A, R> {
+    fn from(value: NamedStructure<N, A, R>) -> Self {
         Self {
             structure: value.structure,
             contractions: 0,
@@ -1812,17 +1794,17 @@ impl<N, A> From<NamedStructure<N, A>> for SmartShadowStructure<N, A> {
 /// It enables keeping track of the contraction history of the tensor, mostly for debugging and display purposes.
 /// A [`SymbolicTensor`] can also be used in this way, however it needs a symbolica state and workspace during contraction.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct HistoryStructure<Name, Args = ()> {
-    internal: VecStructure,
+pub struct HistoryStructure<Name, Args = (), R: RepName = PhysReps> {
+    internal: VecStructure<R>,
     pub names: AHashMap<Range<usize>, Name>, //ideally this is a named partion.. maybe a btreemap<usize, N>, and the range is from previous to next
-    external: NamedStructure<Name, Args>,
+    external: NamedStructure<Name, Args, R>,
 }
 
-impl<N, A> From<NamedStructure<N, A>> for HistoryStructure<N, A>
+impl<N, A, R: RepName<Dual = R>> From<NamedStructure<N, A, R>> for HistoryStructure<N, A, R>
 where
     N: Clone,
 {
-    fn from(external: NamedStructure<N, A>) -> Self {
+    fn from(external: NamedStructure<N, A, R>) -> Self {
         Self {
             internal: external.structure.clone(),
             names: AHashMap::from([(0..external.order(), external.global_name.clone().unwrap())]),
@@ -1831,7 +1813,7 @@ where
     }
 }
 
-impl<N, A> HistoryStructure<N, A> {
+impl<N, A, R: RepName<Dual = R>> HistoryStructure<N, A, R> {
     /// make the indices in the internal index list of self independent from the indices in the internal index list of other
     /// This is done by shifting the indices in the internal index list of self by the the maximum index present.
     pub fn independentize_internal(&mut self, other: &Self) {
@@ -1861,7 +1843,7 @@ impl<N, A> HistoryStructure<N, A> {
     }
 }
 
-impl<N, A> HasName for HistoryStructure<N, A>
+impl<N, A, R: RepName> HasName for HistoryStructure<N, A, R>
 where
     N: Clone,
     A: Clone,
@@ -1877,7 +1859,7 @@ where
     }
 }
 
-impl<N, A> TracksCount for HistoryStructure<N, A> {
+impl<N, A, R: RepName> TracksCount for HistoryStructure<N, A, R> {
     /// Since each time we contract, we merge the name maps, the amount of contractions, is the size of the name map
     /// This function returns the number of contractions thus computed
     fn contractions_num(&self) -> usize {
@@ -1885,7 +1867,7 @@ impl<N, A> TracksCount for HistoryStructure<N, A> {
     }
 }
 
-impl<N, A> ScalarStructure for HistoryStructure<N, A> {
+impl<N, A, R: RepName> ScalarStructure for HistoryStructure<N, A, R> {
     fn scalar_structure() -> Self {
         HistoryStructure {
             internal: VecStructure::default(),
@@ -1895,8 +1877,8 @@ impl<N, A> ScalarStructure for HistoryStructure<N, A> {
     }
 }
 
-impl<N, A> TensorStructure for HistoryStructure<N, A> {
-    type Slot = PhysicalSlots;
+impl<N, A, R: RepName<Dual = R>> TensorStructure for HistoryStructure<N, A, R> {
+    type Slot = Slot<R>;
     // type R = PhysicalReps;
     //
     fn dual(self) -> Self {
@@ -1937,7 +1919,7 @@ impl<N, A> TensorStructure for HistoryStructure<N, A> {
 //     }
 // }
 
-impl<N, A> StructureContract for HistoryStructure<N, A>
+impl<N, A, R: RepName<Dual = R>> StructureContract for HistoryStructure<N, A, R>
 where
     N: Clone,
     A: Clone,
@@ -2152,7 +2134,7 @@ mod shadowing_tests {
         let expr = Atom::parse("p(1,mu,aind(lor(4,4)))").unwrap();
 
         if let AtomView::Fun(f) = expr.as_atom_view() {
-            let named_structure = AtomStructure::try_from(f);
+            let named_structure = AtomStructure::<Lorentz>::try_from(f);
             match named_structure {
                 Ok(named_structure) => println!("{}", named_structure),
                 Err(e) => println!("{}", e),

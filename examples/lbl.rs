@@ -1,3 +1,4 @@
+use spenso::structure::representation::PhysReps;
 #[cfg(feature = "shadowing")]
 use spenso::symbolic::SymbolicTensor;
 #[cfg(feature = "shadowing")]
@@ -22,7 +23,7 @@ fn main() {
     #[cfg(feature = "shadowing")]
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
     #[cfg(feature = "shadowing")]
-    let network = sym_tensor.to_network().unwrap();
+    let network = sym_tensor.to_network::<PhysReps>().unwrap();
     #[cfg(feature = "shadowing")]
     for (_, t) in &network.graph.nodes {
         println!("{}", t)

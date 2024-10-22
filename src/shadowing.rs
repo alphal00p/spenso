@@ -583,9 +583,10 @@ mod test {
     use crate::{
         contraction::Contract,
         network::TensorNetwork,
+        parametric::MixedTensor,
         structure::{
-            representation::{Rep, RepName, REPS},
-            HasStructure, IndexlessNamedStructure, TensorStructure, VecStructure,
+            representation::{PhysReps, Rep, RepName, REPS},
+            AtomStructure, HasStructure, IndexlessNamedStructure, TensorStructure, VecStructure,
         },
     };
 
@@ -663,7 +664,8 @@ mod test {
     #[test]
     fn pslash() {
         let expr = Atom::parse("p(1,mink(4,mu))*γ(mink(4,mu),bis(4,i),bis(4,j))").unwrap();
-        let mut network: TensorNetwork<_, _> = expr.as_view().try_into().unwrap();
+        let mut network: TensorNetwork<MixedTensor<f64, AtomStructure<PhysReps>>, _> =
+            expr.as_view().try_into().unwrap();
         network.contract();
         let result = network
             .result()

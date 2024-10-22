@@ -49,6 +49,7 @@ use crate::{
         SerializableExportedCode,
     },
     shadowing::{ShadowMapping, Shadowable},
+    structure::representation::Rep,
     structure::{AtomStructure, NamedStructure, StructureContract, ToSymbolic},
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
     upgrading_arithmetic::{FallibleAdd, TrySmallestUpgrade},
@@ -59,8 +60,8 @@ use crate::{
     contraction::{Contract, ContractionError, Trace},
     data::{DataTensor, GetTensorData, HasTensorData},
     structure::{
-        slot::DualSlotTo, CastStructure, HasName, HasStructure, ScalarTensor, TensorStructure,
-        TracksCount,
+        representation::RepName, slot::DualSlotTo, CastStructure, HasName, HasStructure,
+        ScalarTensor, TensorStructure, TracksCount,
     },
     upgrading_arithmetic::FallibleMul,
 };
@@ -2449,7 +2450,11 @@ where
 // use log::trace;
 
 #[cfg(feature = "shadowing")]
-impl<'a> TryFrom<MulView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
+impl<'a, R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize> TryFrom<MulView<'a>>
+    for TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>
+where
+    Rep: From<R>,
+{
     type Error = TensorNetworkError;
     fn try_from(value: MulView<'a>) -> Result<Self, Self::Error> {
         let mut network: Self = TensorNetwork::new();
@@ -2482,8 +2487,10 @@ impl<'a> TryFrom<MulView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> TryFrom<AtomView<'a>>
-    for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom>
+impl<'a, R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize> TryFrom<AtomView<'a>>
+    for TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>
+where
+    Rep: From<R>,
 {
     type Error = TensorNetworkError;
     fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
@@ -2505,7 +2512,11 @@ impl<'a> TryFrom<AtomView<'a>>
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> TryFrom<PowView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
+impl<'a, R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize> TryFrom<PowView<'a>>
+    for TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>
+where
+    Rep: From<R>,
+{
     type Error = TensorNetworkError;
 
     fn try_from(value: PowView<'a>) -> std::result::Result<Self, Self::Error> {
@@ -2554,11 +2565,15 @@ impl<'a> TryFrom<PowView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> TryFrom<FunView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
+impl<'a, R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize> TryFrom<FunView<'a>>
+    for TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>
+where
+    Rep: From<R>,
+{
     type Error = TensorNetworkError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         let mut network: Self = TensorNetwork::new();
-        let s: Result<NamedStructure<_, _>, _> = value.try_into();
+        let s: Result<NamedStructure<_, _, _>, _> = value.try_into();
 
         let mut scalar = None;
         if let Ok(s) = s {
@@ -2578,7 +2593,11 @@ impl<'a> TryFrom<FunView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>,
 }
 // use log::trace;
 #[cfg(feature = "shadowing")]
-impl<'a> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom> {
+impl<'a, R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize> TryFrom<AddView<'a>>
+    for TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>
+where
+    Rep: From<R>,
+{
     type Error = TensorNetworkError;
     fn try_from(value: AddView<'a>) -> Result<Self, Self::Error> {
         // trace!("AddView: {}", value.as_view());
@@ -3035,12 +3054,14 @@ mod test {
     #[cfg(feature = "shadowing")]
     #[test]
     fn pslash_parse() {
+        use crate::structure::representation::PhysReps;
+
         let expr = "Q(15,dind(lor(4,75257)))   *γ(lor(4,75257),bis(4,1),bis(4,18))";
         let atom = Atom::parse(expr).unwrap();
 
         let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-        let network = sym_tensor.to_network().unwrap();
+        let network = sym_tensor.to_network::<PhysReps>().unwrap();
 
         println!("{}", network.dot());
     }
@@ -3048,6 +3069,8 @@ mod test {
     #[cfg(feature = "shadowing")]
     #[test]
     fn three_loop_photon_parse() {
+        use crate::structure::representation::PhysReps;
+
         let expr = concat!(
             "-64/729*ee^6*G^4",
             "*(MT*id(bis(4,1),bis(4,18)))", //+Q(15,aind(loru(4,75257)))    *γ(aind(loru(4,75257),bis(4,1),bis(4,18))))",
@@ -3092,7 +3115,7 @@ mod test {
 
         let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-        let _network = sym_tensor.to_network().unwrap();
+        let _network = sym_tensor.to_network::<PhysReps>().unwrap();
 
         // println!("{}", network.rich_graph().dot());
     }

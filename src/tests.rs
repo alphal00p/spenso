@@ -417,7 +417,7 @@ fn scalar_and_dim1_conract() {
 
 #[test]
 fn dense_dense_single_contract() {
-    let structura = VecStructure::new(vec![
+    let structura: VecStructure<Euclidean> = VecStructure::new(vec![
         Euclidean::slot(4, 1).into(),
         Euclidean::slot(4, 2).into(),
     ]);
@@ -446,7 +446,7 @@ fn dense_dense_single_contract() {
 #[test]
 fn sparse_diag_dense_contract() {
     // Logger::try_with_str("trace").unwrap().start().unwrap();
-    let structura = VecStructure::new(vec![
+    let structura: VecStructure<Euclidean> = VecStructure::new(vec![
         Euclidean::slot(4, 1).into(),
         Euclidean::slot(4, 2).into(),
     ]);
@@ -646,7 +646,7 @@ fn all_single_contractions() {
 #[test]
 fn simple_multi_contract() {
     // Logger::try_with_str("trace").unwrap().start().unwrap();
-    let structa = VecStructure::new(vec![
+    let structa = VecStructure::<PhysReps>::new(vec![
         Euclidean::slot(3, 1).into(),
         Euclidean::slot(4, 2).into(),
         ColorFundamental::slot(4, 3).into(),
@@ -1394,7 +1394,7 @@ fn symbolic_contract() {
         Atom::parse("T(aind(euc(2,1),euc(3,4)))*P(aind(euc(2,3),euc(3,2)))").unwrap()
     );
 
-    let a = f.to_network().unwrap();
+    let a = f.to_network::<PhysReps>().unwrap();
 
     // let syms = a.to_symbolic_tensor_vec();
 
@@ -1490,7 +1490,7 @@ fn parsing_scalar_mul() {
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-    let mut network = sym_tensor.to_network().unwrap();
+    let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
 
     network.contract();
     println!("Network res: {}", network.result().unwrap().0);
@@ -1504,7 +1504,7 @@ fn parsing_single_contract() {
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-    let mut network = sym_tensor.to_network().unwrap();
+    let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
 
     println!("{}", network.dot());
     network.contract();
@@ -1519,7 +1519,7 @@ fn parsing_addition_and_mul() {
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-    let mut network = sym_tensor.to_network().unwrap();
+    let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
 
     network.contract();
     println!("Network res: {}", network.result().unwrap().0);
@@ -1529,7 +1529,7 @@ fn parsing_addition_and_mul() {
 fn transpose() {
     let a = DenseTensor::from_data(
         vec![1, 2],
-        VecStructure::new(vec![Bispinor::slot(2, 1).into()]),
+        VecStructure::<Bispinor>::new(vec![Bispinor::slot(2, 1).into()]),
     )
     .unwrap();
 

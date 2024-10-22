@@ -16,6 +16,8 @@ use crate::{
     },
 };
 
+use crate::{parametric::MixedTensor, structure::AtomStructure};
+
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, Symbol},
@@ -103,15 +105,20 @@ where
 pub fn mink_four_vector<T, I>(index: AbstractIndex, p: [T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
-    I: TensorStructure + FromIterator<Slot<Lorentz>> + FromIterator<Slot<Dual<Lorentz>>>,
+    I: TensorStructure + FromIterator<I::Slot>,
+    I::Slot: From<Slot<Lorentz>> + From<Slot<Dual<Lorentz>>>,
 {
     let structure: I = match index {
         AbstractIndex::Dualize(d) => {
             [Lorentz::selfless_dual().new_slot(4, AbstractIndex::Normal(d))]
                 .into_iter()
+                .map(I::Slot::from)
                 .collect()
         }
-        AbstractIndex::Normal(_) => [Lorentz::slot(4, index)].into_iter().collect(),
+        AbstractIndex::Normal(_) => [Lorentz::slot(4, index)]
+            .into_iter()
+            .map(Into::into)
+            .collect(),
         _ => panic!("Invalid index"),
     };
     DenseTensor::from_data(p.to_vec(), structure).unwrap_or_else(|_| unreachable!())
@@ -704,13 +711,15 @@ mod test {
     #[test]
     #[cfg(feature = "shadowing")]
     fn clifford() {
-        use crate::network::TensorNetwork;
+        use crate::{network::TensorNetwork, parametric::MixedTensor, structure::AtomStructure};
 
         let expr = Atom::parse(
             "γ(mink(4,1),bis(4,4),bis(4,3))*γ(mink(4,2),bis(4,3),bis(4,4))+γ(mink(4,2),bis(4,4),bis(4,3))*γ(mink(4,1),bis(4,3),bis(4,4))",
         )
         .unwrap();
-        let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
+        let mut net =
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
+                .unwrap();
 
         net.contract();
 
@@ -733,12 +742,17 @@ mod test {
         )
         .unwrap();
         // +γ(aind(bis(4,4),bis(4,3),mink(4,2)))*γ(aind(bis(4,3),bis(4,4),mink(4,1))))
-        let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
+        let mut net =
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
+                .unwrap();
 
         net.contract();
         let other = Atom::parse("2*Metric(mink(4,1),mink(4,2))*id(bis(4,4),bis(4,3))").unwrap();
 
-        let mut net = TensorNetwork::try_from(other.as_view()).unwrap();
+        let mut net = TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(
+            other.as_view(),
+        )
+        .unwrap();
 
         net.contract();
 
@@ -756,7 +770,9 @@ mod test {
         let _ = env_logger::builder().is_test(true).try_init();
         let expr = Atom::parse("γ(aind(mink(4,1),bis(4,4),bis(4,3)))*Q(1,aind(mink(4,1)))*γ(aind(mink(4,2),bis(4,3),bis(4,4)))*Q(2,aind(mink(4,2)))").unwrap();
 
-        let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
+        let mut net =
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
+                .unwrap();
 
         net.contract();
 
@@ -764,7 +780,9 @@ mod test {
 
         let expr = Atom::parse("γ(aind(bis(4,1),bis(4,4),bis(4,3)))*Q(1,aind(bis(4,1)))*γ(aind(bis(4,2),bis(4,3),bis(4,4)))*Q(2,aind(bis(4,2)))").unwrap();
 
-        let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
+        let mut net =
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
+                .unwrap();
 
         net.contract();
 
@@ -779,7 +797,9 @@ mod test {
         )
         .unwrap();
 
-        let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
+        let mut net =
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
+                .unwrap();
 
         net.contract();
 
@@ -795,12 +815,16 @@ mod test {
         )
         .unwrap();
 
-        let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
+        let mut net =
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
+                .unwrap();
         println!("{}", net.dot());
         net.contract();
 
-        let mut other =
-            TensorNetwork::try_from(Atom::parse("p(aind(mink (4,1)))").unwrap().as_view()).unwrap();
+        let mut other = TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(
+            Atom::parse("p(aind(mink (4,1)))").unwrap().as_view(),
+        )
+        .unwrap();
         other.contract();
 
         net.push(other.result().unwrap().0);
@@ -819,7 +843,9 @@ mod test {
         )
         .unwrap();
 
-        let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
+        let mut net =
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
+                .unwrap();
         println!("{}", net.dot());
         net.contract();
 
@@ -1023,10 +1049,14 @@ mod test {
     #[test]
     #[cfg(feature = "shadowing")]
     fn data4() {
+        use crate::{parametric::MixedTensor, structure::AtomStructure};
+
         let _ = env_logger::builder().is_test(true).try_init();
         let expr = Atom::parse("A(aind(mink(4,1),bis(4,4),bis(4,3)))*B(aind(mink(4,1)))").unwrap();
 
-        let mut net = TensorNetwork::try_from(expr.as_view()).unwrap();
+        let mut net =
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
+                .unwrap();
         println!("{}", net.dot());
         net.contract();
         let res = net.result().unwrap().0;

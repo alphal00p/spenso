@@ -4,12 +4,16 @@ use crate::{
     parametric::MixedTensor,
     shadowing::Shadowable,
     structure::{
-        abstract_index::ABSTRACTIND, slot::PhysicalSlots, AtomStructure, HasName, HasStructure,
-        NamedStructure, StructureContract, TensorStructure, ToSymbolic, VecStructure,
+        abstract_index::ABSTRACTIND,
+        representation::{Rep, RepName},
+        slot::PhysicalSlots,
+        AtomStructure, HasName, HasStructure, NamedStructure, StructureContract, TensorStructure,
+        ToSymbolic, VecStructure,
     },
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
 };
 
+use serde::{Deserialize, Serialize};
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
     state::State,
@@ -121,9 +125,14 @@ impl SymbolicTensor {
         self.to_named().to_shell().to_explicit().unwrap()
     }
     #[allow(clippy::type_complexity)]
-    pub fn to_network(
+    pub fn to_network<R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize>(
         &self,
-    ) -> Result<TensorNetwork<MixedTensor<f64, AtomStructure>, SerializableAtom>, TensorNetworkError>
+    ) -> Result<
+        TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>,
+        TensorNetworkError,
+    >
+    where
+        Rep: From<R>,
     {
         self.expression.as_view().try_into()
     }

@@ -13,7 +13,7 @@ mod test {
     #[cfg(feature = "shadowing")]
     use crate::symbolic::SymbolicTensor;
 
-    use crate::structure::HasStructure;
+    use crate::structure::{representation::PhysReps, HasStructure};
 
     #[cfg(feature = "shadowing")]
     #[test]
@@ -42,7 +42,7 @@ mod test {
         let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
         let time = std::time::Instant::now();
-        let mut network = sym_tensor.to_network().unwrap();
+        let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
         println!("Network created {:?}", time.elapsed());
 
         let time = std::time::Instant::now();
@@ -143,7 +143,7 @@ mod test {
         let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
         let time = std::time::Instant::now();
-        let mut network = sym_tensor.to_network().unwrap();
+        let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
         println!("Network created {:?}", time.elapsed());
 
         let time = std::time::Instant::now();

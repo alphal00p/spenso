@@ -1,3 +1,4 @@
+#[cfg(feature = "shadowing")]
 use anyhow::Result;
 
 use serde::Deserialize;

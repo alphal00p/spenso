@@ -1,5 +1,4 @@
 use abstract_index::AbstractIndex;
-use abstract_index::ABSTRACTIND;
 use ahash::AHashMap;
 
 use anyhow::{anyhow, Result};
@@ -21,20 +20,22 @@ use crate::permutation::Permutation;
 use crate::{
     data::DenseTensor,
     parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
+    structure::abstract_index::ABSTRACTIND,
+    structure::slot::ConstructibleSlot,
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom, SerializableSymbol},
 };
-use representation::{Dual, Euclidean, Lorentz, Minkowski, PhysReps, Rep, RepName, Representation};
+use representation::{PhysReps, Rep, RepName, Representation};
 use serde::Deserialize;
 use serde::Serialize;
-use slot::ConstructibleSlot;
 use slot::DualSlotTo;
 use slot::IsAbstractSlot;
-use slot::PhysicalSlots;
 use slot::Slot;
 use slot::SlotError;
 use smartstring::LazyCompact;
 use smartstring::SmartString;
 use std::fmt::Debug;
+
+#[cfg(feature = "shadowing")]
 use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::Range;

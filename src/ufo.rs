@@ -24,9 +24,7 @@ use symbolica::{
 
 #[cfg(feature = "shadowing")]
 use crate::{
-    parametric::MixedTensor,
     shadowing::Shadowable,
-    structure::AtomStructure,
     structure::{HistoryStructure, NamedStructure},
     symbolica_utils::{IntoArgs, IntoSymbol},
 };
@@ -102,6 +100,7 @@ where
     identity(indices, signature)
 }
 
+#[allow(unreachable_patterns)]
 pub fn mink_four_vector<T, I>(index: AbstractIndex, p: [T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
@@ -226,7 +225,7 @@ where
     identity(indices, signature)
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, unreachable_patterns)]
 pub fn gamma<T, I>(
     minkindex: AbstractIndex,
     indices: [AbstractIndex; 2],

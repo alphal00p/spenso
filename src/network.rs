@@ -51,7 +51,7 @@ use crate::{
     shadowing::{ShadowMapping, Shadowable},
     structure::representation::Rep,
     structure::slot::IsAbstractSlot,
-    structure::{AtomStructure, NamedStructure, StructureContract, ToSymbolic},
+    structure::{StructureContract, ToSymbolic},
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
     upgrading_arithmetic::{FallibleAdd, TrySmallestUpgrade},
 };
@@ -61,8 +61,8 @@ use crate::{
     contraction::{Contract, ContractionError, Trace},
     data::{DataTensor, GetTensorData, HasTensorData},
     structure::{
-        representation::RepName, slot::DualSlotTo, CastStructure, HasName, HasStructure,
-        ScalarTensor, TensorStructure, TracksCount,
+        slot::DualSlotTo, CastStructure, HasName, HasStructure, ScalarTensor, TensorStructure,
+        TracksCount,
     },
     upgrading_arithmetic::FallibleMul,
 };
@@ -2484,7 +2484,7 @@ where
                 scalars = scalars.mul_fallible(s).unwrap();
             }
             match net.result() {
-                Ok((t, s)) => {
+                Ok((t, _s)) => {
                     network.push(t);
                 }
                 Err(TensorNetworkError::NoNodes) => {}
@@ -2575,7 +2575,7 @@ where
             net.contract();
 
             match net.result() {
-                Ok((res, s)) => {
+                Ok((res, _s)) => {
                     new.push(res.clone());
                     while n > 1 {
                         if n % 2 == 0 {

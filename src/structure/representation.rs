@@ -1,7 +1,7 @@
 use super::{
-    abstract_index::{AbstractIndex, AbstractIndexError, DOWNIND, SELFDUALIND, UPIND},
+    abstract_index::{AbstractIndex, AbstractIndexError},
     dimension::{Dimension, DimensionError},
-    slot::{PhysicalSlots, Slot, SlotError},
+    slot::{PhysicalSlots, Slot},
 };
 use ahash::AHashMap;
 use append_only_vec::AppendOnlyVec;
@@ -12,6 +12,12 @@ use std::{
     sync::RwLock,
 };
 use std::{hash::Hash, ops::Index};
+
+#[cfg(feature = "shadowing")]
+use crate::{
+    structure::abstract_index::{DOWNIND, SELFDUALIND, UPIND},
+    structure::slot::SlotError,
+};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{

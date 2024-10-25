@@ -2144,6 +2144,7 @@ where
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
+    use super::representation::Lorentz;
     use super::*;
     use symbolica::atom::{AsAtomView, Atom};
 

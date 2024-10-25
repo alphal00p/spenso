@@ -702,8 +702,10 @@ mod test {
         complex::RealOrComplexTensor,
         contraction::Contract,
         network::TensorNetwork,
+        parametric::MixedTensor,
         parametric::ParamOrConcrete,
         shadowing::Shadowable,
+        structure::AtomStructure,
         structure::{HasStructure, VecStructure},
         symbolica_utils::{SerializableAtom, SerializableSymbol},
     };
@@ -711,8 +713,6 @@ mod test {
     #[test]
     #[cfg(feature = "shadowing")]
     fn clifford() {
-        use crate::{network::TensorNetwork, parametric::MixedTensor, structure::AtomStructure};
-
         let expr = Atom::parse(
             "γ(mink(4,1),bis(4,4),bis(4,3))*γ(mink(4,2),bis(4,3),bis(4,4))+γ(mink(4,2),bis(4,4),bis(4,3))*γ(mink(4,1),bis(4,3),bis(4,4))",
         )

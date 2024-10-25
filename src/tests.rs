@@ -417,14 +417,9 @@ fn scalar_and_dim1_conract() {
 
 #[test]
 fn dense_dense_single_contract() {
-    let structura: VecStructure<Euclidean> = VecStructure::new(vec![
-        Euclidean::slot(4, 1).into(),
-        Euclidean::slot(4, 2).into(),
-    ]);
-    let structurb = VecStructure::new(vec![
-        Euclidean::slot(4, 2).into(),
-        Euclidean::slot(3, 3).into(),
-    ]);
+    let structura: VecStructure<Euclidean> =
+        VecStructure::new(vec![Euclidean::slot(4, 1), Euclidean::slot(4, 2)]);
+    let structurb = VecStructure::new(vec![Euclidean::slot(4, 2), Euclidean::slot(3, 3)]);
 
     let a = DenseTensor::from_data(
         vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
@@ -446,14 +441,9 @@ fn dense_dense_single_contract() {
 #[test]
 fn sparse_diag_dense_contract() {
     // Logger::try_with_str("trace").unwrap().start().unwrap();
-    let structura: VecStructure<Euclidean> = VecStructure::new(vec![
-        Euclidean::slot(4, 1).into(),
-        Euclidean::slot(4, 2).into(),
-    ]);
-    let structurb = VecStructure::new(vec![
-        Euclidean::slot(4, 2).into(),
-        Euclidean::slot(3, 3).into(),
-    ]);
+    let structura: VecStructure<Euclidean> =
+        VecStructure::new(vec![Euclidean::slot(4, 1), Euclidean::slot(4, 2)]);
+    let structurb = VecStructure::new(vec![Euclidean::slot(4, 2), Euclidean::slot(3, 3)]);
 
     let a = SparseTensor::from_data(
         [
@@ -1529,15 +1519,12 @@ fn parsing_addition_and_mul() {
 fn transpose() {
     let a = DenseTensor::from_data(
         vec![1, 2],
-        VecStructure::<Bispinor>::new(vec![Bispinor::slot(2, 1).into()]),
+        VecStructure::<Bispinor>::new(vec![Bispinor::slot(2, 1)]),
     )
     .unwrap();
 
-    let b = DenseTensor::from_data(
-        vec![3, 4],
-        VecStructure::new(vec![Bispinor::slot(2, 2).into()]),
-    )
-    .unwrap();
+    let b =
+        DenseTensor::from_data(vec![3, 4], VecStructure::new(vec![Bispinor::slot(2, 2)])).unwrap();
     // let m = DenseTensor::from_data(
     //     vec![0, 1, 0, 0],
     //     VecStructure::new(vec![
@@ -1549,19 +1536,13 @@ fn transpose() {
 
     let mtranspose = DenseTensor::from_data(
         vec![0, 1, 0, 0],
-        VecStructure::new(vec![
-            Bispinor::slot(2, 1).into(),
-            Bispinor::slot(2, 2).into(),
-        ]),
+        VecStructure::new(vec![Bispinor::slot(2, 1), Bispinor::slot(2, 2)]),
     )
     .unwrap();
 
     let mdatatransposed = DenseTensor::from_data(
         vec![0, 0, 1, 0],
-        VecStructure::new(vec![
-            Bispinor::slot(2, 2).into(),
-            Bispinor::slot(2, 1).into(),
-        ]),
+        VecStructure::new(vec![Bispinor::slot(2, 2), Bispinor::slot(2, 1)]),
     )
     .unwrap();
 

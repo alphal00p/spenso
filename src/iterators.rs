@@ -1198,19 +1198,19 @@ mod iteratortests {
         let rep = Euclidean {};
 
         let structura: VecStructure<Euclidean> = VecStructure::new(vec![
-            rep.new_slot(4, 0).into(),
-            rep.new_slot(4, 4).into(),
-            rep.new_slot(5, 1).into(),
-            rep.new_slot(7, 3).into(),
-            rep.new_slot(8, 2).into(),
+            rep.new_slot(4, 0),
+            rep.new_slot(4, 4),
+            rep.new_slot(5, 1),
+            rep.new_slot(7, 3),
+            rep.new_slot(8, 2),
         ]);
 
         let structurb = VecStructure::new(vec![
-            rep.new_slot(8, 2).into(),
-            rep.new_slot(7, 3).into(),
-            rep.new_slot(4, 0).into(),
-            rep.new_slot(5, 1).into(),
-            rep.new_slot(4, 5).into(),
+            rep.new_slot(8, 2),
+            rep.new_slot(7, 3),
+            rep.new_slot(4, 0),
+            rep.new_slot(5, 1),
+            rep.new_slot(4, 5),
         ]);
 
         let fibera = Fiber::from(

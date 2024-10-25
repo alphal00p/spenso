@@ -3,7 +3,7 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use smartstring::{LazyCompact, SmartString};
 use symbolica::{
-    atom::{AsAtomView, Atom, FunctionBuilder, Symbol},
+    atom::{AsAtomView, Atom, AtomView, FunctionBuilder, Symbol},
     id::{Pattern, PatternOrMap, Replacement},
     state::State,
 };
@@ -152,6 +152,14 @@ impl<'de> Deserialize<'de> for SerializableAtom {
         let atom = Atom::import_with_map(Cursor::new(&helper.atom), &map).unwrap();
 
         Ok(SerializableAtom(atom))
+    }
+}
+
+impl<'a> TryFrom<AtomView<'a>> for SerializableAtom {
+    type Error = anyhow::Error;
+
+    fn try_from(value: AtomView<'a>) -> Result<Self> {
+        Ok(SerializableAtom(value.to_owned()))
     }
 }
 

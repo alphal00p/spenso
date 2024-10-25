@@ -50,6 +50,7 @@ use crate::{
     },
     shadowing::{ShadowMapping, Shadowable},
     structure::representation::Rep,
+    structure::slot::IsAbstractSlot,
     structure::{AtomStructure, NamedStructure, StructureContract, ToSymbolic},
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
     upgrading_arithmetic::{FallibleAdd, TrySmallestUpgrade},
@@ -2450,16 +2451,28 @@ where
 // use log::trace;
 
 #[cfg(feature = "shadowing")]
-impl<'a, R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize> TryFrom<MulView<'a>>
-    for TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>
+impl<'a, S, Sc> TryFrom<MulView<'a>> for TensorNetwork<MixedTensor<f64, S>, Sc>
 where
-    Rep: From<R>,
+    Sc: for<'r> TryFrom<AtomView<'r>>
+        + FallibleMul<Output = Sc>
+        + Clone
+        + FallibleAdd<Sc, Output = Sc>,
+    TensorNetworkError: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
+    S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
+    S::Name: IntoSymbol + Clone,
+    S::Args: IntoArgs,
+    S::Slot: Serialize + for<'de> Deserialize<'de>,
+    Rep: From<<S::Slot as IsAbstractSlot>::R>,
+    MixedTensor<f64, S>: Contract<MixedTensor<f64, S>, LCM = MixedTensor<f64, S>>
+        + Trace
+        + ScalarMul<Sc, Output = MixedTensor<f64, S>>,
 {
     type Error = TensorNetworkError;
     fn try_from(value: MulView<'a>) -> Result<Self, Self::Error> {
         let mut network: Self = TensorNetwork::new();
 
-        let mut scalars = SerializableAtom(Atom::new_num(1));
+        let one = Atom::new_num(1);
+        let mut scalars = Sc::try_from(one.as_view())?;
         let mut has_scalar = false;
 
         for arg in value.iter() {
@@ -2487,10 +2500,21 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a, R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize> TryFrom<AtomView<'a>>
-    for TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>
+impl<'a, S, Sc> TryFrom<AtomView<'a>> for TensorNetwork<MixedTensor<f64, S>, Sc>
 where
-    Rep: From<R>,
+    Sc: for<'r> TryFrom<AtomView<'r>>
+        + FallibleMul<Output = Sc>
+        + Clone
+        + FallibleAdd<Sc, Output = Sc>,
+    TensorNetworkError: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
+    S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
+    S::Name: IntoSymbol + Clone,
+    S::Args: IntoArgs,
+    S::Slot: Serialize + for<'de> Deserialize<'de>,
+    Rep: From<<S::Slot as IsAbstractSlot>::R>,
+    MixedTensor<f64, S>: Contract<MixedTensor<f64, S>, LCM = MixedTensor<f64, S>>
+        + Trace
+        + ScalarMul<Sc, Output = MixedTensor<f64, S>>,
 {
     type Error = TensorNetworkError;
     fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
@@ -2501,10 +2525,10 @@ where
             AtomView::Pow(p) => p.try_into(),
             a => {
                 let mut network: Self = TensorNetwork::new();
-                let a = a.to_owned();
+                // let a = a.to_owned();
 
                 // trace!("scalar atomview not a: {}", a);
-                network.scalar = Some(SerializableAtom(a));
+                network.scalar = Some(a.try_into()?);
                 Ok(network)
             }
         }
@@ -2512,29 +2536,41 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a, R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize> TryFrom<PowView<'a>>
-    for TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>
+impl<'a, S, Sc> TryFrom<PowView<'a>> for TensorNetwork<MixedTensor<f64, S>, Sc>
 where
-    Rep: From<R>,
+    Sc: for<'r> TryFrom<AtomView<'r>>
+        + FallibleMul<Output = Sc>
+        + Clone
+        + FallibleAdd<Sc, Output = Sc>,
+    TensorNetworkError: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
+    S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
+    S::Name: IntoSymbol + Clone,
+    S::Args: IntoArgs,
+    S::Slot: Serialize + for<'de> Deserialize<'de>,
+    Rep: From<<S::Slot as IsAbstractSlot>::R>,
+    MixedTensor<f64, S>: Contract<MixedTensor<f64, S>, LCM = MixedTensor<f64, S>>
+        + Trace
+        + ScalarMul<Sc, Output = MixedTensor<f64, S>>,
 {
     type Error = TensorNetworkError;
 
     fn try_from(value: PowView<'a>) -> std::result::Result<Self, Self::Error> {
-        let mut new = TensorNetwork::new();
+        let mut new: Self = TensorNetwork::new();
 
         let (base, exp) = value.get_base_exp();
 
         if let Ok(mut n) = i64::try_from(exp) {
             if n < 0 {
-                new.scalar = Some(SerializableAtom(value.as_view().to_owned()));
+                new.scalar = Some(value.as_view().try_into()?);
             }
             if n == 0 {
-                new.scalar = Some(SerializableAtom(Atom::new_num(1)));
+                let one = Atom::new_num(1);
+                new.scalar = Some(one.as_view().try_into()?);
                 return Ok(new);
             } else if n == 1 {
                 return base.try_into();
             }
-            let mut net: TensorNetwork<_, _> = base.try_into()?;
+            let mut net = Self::try_from(base)?;
 
             net.contract();
 
@@ -2552,12 +2588,12 @@ where
                     }
                 }
                 Err(TensorNetworkError::NoNodes) => {
-                    new.scalar = Some(SerializableAtom(value.as_view().to_owned()));
+                    new.scalar = Some(value.as_view().try_into()?);
                 }
                 Err(e) => return Err(e),
             }
         } else {
-            new.scalar = Some(SerializableAtom(value.as_view().to_owned()));
+            new.scalar = Some(value.as_view().try_into()?);
         }
 
         Ok(new)
@@ -2565,15 +2601,26 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a, R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize> TryFrom<FunView<'a>>
-    for TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>
+impl<'a, S, Sc> TryFrom<FunView<'a>> for TensorNetwork<MixedTensor<f64, S>, Sc>
 where
-    Rep: From<R>,
+    Sc: for<'r> TryFrom<AtomView<'r>>
+        + FallibleMul<Output = Sc>
+        + Clone
+        + FallibleAdd<Sc, Output = Sc>,
+    TensorNetworkError: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
+    S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
+    S::Name: IntoSymbol + Clone,
+    S::Args: IntoArgs,
+    S::Slot: Serialize + for<'de> Deserialize<'de>,
+    Rep: From<<S::Slot as IsAbstractSlot>::R>,
+    MixedTensor<f64, S>: Contract<MixedTensor<f64, S>, LCM = MixedTensor<f64, S>>
+        + Trace
+        + ScalarMul<Sc, Output = MixedTensor<f64, S>>,
 {
     type Error = TensorNetworkError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         let mut network: Self = TensorNetwork::new();
-        let s: Result<NamedStructure<_, _, _>, _> = value.try_into();
+        let s: Result<S, _> = value.try_into();
 
         let mut scalar = None;
         if let Ok(s) = s {
@@ -2584,7 +2631,7 @@ where
                 .internal_contract();
             network.push(t);
         } else {
-            scalar = Some(SerializableAtom(value.as_view().to_owned()));
+            scalar = Some(value.as_view().try_into().map_err(Into::into)?);
         }
 
         network.scalar = scalar;
@@ -2593,16 +2640,28 @@ where
 }
 // use log::trace;
 #[cfg(feature = "shadowing")]
-impl<'a, R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize> TryFrom<AddView<'a>>
-    for TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>
+impl<'a, S, Sc> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, S>, Sc>
 where
-    Rep: From<R>,
+    Sc: for<'r> TryFrom<AtomView<'r>>
+        + FallibleMul<Output = Sc>
+        + Clone
+        + FallibleAdd<Sc, Output = Sc>,
+    TensorNetworkError: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
+    S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
+    S::Name: IntoSymbol + Clone,
+    S::Args: IntoArgs,
+    S::Slot: Serialize + for<'de> Deserialize<'de>,
+    Rep: From<<S::Slot as IsAbstractSlot>::R>,
+    MixedTensor<f64, S>: Contract<MixedTensor<f64, S>, LCM = MixedTensor<f64, S>>
+        + Trace
+        + ScalarMul<Sc, Output = MixedTensor<f64, S>>,
 {
     type Error = TensorNetworkError;
     fn try_from(value: AddView<'a>) -> Result<Self, Self::Error> {
         // trace!("AddView: {}", value.as_view());
         let mut tensors = vec![];
-        let mut scalars = SerializableAtom(Atom::new_num(0));
+        let zero = Atom::new_num(0);
+        let mut scalars: Sc = zero.as_view().try_into()?;
         let mut is_scalar = false;
         for summand in value.iter() {
             // trace!("summand: {}", summand);
@@ -2611,7 +2670,7 @@ where
             match net.result() {
                 Ok((mut t, s)) => {
                     if let Some(s) = s {
-                        t = t.scalar_mul(&s.0).unwrap();
+                        t = t.scalar_mul(&s).unwrap();
                     }
                     tensors.push(t);
                 }

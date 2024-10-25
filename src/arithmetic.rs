@@ -16,6 +16,7 @@ use crate::{
     data::{DataTensor, DenseTensor, GetTensorData, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
     structure::{concrete_index::ConcreteIndex, HasStructure, TensorStructure},
+    symbolica_utils::SerializableAtom,
     upgrading_arithmetic::{FallibleAdd, FallibleMul, FallibleSub, TrySmallestUpgrade},
 };
 
@@ -920,5 +921,18 @@ where
                 ParamTensor::composite(a.scalar_mul(rhs)?),
             )),
         }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<T: R, I> ScalarMul<SerializableAtom> for MixedTensor<T, I>
+where
+    I: TensorStructure + Clone,
+    T: Clone + FallibleMul<Atom, Output = Atom>,
+    Complex<T>: FallibleMul<Atom, Output = Atom>,
+{
+    type Output = MixedTensor<T, I>;
+    fn scalar_mul(&self, rhs: &SerializableAtom) -> Option<Self::Output> {
+        self.scalar_mul(&rhs.0)
     }
 }

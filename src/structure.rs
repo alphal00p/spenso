@@ -848,6 +848,12 @@ impl<N, A, R: RepName> From<NamedStructure<N, A, R>> for IndexLess<R> {
     }
 }
 
+impl<N, A, R: RepName> From<IndexlessNamedStructure<N, A, R>> for IndexLess<R> {
+    fn from(structure: IndexlessNamedStructure<N, A, R>) -> Self {
+        structure.structure
+    }
+}
+
 impl<N, A, R: RepName> From<SmartShadowStructure<N, A, R>> for IndexLess<R> {
     fn from(structure: SmartShadowStructure<N, A, R>) -> Self {
         structure.structure.into()
@@ -1218,7 +1224,7 @@ impl<R: RepName<Dual = R>> StructureContract for VecStructure<R> {
 pub struct IndexlessNamedStructure<Name = SmartString<LazyCompact>, Args = usize, R: RepName = Rep>
 {
     pub structure: IndexLess<R>,
-    pub global_name: Name,
+    pub global_name: Option<Name>,
     pub additional_args: Option<Args>,
 }
 impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructure<Name, Args, R> {
@@ -1256,7 +1262,7 @@ impl<Name, Args, R: RepName> IndexlessNamedStructure<Name, Args, R> {
     {
         Self {
             structure: iter.into_iter().map(I::into).collect(),
-            global_name: name,
+            global_name: Some(name),
             additional_args: args,
         }
     }
@@ -1271,21 +1277,32 @@ where
     type Args = A;
 
     fn name(&self) -> Option<Self::Name> {
-        Some(self.global_name.clone())
+        self.global_name.clone()
     }
     fn set_name(&mut self, name: Self::Name) {
-        self.global_name = name;
+        self.global_name = Some(name);
     }
     fn args(&self) -> Option<Self::Args> {
         self.additional_args.clone()
     }
 }
 
+impl<N, A, R: RepName> From<IndexLess<R>> for IndexlessNamedStructure<N, A, R> {
+    fn from(value: IndexLess<R>) -> Self {
+        IndexlessNamedStructure {
+            structure: value,
+            global_name: None,
+            additional_args: None,
+        }
+    }
+}
+
 #[cfg(feature = "shadowing")]
 impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for IndexlessNamedStructure<N, A, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.global_name.ref_into_symbol())?;
-
+        if let Some(ref name) = self.global_name {
+            write!(f, "{}", name.ref_into_symbol())?;
+        }
         write!(f, "(")?;
         if let Some(ref args) = self.additional_args {
             let args: Vec<std::string::String> =

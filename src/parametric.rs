@@ -293,6 +293,13 @@ impl<S: TensorStructure> ParamTensor<S> {
         }
     }
 
+    pub fn map_structure_fallible<S2: TensorStructure,E>(self, f: impl Fn(S) -> Result<S2,E>) -> Result<ParamTensor<S2>,E> {
+        Ok(ParamTensor {
+            tensor: self.tensor.map_structure_fallible(f)?,
+            param_type: self.param_type,
+        })
+    }
+
     pub fn map_data_ref(&self, f: impl Fn(&Atom) -> Atom) -> ParamTensor<S>
     where
         S: Clone,
@@ -347,6 +354,18 @@ where
     S: TensorStructure + Clone,
 {
     fn from(tensor: SparseTensor<Atom, S>) -> Self {
+        ParamTensor {
+            tensor: tensor.into(),
+            param_type: ParamOrComposite::Composite,
+        }
+    }
+}
+
+impl<S> From<DenseTensor<Atom, S>> for ParamTensor<S>
+where
+    S: TensorStructure + Clone,
+{
+    fn from(tensor: DenseTensor<Atom, S>) -> Self {
         ParamTensor {
             tensor: tensor.into(),
             param_type: ParamOrComposite::Composite,
@@ -1464,6 +1483,16 @@ impl<T: Clone, S: TensorStructure + Clone> MixedTensor<T, S> {
             ParamOrConcrete::Concrete(x) => ParamOrConcrete::Concrete(x.map_structure(f)),
             ParamOrConcrete::Param(x) => ParamOrConcrete::Param(x.map_structure(f)),
         }
+    }
+
+    pub fn map_structure_fallible<S2: TensorStructure+Clone, E>(
+        self,
+        f: impl Fn(S) -> Result<S2, E>,
+    ) -> Result<MixedTensor<T, S2>, E> {
+        Ok(match self {
+            ParamOrConcrete::Concrete(x) => ParamOrConcrete::Concrete(x.map_structure_fallible(f)?),
+            ParamOrConcrete::Param(x) => ParamOrConcrete::Param(x.map_structure_fallible(f)?),
+        })
     }
 }
 

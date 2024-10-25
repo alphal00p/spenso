@@ -26,10 +26,10 @@ fn gamma_net_param(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
-) -> TensorNetwork<MixedTensor<f64, ContractionCountStructure>, SerializableAtom> {
+) -> TensorNetwork<MixedTensor<f64, ContractionCountStructure<PhysReps>>, SerializableAtom> {
     let mut i: i32 = 0;
     let mut contracting_index = 0.into();
-    let mut result: Vec<MixedTensor<f64, ContractionCountStructure>> =
+    let mut result: Vec<MixedTensor<f64, ContractionCountStructure<PhysReps>>> =
         vec![euclidean_four_vector(contracting_index, vbar).into()];
     let lor_fouru = PhysReps::new_rep(&Lorentz {}.into(), 4);
     let lor_fourd = lor_fouru.dual();

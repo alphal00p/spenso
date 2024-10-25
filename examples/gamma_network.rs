@@ -5,7 +5,9 @@ use spenso::{
     complex::Complex,
     data::NumTensor,
     network::TensorNetwork,
-    structure::{abstract_index::AbstractIndex, ContractionCountStructure},
+    structure::{
+        abstract_index::AbstractIndex, representation::PhysReps, ContractionCountStructure,
+    },
     ufo::{euclidean_four_vector, gamma, mink_four_vector},
     upgrading_arithmetic::FallibleMul,
 };
@@ -14,10 +16,10 @@ fn gamma_net_num(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
-) -> TensorNetwork<NumTensor<ContractionCountStructure>, Complex<f64>> {
+) -> TensorNetwork<NumTensor<ContractionCountStructure<PhysReps>>, Complex<f64>> {
     let mut i: i32 = 0;
     let mut contracting_index = 0.into();
-    let mut result: Vec<NumTensor<ContractionCountStructure>> =
+    let mut result: Vec<NumTensor<ContractionCountStructure<PhysReps>>> =
         vec![euclidean_four_vector(contracting_index, vbar).into()];
     for m in minkindices {
         let ui = contracting_index;

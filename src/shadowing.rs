@@ -107,7 +107,7 @@ impl GenericKey {
 impl From<ExplicitKey> for GenericKey {
     fn from(key: ExplicitKey) -> Self {
         Self {
-            global_name: key.global_name,
+            global_name: key.global_name.unwrap(),
             reps: key.reps().into_iter().map(|r| r.rep).collect(),
             args: key.additional_args,
         }
@@ -448,6 +448,13 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
         tensor.into()
     }
 
+
+
+    pub fn insert_explicit(& mut self,data: MixedTensor<Data,ExplicitKey>){
+        let key = data.structure().clone();
+        self.explicit_dimension.insert(key, data);
+    }
+
     pub fn insert_explicit_real(&mut self, key: ExplicitKey, data: Vec<Data>) {
         let tensor: MixedTensor<Data, ExplicitKey> =
             DenseTensor::from_data(data, key.clone()).unwrap().into();
@@ -505,7 +512,7 @@ impl<Data: Clone + num::One + num::Zero + Neg<Output = Data>> Default for Explic
     }
 }
 
-static EXPLICIT_TENSOR_MAP: Lazy<RwLock<ExplicitTensorMap>> =
+pub static EXPLICIT_TENSOR_MAP: Lazy<RwLock<ExplicitTensorMap>> =
     Lazy::new(|| RwLock::new(ExplicitTensorMap::new()));
 
 pub trait ShadowMapping<Const>: Shadowable {
@@ -588,6 +595,7 @@ mod test {
             representation::{PhysReps, Rep, RepName, REPS},
             AtomStructure, HasStructure, IndexlessNamedStructure, TensorStructure, VecStructure,
         },
+        symbolica_utils::SerializableAtom,
     };
 
     use super::{ExplicitKey, EXPLICIT_TENSOR_MAP};
@@ -664,8 +672,10 @@ mod test {
     #[test]
     fn pslash() {
         let expr = Atom::parse("p(1,mink(4,mu))*γ(mink(4,mu),bis(4,i),bis(4,j))").unwrap();
-        let mut network: TensorNetwork<MixedTensor<f64, AtomStructure<PhysReps>>, _> =
-            expr.as_view().try_into().unwrap();
+        let mut network: TensorNetwork<
+            MixedTensor<f64, AtomStructure<PhysReps>>,
+            SerializableAtom,
+        > = expr.as_view().try_into().unwrap();
         network.contract();
         let result = network
             .result()

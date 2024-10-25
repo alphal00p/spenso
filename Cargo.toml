@@ -60,6 +60,7 @@ ambassador = "0.3.6"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 append-only-vec = "0.1.6"
 approx = "0.5.1"
+auto_enums = "0.8.6"
 bitvec = { version = "1.0.1", features = ["serde"] }
 const_format = { version = "0.2.32", features = ["rust_1_51"] }
 constcat = "0.5.0"

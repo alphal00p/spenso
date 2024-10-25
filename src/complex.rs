@@ -1577,6 +1577,18 @@ impl<T, S: TensorStructure> RealOrComplexTensor<T, S> {
             RealOrComplexTensor::Complex(d) => RealOrComplexTensor::Complex(d.map_structure(f)),
         }
     }
+
+    pub fn map_structure_fallible<S2: TensorStructure, E>(
+        self,
+        f: impl Fn(S) -> Result<S2, E>,
+    ) -> Result<RealOrComplexTensor<T, S2>, E> {
+        Ok(match self {
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.map_structure_fallible(f)?),
+            RealOrComplexTensor::Complex(d) => {
+                RealOrComplexTensor::Complex(d.map_structure_fallible(f)?)
+            }
+        })
+    }
 }
 
 impl<T: Display, S: TensorStructure> Display for RealOrComplexTensor<T, S> {

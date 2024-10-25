@@ -146,11 +146,12 @@ where
 pub fn euclidean_four_vector<T, I>(index: AbstractIndex, p: [T; 4]) -> DenseTensor<T, I>
 where
     T: Clone,
-    I: TensorStructure + FromIterator<Slot<Euclidean>>,
+    I: TensorStructure + FromIterator<I::Slot>,
+    I::Slot: From<Slot<Euclidean>>,
 {
     DenseTensor::from_data(
         p.to_vec(),
-        [Euclidean::slot(4, index)].into_iter().collect(),
+        [Euclidean::slot(4, index).into()].into_iter().collect(),
     )
     .unwrap_or_else(|_| unreachable!())
 }
@@ -718,8 +719,10 @@ mod test {
         )
         .unwrap();
         let mut net =
-            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
-                .unwrap();
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
+                expr.as_view(),
+            )
+            .unwrap();
 
         net.contract();
 
@@ -743,16 +746,19 @@ mod test {
         .unwrap();
         // +γ(aind(bis(4,4),bis(4,3),mink(4,2)))*γ(aind(bis(4,3),bis(4,4),mink(4,1))))
         let mut net =
-            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
-                .unwrap();
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
+                expr.as_view(),
+            )
+            .unwrap();
 
         net.contract();
         let other = Atom::parse("2*Metric(mink(4,1),mink(4,2))*id(bis(4,4),bis(4,3))").unwrap();
 
-        let mut net = TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(
-            other.as_view(),
-        )
-        .unwrap();
+        let mut net =
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
+                other.as_view(),
+            )
+            .unwrap();
 
         net.contract();
 
@@ -771,8 +777,10 @@ mod test {
         let expr = Atom::parse("γ(aind(mink(4,1),bis(4,4),bis(4,3)))*Q(1,aind(mink(4,1)))*γ(aind(mink(4,2),bis(4,3),bis(4,4)))*Q(2,aind(mink(4,2)))").unwrap();
 
         let mut net =
-            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
-                .unwrap();
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
+                expr.as_view(),
+            )
+            .unwrap();
 
         net.contract();
 
@@ -781,8 +789,10 @@ mod test {
         let expr = Atom::parse("γ(aind(bis(4,1),bis(4,4),bis(4,3)))*Q(1,aind(bis(4,1)))*γ(aind(bis(4,2),bis(4,3),bis(4,4)))*Q(2,aind(bis(4,2)))").unwrap();
 
         let mut net =
-            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
-                .unwrap();
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
+                expr.as_view(),
+            )
+            .unwrap();
 
         net.contract();
 
@@ -798,8 +808,10 @@ mod test {
         .unwrap();
 
         let mut net =
-            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
-                .unwrap();
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
+                expr.as_view(),
+            )
+            .unwrap();
 
         net.contract();
 
@@ -816,15 +828,18 @@ mod test {
         .unwrap();
 
         let mut net =
-            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
-                .unwrap();
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
+                expr.as_view(),
+            )
+            .unwrap();
         println!("{}", net.dot());
         net.contract();
 
-        let mut other = TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(
-            Atom::parse("p(aind(mink (4,1)))").unwrap().as_view(),
-        )
-        .unwrap();
+        let mut other =
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
+                Atom::parse("p(aind(mink (4,1)))").unwrap().as_view(),
+            )
+            .unwrap();
         other.contract();
 
         net.push(other.result().unwrap().0);
@@ -844,8 +859,10 @@ mod test {
         .unwrap();
 
         let mut net =
-            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
-                .unwrap();
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
+                expr.as_view(),
+            )
+            .unwrap();
         println!("{}", net.dot());
         net.contract();
 
@@ -876,34 +893,34 @@ mod test {
                 crate::symbolica_utils::SerializableSymbol,
                 Vec<crate::symbolica_utils::SerializableAtom>,
             >,
-        > = TensorNetwork::try_from(g1.as_view())
+        > = TensorNetwork::<_, SerializableAtom>::try_from(g1.as_view())
             .unwrap()
             .result()
             .unwrap()
             .0;
-        let g2_tensor = TensorNetwork::try_from(g2.as_view())
+        let g2_tensor = TensorNetwork::<_, SerializableAtom>::try_from(g2.as_view())
             .unwrap()
             .result()
             .unwrap()
             .0;
-        let p_tensor = TensorNetwork::try_from(p.as_view())
-            .unwrap()
-            .result()
-            .unwrap()
-            .0;
-
-        let q_tensor = TensorNetwork::try_from(q.as_view())
+        let p_tensor = TensorNetwork::<_, SerializableAtom>::try_from(p.as_view())
             .unwrap()
             .result()
             .unwrap()
             .0;
 
-        let u_tensor = TensorNetwork::try_from(u.as_view())
+        let q_tensor = TensorNetwork::<_, SerializableAtom>::try_from(q.as_view())
             .unwrap()
             .result()
             .unwrap()
             .0;
-        let v_tensor = TensorNetwork::try_from(v.as_view())
+
+        let u_tensor = TensorNetwork::<_, SerializableAtom>::try_from(u.as_view())
+            .unwrap()
+            .result()
+            .unwrap()
+            .0;
+        let v_tensor = TensorNetwork::<_, SerializableAtom>::try_from(v.as_view())
             .unwrap()
             .result()
             .unwrap()
@@ -1055,8 +1072,10 @@ mod test {
         let expr = Atom::parse("A(aind(mink(4,1),bis(4,4),bis(4,3)))*B(aind(mink(4,1)))").unwrap();
 
         let mut net =
-            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, _>::try_from(expr.as_view())
-                .unwrap();
+            TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
+                expr.as_view(),
+            )
+            .unwrap();
         println!("{}", net.dot());
         net.contract();
         let res = net.result().unwrap().0;

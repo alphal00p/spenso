@@ -339,6 +339,19 @@ impl<T, S: TensorStructure> SparseTensor<T, S> {
         }
     }
 
+    pub fn map_structure_fallible<S2, E>(
+        self,
+        f: impl Fn(S) -> Result<S2, E>,
+    ) -> Result<SparseTensor<T, S2>, E>
+    where
+        S2: TensorStructure,
+    {
+        Ok(SparseTensor {
+            elements: self.elements,
+            structure: f(self.structure)?,
+        })
+    }
+
     pub fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> SparseTensor<U, S>
     where
         // T: Clone,
@@ -1103,6 +1116,19 @@ impl<T, S: TensorStructure> DenseTensor<T, S> {
         }
     }
 
+    pub fn map_structure_fallible<S2, E>(
+        self,
+        f: impl Fn(S) -> Result<S2, E>,
+    ) -> Result<DenseTensor<T, S2>, E>
+    where
+        S2: TensorStructure,
+    {
+        Ok(DenseTensor {
+            data: self.data,
+            structure: f(self.structure)?,
+        })
+    }
+
     pub fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> DenseTensor<U, S>
     where
         // T: Clone,
@@ -1399,6 +1425,15 @@ impl<T, S: TensorStructure> DataTensor<T, S> {
         }
     }
 
+    pub fn map_structure_fallible<S2: TensorStructure, E>(
+        self,
+        f: impl Fn(S) -> Result<S2, E>,
+    ) -> Result<DataTensor<T, S2>, E> {
+        Ok(match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_structure_fallible(f)?),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_structure_fallible(f)?),
+        })
+    }
     pub fn map_data_ref_result<U, E>(
         &self,
         f: impl Fn(&T) -> Result<U, E>,

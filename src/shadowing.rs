@@ -448,9 +448,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
         tensor.into()
     }
 
-
-
-    pub fn insert_explicit(& mut self,data: MixedTensor<Data,ExplicitKey>){
+    pub fn insert_explicit(&mut self, data: MixedTensor<Data, ExplicitKey>) {
         let key = data.structure().clone();
         self.explicit_dimension.insert(key, data);
     }

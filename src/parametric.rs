@@ -293,7 +293,10 @@ impl<S: TensorStructure> ParamTensor<S> {
         }
     }
 
-    pub fn map_structure_fallible<S2: TensorStructure,E>(self, f: impl Fn(S) -> Result<S2,E>) -> Result<ParamTensor<S2>,E> {
+    pub fn map_structure_fallible<S2: TensorStructure, E>(
+        self,
+        f: impl Fn(S) -> Result<S2, E>,
+    ) -> Result<ParamTensor<S2>, E> {
         Ok(ParamTensor {
             tensor: self.tensor.map_structure_fallible(f)?,
             param_type: self.param_type,
@@ -1485,7 +1488,7 @@ impl<T: Clone, S: TensorStructure + Clone> MixedTensor<T, S> {
         }
     }
 
-    pub fn map_structure_fallible<S2: TensorStructure+Clone, E>(
+    pub fn map_structure_fallible<S2: TensorStructure + Clone, E>(
         self,
         f: impl Fn(S) -> Result<S2, E>,
     ) -> Result<MixedTensor<T, S2>, E> {

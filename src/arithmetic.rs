@@ -8,7 +8,10 @@ use gat_lending_iterator::LendingIterator;
 use symbolica::atom::Atom;
 
 #[cfg(feature = "shadowing")]
-use crate::parametric::{MixedTensor, ParamTensor};
+use crate::{
+    parametric::{MixedTensor, ParamTensor},
+    symbolica_utils::SerializableAtom,
+};
 
 use crate::{
     complex::{Complex, RealOrComplexTensor, R},
@@ -16,7 +19,6 @@ use crate::{
     data::{DataTensor, DenseTensor, GetTensorData, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
     structure::{concrete_index::ConcreteIndex, HasStructure, TensorStructure},
-    symbolica_utils::SerializableAtom,
     upgrading_arithmetic::{FallibleAdd, FallibleMul, FallibleSub, TrySmallestUpgrade},
 };
 

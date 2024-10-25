@@ -15,6 +15,7 @@ use symbolica::{
     {fun, symb},
 };
 
+#[cfg(feature = "shadowing")]
 use crate::shadowing::ETS;
 use thiserror::Error;
 
@@ -126,7 +127,7 @@ pub enum SlotError {
 
 ///    let mink = Lorentz::rep(4);
 ///    let mu = mink.new_slot(0);
-///    let atom = mu.to_symbolic();
+///    let atom = mu.to_atom();
 ///    let slot = Slot::try_from(atom.as_view()).unwrap();
 ///    assert_eq!(slot, mu);
 /// ```
@@ -253,8 +254,8 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash {
     /// # use spenso::structure::concrete_index::*;
     /// let mink = Lorentz::rep(4);
     /// let mu = mink.new_slot(0);
-    /// println!("{}", mu.to_symbolic());
-    /// assert_eq!("lor(4,0)", mu.to_symbolic().to_string());
+    /// println!("{}", mu.to_atom());
+    /// assert_eq!("lor(4,0)", mu.to_atom().to_string());
     /// assert_eq!("lor4|₀", mu.to_string());
     /// ```
     fn to_atom(&self) -> Atom;
@@ -367,6 +368,12 @@ mod shadowing_tests {
         println!("{}", mu.to_atom());
         assert_eq!("lor(4,0)", mu.to_atom().to_string());
         assert_eq!("lor4|₀", mu.to_string());
+
+        let mink = Lorentz::rep(4);
+        let mu = mink.new_slot(0);
+        let atom = mu.to_atom();
+        let slot = Slot::try_from(atom.as_view()).unwrap();
+        assert_eq!(slot, mu);
     }
 
     #[test]

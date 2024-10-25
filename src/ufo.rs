@@ -16,8 +16,6 @@ use crate::{
     },
 };
 
-use crate::{parametric::MixedTensor, structure::AtomStructure};
-
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, Symbol},
@@ -26,7 +24,9 @@ use symbolica::{
 
 #[cfg(feature = "shadowing")]
 use crate::{
+    parametric::MixedTensor,
     shadowing::Shadowable,
+    structure::AtomStructure,
     structure::{HistoryStructure, NamedStructure},
     symbolica_utils::{IntoArgs, IntoSymbol},
 };

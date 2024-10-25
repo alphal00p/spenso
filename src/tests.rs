@@ -1391,7 +1391,7 @@ fn symbolic_contract() {
 
     assert_eq!(
         *f.get_atom(),
-        Atom::parse("T(aind(euc(2,1),euc(3,4)))*P(aind(euc(2,3),euc(3,2)))").unwrap()
+        Atom::parse("T(euc(2,1),euc(3,4))*P(euc(2,3),euc(3,2))").unwrap()
     );
 
     let a = f.to_network::<PhysReps>().unwrap();

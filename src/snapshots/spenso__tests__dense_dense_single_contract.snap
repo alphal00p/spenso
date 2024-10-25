@@ -22,12 +22,10 @@ structure:
       rep:
         dim:
           Concrete: 4
-        rep:
-          Euclidean: {}
+        rep: {}
     - aind:
         Normal: 3
       rep:
         dim:
           Concrete: 3
-        rep:
-          Euclidean: {}
+        rep: {}

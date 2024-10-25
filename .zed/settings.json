@@ -20,7 +20,8 @@
           }
         },
         "cargo": {
-          "features": ["shadowing"]
+          "features": []
+          // "features": ["shadowing"]
         },
         "diagnostics": {
           "experimental": {
@@ -32,7 +33,8 @@
         "checkOnSave": true,
         "check": {
           "onSave": true,
-          "features": ["shadowing"],
+          "features": [],
+          // "features": ["shadowing"],
           "command": "clippy"
         }
       }

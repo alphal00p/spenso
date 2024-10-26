@@ -1353,6 +1353,16 @@ pub enum StructureError {
 }
 
 #[cfg(feature = "shadowing")]
+impl<'a, R: RepName<Dual = R>> TryFrom<FunView<'a>>
+    for SmartShadowStructure<SerializableSymbol, Vec<SerializableAtom>, R>
+{
+    type Error = StructureError;
+    fn try_from(value: FunView<'a>) -> std::result::Result<Self, Self::Error> {
+        AtomStructure::<R>::try_from(value).map(|x| x.into())
+    }
+}
+
+#[cfg(feature = "shadowing")]
 impl<'a, R: RepName> TryFrom<FunView<'a>> for AtomStructure<R> {
     type Error = StructureError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {

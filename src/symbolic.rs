@@ -71,6 +71,11 @@ impl StructureContract for SymbolicTensor {
         }
     }
 
+    fn concat(&mut self, other: &Self) {
+        self.structure.concat(&other.structure);
+        self.expression = &other.expression * &self.expression;
+    }
+
     fn merge(&mut self, other: &Self) -> Option<usize> {
         self.expression = &other.expression * &self.expression;
         self.structure.merge(&other.structure)

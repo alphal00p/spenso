@@ -4,8 +4,8 @@ use crate::{
     iterators::{DenseTensorLinearIterator, IteratableTensor, SparseTensorLinearIterator},
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
-        CastStructure, HasName, HasStructure, ScalarStructure, ScalarTensor, TensorStructure,
-        TracksCount, VecStructure,
+        CastStructure, HasName, HasStructure, ScalarStructure, ScalarTensor, StructureContract,
+        TensorStructure, TracksCount, VecStructure,
     },
     upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
 };
@@ -630,7 +630,15 @@ where
         T: Clone + Default,
         I: Clone,
     {
-        let mut dense = DenseTensor::default(self.structure.clone());
+        self.to_dense_with(&T::default())
+    }
+
+    pub fn to_dense_with(&self, zero: &T) -> DenseTensor<T, I>
+    where
+        T: Clone,
+        I: Clone,
+    {
+        let mut dense = DenseTensor::fill(self.structure.clone(), zero.clone());
         for (indices, value) in self.elements.iter() {
             let _ = dense.set_flat(*indices, value.clone());
         }
@@ -876,18 +884,28 @@ where
     }
 }
 
-impl<T: Default + Clone, I> DenseTensor<T, I>
+impl<T, I> DenseTensor<T, I>
 where
     I: TensorStructure,
 {
-    pub fn default(structure: I) -> Self {
+    pub fn default(structure: I) -> Self
+    where
+        T: Default + Clone,
+    {
+        Self::fill(structure, T::default())
+    }
+
+    pub fn fill(structure: I, fill: T) -> Self
+    where
+        T: Clone,
+    {
         let length = if structure.is_scalar() {
             1
         } else {
             structure.size().unwrap()
         };
         DenseTensor {
-            data: vec![T::default(); length],
+            data: vec![fill; length],
             structure,
         }
     }
@@ -1778,5 +1796,58 @@ where
 {
     fn from(other: SparseTensor<Complex<f64>, T>) -> Self {
         NumTensor::Complex(DataTensor::Sparse(other))
+    }
+}
+
+impl<T, S: TensorStructure + StructureContract> DenseTensor<DenseTensor<T, S>, S> {
+    pub fn flatten(self) -> Result<DenseTensor<T, S>> {
+        // Check that the data is not empty
+        if self.data.is_empty() {
+            return Err(anyhow!("Cannot flatten an empty tensor"));
+        }
+
+        // Verify that all inner tensors have the same structure
+        let first_inner_structure = &self.data[0].structure;
+        // for tensor in &self.data {
+        //     if tensor.structure != *first_inner_structure {
+        //         return Err(anyhow!("Inner tensors have different structures"));
+        //     }
+        // }
+
+        // Concatenate the outer and inner structures
+        let mut combined_structure = self.structure;
+
+        combined_structure.concat(first_inner_structure);
+
+        // Flatten the data by concatenating inner tensors' data
+        let data = self
+            .data
+            .into_iter()
+            .flat_map(|tensor| tensor.data.into_iter())
+            .collect();
+
+        // Create the new flattened tensor
+        Ok(DenseTensor {
+            data,
+            structure: combined_structure,
+        })
+    }
+}
+
+impl<T: Clone, S: TensorStructure + StructureContract + Clone> DataTensor<DataTensor<T, S>, S> {
+    pub fn flatten(self, fill: &T) -> Result<DataTensor<T, S>> {
+        let densified = self.map_data(|a| match a {
+            DataTensor::Dense(d) => d,
+            DataTensor::Sparse(s) => s.to_dense_with(fill),
+        });
+        match densified {
+            DataTensor::Dense(d) => d.flatten().map(DataTensor::Dense),
+            DataTensor::Sparse(s) => {
+                let dense_fill = DenseTensor::fill(s.structure().clone(), fill.clone());
+                s.to_dense_with(&dense_fill)
+                    .flatten()
+                    .map(DataTensor::Dense)
+            }
+        }
     }
 }

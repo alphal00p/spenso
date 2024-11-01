@@ -56,6 +56,8 @@
           pkgs.git
           pkgs.gmp.dev
           pkgs.gnum4
+          pkgs.clang
+          pkgs.mold
           pkgs.mpfr.dev
           pkgs.cargo-insta
         ];
@@ -170,6 +172,7 @@
 
         # Additional dev-shell environment variables can be set directly
         # MY_CUSTOM_DEVELOPMENT_VAR = "something else";
+        RUSTFLAGS = "-C target-cpu=native -Clink-arg=-fuse-ld=${pkgs.mold}/bin/mold";
 
         # Extra inputs can be added here; cargo and rustc are provided by default.
         packages = [

@@ -694,6 +694,8 @@ pub trait StructureContract {
 
     fn merge(&mut self, other: &Self) -> Option<usize>;
 
+    fn concat(&mut self, other: &Self);
+
     #[must_use]
     fn merge_at(&self, other: &Self, positions: (usize, usize)) -> Self;
 }
@@ -707,6 +709,10 @@ impl<S: DualSlotTo<Dual = S, R: RepName>> StructureContract for Vec<S> {
         let a = self.remove(i);
         let b = self.remove(j);
         assert_eq!(a, b);
+    }
+
+    fn concat(&mut self, other: &Self) {
+        self.extend(other.iter().cloned());
     }
 
     fn trace_out(&mut self) {
@@ -1219,6 +1225,10 @@ impl<R: RepName<Dual = R>> StructureContract for VecStructure<R> {
     fn trace(&mut self, i: usize, j: usize) {
         self.structure.trace(i, j);
     }
+
+    fn concat(&mut self, other: &Self) {
+        self.structure.extend(other.structure.clone())
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
@@ -1562,7 +1572,12 @@ impl<N, A, R: RepName<Dual = R>> StructureContract for NamedStructure<N, A, R> {
         to self.structure{
             fn trace_out(&mut self);
             fn trace(&mut self, i: usize, j: usize);
+
         }
+    }
+
+    fn concat(&mut self, other: &Self) {
+        self.structure.concat(&other.structure)
     }
 
     fn merge(&mut self, other: &Self) -> Option<usize> {
@@ -1655,6 +1670,10 @@ impl<R: RepName<Dual = R>> StructureContract for ContractionCountStructure<R> {
             fn trace_out(&mut self);
             fn trace(&mut self, i: usize, j: usize);
         }
+    }
+
+    fn concat(&mut self, other: &Self) {
+        self.structure.concat(&other.structure)
     }
     fn merge(&mut self, other: &Self) -> Option<usize> {
         self.contractions += other.contractions + 1;
@@ -1782,6 +1801,9 @@ impl<N, A, R: RepName> TracksCount for SmartShadowStructure<N, A, R> {
 }
 
 impl<N, A, R: RepName<Dual = R>> StructureContract for SmartShadowStructure<N, A, R> {
+    fn concat(&mut self, other: &Self) {
+        self.structure.concat(&other.structure)
+    }
     fn merge(&mut self, other: &Self) -> Option<usize> {
         self.contractions += other.contractions;
         self.structure.merge(&other.structure)
@@ -1952,6 +1974,9 @@ where
     N: Clone,
     A: Clone,
 {
+    fn concat(&mut self, other: &Self) {
+        self.external.structure.concat(&other.external.structure)
+    }
     /// remove the repeated indices in the external index list
     fn trace_out(&mut self) {
         let mut positions = IndexMap::new();

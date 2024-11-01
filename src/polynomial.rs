@@ -1,3 +1,35 @@
+use symbolica::{
+    domains::Ring,
+    poly::{polynomial::MultivariatePolynomial, Exponent, MonomialOrder},
+};
+
+use crate::{
+    contraction::{RefOne, RefZero},
+    upgrading_arithmetic::TrySmallestUpgrade,
+};
+
+impl<F: Ring, E: Exponent, O: MonomialOrder> TrySmallestUpgrade<MultivariatePolynomial<F, E, O>>
+    for MultivariatePolynomial<F, E, O>
+{
+    type LCM = MultivariatePolynomial<F, E, O>;
+
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+        Some(std::borrow::Cow::Borrowed(self))
+    }
+}
+
+impl<F: Ring, E: Exponent, O: MonomialOrder> RefZero for MultivariatePolynomial<F, E, O> {
+    fn ref_zero(&self) -> Self {
+        self.zero()
+    }
+}
+
+impl<F: Ring, E: Exponent, O: MonomialOrder> RefOne for MultivariatePolynomial<F, E, O> {
+    fn ref_one(&self) -> Self {
+        self.one()
+    }
+}
+
 #[cfg(test)]
 mod test {
 
@@ -9,11 +41,22 @@ mod test {
         poly::{polynomial::MultivariatePolynomial, Variable},
         state::State,
     };
+    use symbolica::{domains::rational::Q, poly::LexOrder};
 
     #[cfg(feature = "shadowing")]
     use crate::symbolic::SymbolicTensor;
 
-    use crate::structure::{representation::PhysReps, HasStructure};
+    use crate::{
+        structure::{representation::PhysReps, HasStructure},
+        upgrading_arithmetic::FallibleAdd,
+    };
+
+    #[test]
+    fn fallible_add_poly() {
+        let one: MultivariatePolynomial<_, u16, LexOrder> = MultivariatePolynomial::new_one(&Q);
+
+        let a = one.add_fallible(&one).unwrap();
+    }
 
     #[cfg(feature = "shadowing")]
     #[test]

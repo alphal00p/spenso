@@ -73,22 +73,23 @@ use symbolica::domains::float::Complex as SymComplex;
 pub trait TensorCoefficient: Display {
     fn cooked_name(&self) -> Option<String>;
     fn name(&self) -> Option<Symbol>;
-    fn tags(&self) -> Vec<AtomOrView>;
+    fn tags(&self) -> Vec<AtomOrView<'static>>;
     fn to_atom(&self) -> Option<Atom>;
     fn to_atom_re(&self) -> Option<Atom>;
     fn to_atom_im(&self) -> Option<Atom>;
-    fn add_tagged_function<'c, 'a, 'b: 'c, T>(
-        &'c self,
-        fn_map: &'b mut FunctionMap<'a, T>,
+    fn add_tagged_function<'a, T>(
+        &self,
+        fn_map: &mut FunctionMap<'a, T>,
         body: AtomView<'a>,
     ) -> Result<(), String> {
-        if let Some((name, cooked_name)) = self.name().zip(self.cooked_name()) {
-            fn_map
-                .add_tagged_function(name, self.tags(), cooked_name, vec![], body)
-                .map_err(String::from)
-        } else {
-            Err(format!("unnamed {}", self))
-        }
+        let (name, cooked_name) = self
+            .name()
+            .zip(self.cooked_name())
+            .ok_or(format!("unnamed {}", self))?;
+
+        fn_map
+            .add_tagged_function(name, self.tags(), cooked_name, vec![], body)
+            .map_err(String::from)
     }
 }
 
@@ -128,7 +129,7 @@ impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
         Some(name)
     }
 
-    fn tags(&self) -> Vec<AtomOrView> {
+    fn tags(&self) -> Vec<AtomOrView<'static>> {
         let mut tags: Vec<AtomOrView> = if let Some(ref args) = self.args {
             args.args().into_iter().map(AtomOrView::from).collect()
         } else {
@@ -209,7 +210,7 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
         Some(name)
     }
 
-    fn tags(&self) -> Vec<AtomOrView> {
+    fn tags(&self) -> Vec<AtomOrView<'static>> {
         let mut tags: Vec<AtomOrView> = if let Some(ref args) = self.args {
             args.args().into_iter().map(AtomOrView::from).collect()
         } else {

@@ -12,6 +12,7 @@ use symbolica::atom::PowView;
 // use log::trace;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
+use symbolica::poly::PositiveExponent;
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{representation::FunView, AddView, Atom, AtomView, MulView, Symbol},
@@ -30,10 +31,7 @@ use symbolica::{
         ExpressionEvaluator, FunctionMap, InlineASM,
     },
     id::{Condition, MatchSettings, Pattern, PatternOrMap, PatternRestriction, Replacement},
-    poly::{
-        factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Exponent,
-        Variable,
-    },
+    poly::{factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Variable},
     state::State,
 };
 
@@ -1671,7 +1669,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     /// specified by `var_map`. If new variables are encountered, they are
     /// added to the variable map. Similarly, non-polynomial parts are automatically
     /// defined as a new independent variable in the polynomial.
-    pub fn to_polynomial<R: EuclideanDomain + ConvertToRing, E: Exponent>(
+    pub fn to_polynomial<R: EuclideanDomain + ConvertToRing, E: PositiveExponent>(
         &self,
         field: &R,
         var_map: Option<Arc<Vec<Variable>>>,
@@ -1697,7 +1695,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     pub fn to_rational_polynomial<
         R: EuclideanDomain + ConvertToRing,
         RO: EuclideanDomain + PolynomialGCD<E>,
-        E: Exponent,
+        E: PositiveExponent,
     >(
         &self,
         field: &R,
@@ -1726,7 +1724,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     pub fn to_factorized_rational_polynomial<
         R: EuclideanDomain + ConvertToRing,
         RO: EuclideanDomain + PolynomialGCD<E>,
-        E: Exponent,
+        E: PositiveExponent,
     >(
         &self,
         field: &R,

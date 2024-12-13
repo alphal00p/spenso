@@ -12,7 +12,6 @@ use crate::symbolica_utils::SerializableAtom;
 use symbolica::{
     atom::Atom,
     domains::float::{Complex as SymbolicaComplex, Real},
-    state::State,
 };
 
 use crate::{
@@ -1051,7 +1050,7 @@ impl TrySmallestUpgrade<Atom> for Complex<f64> {
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
         let real: Cow<'_, Atom> = <f64 as TrySmallestUpgrade<Atom>>::try_upgrade(&self.re)?;
         let imag: Cow<'_, Atom> = <f64 as TrySmallestUpgrade<Atom>>::try_upgrade(&self.im)?;
-        let i = Atom::new_var(State::I);
+        let i = Atom::new_var(Atom::I);
         let symrat = (i * imag.as_ref()) + real.as_ref();
 
         Some(Cow::Owned(symrat))
@@ -1195,7 +1194,7 @@ impl TrySmallestUpgrade<SerializableAtom> for Complex<f64> {
             <f64 as TrySmallestUpgrade<SerializableAtom>>::try_upgrade(&self.re)?;
         let imag: Cow<'_, SerializableAtom> =
             <f64 as TrySmallestUpgrade<SerializableAtom>>::try_upgrade(&self.im)?;
-        let i = SerializableAtom::from(Atom::new_var(State::I));
+        let i = SerializableAtom::from(Atom::new_var(Atom::I));
         let symrat = (i * imag.as_ref()) + real.as_ref();
 
         Some(Cow::Owned(symrat))
@@ -1357,7 +1356,7 @@ mod test {
     use ahash::{HashMap, HashMapExt};
 
     #[cfg(feature = "shadowing")]
-    use symbolica::{atom::Atom, state::State};
+    use symbolica::atom::Atom;
 
     #[cfg(feature = "shadowing")]
     use crate::complex::Complex;
@@ -1381,6 +1380,8 @@ mod test {
     #[test]
     #[cfg(feature = "shadowing")]
     fn test_fallible_mul() {
+        use symbolica::atom::AtomCore;
+
         let a: i32 = 4;
         let b: f64 = 4.;
         let mut c: f64 = a.mul_fallible(&b).unwrap();
@@ -1398,7 +1399,7 @@ mod test {
         let mut f = a.mul_fallible(&4.).unwrap();
         f.add_assign_fallible(b);
 
-        let i = Atom::new_var(State::I);
+        let i = Atom::new_var(Atom::I);
 
         f.add_assign_fallible(&i);
 
@@ -1413,7 +1414,6 @@ mod test {
         const_map.insert(b.as_view(), Complex::<f64>::new(3., 1.).into());
 
         let ev: symbolica::domains::float::Complex<f64> = f
-            .as_view()
             .evaluate(|r| r.into(), &const_map, &function_map, &mut cache)
             .unwrap();
 

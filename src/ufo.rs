@@ -871,6 +871,8 @@ mod test {
     #[test]
     #[cfg(feature = "shadowing")]
     fn data3() {
+        use symbolica::atom::AtomCore;
+
         let _ = env_logger::builder().is_test(true).try_init();
         let g1 = Atom::parse("γ(aind(mink(4,1),bis(4,3),bis(4,4)))").unwrap();
         let g2 = Atom::parse("γ(aind(mink(4,2),bis(4,3),bis(4,4)))").unwrap();
@@ -1087,6 +1089,8 @@ mod test {
     #[test]
     #[cfg(feature = "shadowing")]
     fn data5() {
+        use symbolica::atom::AtomCore;
+
         let spinstructure = VecStructure::new(vec![
             Bispinor::slot(4, 3).into(),
             Bispinor::slot(4, 4).into(),
@@ -1191,6 +1195,8 @@ mod test {
     #[test]
     #[cfg(feature = "shadowing")]
     fn data6() {
+        use symbolica::atom::AtomCore;
+
         let spinstructure = VecStructure::new(vec![
             Bispinor::slot(4, 3).into(),
             Bispinor::slot(4, 4).into(),

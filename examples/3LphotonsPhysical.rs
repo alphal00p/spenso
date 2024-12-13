@@ -1,18 +1,18 @@
 use std::{fs::File, io::BufReader};
 
-use ahash::AHashMap;
+use ahash::{AHashMap, HashMap, HashMapExt};
 
 use approx::{assert_relative_eq, RelativeEq};
 use spenso::{
     complex::Complex,
     network::{Levels, TensorNetwork},
-    parametric::MixedTensor,
+    parametric::{atomcore::TensorAtomOps, MixedTensor},
     structure::{HasStructure, SmartShadowStructure},
     symbolic::SymbolicTensor,
     symbolica_utils::SerializableAtom,
 };
 use symbolica::{
-    atom::{Atom, AtomView, Symbol},
+    atom::{Atom, AtomCore, AtomView, Symbol},
     domains::rational::Rational,
     evaluate::{CompileOptions, FunctionMap, InlineASM},
     id::Replacement,
@@ -111,7 +111,7 @@ fn main() {
         .map(|(k, v)| (State::get_symbol(k), v))
         .collect();
 
-    const_atom_map.insert(State::I, Complex::i());
+    const_atom_map.insert(Atom::I, Complex::i());
 
     let mut const_map: AHashMap<AtomView<'_>, symbolica::domains::float::Complex<f64>> =
         data_atom_map
@@ -136,25 +136,24 @@ fn main() {
     for (k, v) in const_atom_map.iter() {
         let name_re = Atom::new_var(State::get_symbol(k.to_string() + "_re"));
         let name_im = Atom::new_var(State::get_symbol(k.to_string() + "_im"));
-        let i = Atom::new_var(State::I);
+        let i = Atom::new_var(Atom::I);
         let pat = &name_re + i * &name_im;
-        replacements.push((Atom::new_var(*k).into_pattern(), pat.into_pattern().into()));
+        replacements.push(Replacement::new(
+            Atom::new_var(*k).to_pattern(),
+            pat.to_pattern(),
+        ));
 
         fn_map.add_constant(name_re, Rational::from(v.re));
         fn_map.add_constant(name_im, Rational::from(v.im));
     }
 
-    let reps: Vec<Replacement> = replacements
-        .iter()
-        .map(|(pat, rhs)| Replacement::new(pat, rhs))
-        .collect();
-
     let mut params = data_atom_map.0.clone();
-    params.push(Atom::new_var(State::I));
+    params.push(Atom::new_var(Atom::I));
 
     let mut truth_net = network.clone();
 
-    truth_net.evaluate_complex(|i| i.into(), &const_map);
+    let function_map = HashMap::new();
+    truth_net.evaluate_complex(|i| i.into(), &const_map, &function_map);
     truth_net.contract();
     let truth = truth_net
         .result()
@@ -186,7 +185,7 @@ fn main() {
     let counting_network: TensorNetwork<
         MixedTensor<_, SmartShadowStructure<_, _>>,
         SerializableAtom,
-    > = network.clone().cast().replace_all_multiple(&reps);
+    > = network.clone().cast().replace_all_multiple(&replacements);
     let mut values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
     values.push(SymComplex::from(Complex::i()));
 
@@ -216,7 +215,7 @@ fn main() {
 
     let mut eval_tree_leveled_tensor = levels
         .contract(1, &mut fn_map)
-        .eval_tree(&fn_map, &params)
+        .to_evaluation_tree(&fn_map, &params)
         .unwrap();
 
     eval_tree_leveled_tensor.horner_scheme();
@@ -225,7 +224,7 @@ fn main() {
 
     let mut eval_tree_leveled_tensor_depth2 = levels2
         .contract(2, &mut fn_map)
-        .eval_tree(&fn_map, &params)
+        .to_evaluation_tree(&fn_map, &params)
         .unwrap();
 
     eval_tree_leveled_tensor_depth2.horner_scheme();
@@ -244,7 +243,7 @@ fn main() {
     network.contract();
 
     let mut precontracted = network.clone();
-    precontracted.evaluate_complex(|i| i.into(), &const_map);
+    precontracted.evaluate_complex(|i| i.into(), &const_map, &function_map);
     assert!(truth.relative_eq(
         &precontracted
             .result()

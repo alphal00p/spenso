@@ -9,6 +9,7 @@ use insta::{assert_ron_snapshot, assert_snapshot, assert_yaml_snapshot};
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 
+use symbolica::atom::AtomCore;
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView},
@@ -1210,7 +1211,7 @@ fn contract_densor_with_spensor() {
 #[test]
 #[cfg(feature = "shadowing")]
 fn evaluate() {
-    use crate::shadowing::Shadowable;
+    use crate::{parametric::atomcore::TensorAtomMaps, shadowing::Shadowable};
 
     let structure: NamedStructure<String, ()> = test_structure(3, 1).to_named("a".into(), None);
 
@@ -1224,7 +1225,9 @@ fn evaluate() {
 
     a.append_const_map(&adata, &mut const_map);
 
-    let aev: DenseTensor<f64, _> = a.evaluate(|r| r.into(), &const_map).unwrap();
+    let fn_map = HashMap::new();
+
+    let aev: DenseTensor<f64, _> = a.evaluate(|r| r.into(), &const_map, &fn_map).unwrap();
 
     assert_eq!(aev.data(), adata.data());
 }
@@ -1413,7 +1416,7 @@ fn test_fallible_mul() {
         let a = &Atom::parse("a(2)").unwrap();
 
         let b = &Atom::parse("b(1)").unwrap();
-        let i = Atom::new_var(State::I);
+        let i = Atom::new_var(Atom::I);
         let mut f = a.mul_fallible(&4.).unwrap();
         f.add_assign_fallible(b);
         f.add_assign_fallible(&i);
@@ -1429,7 +1432,6 @@ fn test_fallible_mul() {
         const_map.insert(b.as_view(), Complex::<f64>::new(3., 1.).into());
 
         let ev: symbolica::domains::float::Complex<f64> = f
-            .as_view()
             .evaluate(|r| r.into(), &const_map, &function_map, &mut cache)
             .unwrap();
 

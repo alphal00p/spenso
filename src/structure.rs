@@ -219,7 +219,7 @@ pub trait ToSymbolic: TensorStructure {
         for index in 0..self.size()? {
             let re = index_to_atom(&self, index.into()).to_atom_re().unwrap();
             let im = index_to_atom(&self, index.into()).to_atom_im().unwrap();
-            let i = Atom::new_var(State::I);
+            let i = Atom::new_var(Atom::I);
             data.push(&re + i * &im);
         }
 
@@ -2181,7 +2181,7 @@ where
 mod shadowing_tests {
     use super::representation::Lorentz;
     use super::*;
-    use symbolica::atom::{AsAtomView, Atom};
+    use symbolica::atom::{Atom, AtomCore};
 
     #[test]
     fn named_structure_from_atom() {

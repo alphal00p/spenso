@@ -134,18 +134,19 @@ fn criterion_benchmark(c: &mut Criterion) {
     net.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(2));
     let mut const_map = AHashMap::new();
 
-    let i = Atom::new_var(State::I);
+    let i = Atom::new_var(Atom::I);
     const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.).into());
 
     let mut group = c.benchmark_group("evaluate_net");
 
+    let function_map = AHashMap::new();
     group.bench_function("Evaluate_net", |b| {
         b.iter_batched(
             || net.clone(),
             |mut net| {
                 const_map_gen(&params, &mut const_map);
 
-                net.evaluate_complex(|r| r.into(), &const_map);
+                net.evaluate_complex(|r| r.into(), &const_map, &function_map);
 
                 net.contract();
             },

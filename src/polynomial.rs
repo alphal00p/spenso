@@ -41,7 +41,7 @@ mod test {
         poly::{polynomial::MultivariatePolynomial, Variable},
         state::State,
     };
-    use symbolica::{domains::rational::Q, poly::LexOrder};
+    use symbolica::{atom::AtomCore, domains::rational::Q, poly::LexOrder};
 
     #[cfg(feature = "shadowing")]
     use crate::symbolic::SymbolicTensor;
@@ -54,13 +54,14 @@ mod test {
     #[test]
     fn fallible_add_poly() {
         let one: MultivariatePolynomial<_, u16, LexOrder> = MultivariatePolynomial::new_one(&Q);
-
-        let a = one.add_fallible(&one).unwrap();
+        one.add_fallible(&one).unwrap();
     }
 
     #[cfg(feature = "shadowing")]
     #[test]
     fn three_loop_photon_poly() {
+        use symbolica::atom::AtomCore;
+
         let expr = concat!("-64/729*G^4*ee^6",
     "*(MT*id(aind(bis(4,47),bis(4,135)))+Q(15,aind(mink(4,149)))*γ(aind(mink(4,149),bis(4,47),bis(4,135))))",
     "*(MT*id(aind(bis(4,83),bis(4,46)))+Q(6,aind(mink(4,138)))*γ(aind(mink(4,138),bis(4,83),bis(4,46))))",
@@ -109,9 +110,9 @@ mod test {
         let mut qs = vec![];
 
         for i in 0..18 {
-            reps.push((
+            reps.push(Replacement::new(
                 Pattern::parse(format!("Q({},cind(0))", i).as_str()).unwrap(),
-                Pattern::parse(format!("Q{}", i).as_str()).unwrap().into(),
+                Pattern::parse(format!("Q{}", i).as_str()).unwrap(),
             ));
 
             vars.push(Variable::Symbol(State::get_symbol(
@@ -119,11 +120,6 @@ mod test {
             )));
             qs.push(Atom::parse(format!("Q{}", i).as_str()).unwrap());
         }
-
-        let reps = reps
-            .iter()
-            .map(|(pat, rhs)| Replacement::new(pat, rhs))
-            .collect::<Vec<_>>();
 
         res = res.replace_all_multiple(&reps);
         println!(
@@ -210,9 +206,9 @@ mod test {
         let mut qs = vec![];
 
         for i in 0..11 {
-            reps.push((
+            reps.push(Replacement::new(
                 Pattern::parse(format!("Q({},cind(0))", i).as_str()).unwrap(),
-                Pattern::parse(format!("Q{}", i).as_str()).unwrap().into(),
+                Pattern::parse(format!("Q{}", i).as_str()).unwrap(),
             ));
 
             vars.push(Variable::Symbol(State::get_symbol(
@@ -220,11 +216,6 @@ mod test {
             )));
             qs.push(Atom::parse(format!("Q{}", i).as_str()).unwrap());
         }
-
-        let reps = reps
-            .iter()
-            .map(|(pat, rhs)| Replacement::new(pat, rhs))
-            .collect::<Vec<_>>();
 
         res = res.replace_all_multiple(&reps);
         println!(

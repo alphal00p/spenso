@@ -1,6 +1,6 @@
 use ahash::AHashMap;
 #[cfg(feature = "shadowing")]
-use ahash::{AHashSet, HashMap};
+use ahash::{AHashSet, HashMap, HashMapExt};
 #[cfg(feature = "shadowing")]
 use anyhow::anyhow;
 #[cfg(feature = "shadowing")]
@@ -12,7 +12,11 @@ use symbolica::atom::PowView;
 // use log::trace;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
-use symbolica::poly::PositiveExponent;
+use symbolica::{
+    atom::AtomCore,
+    id::{BorrowPatternOrMap, BorrowReplacement},
+    poly::PositiveExponent,
+};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{representation::FunView, AddView, Atom, AtomView, MulView, Symbol},
@@ -30,7 +34,7 @@ use symbolica::{
         CompileOptions, CompiledCode, CompiledEvaluator, EvalTree, EvaluationFn, ExportedCode,
         ExpressionEvaluator, FunctionMap, InlineASM,
     },
-    id::{Condition, MatchSettings, Pattern, PatternOrMap, PatternRestriction, Replacement},
+    id::{Condition, MatchSettings, Pattern, PatternRestriction},
     poly::{factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Variable},
     state::State,
 };
@@ -42,9 +46,9 @@ use crate::{
     data::{DataIterator, DenseTensor, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
     parametric::{
-        AtomViewOrConcrete, CompiledEvalTensor, EvalTensor, EvalTreeTensor, MixedTensor,
-        ParamTensor, PatternReplacement, SerializableCompiledCode, SerializableCompiledEvaluator,
-        SerializableExportedCode,
+        atomcore::PatternReplacement, AtomViewOrConcrete, CompiledEvalTensor, EvalTensor,
+        EvalTreeTensor, MixedTensor, ParamTensor, SerializableCompiledCode,
+        SerializableCompiledEvaluator, SerializableExportedCode,
     },
     shadowing::{ShadowMapping, Shadowable},
     structure::representation::Rep,
@@ -57,7 +61,8 @@ use crate::{
 use crate::{
     arithmetic::ScalarMul,
     contraction::{Contract, ContractionError, Trace},
-    data::{DataTensor, GetTensorData, HasTensorData},
+    data::{DataTensor, GetTensorData, HasTensorData, StorageTensor},
+    parametric::atomcore::{TensorAtomMaps, TensorAtomOps},
     structure::{
         slot::DualSlotTo, CastStructure, HasName, HasStructure, ScalarTensor, TensorStructure,
         TracksCount,
@@ -1541,11 +1546,12 @@ where
         &'a mut self,
         coeff_map: F,
         const_map: &AHashMap<AtomView<'a>, T>,
+        function_map: &HashMap<Symbol, EvaluationFn<T>>,
     ) where
         T: Real + for<'c> From<&'c Rational>,
     {
         for (_, n) in &mut self.graph.nodes {
-            n.evaluate_real(coeff_map, const_map);
+            n.evaluate_real(coeff_map, const_map, function_map);
         }
     }
 
@@ -1554,12 +1560,13 @@ where
         &'a mut self,
         coeff_map: F,
         const_map: &AHashMap<AtomView<'a>, SymComplex<T>>,
+        function_map: &HashMap<Symbol, EvaluationFn<SymComplex<T>>>,
     ) where
         T: Real + for<'c> From<&'c Rational>,
         SymComplex<T>: Real + for<'c> From<&'c Rational>,
     {
         for (_, n) in &mut self.graph.nodes {
-            n.evaluate_complex(coeff_map, const_map);
+            n.evaluate_complex(coeff_map, const_map, function_map);
         }
     }
 
@@ -1594,17 +1601,20 @@ where
 use std::hash::Hash;
 
 #[cfg(feature = "shadowing")]
-impl<P: PatternReplacement + HasStructure> PatternReplacement for TensorNetwork<P, SerializableAtom>
+impl<P: StorageTensor<Data = Atom>> TensorAtomMaps for TensorNetwork<P, Atom>
 where
     P::Structure: Clone + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
 {
-    fn replace_all(
+    type ContainerData<T> = TensorNetwork<P::ContainerData<T>, T>;
+
+    fn replace_all<R: symbolica::id::BorrowPatternOrMap>(
         &self,
         pattern: &Pattern,
-        rhs: &PatternOrMap,
+        rhs: R,
         conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self {
+        let rhs = rhs.borrow();
         let graph = self
             .graph
             .map_nodes_ref(|(_, a)| a.replace_all(pattern, rhs, conditions, settings));
@@ -1613,26 +1623,333 @@ where
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| SerializableAtom(a.0.replace_all(pattern, rhs, conditions, settings))),
+                .map(|a| a.replace_all(pattern, rhs, conditions, settings)),
         }
     }
 
-    fn replace_all_mut(
+    fn apart(&self, x: Symbol) -> Self {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.apart(x));
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.apart(x)),
+        }
+    }
+
+    fn cancel(&self) -> Self {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.cancel());
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.cancel()),
+        }
+    }
+
+    fn expand(&self) -> Self {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.expand());
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.expand()),
+        }
+    }
+
+    fn factor(&self) -> Self {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.factor());
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.factor()),
+        }
+    }
+
+    fn nsolve<N: SingleFloat + Real + PartialOrd + Clone>(
+        &self,
+        x: Symbol,
+        init: N,
+        prec: N,
+        max_iterations: usize,
+    ) -> std::result::Result<Self::ContainerData<N>, std::string::String> {
+        let graph = self.graph.map_nodes_ref_result(|(_, a)| {
+            a.nsolve(x, init.clone(), prec.clone(), max_iterations)
+        })?;
+        Ok(TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.nsolve(x, init.clone(), prec.clone(), max_iterations))
+                .transpose()?,
+        })
+    }
+
+    fn series<T: AtomCore>(
+        &self,
+        x: Symbol,
+        expansion_point: T,
+        depth: Rational,
+        depth_is_absolute: bool,
+    ) -> std::result::Result<
+        Self::ContainerData<symbolica::poly::series::Series<symbolica::domains::atom::AtomField>>,
+        &'static str,
+    > {
+        let graph = self.graph.map_nodes_ref_result(|(_, a)| {
+            a.series(
+                x,
+                expansion_point.as_atom_view(),
+                depth.clone(),
+                depth_is_absolute,
+            )
+        })?;
+        Ok(TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| {
+                    a.series(
+                        x,
+                        expansion_point.as_atom_view(),
+                        depth.clone(),
+                        depth_is_absolute,
+                    )
+                })
+                .transpose()?,
+        })
+    }
+
+    fn evaluate<T: Real, F: Fn(&Rational) -> T + Copy>(
+        &self,
+        coeff_map: F,
+        const_map: &HashMap<AtomView<'_>, T>,
+        function_map: &HashMap<Symbol, EvaluationFn<T>>,
+        // cache: &mut HashMap<AtomView<'b>, T>,
+    ) -> std::result::Result<Self::ContainerData<T>, std::string::String> {
+        let graph = self
+            .graph
+            .map_nodes_ref_result(|(_, a)| a.evaluate(coeff_map, const_map, function_map))?;
+        Ok(TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| {
+                    let mut cache = HashMap::new();
+                    a.evaluate(coeff_map, const_map, function_map, &mut cache)
+                })
+                .transpose()?,
+        })
+    }
+
+    fn together(&self) -> Self {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.together());
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.together()),
+        }
+    }
+
+    fn expand_in<T: AtomCore>(&self, var: T) -> Self {
+        let var = var.as_atom_view();
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.expand_in(var));
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.expand_in(var)),
+        }
+    }
+
+    fn map_terms(
+        &self,
+        f: impl Fn(AtomView) -> Atom + Send + Sync + Clone,
+        n_cores: usize,
+    ) -> Self {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.map_terms(f.clone(), n_cores));
+        TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.map_terms(f.clone(), n_cores)),
+        }
+    }
+
+    fn zero_test(
+        &self,
+        iterations: usize,
+        tolerance: f64,
+    ) -> Self::ContainerData<symbolica::id::ConditionResult> {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.zero_test(iterations, tolerance));
+        TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.zero_test(iterations, tolerance)),
+        }
+    }
+
+    fn derivative(&self, x: Symbol) -> Self {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.derivative(x));
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.derivative(x)),
+        }
+    }
+
+    fn expand_num(&self) -> Self {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.expand_num());
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.expand_num()),
+        }
+    }
+
+    fn to_pattern(&self) -> Self::ContainerData<Pattern> {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.to_pattern());
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.to_pattern()),
+        }
+    }
+
+    fn coefficient<T: AtomCore>(&self, x: T) -> Self {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.coefficient(x.as_atom_view()));
+        TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.coefficient(x.as_atom_view())),
+        }
+    }
+
+    fn collect_num(&self) -> Self {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.collect_num());
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.collect_num()),
+        }
+    }
+
+    fn replace_map<F: Fn(AtomView, &symbolica::id::Context, &mut Atom) -> bool>(
+        &self,
+        m: &F,
+    ) -> Self {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.replace_map(m));
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.replace_map(m)),
+        }
+    }
+
+    fn to_polynomial<R: EuclideanDomain + ConvertToRing, E: symbolica::poly::Exponent>(
+        &self,
+        field: &R,
+        var_map: Option<Arc<Vec<Variable>>>,
+    ) -> Self::ContainerData<MultivariatePolynomial<R, E>> {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.to_polynomial(field, var_map.clone()));
+        TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.to_polynomial(field, var_map.clone())),
+        }
+    }
+
+    fn expand_via_poly<E: symbolica::poly::Exponent, T: AtomCore>(&self, var: Option<T>) -> Self {
+        let var = var.as_ref().map(|a| a.as_atom_view());
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.expand_via_poly::<E, AtomView>(var));
+        TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.expand_via_poly::<E, AtomView>(var)),
+        }
+    }
+
+    fn expand_in_symbol(&self, var: Symbol) -> Self {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.expand_in_symbol(var));
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.expand_in_symbol(var)),
+        }
+    }
+
+    fn map_coefficient<
+        F: Fn(symbolica::coefficient::CoefficientView) -> symbolica::coefficient::Coefficient + Copy,
+    >(
+        &self,
+        f: F,
+    ) -> Self {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.map_coefficient(f));
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.map_coefficient(f)),
+        }
+    }
+
+    fn replace_all_mut<R: symbolica::id::BorrowPatternOrMap>(
         &mut self,
         pattern: &Pattern,
-        rhs: &PatternOrMap,
+        rhs: R,
         conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     ) {
+        let rhs = rhs.borrow();
         self.graph
             .map_nodes_mut(|(_, a)| a.replace_all_mut(pattern, rhs, conditions, settings));
-
-        if let Some(a) = self.scalar.as_mut() {
-            a.0 = a.0.replace_all(pattern, rhs, conditions, settings);
+        if let Some(a) = &mut self.scalar {
+            a.replace_all_mut(pattern, rhs, conditions, settings)
         }
     }
 
-    fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
+    fn replace_map_mut<F: Fn(AtomView, &symbolica::id::Context, &mut Atom) -> bool>(
+        &mut self,
+        m: &F,
+    ) {
+        self.graph.map_nodes_mut(|(_, a)| a.replace_map_mut(m));
+        if let Some(a) = self.scalar.as_mut() {
+            a.replace_map_mut(m);
+        }
+    }
+
+    fn replace_all_repeat<R: symbolica::id::BorrowPatternOrMap>(
+        &self,
+        pattern: &Pattern,
+        rhs: R,
+        conditions: Option<&Condition<PatternRestriction>>,
+        settings: Option<&MatchSettings>,
+    ) -> Self {
+        let rhs = rhs.borrow();
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.replace_all_repeat(pattern, rhs, conditions, settings));
+        TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.replace_all_repeat(pattern, rhs, conditions, settings)),
+        }
+    }
+
+    fn to_canonical_string(&self) -> Self::ContainerData<std::string::String> {
+        let graph = self.graph.map_nodes_ref(|(_, a)| a.to_canonical_string());
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.to_canonical_string()),
+        }
+    }
+
+    fn replace_all_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
         let graph = self
             .graph
             .map_nodes_ref(|(_, a)| a.replace_all_multiple(replacements));
@@ -1641,58 +1958,76 @@ where
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| SerializableAtom(a.0.replace_all_multiple(replacements))),
+                .map(|a| a.replace_all_multiple(replacements)),
         }
     }
 
-    fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]) {
-        self.graph
-            .map_nodes_mut(|(_, a)| a.replace_all_multiple_mut(replacements));
-        if let Some(a) = self.scalar.as_mut() {
-            a.0 = a.0.replace_all_multiple(replacements);
-        }
-    }
-
-    fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]) {
-        self.graph
-            .map_nodes_mut(|(_, a)| a.replace_all_multiple_repeat_mut(replacements));
-        if let Some(a) = self.scalar.as_mut() {
-            Self::replace_repeat_multiple_atom(&mut a.0, replacements);
-        }
-    }
-}
-#[cfg(feature = "shadowing")]
-impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
-    TensorNetwork<ParamTensor<S>, SerializableAtom>
-{
-    /// Convert the tensor of atoms to a tensor of polynomials, optionally in the variable ordering
-    /// specified by `var_map`. If new variables are encountered, they are
-    /// added to the variable map. Similarly, non-polynomial parts are automatically
-    /// defined as a new independent variable in the polynomial.
-    pub fn to_polynomial<R: EuclideanDomain + ConvertToRing, E: PositiveExponent>(
-        &self,
-        field: &R,
-        var_map: Option<Arc<Vec<Variable>>>,
-    ) -> TensorNetwork<DataTensor<MultivariatePolynomial<R, E>, S>, MultivariatePolynomial<R, E>>
-    where
-        S: Clone,
-    {
+    fn set_coefficient_ring(&self, vars: &Arc<Vec<Variable>>) -> Self {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.set_coefficient_ring(vars));
         TensorNetwork {
-            graph: self
-                .graph
-                .map_nodes_ref(|(_, t)| t.to_polynomial(field, var_map.clone())),
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.set_coefficient_ring(vars)),
+        }
+    }
+
+    fn coefficients_to_float(&self, f: u32) -> Self {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.coefficients_to_float(f));
+        TensorNetwork {
+            graph,
+            scalar: self.scalar.as_ref().map(|a| a.coefficients_to_float(f)),
+        }
+    }
+
+    fn map_terms_single_core(&self, f: impl Fn(AtomView) -> Atom + Clone) -> Self {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.map_terms_single_core(f.clone()));
+        TensorNetwork {
+            graph,
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| a.0.to_polynomial(field, var_map.clone())),
+                .map(|a| a.map_terms_single_core(f.clone())),
         }
     }
 
-    /// Convert the tensor of atoms to a tensor of rational polynomials, optionally in the variable ordering
-    /// specified by `var_map`. If new variables are encountered, they are
-    /// added to the variable map. Similarly, non-rational polynomial parts are automatically
-    /// defined as a new independent variable in the rational polynomial.
-    pub fn to_rational_polynomial<
+    fn to_polynomial_in_vars<E: symbolica::poly::Exponent>(
+        &self,
+        var_map: &Arc<Vec<Variable>>,
+    ) -> Self::ContainerData<MultivariatePolynomial<symbolica::domains::atom::AtomField, E>> {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.to_polynomial_in_vars(var_map));
+        TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.to_polynomial_in_vars(var_map)),
+        }
+    }
+
+    fn replace_all_repeat_mut<R: symbolica::id::BorrowPatternOrMap>(
+        &mut self,
+        pattern: &Pattern,
+        rhs: R,
+        conditions: Option<&Condition<PatternRestriction>>,
+        settings: Option<&MatchSettings>,
+    ) {
+        let rhs = rhs.borrow();
+        self.graph
+            .map_nodes_mut(|(_, a)| a.replace_all_repeat_mut(pattern, rhs, conditions, settings));
+
+        if let Some(a) = self.scalar.as_mut() {
+            a.replace_all_repeat_mut(pattern, rhs, conditions, settings);
+        }
+    }
+
+    fn to_rational_polynomial<
         R: EuclideanDomain + ConvertToRing,
         RO: EuclideanDomain + PolynomialGCD<E>,
         E: PositiveExponent,
@@ -1701,27 +2036,66 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         field: &R,
         out_field: &RO,
         var_map: Option<Arc<Vec<Variable>>>,
-    ) -> TensorNetwork<DataTensor<RationalPolynomial<RO, E>, S>, RationalPolynomial<RO, E>>
+    ) -> Self::ContainerData<RationalPolynomial<RO, E>>
     where
         RationalPolynomial<RO, E>:
             FromNumeratorAndDenominator<R, RO, E> + FromNumeratorAndDenominator<RO, RO, E>,
-        S: Clone,
     {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.to_rational_polynomial(field, out_field, var_map.clone()));
         TensorNetwork {
-            graph: self.graph.map_nodes_ref(|(_, t)| {
-                t.to_rational_polynomial(field, out_field, var_map.clone())
-            }),
-            scalar: self.scalar.as_ref().map(|a| {
-                a.0.to_rational_polynomial(field, out_field, var_map.clone())
-            }),
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.to_rational_polynomial(field, out_field, var_map.clone())),
         }
     }
 
-    /// Convert the tensor of atoms to a tensor of rational polynomials with factorized denominators, optionally in the variable ordering
-    /// specified by `var_map`. If new variables are encountered, they are
-    /// added to the variable map. Similarly, non-rational polynomial parts are automatically
-    /// defined as a new independent variable in the rational polynomial.
-    pub fn to_factorized_rational_polynomial<
+    fn rationalize_coefficients(&self, relative_error: &Rational) -> Self {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.rationalize_coefficients(relative_error));
+        TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.rationalize_coefficients(relative_error)),
+        }
+    }
+
+    fn replace_all_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
+        self.graph
+            .map_nodes_mut(|(_, a)| a.replace_all_multiple_mut(replacements));
+        if let Some(a) = self.scalar.as_mut() {
+            a.replace_all_multiple_mut(replacements);
+        }
+    }
+
+    fn replace_all_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
+        let graph = self
+            .graph
+            .map_nodes_ref(|(_, a)| a.replace_all_multiple_repeat(replacements));
+        TensorNetwork {
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.replace_all_multiple_repeat(replacements)),
+        }
+    }
+
+    fn replace_all_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
+        self.graph
+            .map_nodes_mut(|(_, a)| a.replace_all_multiple_repeat_mut(replacements));
+        if let Some(a) = self.scalar.as_mut() {
+            a.replace_all_multiple_repeat_mut(replacements);
+        }
+    }
+
+    fn to_factorized_rational_polynomial<
         R: EuclideanDomain + ConvertToRing,
         RO: EuclideanDomain + PolynomialGCD<E>,
         E: PositiveExponent,
@@ -1730,26 +2104,93 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         field: &R,
         out_field: &RO,
         var_map: Option<Arc<Vec<Variable>>>,
-    ) -> TensorNetwork<
-        DataTensor<FactorizedRationalPolynomial<RO, E>, S>,
-        FactorizedRationalPolynomial<RO, E>,
-    >
+    ) -> Self::ContainerData<FactorizedRationalPolynomial<RO, E>>
     where
         FactorizedRationalPolynomial<RO, E>: FromNumeratorAndFactorizedDenominator<R, RO, E>
             + FromNumeratorAndFactorizedDenominator<RO, RO, E>,
         MultivariatePolynomial<RO, E>: Factorize,
-        S: Clone,
     {
+        let graph = self.graph.map_nodes_ref(|(_, a)| {
+            a.to_factorized_rational_polynomial(field, out_field, var_map.clone())
+        });
         TensorNetwork {
-            graph: self.graph.map_nodes_ref(|(_, t)| {
-                t.to_factorized_rational_polynomial(field, out_field, var_map.clone())
-            }),
-            scalar: self.scalar.as_ref().map(|a| {
-                a.0.to_factorized_rational_polynomial(field, out_field, var_map.clone())
-            }),
+            graph,
+            scalar: self
+                .scalar
+                .as_ref()
+                .map(|a| a.to_factorized_rational_polynomial(field, out_field, var_map.clone())),
         }
     }
+}
 
+// use crate::parametric::atomcore::PatternReplacement;
+// fn replace_all(
+//     &self,
+//     pattern: &Pattern,
+//     rhs: &PatternOrMap,
+//     conditions: Option<&Condition<PatternRestriction>>,
+//     settings: Option<&MatchSettings>,
+// ) -> Self {
+//     let graph = self
+//         .graph
+//         .map_nodes_ref(|(_, a)| a.replace_all(pattern, rhs, conditions, settings));
+//     TensorNetwork {
+//         graph,
+//         scalar: self
+//             .scalar
+//             .as_ref()
+//             .map(|a| SerializableAtom(a.0.replace_all(pattern, rhs, conditions, settings))),
+//     }
+// }
+
+// fn replace_all_mut(
+//     &mut self,
+//     pattern: &Pattern,
+//     rhs: &PatternOrMap,
+//     conditions: Option<&Condition<PatternRestriction>>,
+//     settings: Option<&MatchSettings>,
+// ) {
+//     self.graph
+//         .map_nodes_mut(|(_, a)| a.replace_all_mut(pattern, rhs, conditions, settings));
+
+//     if let Some(a) = self.scalar.as_mut() {
+//         a.0 = a.0.replace_all(pattern, rhs, conditions, settings);
+//     }
+// }
+
+// fn replace_all_multiple<R: BorrowReplacement>(&self, replacements: &[R]) -> Self {
+//     let graph = self
+//         .graph
+//         .map_nodes_ref(|(_, a)| a.replace_all_multiple(replacements));
+//     TensorNetwork {
+//         graph,
+//         scalar: self
+//             .scalar
+//             .as_ref()
+//             .map(|a| SerializableAtom(a.0.replace_all_multiple(replacements))),
+//     }
+// }
+
+// fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]) {
+//     self.graph
+//         .map_nodes_mut(|(_, a)| a.replace_all_multiple_mut(replacements));
+//     if let Some(a) = self.scalar.as_mut() {
+//         a.0 = a.0.replace_all_multiple(replacements);
+//     }
+// }
+
+// fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]) {
+//     self.graph
+//         .map_nodes_mut(|(_, a)| a.replace_all_multiple_repeat_mut(replacements));
+//     if let Some(a) = self.scalar.as_mut() {
+//         Self::replace_repeat_multiple_atom(&mut a.0, replacements);
+//     }
+// }
+
+#[cfg(feature = "shadowing")]
+impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
+    TensorNetwork<ParamTensor<S>, SerializableAtom>
+{
     pub fn eval_tree(
         &self,
         fn_map: &FunctionMap,
@@ -1760,7 +2201,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     {
         let mut evaluate_net = TensorNetwork::new();
         for (_, t) in &self.graph.nodes {
-            let evaluated_tensor = t.eval_tree(fn_map, params)?;
+            let evaluated_tensor = t.to_evaluation_tree(fn_map, params)?;
             evaluate_net.push(evaluated_tensor);
         }
 
@@ -1777,6 +2218,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         &'a self,
         coeff_map: F,
         const_map: &AHashMap<AtomView<'a>, D>,
+        function_map: &HashMap<Symbol, EvaluationFn<D>>,
     ) -> Result<TensorNetwork<DataTensor<D, S>, D>, String>
     where
         D: Clone
@@ -1785,7 +2227,7 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
     {
         let mut evaluated_net = TensorNetwork::new();
         for (_, t) in &self.graph.nodes {
-            let evaluated_tensor = t.evaluate(coeff_map, const_map)?;
+            let evaluated_tensor = t.evaluate(coeff_map, const_map, function_map)?;
             evaluated_net.push(evaluated_tensor);
         }
         let fn_map: HashMap<_, EvaluationFn<_>> = HashMap::default();
@@ -2398,16 +2840,17 @@ where
     S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone,
     T: Clone,
 {
-    pub fn replace_all(
+    pub fn replace_all<R: BorrowPatternOrMap>(
         &self,
         pattern: &Pattern,
-        rhs: &PatternOrMap,
+        rhs: R,
         conditions: Option<&Condition<PatternRestriction>>,
         settings: Option<&MatchSettings>,
     ) -> Self
     where
         S: Clone,
     {
+        let rhs = rhs.borrow();
         let new_graph = self
             .graph
             .map_nodes_ref(|(_, t)| t.replace_all(pattern, rhs, conditions, settings));
@@ -2420,7 +2863,7 @@ where
         }
     }
 
-    pub fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
+    pub fn replace_all_multiple<R: BorrowReplacement>(&self, replacements: &[R]) -> Self {
         let new_graph = self
             .graph
             .map_nodes_ref(|(_, t)| t.replace_all_multiple(replacements));

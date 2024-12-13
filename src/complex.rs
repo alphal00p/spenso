@@ -35,7 +35,7 @@ use rand::Rng;
 
 use crate::{
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefOne, RefZero, Trace},
-    data::{DataTensor, GetTensorData, HasTensorData, SetTensorData, SparseOrDense},
+    data::{DataTensor, GetTensorData, HasTensorData, SetTensorData, SparseOrDense, StorageTensor},
     iterators::{IteratableTensor, IteratorEnum},
     structure::{
         concrete_index::{ExpandedIndex, FlatIndex},
@@ -200,6 +200,12 @@ where
         + RefOne
         + RefZero,
 {
+    fn i(&self) -> Option<Self> {
+        Some(Complex {
+            re: self.re.zero(),
+            im: self.re.one(),
+        })
+    }
     fn e(&self) -> Self {
         Complex {
             re: self.re.e(),
@@ -1567,7 +1573,9 @@ impl<T: Clone, S: TensorStructure + Clone> HasTensorData for RealOrComplexTensor
     }
 }
 
-impl<T, S: TensorStructure> RealOrComplexTensor<T, S> {
+// use crate::data::StorageTensor;
+
+impl<T, S: TensorStructure + Clone> RealOrComplexTensor<T, S> {
     pub fn map_structure<S2: TensorStructure>(
         self,
         f: impl Fn(S) -> S2,

@@ -3,14 +3,14 @@ extern crate derive_more;
 use std::{
     fmt::{Debug, Display},
     io::Cursor,
-    sync::Arc,
 };
 
-use ahash::{AHashMap, HashMap};
+use ahash::HashMap;
 
 use anyhow::anyhow;
 use anyhow::{Error, Result};
 
+use atomcore::TensorAtomMaps;
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
 use log::trace;
@@ -22,7 +22,7 @@ use crate::{
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero, Trace},
     data::{
         DataIterator, DataTensor, DenseTensor, GetTensorData, HasTensorData, SetTensorData,
-        SparseOrDense, SparseTensor,
+        SparseOrDense, SparseTensor, StorageTensor,
     },
     iterators::{IteratableTensor, IteratorEnum},
     shadowing::{ShadowMapping, Shadowable},
@@ -38,25 +38,16 @@ use crate::{
 
 use symbolica::{
     atom::{representation::FunView, Atom, AtomOrView, AtomView, FunctionBuilder, Symbol},
-    coefficient::{Coefficient, ConvertToRing},
+    coefficient::Coefficient,
     domains::{
-        factorized_rational_polynomial::{
-            FactorizedRationalPolynomial, FromNumeratorAndFactorizedDenominator,
-        },
         float::{NumericalFloatLike, Real},
         rational::Rational,
-        rational_polynomial::{FromNumeratorAndDenominator, RationalPolynomial},
-        EuclideanDomain,
     },
     evaluate::{
         CompileOptions, CompiledCode, CompiledEvaluator, CompiledEvaluatorFloat, EvalTree,
         EvaluationFn, ExportedCode, Expression, ExpressionEvaluator, FunctionMap, InlineASM,
     },
-    id::{Condition, MatchSettings, Pattern, PatternOrMap, PatternRestriction, Replacement},
-    poly::{
-        factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial,
-        PositiveExponent, Variable,
-    },
+    id::{BorrowPatternOrMap, Condition, MatchSettings, Pattern, PatternRestriction},
     state::State,
 };
 
@@ -286,57 +277,96 @@ pub struct ParamTensor<S: TensorStructure = VecStructure> {
     // Composite(DataTensor<Atom, S>),
 }
 
-impl<S: TensorStructure> ParamTensor<S> {
-    pub fn map_structure<S2: TensorStructure>(self, f: impl Fn(S) -> S2) -> ParamTensor<S2> {
-        ParamTensor {
-            tensor: self.tensor.map_structure(f),
-            param_type: self.param_type,
-        }
+impl<S: TensorStructure + Clone> StorageTensor for ParamTensor<S> {
+    type Data = Atom;
+    type ContainerData<Data> = DataTensor<Data, S>;
+    type ContainerStructure<Structure> = ParamTensor<Structure> where
+        Structure: TensorStructure;
+
+    fn map_data<U>(self, f: impl Fn(Self::Data) -> U) -> Self::ContainerData<U> {
+        self.tensor.map_data(f)
     }
 
-    pub fn map_structure_fallible<S2: TensorStructure, E>(
-        self,
-        f: impl Fn(S) -> Result<S2, E>,
-    ) -> Result<ParamTensor<S2>, E> {
+    fn map_data_ref_mut_result<U, E>(
+        &mut self,
+        f: impl FnMut(&mut Self::Data) -> Result<U, E>,
+    ) -> Result<Self::ContainerData<U>, E> {
+        self.tensor.map_data_ref_mut_result(f)
+    }
+
+    fn map_data_ref_result_self<E>(
+        &self,
+        f: impl Fn(&Self::Data) -> Result<Self::Data, E>,
+    ) -> Result<Self, E> {
         Ok(ParamTensor {
-            tensor: self.tensor.map_structure_fallible(f)?,
+            tensor: self.tensor.map_data_ref_result_self(f)?,
             param_type: self.param_type,
         })
     }
 
-    pub fn map_data_ref(&self, f: impl Fn(&Atom) -> Atom) -> ParamTensor<S>
-    where
-        S: Clone,
-    {
-        ParamTensor {
-            tensor: self.tensor.map_data_ref(f),
-            param_type: self.param_type,
-        }
-    }
-
-    pub fn map_data(self, f: impl Fn(Atom) -> Atom) -> ParamTensor<S> {
-        ParamTensor {
-            tensor: self.tensor.map_data(f),
-            param_type: self.param_type,
-        }
-    }
-
-    pub fn map_data_mut(&mut self, f: impl FnMut(&mut Atom))
-    where
-        S: Clone,
-    {
+    fn map_data_mut(&mut self, f: impl FnMut(&mut Self::Data)) {
         self.tensor.map_data_mut(f)
     }
 
-    pub fn map_data_ref_mut<U>(&mut self, f: impl FnMut(&mut Atom) -> Atom) -> ParamTensor<S>
+    fn map_data_ref<U>(&self, f: impl Fn(&Self::Data) -> U) -> Self::ContainerData<U> {
+        self.tensor.map_data_ref(f)
+    }
+
+    fn map_structure<Ss>(self, f: impl Fn(Self::Structure) -> Ss) -> Self::ContainerStructure<Ss>
     where
-        // T: Clone,
-        // U: Clone,
-        S: Clone,
+        Ss: TensorStructure,
     {
         ParamTensor {
-            tensor: self.tensor.map_data_ref_mut(f),
             param_type: self.param_type,
+            tensor: self.tensor.map_structure(f),
+        }
+    }
+
+    fn map_structure_fallible<St, E>(
+        self,
+        f: impl Fn(Self::Structure) -> Result<St, E>,
+    ) -> Result<Self::ContainerStructure<St>, E>
+    where
+        St: TensorStructure,
+    {
+        Ok(ParamTensor {
+            param_type: self.param_type,
+            tensor: self.tensor.map_structure_fallible(f)?,
+        })
+    }
+
+    fn map_data_ref_mut<U>(
+        &mut self,
+        f: impl FnMut(&mut Self::Data) -> U,
+    ) -> Self::ContainerData<U> {
+        self.tensor.map_data_ref_mut(f)
+    }
+
+    fn map_data_ref_self(&self, f: impl Fn(&Self::Data) -> Self::Data) -> Self {
+        ParamTensor {
+            param_type: self.param_type,
+            tensor: self.tensor.map_data_ref(f),
+        }
+    }
+
+    fn map_data_ref_result<U, E>(
+        &self,
+        f: impl Fn(&Self::Data) -> Result<U, E>,
+    ) -> Result<Self::ContainerData<U>, E> {
+        self.tensor.map_data_ref_result(f)
+    }
+
+    fn map_data_ref_mut_self(&mut self, f: impl FnMut(&mut Self::Data) -> Self::Data) -> Self {
+        ParamTensor {
+            param_type: self.param_type,
+            tensor: self.tensor.map_data_ref_mut_self(f),
+        }
+    }
+
+    fn map_data_self(self, f: impl Fn(Self::Data) -> Self::Data) -> Self {
+        ParamTensor {
+            param_type: self.param_type,
+            tensor: self.tensor.map_data(f),
         }
     }
 }
@@ -565,73 +595,6 @@ impl<S: TensorStructure> ParamTensor<S> {
             param_type: ParamOrComposite::Composite,
         }
     }
-
-    /// Convert the tensor of atoms to a tensor of polynomials, optionally in the variable ordering
-    /// specified by `var_map`. If new variables are encountered, they are
-    /// added to the variable map. Similarly, non-polynomial parts are automatically
-    /// defined as a new independent variable in the polynomial.
-    pub fn to_polynomial<R: EuclideanDomain + ConvertToRing, E: PositiveExponent>(
-        &self,
-        field: &R,
-        var_map: Option<Arc<Vec<Variable>>>,
-    ) -> DataTensor<MultivariatePolynomial<R, E>, S>
-    where
-        S: Clone,
-    {
-        self.tensor
-            .map_data_ref(|a| a.as_view().to_polynomial(field, var_map.clone()))
-    }
-
-    /// Convert the tensor of atoms to a tensor of rational polynomials, optionally in the variable ordering
-    /// specified by `var_map`. If new variables are encountered, they are
-    /// added to the variable map. Similarly, non-rational polynomial parts are automatically
-    /// defined as a new independent variable in the rational polynomial.
-    pub fn to_rational_polynomial<
-        R: EuclideanDomain + ConvertToRing,
-        RO: EuclideanDomain + PolynomialGCD<E>,
-        E: PositiveExponent,
-    >(
-        &self,
-        field: &R,
-        out_field: &RO,
-        var_map: Option<Arc<Vec<Variable>>>,
-    ) -> DataTensor<RationalPolynomial<RO, E>, S>
-    where
-        RationalPolynomial<RO, E>:
-            FromNumeratorAndDenominator<R, RO, E> + FromNumeratorAndDenominator<RO, RO, E>,
-        S: Clone,
-    {
-        self.tensor.map_data_ref(|a| {
-            a.as_view()
-                .to_rational_polynomial(field, out_field, var_map.clone())
-        })
-    }
-
-    /// Convert the tensor of atoms to a tensor of rational polynomials with factorized denominators, optionally in the variable ordering
-    /// specified by `var_map`. If new variables are encountered, they are
-    /// added to the variable map. Similarly, non-rational polynomial parts are automatically
-    /// defined as a new independent variable in the rational polynomial.
-    pub fn to_factorized_rational_polynomial<
-        R: EuclideanDomain + ConvertToRing,
-        RO: EuclideanDomain + PolynomialGCD<E>,
-        E: PositiveExponent,
-    >(
-        &self,
-        field: &R,
-        out_field: &RO,
-        var_map: Option<Arc<Vec<Variable>>>,
-    ) -> DataTensor<FactorizedRationalPolynomial<RO, E>, S>
-    where
-        FactorizedRationalPolynomial<RO, E>: FromNumeratorAndFactorizedDenominator<R, RO, E>
-            + FromNumeratorAndFactorizedDenominator<RO, RO, E>,
-        MultivariatePolynomial<RO, E>: Factorize,
-        S: Clone,
-    {
-        self.tensor.map_data_ref(|a| {
-            a.as_view()
-                .to_factorized_rational_polynomial(field, out_field, var_map.clone())
-        })
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Copy, PartialEq, Eq, Hash)]
@@ -665,53 +628,6 @@ where
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
 {
-    // fn shadow_with_map<'a, T>(
-    //     &'a self,
-    //     fn_map: &mut FunctionMap<'a, Const>,
-    //     index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
-    // ) -> Option<ParamTensor<Self::Structure>>
-    // where
-    //     T: TensorCoefficient,
-    // {
-    //     match self {
-    //         ParamTensor::Param(_) => return Some(self.clone()),
-    //         ParamTensor::Composite(c) => match c {
-    //             DataTensor::Dense(d) => {
-    //                 let mut data = vec![];
-    //                 for (i, a) in d.flat_iter() {
-    //                     let labeled_coef = index_to_atom(self.structure(), i);
-
-    //                     labeled_coef
-    //                         .add_tagged_function(fn_map, a.as_view())
-    //                         .unwrap();
-    //                     data.push(labeled_coef.to_atom().unwrap());
-    //                 }
-    //                 let param = DenseTensor {
-    //                     data,
-    //                     structure: d.structure.clone(),
-    //                 };
-    //                 Some(ParamTensor::Param(param.into()))
-    //             }
-    //             DataTensor::Sparse(d) => {
-    //                 let mut data = vec![];
-    //                 for (i, a) in d.flat_iter() {
-    //                     let labeled_coef = index_to_atom(self.structure(), i);
-
-    //                     labeled_coef
-    //                         .add_tagged_function(fn_map, a.as_view())
-    //                         .unwrap();
-    //                     data.push(labeled_coef.to_atom().unwrap());
-    //                 }
-    //                 let param = DenseTensor {
-    //                     data,
-    //                     structure: d.structure.clone(),
-    //                 };
-    //                 Some(ParamTensor::Param(param.into()))
-    //             }
-    //         },
-    //     }
-    // }
-
     fn append_map<'a, T>(
         &'a self,
         fn_map: &mut FunctionMap<'a, Const>,
@@ -745,123 +661,9 @@ where
     }
 }
 
-// impl<T: Real> SparseTensor<EvalTree<T>> {
-//     pub fn evaluate(&mut self, params: &[T]) -> SparseTensor<T> {
-//         let zero = params[0].zero();
-//         let mut out_data = SparseTensor::repeat(self.structure.clone(), zero);
-//         self.map_data_ref_mut(|e| e.evaluate(params, &mut out_data.data));
-//         out_data
-//     }
-// }
+pub mod atomcore;
 
-impl DataTensor<EvalTree<Rational>> {
-    pub fn horner_scheme(&mut self) {
-        self.map_data_mut(|x| x.horner_scheme())
-    }
-}
-
-pub trait PatternReplacement {
-    fn replace_repeat_multiple_atom(expr: &mut Atom, reps: &[Replacement<'_>]) {
-        let atom = expr.replace_all_multiple(reps);
-        if atom != *expr {
-            *expr = atom;
-            Self::replace_repeat_multiple_atom(expr, reps)
-        }
-    }
-
-    fn replace_all(
-        &self,
-        pattern: &Pattern,
-        rhs: &PatternOrMap,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Self;
-
-    fn replace_all_mut(
-        &mut self,
-        pattern: &Pattern,
-        rhs: &PatternOrMap,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    );
-
-    fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self;
-    fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]);
-    fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]);
-}
-
-impl<S: TensorStructure + Clone> PatternReplacement for ParamTensor<S> {
-    fn replace_all(
-        &self,
-        pattern: &Pattern,
-        rhs: &PatternOrMap,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Self {
-        let tensor = self
-            .tensor
-            .map_data_ref(|a| a.replace_all(pattern, rhs, conditions, settings));
-        ParamTensor {
-            tensor,
-            param_type: ParamOrComposite::Composite,
-        }
-    }
-
-    fn replace_all_mut(
-        &mut self,
-        pattern: &Pattern,
-        rhs: &PatternOrMap,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) {
-        *self = self.replace_all(pattern, rhs, conditions, settings)
-    }
-
-    fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
-        let tensor = self
-            .tensor
-            .map_data_ref(|a| a.replace_all_multiple(replacements));
-        ParamTensor {
-            tensor,
-            param_type: ParamOrComposite::Composite,
-        }
-    }
-
-    fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]) {
-        *self = self.replace_all_multiple(replacements)
-    }
-
-    fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]) {
-        self.tensor
-            .map_data_mut(|a| Self::replace_repeat_multiple_atom(a, replacements));
-        self.param_type = ParamOrComposite::Composite;
-    }
-}
-
-impl<S: TensorStructure + Clone> ParamTensor<S> {
-    pub fn eval_tree(
-        &self,
-        fn_map: &FunctionMap,
-        params: &[Atom],
-    ) -> Result<EvalTreeTensor<Rational, S>, String> {
-        self.tensor.eval_tree(fn_map, params)
-    }
-
-    pub fn evaluate<'a, 'b, T, F: Fn(&Rational) -> T + Copy, U>(
-        &self,
-        coeff_map: F,
-        const_map: &'b HashMap<AtomView<'a>, T>,
-    ) -> Result<DataTensor<U, S>, String>
-    where
-        T: symbolica::domains::float::Real
-            + for<'c> std::convert::From<&'c symbolica::domains::rational::Rational>,
-        U: From<T>,
-
-        'a: 'b,
-    {
-        self.tensor.evaluate(coeff_map, const_map)
-    }
-}
+use symbolica::id::BorrowReplacement;
 
 impl<S: TensorStructure + Clone> ParamTensorSet<S> {
     pub fn eval_tree(
@@ -979,6 +781,32 @@ pub enum ParamOrConcrete<C: HasStructure<Structure = S> + Clone, S: TensorStruct
     Param(ParamTensor<S>),
 }
 
+impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> ParamOrConcrete<C, S> {
+    pub fn replace_all<R: BorrowPatternOrMap>(
+        &self,
+        pattern: &Pattern,
+        rhs: R,
+        conditions: Option<&Condition<PatternRestriction>>,
+        settings: Option<&MatchSettings>,
+    ) -> Self {
+        match self {
+            ParamOrConcrete::Param(p) => {
+                ParamOrConcrete::Param(p.replace_all(pattern, rhs, conditions, settings))
+            }
+            _ => self.clone(),
+        }
+    }
+
+    pub fn replace_all_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
+        match self {
+            ParamOrConcrete::Param(p) => {
+                ParamOrConcrete::Param(p.replace_all_multiple(replacements))
+            }
+            _ => self.clone(),
+        }
+    }
+}
+
 impl<C: Display + HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> Display
     for ParamOrConcrete<C, S>
 {
@@ -1067,60 +895,6 @@ impl<T> From<Atom> for AtomOrConcrete<T> {
 impl<T: Concrete> From<T> for AtomOrConcrete<T> {
     fn from(value: T) -> Self {
         AtomOrConcrete::Concrete(value)
-    }
-}
-
-impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> PatternReplacement
-    for ParamOrConcrete<C, S>
-{
-    fn replace_all(
-        &self,
-        pattern: &Pattern,
-        rhs: &PatternOrMap,
-
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Self {
-        match self {
-            ParamOrConcrete::Param(p) => {
-                ParamOrConcrete::Param(p.replace_all(pattern, rhs, conditions, settings))
-            }
-            _ => self.clone(),
-        }
-    }
-
-    fn replace_all_multiple(&self, replacements: &[Replacement<'_>]) -> Self {
-        match self {
-            ParamOrConcrete::Param(p) => {
-                ParamOrConcrete::Param(p.replace_all_multiple(replacements))
-            }
-            _ => self.clone(),
-        }
-    }
-
-    fn replace_all_mut(
-        &mut self,
-        pattern: &Pattern,
-        rhs: &PatternOrMap,
-
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) {
-        if let ParamOrConcrete::Param(p) = self {
-            p.replace_all_mut(pattern, rhs, conditions, settings);
-        }
-    }
-
-    fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]) {
-        if let ParamOrConcrete::Param(p) = self {
-            p.replace_all_multiple_mut(replacements);
-        }
-    }
-
-    fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]) {
-        if let ParamOrConcrete::Param(p) = self {
-            p.replace_all_multiple_repeat_mut(replacements);
-        }
     }
 }
 
@@ -1379,7 +1153,7 @@ impl<T: Into<Coefficient>> From<RealOrComplex<T>> for Atom {
             RealOrComplex::Real(x) => Atom::new_num(x),
             RealOrComplex::Complex(x) => {
                 let (re, im) = (Atom::new_num(x.re), Atom::new_num(x.im));
-                let i = Atom::new_var(State::I);
+                let i = Atom::new_var(Atom::I);
                 re + im * i
             }
         }
@@ -1592,6 +1366,7 @@ impl<'a, I: TensorStructure + Clone + 'a, T: Clone> MixedTensor<T, I> {
         &mut self,
         coeff_map: F,
         const_map: &'b HashMap<AtomView<'a>, T>,
+        function_map: &HashMap<Symbol, EvaluationFn<T>>,
     ) where
         'b: 'a,
         T: Real + for<'c> From<&'c Rational>,
@@ -1603,7 +1378,7 @@ impl<'a, I: TensorStructure + Clone + 'a, T: Clone> MixedTensor<T, I> {
 
         if let Some(x) = content {
             *self = MixedTensor::Concrete(RealOrComplexTensor::Real(
-                x.evaluate(coeff_map, const_map).unwrap(),
+                x.evaluate(coeff_map, const_map, function_map).unwrap(),
             ));
         }
     }
@@ -1612,6 +1387,7 @@ impl<'a, I: TensorStructure + Clone + 'a, T: Clone> MixedTensor<T, I> {
         &mut self,
         coeff_map: F,
         const_map: &'b HashMap<AtomView<'a>, SymComplex<T>>,
+        function_map: &HashMap<Symbol, EvaluationFn<SymComplex<T>>>,
     ) where
         'b: 'a,
         T: Real + for<'c> From<&'c Rational>,
@@ -1624,83 +1400,11 @@ impl<'a, I: TensorStructure + Clone + 'a, T: Clone> MixedTensor<T, I> {
 
         if let Some(x) = content {
             *self = MixedTensor::Concrete(RealOrComplexTensor::Complex(
-                x.evaluate(coeff_map, const_map).unwrap(),
+                x.evaluate(coeff_map, const_map, function_map)
+                    .unwrap()
+                    .map_data(|c| c.into()),
             ));
         }
-    }
-}
-
-impl<I> DataTensor<Atom, I>
-where
-    I: Clone + TensorStructure,
-{
-    pub fn eval_tree(
-        &self,
-        fn_map: &FunctionMap,
-        params: &[Atom],
-    ) -> Result<EvalTreeTensor<Rational, I>, String> {
-        EvalTreeTensor::from_data(self, fn_map, params)
-    }
-
-    pub fn evaluate<'a, 'b, T, F: Fn(&Rational) -> T + Copy, U>(
-        &self,
-        coeff_map: F,
-        const_map: &'b HashMap<AtomView<'a>, T>,
-    ) -> Result<DataTensor<U, I>, String>
-    where
-        T: symbolica::domains::float::Real
-            + for<'c> std::convert::From<&'c symbolica::domains::rational::Rational>,
-        U: From<T>,
-
-        'a: 'b,
-    {
-        match self {
-            DataTensor::Dense(x) => Ok(DataTensor::Dense(x.evaluate(coeff_map, const_map)?)),
-            DataTensor::Sparse(x) => Ok(DataTensor::Sparse(x.evaluate(coeff_map, const_map)?)),
-        }
-    }
-}
-
-impl<I> SparseTensor<Atom, I>
-where
-    I: Clone + TensorStructure,
-{
-    pub fn eval_tree(
-        &self,
-        fn_map: &FunctionMap,
-        params: &[Atom],
-    ) -> Result<EvalTreeTensor<Rational, I>, String> {
-        EvalTreeTensor::from_sparse(self, fn_map, params)
-    }
-
-    pub fn evaluate<'a, T, F: Fn(&Rational) -> T + Copy, U>(
-        &self,
-        coeff_map: F,
-        const_map: &HashMap<AtomView<'a>, T>,
-    ) -> Result<SparseTensor<U, I>, String>
-    where
-        T: symbolica::domains::float::Real
-            + for<'d> std::convert::From<&'d symbolica::domains::rational::Rational>,
-        U: From<T>,
-    {
-        let fn_map: HashMap<_, EvaluationFn<_>> = HashMap::default();
-        let mut cache = HashMap::default();
-        let structure = self.structure.clone();
-        let mut data = AHashMap::new();
-
-        for (idx, x) in self.elements.iter() {
-            data.insert(
-                *idx,
-                x.as_view()
-                    .evaluate::<T, F>(coeff_map, const_map, &fn_map, &mut cache)?
-                    .into(),
-            );
-        }
-
-        Ok(SparseTensor {
-            elements: data,
-            structure,
-        })
     }
 }
 
@@ -1708,40 +1412,6 @@ impl<I> DenseTensor<Atom, I>
 where
     I: Clone + TensorStructure,
 {
-    pub fn eval_tree(
-        &self,
-        fn_map: &FunctionMap,
-        params: &[Atom],
-    ) -> Result<EvalTreeTensor<Rational, I>, String> {
-        EvalTreeTensor::from_dense(self, fn_map, params)
-    }
-
-    pub fn evaluate<'a, T, F: Fn(&Rational) -> T + Copy, U>(
-        &'a self,
-        coeff_map: F,
-        const_map: &HashMap<AtomView<'a>, T>,
-    ) -> Result<DenseTensor<U, I>, String>
-    where
-        T: symbolica::domains::float::Real
-            + for<'b> std::convert::From<&'b symbolica::domains::rational::Rational>,
-        U: From<T>,
-    {
-        let fn_map: HashMap<_, EvaluationFn<_>> = HashMap::default();
-        let mut cache = HashMap::default();
-        let structure = self.structure.clone();
-        let mut data = Vec::new();
-
-        for d in self.data.iter() {
-            data.push(
-                d.as_view()
-                    .evaluate::<T, F>(coeff_map, const_map, &fn_map, &mut cache)?
-                    .into(),
-            )
-        }
-
-        Ok(DenseTensor { data, structure })
-    }
-
     pub fn append_const_map<'a, 'b, T, U>(
         &'a self,
         data: &DenseTensor<T, I>,
@@ -2196,6 +1866,18 @@ impl<S: Clone> EvalTreeTensor<Rational, S> {
     ) -> Vec<Expression<Rational>> {
         self.eval
             .optimize_horner_scheme(iterations, n_cores, scheme, verbose)
+    }
+
+    pub fn optimize(
+        &mut self,
+        iterations: usize,
+        n_cores: usize,
+        start_scheme: Option<Vec<Expression<Rational>>>,
+        verbose: bool,
+    ) -> EvalTensor<ExpressionEvaluator<Rational>, S> {
+        let _ = self.optimize_horner_scheme(iterations, n_cores, start_scheme, verbose);
+        self.common_subexpression_elimination();
+        self.clone().linearize(None)
     }
 }
 

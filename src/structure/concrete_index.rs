@@ -15,7 +15,7 @@ use derive_more::Sub;
 use derive_more::SubAssign;
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{AsAtomView, Atom, FunctionBuilder},
+    atom::{Atom, AtomCore, FunctionBuilder},
     state::State,
     {fun, symb},
 };

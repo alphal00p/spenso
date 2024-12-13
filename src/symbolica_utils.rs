@@ -1,10 +1,10 @@
-use crate::structure::concrete_index::ConcreteIndex;
+use crate::{parametric::atomcore::PatternReplacement, structure::concrete_index::ConcreteIndex};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use smartstring::{LazyCompact, SmartString};
 use symbolica::{
-    atom::{AsAtomView, Atom, AtomView, FunctionBuilder, Symbol},
-    id::{Pattern, PatternOrMap, Replacement},
+    atom::{Atom, AtomCore, AtomView, FunctionBuilder, Symbol},
+    id::Pattern,
     state::State,
 };
 
@@ -67,40 +67,67 @@ impl From<SerializableSymbol> for u32 {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct SerializableAtom(pub Atom);
 
-impl SerializableAtom {
-    pub fn replace_repeat(&mut self, lhs: Pattern, rhs: PatternOrMap) {
-        let atom = self.0.replace_all(&lhs, &rhs, None, None);
-        if atom != self.0 {
-            self.0 = atom;
-            self.replace_repeat(lhs, rhs);
-        }
+impl PatternReplacement for SerializableAtom {
+    fn replace_all_mut<R: symbolica::id::BorrowPatternOrMap>(
+        &mut self,
+        pattern: &Pattern,
+        rhs: R,
+        conditions: Option<&symbolica::id::Condition<symbolica::id::PatternRestriction>>,
+        settings: Option<&symbolica::id::MatchSettings>,
+    ) {
+        self.0.replace_all_mut(pattern, rhs, conditions, settings)
     }
 
-    pub fn replace_repeat_multiple(&mut self, reps: &[Replacement<'_>]) {
-        let atom = self.0.replace_all_multiple(reps);
-        // info!("expanded rep");
-        if atom != self.0 {
-            // info!("applied replacement");
-            self.0 = atom;
-            self.replace_repeat_multiple(reps);
-        }
+    fn replace_map_mut<F: Fn(AtomView, &symbolica::id::Context, &mut Atom) -> bool>(
+        &mut self,
+        m: &F,
+    ) {
+        self.0.replace_map_mut(m)
     }
 
-    pub fn replace_repeat_multiple_atom(expr: &mut Atom, reps: &[Replacement<'_>]) {
-        let atom = expr.replace_all_multiple(reps);
-        if atom != *expr {
-            *expr = atom;
-            Self::replace_repeat_multiple_atom(expr, reps)
-        }
+    fn replace_all_repeat<R: symbolica::id::BorrowPatternOrMap>(
+        &self,
+        pattern: &Pattern,
+        rhs: R,
+        conditions: Option<&symbolica::id::Condition<symbolica::id::PatternRestriction>>,
+        settings: Option<&symbolica::id::MatchSettings>,
+    ) -> Self {
+        SerializableAtom(
+            self.0
+                .replace_all_repeat(pattern, rhs, conditions, settings),
+        )
     }
 
-    pub fn replace_repeat_multiple_atom_expand(expr: &mut Atom, reps: &[Replacement<'_>]) {
-        let a = expr.expand();
-        let atom = a.replace_all_multiple(reps);
-        if atom != *expr {
-            *expr = atom;
-            Self::replace_repeat_multiple_atom_expand(expr, reps)
-        }
+    fn replace_all_repeat_mut<R: symbolica::id::BorrowPatternOrMap>(
+        &mut self,
+        pattern: &Pattern,
+        rhs: R,
+        conditions: Option<&symbolica::id::Condition<symbolica::id::PatternRestriction>>,
+        settings: Option<&symbolica::id::MatchSettings>,
+    ) {
+        self.0
+            .replace_all_repeat_mut(pattern, rhs, conditions, settings)
+    }
+
+    fn replace_all_multiple_mut<T: symbolica::id::BorrowReplacement>(
+        &mut self,
+        replacements: &[T],
+    ) {
+        self.0.replace_all_multiple_mut(replacements)
+    }
+
+    fn replace_all_multiple_repeat<T: symbolica::id::BorrowReplacement>(
+        &self,
+        replacements: &[T],
+    ) -> Self {
+        self.0.replace_all_multiple_repeat(replacements).into()
+    }
+
+    fn replace_all_multiple_repeat_mut<T: symbolica::id::BorrowReplacement>(
+        &mut self,
+        replacements: &[T],
+    ) {
+        self.0.replace_all_multiple_repeat_mut(replacements)
     }
 }
 

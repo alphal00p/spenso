@@ -21,7 +21,7 @@ use crate::{
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{AsAtomView, Atom, FunctionBuilder, Symbol},
+    atom::{Atom, AtomCore, FunctionBuilder, Symbol},
     state::State,
     {fun, symb},
 };
@@ -414,7 +414,7 @@ duplicate! {
             for a in args {
                 fun = fun.add_arg(&a);
             }
-            FunctionBuilder::new(symb!(DOWNIND)).add_arg(&fun.finish()).finish()
+            FunctionBuilder::new(symb!(DOWNIND)).add_arg(fun.finish()).finish()
         }
 
         fn is_neg(self, i: usize) -> bool {
@@ -923,7 +923,7 @@ pub struct Representation<T: RepName> {
 
 impl<T: RepName> Representation<T> {
     #[cfg(feature = "shadowing")]
-    pub fn pattern<'b, A: AsAtomView<'b>>(&self, aind: A) -> Atom {
+    pub fn pattern<A: AtomCore>(&self, aind: A) -> Atom {
         let mut atom = Atom::new();
         atom.set_from_view(&aind.as_atom_view());
         self.rep.to_symbolic([self.dim.to_symbolic(), atom])

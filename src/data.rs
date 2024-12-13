@@ -1123,89 +1123,6 @@ where
     }
 }
 
-impl<T, S: TensorStructure> DenseTensor<T, S> {
-    pub fn map_structure<S2>(self, f: impl Fn(S) -> S2) -> DenseTensor<T, S2>
-    where
-        S2: TensorStructure,
-    {
-        DenseTensor {
-            data: self.data,
-            structure: f(self.structure),
-        }
-    }
-
-    pub fn map_structure_fallible<S2, E>(
-        self,
-        f: impl Fn(S) -> Result<S2, E>,
-    ) -> Result<DenseTensor<T, S2>, E>
-    where
-        S2: TensorStructure,
-    {
-        Ok(DenseTensor {
-            data: self.data,
-            structure: f(self.structure)?,
-        })
-    }
-
-    pub fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> DenseTensor<U, S>
-    where
-        // T: Clone,
-        // U: Clone,
-        S: Clone,
-    {
-        let data = self.data.iter().map(f).collect();
-        DenseTensor {
-            data,
-            structure: self.structure.clone(),
-        }
-    }
-
-    pub fn map_data_ref_result<U, E>(
-        &self,
-        f: impl Fn(&T) -> Result<U, E>,
-    ) -> Result<DenseTensor<U, S>, E>
-    where
-        // T: Clone,
-        // U: Clone,
-        S: Clone,
-    {
-        let data: Result<Vec<U>, E> = self.data.iter().map(f).collect();
-        Ok(DenseTensor {
-            data: data?,
-            structure: self.structure.clone(),
-        })
-    }
-
-    pub fn map_data_ref_mut<U>(&mut self, f: impl FnMut(&mut T) -> U) -> DenseTensor<U, S>
-    where
-        // T: Clone,
-        // U: Clone,
-        S: Clone,
-    {
-        let data = self.data.iter_mut().map(f).collect();
-        DenseTensor {
-            data,
-            structure: self.structure.clone(),
-        }
-    }
-
-    pub fn map_data_mut(&mut self, f: impl FnMut(&mut T))
-    where
-        // T: Clone,
-        // U: Clone,
-        S: Clone,
-    {
-        self.data.iter_mut().for_each(f);
-    }
-
-    pub fn map_data<U>(self, f: impl Fn(T) -> U) -> DenseTensor<U, S> {
-        let data = self.data.into_iter().map(f).collect();
-        DenseTensor {
-            data,
-            structure: self.structure,
-        }
-    }
-}
 impl<T, I> SetTensorData for DenseTensor<T, I>
 where
     I: TensorStructure,
@@ -1431,80 +1348,6 @@ where
         match self {
             DataTensor::Dense(d) => d.symhashmap(name, args),
             DataTensor::Sparse(s) => s.symhashmap(name, args),
-        }
-    }
-}
-
-impl<T, S: TensorStructure> DataTensor<T, S> {
-    pub fn map_structure<S2: TensorStructure>(self, f: impl Fn(S) -> S2) -> DataTensor<T, S2> {
-        match self {
-            DataTensor::Dense(d) => DataTensor::Dense(d.map_structure(f)),
-            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_structure(f)),
-        }
-    }
-
-    pub fn map_structure_fallible<S2: TensorStructure, E>(
-        self,
-        f: impl Fn(S) -> Result<S2, E>,
-    ) -> Result<DataTensor<T, S2>, E> {
-        Ok(match self {
-            DataTensor::Dense(d) => DataTensor::Dense(d.map_structure_fallible(f)?),
-            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_structure_fallible(f)?),
-        })
-    }
-    pub fn map_data_ref_result<U, E>(
-        &self,
-        f: impl Fn(&T) -> Result<U, E>,
-    ) -> Result<DataTensor<U, S>, E>
-    where
-        // T: Clone,
-        // U: Clone,
-        S: Clone,
-    {
-        match self {
-            DataTensor::Dense(d) => Ok(DataTensor::Dense(d.map_data_ref_result(f)?)),
-            DataTensor::Sparse(s) => Ok(DataTensor::Sparse(s.map_data_ref_result(f)?)),
-        }
-    }
-
-    pub fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> DataTensor<U, S>
-    where
-        // T: Clone,
-        // U: Clone,
-        S: Clone,
-    {
-        match self {
-            DataTensor::Dense(d) => DataTensor::Dense(d.map_data_ref(f)),
-            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_data_ref(f)),
-        }
-    }
-
-    pub fn map_data<U>(self, f: impl Fn(T) -> U) -> DataTensor<U, S> {
-        match self {
-            DataTensor::Dense(d) => DataTensor::Dense(d.map_data(f)),
-            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_data(f)),
-        }
-    }
-
-    pub fn map_data_mut(&mut self, f: impl FnMut(&mut T))
-    where
-        S: Clone,
-    {
-        match self {
-            DataTensor::Dense(d) => d.map_data_mut(f),
-            DataTensor::Sparse(s) => s.map_data_mut(f),
-        }
-    }
-
-    pub fn map_data_ref_mut<U>(&mut self, f: impl FnMut(&mut T) -> U) -> DataTensor<U, S>
-    where
-        // T: Clone,
-        // U: Clone,
-        S: Clone,
-    {
-        match self {
-            DataTensor::Dense(d) => DataTensor::Dense(d.map_data_ref_mut(f)),
-            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_data_ref_mut(f)),
         }
     }
 }
@@ -1848,6 +1691,348 @@ impl<T: Clone, S: TensorStructure + StructureContract + Clone> DataTensor<DataTe
                     .flatten()
                     .map(DataTensor::Dense)
             }
+        }
+    }
+}
+
+pub trait StorageTensor: Sized + HasStructure<Structure: Clone> {
+    type ContainerStructure<S: TensorStructure>: HasStructure<Structure = S>;
+    type ContainerData<Data>: HasStructure<Structure = Self::Structure>;
+    type Data;
+
+    fn map_structure<S>(self, f: impl Fn(Self::Structure) -> S) -> Self::ContainerStructure<S>
+    where
+        S: TensorStructure;
+
+    fn map_structure_fallible<S, E>(
+        self,
+        f: impl Fn(Self::Structure) -> Result<S, E>,
+    ) -> Result<Self::ContainerStructure<S>, E>
+    where
+        S: TensorStructure;
+
+    fn map_data_ref<U>(&self, f: impl Fn(&Self::Data) -> U) -> Self::ContainerData<U>;
+
+    fn map_data_ref_self(&self, f: impl Fn(&Self::Data) -> Self::Data) -> Self;
+
+    fn map_data_ref_result<U, E>(
+        &self,
+        f: impl Fn(&Self::Data) -> Result<U, E>,
+    ) -> Result<Self::ContainerData<U>, E>;
+
+    fn map_data_ref_result_self<E>(
+        &self,
+        f: impl Fn(&Self::Data) -> Result<Self::Data, E>,
+    ) -> Result<Self, E>;
+
+    fn map_data_ref_mut<U>(
+        &mut self,
+        f: impl FnMut(&mut Self::Data) -> U,
+    ) -> Self::ContainerData<U>;
+
+    fn map_data_ref_mut_result<U, E>(
+        &mut self,
+        f: impl FnMut(&mut Self::Data) -> Result<U, E>,
+    ) -> Result<Self::ContainerData<U>, E>;
+
+    fn map_data_ref_mut_self(&mut self, f: impl FnMut(&mut Self::Data) -> Self::Data) -> Self;
+
+    fn map_data_mut(&mut self, f: impl FnMut(&mut Self::Data));
+
+    fn map_data<U>(self, f: impl Fn(Self::Data) -> U) -> Self::ContainerData<U>;
+
+    fn map_data_self(self, f: impl Fn(Self::Data) -> Self::Data) -> Self;
+}
+
+impl<S: TensorStructure + Clone, T> StorageTensor for DataTensor<T, S> {
+    type Data = T;
+    type ContainerData<Data> = DataTensor<Data, S>;
+    type ContainerStructure<Sts>
+    = DataTensor<T,Sts> where Sts: TensorStructure;
+
+    fn map_data_self(self, f: impl Fn(Self::Data) -> Self::Data) -> Self {
+        self.map_data(f)
+    }
+
+    fn map_data_ref_mut_result<U, E>(
+        &mut self,
+        f: impl FnMut(&mut Self::Data) -> Result<U, E>,
+    ) -> Result<Self::ContainerData<U>, E> {
+        match self {
+            DataTensor::Dense(d) => Ok(DataTensor::Dense(d.map_data_ref_mut_result(f)?)),
+            DataTensor::Sparse(s) => Ok(DataTensor::Sparse(s.map_data_ref_mut_result(f)?)),
+        }
+    }
+
+    fn map_data_ref_self(&self, f: impl Fn(&Self::Data) -> Self::Data) -> Self {
+        self.map_data_ref(f)
+    }
+
+    fn map_data_ref_mut_self(&mut self, f: impl FnMut(&mut Self::Data) -> Self::Data) -> Self {
+        self.map_data_ref_mut(f)
+    }
+
+    fn map_data_ref_result_self<E>(
+        &self,
+        f: impl Fn(&Self::Data) -> Result<Self::Data, E>,
+    ) -> Result<Self, E> {
+        self.map_data_ref_result(f)
+    }
+
+    fn map_structure<S2: TensorStructure>(self, f: impl Fn(S) -> S2) -> DataTensor<T, S2> {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_structure(f)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_structure(f)),
+        }
+    }
+
+    fn map_structure_fallible<S2: TensorStructure, E>(
+        self,
+        f: impl Fn(S) -> Result<S2, E>,
+    ) -> Result<DataTensor<T, S2>, E> {
+        Ok(match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_structure_fallible(f)?),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_structure_fallible(f)?),
+        })
+    }
+    fn map_data_ref_result<U, E>(
+        &self,
+        f: impl Fn(&T) -> Result<U, E>,
+    ) -> Result<DataTensor<U, S>, E> {
+        match self {
+            DataTensor::Dense(d) => Ok(DataTensor::Dense(d.map_data_ref_result(f)?)),
+            DataTensor::Sparse(s) => Ok(DataTensor::Sparse(s.map_data_ref_result(f)?)),
+        }
+    }
+
+    fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> DataTensor<U, S> {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_data_ref(f)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_data_ref(f)),
+        }
+    }
+
+    fn map_data<U>(self, f: impl Fn(T) -> U) -> DataTensor<U, S> {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_data(f)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_data(f)),
+        }
+    }
+
+    fn map_data_mut(&mut self, f: impl FnMut(&mut T)) {
+        match self {
+            DataTensor::Dense(d) => d.map_data_mut(f),
+            DataTensor::Sparse(s) => s.map_data_mut(f),
+        }
+    }
+
+    fn map_data_ref_mut<U>(&mut self, f: impl FnMut(&mut T) -> U) -> DataTensor<U, S> {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_data_ref_mut(f)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_data_ref_mut(f)),
+        }
+    }
+}
+
+impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
+    type Data = T;
+    type ContainerData<Data> = SparseTensor<Data, S>;
+    type ContainerStructure<St: TensorStructure> = SparseTensor<T, St>;
+
+    fn map_data_self(self, f: impl Fn(Self::Data) -> Self::Data) -> Self {
+        self.map_data(f)
+    }
+
+    fn map_data_ref_mut_result<U, E>(
+        &mut self,
+        mut f: impl FnMut(&mut Self::Data) -> Result<U, E>,
+    ) -> Result<Self::ContainerData<U>, E> {
+        let elements: Result<AHashMap<FlatIndex, _>, E> = self
+            .elements
+            .iter_mut()
+            .map(|(k, v)| f(v).map(|v| (*k, v)))
+            .collect();
+        Ok(SparseTensor {
+            elements: elements?,
+            structure: self.structure.clone(),
+        })
+    }
+
+    fn map_data_ref_self(&self, f: impl Fn(&Self::Data) -> Self::Data) -> Self {
+        self.map_data_ref(f)
+    }
+
+    fn map_data_ref_mut_self(&mut self, f: impl FnMut(&mut Self::Data) -> Self::Data) -> Self {
+        self.map_data_ref_mut(f)
+    }
+
+    fn map_data_ref_result_self<E>(
+        &self,
+        f: impl Fn(&Self::Data) -> Result<Self::Data, E>,
+    ) -> Result<Self, E> {
+        self.map_data_ref_result(f)
+    }
+
+    fn map_structure<S2>(self, f: impl Fn(S) -> S2) -> SparseTensor<T, S2>
+    where
+        S2: TensorStructure,
+    {
+        SparseTensor {
+            elements: self.elements,
+            structure: f(self.structure),
+        }
+    }
+
+    fn map_structure_fallible<S2, E>(
+        self,
+        f: impl Fn(S) -> Result<S2, E>,
+    ) -> Result<SparseTensor<T, S2>, E>
+    where
+        S2: TensorStructure,
+    {
+        Ok(SparseTensor {
+            elements: self.elements,
+            structure: f(self.structure)?,
+        })
+    }
+
+    fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> SparseTensor<U, S> {
+        let elements = self.flat_iter().map(|(k, v)| (k, f(v))).collect();
+        SparseTensor {
+            elements,
+            structure: self.structure.clone(),
+        }
+    }
+
+    fn map_data_ref_result<U, E>(
+        &self,
+        f: impl Fn(&T) -> Result<U, E>,
+    ) -> Result<SparseTensor<U, S>, E> {
+        let elements: Result<AHashMap<FlatIndex, _>, E> = self
+            .flat_iter()
+            .map(|(k, v)| f(v).map(|v| (k, v)))
+            .collect();
+        Ok(SparseTensor {
+            elements: elements?,
+            structure: self.structure.clone(),
+        })
+    }
+
+    fn map_data<U>(self, f: impl Fn(T) -> U) -> SparseTensor<U, S> {
+        let elements = self.elements.into_iter().map(|(k, v)| (k, f(v))).collect();
+        SparseTensor {
+            elements,
+            structure: self.structure,
+        }
+    }
+
+    fn map_data_ref_mut<U>(&mut self, mut f: impl FnMut(&mut T) -> U) -> SparseTensor<U, S> {
+        let elements = self.elements.iter_mut().map(|(k, v)| (*k, f(v))).collect();
+        SparseTensor {
+            elements,
+            structure: self.structure.clone(),
+        }
+    }
+
+    fn map_data_mut(&mut self, f: impl FnMut(&mut T)) {
+        self.elements.values_mut().for_each(f);
+    }
+}
+impl<S: TensorStructure + Clone, D> StorageTensor for DenseTensor<D, S> {
+    type ContainerStructure<Structure> = DenseTensor<D, Structure> where Structure: TensorStructure;
+    type ContainerData<Data> = DenseTensor<Data, S>;
+
+    type Data = D;
+
+    fn map_data_self(self, f: impl Fn(Self::Data) -> Self::Data) -> Self {
+        self.map_data(f)
+    }
+
+    fn map_data_ref_self(&self, f: impl Fn(&Self::Data) -> Self::Data) -> Self {
+        self.map_data_ref(f)
+    }
+
+    fn map_data_ref_mut_self(&mut self, f: impl FnMut(&mut Self::Data) -> Self::Data) -> Self {
+        self.map_data_ref_mut(f)
+    }
+
+    fn map_data_ref_result_self<E>(
+        &self,
+        f: impl Fn(&Self::Data) -> Result<Self::Data, E>,
+    ) -> Result<Self, E> {
+        self.map_data_ref_result(f)
+    }
+
+    fn map_structure<S2>(self, f: impl Fn(S) -> S2) -> DenseTensor<D, S2>
+    where
+        S2: TensorStructure,
+    {
+        DenseTensor {
+            data: self.data,
+            structure: f(self.structure),
+        }
+    }
+
+    fn map_structure_fallible<S2, E>(
+        self,
+        f: impl Fn(S) -> Result<S2, E>,
+    ) -> Result<DenseTensor<D, S2>, E>
+    where
+        S2: TensorStructure,
+    {
+        Ok(DenseTensor {
+            data: self.data,
+            structure: f(self.structure)?,
+        })
+    }
+
+    fn map_data_ref<U>(&self, f: impl Fn(&D) -> U) -> DenseTensor<U, S> {
+        let data = self.data.iter().map(f).collect();
+        DenseTensor {
+            data,
+            structure: self.structure.clone(),
+        }
+    }
+
+    fn map_data_ref_result<U, E>(
+        &self,
+        f: impl Fn(&D) -> Result<U, E>,
+    ) -> Result<DenseTensor<U, S>, E> {
+        let data: Result<Vec<U>, E> = self.data.iter().map(f).collect();
+        Ok(DenseTensor {
+            data: data?,
+            structure: self.structure.clone(),
+        })
+    }
+
+    fn map_data_ref_mut<U>(&mut self, f: impl FnMut(&mut D) -> U) -> DenseTensor<U, S> {
+        let data = self.data.iter_mut().map(f).collect();
+        DenseTensor {
+            data,
+            structure: self.structure.clone(),
+        }
+    }
+
+    fn map_data_ref_mut_result<U, E>(
+        &mut self,
+        f: impl FnMut(&mut Self::Data) -> Result<U, E>,
+    ) -> Result<Self::ContainerData<U>, E> {
+        let data: Result<Vec<U>, E> = self.data.iter_mut().map(f).collect();
+        Ok(DenseTensor {
+            data: data?,
+            structure: self.structure.clone(),
+        })
+    }
+
+    fn map_data_mut(&mut self, f: impl FnMut(&mut D)) {
+        self.data.iter_mut().for_each(f);
+    }
+
+    fn map_data<U>(self, f: impl Fn(D) -> U) -> DenseTensor<U, S> {
+        let data = self.data.into_iter().map(f).collect();
+        DenseTensor {
+            data,
+            structure: self.structure,
         }
     }
 }

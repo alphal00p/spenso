@@ -587,6 +587,7 @@ mod test {
 
     use crate::{
         contraction::Contract,
+        data::StorageTensor,
         network::TensorNetwork,
         parametric::MixedTensor,
         structure::{

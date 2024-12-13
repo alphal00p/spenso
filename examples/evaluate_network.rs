@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use ahash::{AHashMap, AHashSet, HashMap};
+use ahash::{AHashMap, AHashSet, HashMap, HashMapExt};
 use spenso::{
     complex::Complex,
     data::HasTensorData,
@@ -133,7 +133,7 @@ fn main() {
     let mut const_map = AHashMap::new();
     const_map_gen(&params, &mut const_map);
 
-    let i = Atom::new_var(State::I);
+    let i = Atom::new_var(Atom::I);
     const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.).into());
 
     // net.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(2));
@@ -161,7 +161,8 @@ fn main() {
     // }
     net.contract();
     let now = std::time::Instant::now();
-    net.evaluate_complex(|r| r.into(), &const_map);
+    let function_map = HashMap::new();
+    net.evaluate_complex(|r| r.into(), &const_map, &function_map);
     println!("Time: {:?}", now.elapsed());
     println!(
         "finished {:?}",

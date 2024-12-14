@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
+use ahash::{HashMap, HashSet, HashSetExt};
 use dyn_clone::DynClone;
 use symbolica::{
-    atom::{Atom, AtomCore, AtomView, Symbol},
+    atom::{Atom, AtomCore, AtomView, KeyLookup, Symbol},
     coefficient::{Coefficient, CoefficientView, ConvertToRing},
     domains::{
         atom::AtomField,
@@ -277,12 +277,11 @@ pub trait TensorAtomMaps {
     /// to an optimized version or generate a compiled version of your expression.
     ///
     /// All variables and all user functions in the expression must occur in the map.
-    fn evaluate<T: Real, F: Fn(&Rational) -> T + Copy>(
+    fn evaluate<A: AtomCore + KeyLookup, T: Real, F: Fn(&Rational) -> T + Copy>(
         &self,
         coeff_map: F,
-        const_map: &HashMap<AtomView<'_>, T>,
-        function_map: &HashMap<Symbol, EvaluationFn<T>>,
-        // cache: &mut HashMap<AtomView<'b>, T>,
+        const_map: &HashMap<A, T>,
+        function_map: &HashMap<Symbol, EvaluationFn<A, T>>,
     ) -> Result<Self::ContainerData<T>, String>;
 
     /// Check if the expression could be 0, using (potentially) numerical sampling with
@@ -619,16 +618,13 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
     /// to an optimized version or generate a compiled version of your expression.
     ///
     /// All variables and all user functions in the expression must occur in the map.
-    fn evaluate<T: Real, F: Fn(&Rational) -> T + Copy>(
+    fn evaluate<A: AtomCore + KeyLookup, T: Real, F: Fn(&Rational) -> T + Copy>(
         &self,
         coeff_map: F,
-        const_map: &HashMap<AtomView<'_>, T>,
-        function_map: &HashMap<Symbol, EvaluationFn<T>>,
+        const_map: &HashMap<A, T>,
+        function_map: &HashMap<Symbol, EvaluationFn<A, T>>,
     ) -> Result<Self::ContainerData<T>, String> {
-        self.map_data_ref_result(|a| {
-            let mut cache = HashMap::new();
-            a.evaluate(coeff_map, const_map, function_map, &mut cache)
-        })
+        self.map_data_ref_result(|a| a.evaluate(coeff_map, const_map, function_map))
     }
 
     /// Check if the expression could be 0, using (potentially) numerical sampling with
@@ -854,9 +850,9 @@ pub trait TensorAtomOps: HasStructure {
     /// Convert nested expressions to a tree suitable for repeated evaluations with
     /// different values for `params`.
     /// All variables and all user functions in the expression must occur in the map.
-    fn to_evaluation_tree<'a>(
-        &'a self,
-        fn_map: &FunctionMap<'a, Rational>,
+    fn to_evaluation_tree(
+        &self,
+        fn_map: &FunctionMap<Rational>,
         params: &[Atom],
     ) -> Result<EvalTreeTensor<Rational, Self::Structure>, String>;
 
@@ -864,9 +860,9 @@ pub trait TensorAtomOps: HasStructure {
     /// All free parameters must appear in `params` and all other variables
     /// and user functions in the expression must occur in the function map.
     /// The function map may have nested expressions.
-    fn evaluator<'a>(
-        &'a self,
-        fn_map: &FunctionMap<'a, Rational>,
+    fn evaluator(
+        &self,
+        fn_map: &FunctionMap<Rational>,
         params: &[Atom],
         optimization_settings: OptimizationSettings,
     ) -> Result<EvalTensor<ExpressionEvaluator<Rational>, Self::Structure>, String>;
@@ -933,9 +929,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DenseTensor<Atom, S> {
         self.iter_flat().any(|(_, a)| a.contains(s))
     }
 
-    fn to_evaluation_tree<'a>(
-        &'a self,
-        fn_map: &FunctionMap<'a, Rational>,
+    fn to_evaluation_tree(
+        &self,
+        fn_map: &FunctionMap<Rational>,
         params: &[Atom],
     ) -> Result<EvalTreeTensor<Rational, Self::Structure>, String> {
         let atomviews: Vec<AtomView> = self.data.iter().map(|a| a.as_view()).collect();
@@ -948,9 +944,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DenseTensor<Atom, S> {
         })
     }
 
-    fn evaluator<'a>(
-        &'a self,
-        fn_map: &FunctionMap<'a, Rational>,
+    fn evaluator(
+        &self,
+        fn_map: &FunctionMap<Rational>,
         params: &[Atom],
         optimization_settings: OptimizationSettings,
     ) -> Result<EvalTensor<ExpressionEvaluator<Rational>, Self::Structure>, String> {
@@ -1025,9 +1021,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for SparseTensor<Atom, S> {
         self.iter_flat().any(|(_, a)| a.contains(s))
     }
 
-    fn to_evaluation_tree<'a>(
-        &'a self,
-        fn_map: &FunctionMap<'a, Rational>,
+    fn to_evaluation_tree(
+        &self,
+        fn_map: &FunctionMap<Rational>,
         params: &[Atom],
     ) -> Result<EvalTreeTensor<Rational, Self::Structure>, String> {
         let atomviews: Vec<AtomView> = self.iter_flat().map(|(_, a)| a.as_view()).collect();
@@ -1040,9 +1036,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for SparseTensor<Atom, S> {
         })
     }
 
-    fn evaluator<'a>(
-        &'a self,
-        fn_map: &FunctionMap<'a, Rational>,
+    fn evaluator(
+        &self,
+        fn_map: &FunctionMap<Rational>,
         params: &[Atom],
         optimization_settings: OptimizationSettings,
     ) -> Result<EvalTensor<ExpressionEvaluator<Rational>, Self::Structure>, String> {
@@ -1089,9 +1085,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DataTensor<Atom, S> {
         }
     }
 
-    fn evaluator<'a>(
-        &'a self,
-        fn_map: &FunctionMap<'a, Rational>,
+    fn evaluator(
+        &self,
+        fn_map: &FunctionMap<Rational>,
         params: &[Atom],
         optimization_settings: OptimizationSettings,
     ) -> Result<EvalTensor<ExpressionEvaluator<Rational>, Self::Structure>, String> {
@@ -1133,9 +1129,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DataTensor<Atom, S> {
         }
     }
 
-    fn to_evaluation_tree<'a>(
-        &'a self,
-        fn_map: &FunctionMap<'a, Rational>,
+    fn to_evaluation_tree(
+        &self,
+        fn_map: &FunctionMap<Rational>,
         params: &[Atom],
     ) -> Result<EvalTreeTensor<Rational, Self::Structure>, String> {
         match self {
@@ -1157,9 +1153,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for ParamTensor<S> {
         self.tensor.contains(s)
     }
 
-    fn evaluator<'a>(
-        &'a self,
-        fn_map: &FunctionMap<'a, Rational>,
+    fn evaluator(
+        &self,
+        fn_map: &FunctionMap<Rational>,
         params: &[Atom],
         optimization_settings: OptimizationSettings,
     ) -> Result<EvalTensor<ExpressionEvaluator<Rational>, Self::Structure>, String> {
@@ -1187,9 +1183,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for ParamTensor<S> {
         self.tensor.coefficient_list::<E, T>(xs)
     }
 
-    fn to_evaluation_tree<'a>(
-        &'a self,
-        fn_map: &FunctionMap<'a, Rational>,
+    fn to_evaluation_tree(
+        &self,
+        fn_map: &FunctionMap<Rational>,
         params: &[Atom],
     ) -> Result<EvalTreeTensor<Rational, Self::Structure>, String> {
         self.tensor.to_evaluation_tree(fn_map, params)

@@ -1,6 +1,6 @@
 use ahash::AHashMap;
 #[cfg(feature = "shadowing")]
-use ahash::{AHashSet, HashMap, HashMapExt};
+use ahash::{AHashSet, HashMap};
 #[cfg(feature = "shadowing")]
 use anyhow::anyhow;
 #[cfg(feature = "shadowing")]
@@ -12,11 +12,6 @@ use symbolica::atom::PowView;
 // use log::trace;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
-use symbolica::{
-    atom::AtomCore,
-    id::{BorrowPatternOrMap, BorrowReplacement},
-    poly::PositiveExponent,
-};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{representation::FunView, AddView, Atom, AtomView, MulView, Symbol},
@@ -37,6 +32,11 @@ use symbolica::{
     id::{Condition, MatchSettings, Pattern, PatternRestriction},
     poly::{factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Variable},
     state::State,
+};
+use symbolica::{
+    atom::{AtomCore, KeyLookup},
+    id::{BorrowPatternOrMap, BorrowReplacement},
+    poly::PositiveExponent,
 };
 
 #[cfg(feature = "shadowing")]
@@ -1542,11 +1542,11 @@ where
     // }
 
     #[cfg(feature = "shadowing")]
-    pub fn evaluate_real<'a, F: Fn(&Rational) -> T + Copy>(
-        &'a mut self,
+    pub fn evaluate_real<A: AtomCore + KeyLookup, F: Fn(&Rational) -> T + Copy>(
+        &mut self,
         coeff_map: F,
-        const_map: &AHashMap<AtomView<'a>, T>,
-        function_map: &HashMap<Symbol, EvaluationFn<T>>,
+        const_map: &AHashMap<A, T>,
+        function_map: &HashMap<Symbol, EvaluationFn<A, T>>,
     ) where
         T: Real + for<'c> From<&'c Rational>,
     {
@@ -1556,11 +1556,11 @@ where
     }
 
     #[cfg(feature = "shadowing")]
-    pub fn evaluate_complex<'a, F: Fn(&Rational) -> SymComplex<T> + Copy>(
-        &'a mut self,
+    pub fn evaluate_complex<A: AtomCore + KeyLookup, F: Fn(&Rational) -> SymComplex<T> + Copy>(
+        &mut self,
         coeff_map: F,
-        const_map: &AHashMap<AtomView<'a>, SymComplex<T>>,
-        function_map: &HashMap<Symbol, EvaluationFn<SymComplex<T>>>,
+        const_map: &AHashMap<A, SymComplex<T>>,
+        function_map: &HashMap<Symbol, EvaluationFn<A, SymComplex<T>>>,
     ) where
         T: Real + for<'c> From<&'c Rational>,
         SymComplex<T>: Real + for<'c> From<&'c Rational>,
@@ -1714,11 +1714,11 @@ where
         })
     }
 
-    fn evaluate<T: Real, F: Fn(&Rational) -> T + Copy>(
+    fn evaluate<A: AtomCore + KeyLookup, T: Real, F: Fn(&Rational) -> T + Copy>(
         &self,
         coeff_map: F,
-        const_map: &HashMap<AtomView<'_>, T>,
-        function_map: &HashMap<Symbol, EvaluationFn<T>>,
+        const_map: &HashMap<A, T>,
+        function_map: &HashMap<Symbol, EvaluationFn<A, T>>,
         // cache: &mut HashMap<AtomView<'b>, T>,
     ) -> std::result::Result<Self::ContainerData<T>, std::string::String> {
         let graph = self
@@ -1729,10 +1729,7 @@ where
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| {
-                    let mut cache = HashMap::new();
-                    a.evaluate(coeff_map, const_map, function_map, &mut cache)
-                })
+                .map(|a| a.evaluate(coeff_map, const_map, function_map))
                 .transpose()?,
         })
     }
@@ -2214,11 +2211,11 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
         Ok(evaluate_net)
     }
 
-    pub fn evaluate<'a, D, F: Fn(&Rational) -> D + Copy>(
-        &'a self,
+    pub fn evaluate<A: AtomCore + KeyLookup, D, F: Fn(&Rational) -> D + Copy>(
+        &self,
         coeff_map: F,
-        const_map: &AHashMap<AtomView<'a>, D>,
-        function_map: &HashMap<Symbol, EvaluationFn<D>>,
+        const_map: &AHashMap<A, D>,
+        function_map: &HashMap<Symbol, EvaluationFn<A, D>>,
     ) -> Result<TensorNetwork<DataTensor<D, S>, D>, String>
     where
         D: Clone
@@ -2230,11 +2227,9 @@ impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
             let evaluated_tensor = t.evaluate(coeff_map, const_map, function_map)?;
             evaluated_net.push(evaluated_tensor);
         }
-        let fn_map: HashMap<_, EvaluationFn<_>> = HashMap::default();
-        let mut cache = HashMap::default();
 
         evaluated_net.scalar = if let Some(s) = &self.scalar {
-            Some(s.0.evaluate(coeff_map, const_map, &fn_map, &mut cache)?)
+            Some(s.0.evaluate(coeff_map, const_map, function_map)?)
         } else {
             None
         };
@@ -3230,7 +3225,7 @@ where
     T: HasName<Name: IntoSymbol, Args: IntoArgs>
         + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
 {
-    pub fn append_map<'a, U>(&'a self, fn_map: &mut FunctionMap<'a, U>)
+    pub fn append_map<U>(&self, fn_map: &mut FunctionMap<U>)
     where
         T: ShadowMapping<U>,
         T::Structure: Clone + ToSymbolic,
@@ -3422,11 +3417,7 @@ where
         }
     }
 
-    pub fn contract<'a, R>(
-        &'a mut self,
-        depth: usize,
-        fn_map: &mut FunctionMap<'a, R>,
-    ) -> ParamTensor<S>
+    pub fn contract<R>(&mut self, depth: usize, fn_map: &mut FunctionMap<R>) -> ParamTensor<S>
     where
         R: From<T>,
     {
@@ -3452,7 +3443,7 @@ where
         }
     }
 
-    fn generate_fn_map<'a, R>(&'a self, fn_map: &mut FunctionMap<'a, R>)
+    fn generate_fn_map<R>(&self, fn_map: &mut FunctionMap<R>)
     where
         R: From<T>,
     {
@@ -3506,11 +3497,7 @@ where
         }
     }
 
-    pub fn contract<'a, R>(
-        &'a mut self,
-        depth: usize,
-        fn_map: &mut FunctionMap<'a, R>,
-    ) -> ParamTensor<S> {
+    pub fn contract<R>(&mut self, depth: usize, fn_map: &mut FunctionMap<R>) -> ParamTensor<S> {
         self.initial
             .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
 
@@ -3533,7 +3520,7 @@ where
         }
     }
 
-    fn generate_fn_map<'a, R>(&'a self, fn_map: &mut FunctionMap<'a, R>) {
+    fn generate_fn_map<R>(&self, fn_map: &mut FunctionMap<R>) {
         self.initial.append_map(fn_map);
         for l in &self.levels {
             l.append_map(fn_map);

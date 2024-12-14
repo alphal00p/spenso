@@ -1670,9 +1670,9 @@ where
     S::Args: IntoArgs,
     R: From<T>,
 {
-    fn append_map<'a, C>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, R>,
+    fn append_map<C>(
+        &self,
+        fn_map: &mut FunctionMap<R>,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> C,
     ) where
         C: TensorCoefficient,

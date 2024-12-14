@@ -1404,7 +1404,6 @@ mod test {
         f.add_assign_fallible(&i);
 
         let function_map = HashMap::new();
-        let mut cache = HashMap::new();
 
         let mut const_map = HashMap::new();
         const_map.insert(i.as_view(), Complex::<f64>::new(0., 1.).into());
@@ -1413,9 +1412,8 @@ mod test {
 
         const_map.insert(b.as_view(), Complex::<f64>::new(3., 1.).into());
 
-        let ev: symbolica::domains::float::Complex<f64> = f
-            .evaluate(|r| r.into(), &const_map, &function_map, &mut cache)
-            .unwrap();
+        let ev: symbolica::domains::float::Complex<f64> =
+            f.evaluate(|r| r.into(), &const_map, &function_map).unwrap();
 
         println!("{}", ev);
         // print!("{}", f.unwrap());

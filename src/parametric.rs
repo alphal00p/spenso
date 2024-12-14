@@ -37,7 +37,7 @@ use crate::{
 };
 
 use symbolica::{
-    atom::{representation::FunView, Atom, AtomOrView, AtomView, FunctionBuilder, Symbol},
+    atom::{representation::FunView, Atom, AtomCore, AtomView, FunctionBuilder, KeyLookup, Symbol},
     coefficient::Coefficient,
     domains::{
         float::{NumericalFloatLike, Real},
@@ -64,14 +64,14 @@ use symbolica::domains::float::Complex as SymComplex;
 pub trait TensorCoefficient: Display {
     fn cooked_name(&self) -> Option<String>;
     fn name(&self) -> Option<Symbol>;
-    fn tags(&self) -> Vec<AtomOrView<'static>>;
+    fn tags(&self) -> Vec<Atom>;
     fn to_atom(&self) -> Option<Atom>;
     fn to_atom_re(&self) -> Option<Atom>;
     fn to_atom_im(&self) -> Option<Atom>;
-    fn add_tagged_function<'a, T>(
+    fn add_tagged_function<T>(
         &self,
-        fn_map: &mut FunctionMap<'a, T>,
-        body: AtomView<'a>,
+        fn_map: &mut FunctionMap<T>,
+        body: Atom,
     ) -> Result<(), String> {
         let (name, cooked_name) = self
             .name()
@@ -120,13 +120,13 @@ impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
         Some(name)
     }
 
-    fn tags(&self) -> Vec<AtomOrView<'static>> {
-        let mut tags: Vec<AtomOrView> = if let Some(ref args) = self.args {
-            args.args().into_iter().map(AtomOrView::from).collect()
+    fn tags(&self) -> Vec<Atom> {
+        let mut tags: Vec<Atom> = if let Some(ref args) = self.args {
+            args.args()
         } else {
             vec![]
         };
-        tags.push(Atom::from(self.index).into());
+        tags.push(Atom::from(self.index));
         tags
     }
 
@@ -201,13 +201,13 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
         Some(name)
     }
 
-    fn tags(&self) -> Vec<AtomOrView<'static>> {
-        let mut tags: Vec<AtomOrView> = if let Some(ref args) = self.args {
-            args.args().into_iter().map(AtomOrView::from).collect()
+    fn tags(&self) -> Vec<Atom> {
+        let mut tags: Vec<Atom> = if let Some(ref args) = self.args {
+            args.args()
         } else {
             vec![]
         };
-        tags.push(Atom::from(self.index.clone()).into());
+        tags.push(Atom::from(self.index.clone()));
         tags
     }
 
@@ -628,9 +628,9 @@ where
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
 {
-    fn append_map<'a, T>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, Const>,
+    fn append_map<T>(
+        &self,
+        fn_map: &mut FunctionMap<Const>,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
     ) where
         T: TensorCoefficient,
@@ -642,18 +642,14 @@ where
                     for (i, a) in d.flat_iter() {
                         let labeled_coef = index_to_atom(self.structure(), i);
 
-                        labeled_coef
-                            .add_tagged_function(fn_map, a.as_view())
-                            .unwrap();
+                        labeled_coef.add_tagged_function(fn_map, a.clone()).unwrap();
                     }
                 }
                 DataTensor::Sparse(d) => {
                     for (i, a) in d.flat_iter() {
                         let labeled_coef = index_to_atom(self.structure(), i);
 
-                        labeled_coef
-                            .add_tagged_function(fn_map, a.as_view())
-                            .unwrap();
+                        labeled_coef.add_tagged_function(fn_map, a.clone()).unwrap();
                     }
                 }
             },
@@ -860,9 +856,9 @@ impl<
     //     }
     // }
 
-    fn append_map<'a, T>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, U>,
+    fn append_map<T>(
+        &self,
+        fn_map: &mut FunctionMap<U>,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
     ) where
         T: TensorCoefficient,
@@ -1362,13 +1358,12 @@ impl<T: Clone, S: TensorStructure + Clone> Ord for MixedTensor<T, S> {
 }
 
 impl<'a, I: TensorStructure + Clone + 'a, T: Clone> MixedTensor<T, I> {
-    pub fn evaluate_real<'b, F: Fn(&Rational) -> T + Copy>(
+    pub fn evaluate_real<A: AtomCore + KeyLookup, F: Fn(&Rational) -> T + Copy>(
         &mut self,
         coeff_map: F,
-        const_map: &'b HashMap<AtomView<'a>, T>,
-        function_map: &HashMap<Symbol, EvaluationFn<T>>,
+        const_map: &HashMap<A, T>,
+        function_map: &HashMap<Symbol, EvaluationFn<A, T>>,
     ) where
-        'b: 'a,
         T: Real + for<'c> From<&'c Rational>,
     {
         let content = match self {
@@ -1383,13 +1378,12 @@ impl<'a, I: TensorStructure + Clone + 'a, T: Clone> MixedTensor<T, I> {
         }
     }
 
-    pub fn evaluate_complex<'b, F: Fn(&Rational) -> SymComplex<T> + Copy>(
+    pub fn evaluate_complex<A: AtomCore + KeyLookup, F: Fn(&Rational) -> SymComplex<T> + Copy>(
         &mut self,
         coeff_map: F,
-        const_map: &'b HashMap<AtomView<'a>, SymComplex<T>>,
-        function_map: &HashMap<Symbol, EvaluationFn<SymComplex<T>>>,
+        const_map: &HashMap<A, SymComplex<T>>,
+        function_map: &HashMap<Symbol, EvaluationFn<A, SymComplex<T>>>,
     ) where
-        'b: 'a,
         T: Real + for<'c> From<&'c Rational>,
         SymComplex<T>: Real + for<'c> From<&'c Rational>,
     {

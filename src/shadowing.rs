@@ -514,16 +514,16 @@ pub static EXPLICIT_TENSOR_MAP: Lazy<RwLock<ExplicitTensorMap>> =
     Lazy::new(|| RwLock::new(ExplicitTensorMap::new()));
 
 pub trait ShadowMapping<Const>: Shadowable {
-    fn expanded_shadow_with_map<'a>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, Const>,
+    fn expanded_shadow_with_map(
+        &self,
+        fn_map: &mut FunctionMap<Const>,
     ) -> Result<ParamTensor<Self::Structure>> {
         self.shadow_with_map(fn_map, Self::Structure::expanded_coef)
     }
 
-    fn shadow_with_map<'a, T, F>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, Const>,
+    fn shadow_with_map<T, F>(
+        &self,
+        fn_map: &mut FunctionMap<Const>,
         index_to_atom: F,
     ) -> Result<ParamTensor<Self::Structure>>
     where
@@ -536,24 +536,24 @@ pub trait ShadowMapping<Const>: Shadowable {
             .map(|x| ParamTensor::param(x.into()))
     }
 
-    fn append_map<'a, T>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, Const>,
+    fn append_map<T>(
+        &self,
+        fn_map: &mut FunctionMap<Const>,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
     ) where
         T: TensorCoefficient;
 
-    fn flat_append_map<'a>(&'a self, fn_map: &mut FunctionMap<'a, Const>) {
+    fn flat_append_map(&self, fn_map: &mut FunctionMap<Const>) {
         self.append_map(fn_map, Self::Structure::flat_coef)
     }
 
-    fn expanded_append_map<'a>(&'a self, fn_map: &mut FunctionMap<'a, Const>) {
+    fn expanded_append_map(&self, fn_map: &mut FunctionMap<Const>) {
         self.append_map(fn_map, Self::Structure::expanded_coef)
     }
 
-    fn flat_shadow_with_map<'a>(
-        &'a self,
-        fn_map: &mut FunctionMap<'a, Const>,
+    fn flat_shadow_with_map(
+        &self,
+        fn_map: &mut FunctionMap<Const>,
     ) -> Result<ParamTensor<Self::Structure>> {
         self.shadow_with_map(fn_map, Self::Structure::flat_coef)
     }
@@ -571,9 +571,9 @@ where
     S::Name: IntoSymbol + Clone,
     S::Args: IntoArgs,
 {
-    fn append_map<'a, T>(
-        &'a self,
-        _fn_map: &mut FunctionMap<'a, Const>,
+    fn append_map<T>(
+        &self,
+        _fn_map: &mut FunctionMap<Const>,
         _index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> T,
     ) where
         T: TensorCoefficient,

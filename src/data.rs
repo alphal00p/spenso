@@ -233,9 +233,9 @@ where
     //     Some(ParamTensor::Param(param.into()))
     // }
 
-    fn append_map<'a, U>(
-        &'a self,
-        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+    fn append_map<U>(
+        &self,
+        fn_map: &mut symbolica::evaluate::FunctionMap<R>,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
     ) where
         U: TensorCoefficient,
@@ -766,9 +766,9 @@ where
     //     Some(ParamTensor::Param(param.into()))
     // }
 
-    fn append_map<'a, U>(
-        &'a self,
-        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+    fn append_map<U>(
+        &self,
+        fn_map: &mut symbolica::evaluate::FunctionMap<R>,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
     ) where
         U: TensorCoefficient,
@@ -1258,9 +1258,9 @@ where
     //     }
     // }
 
-    fn append_map<'a, U>(
-        &'a self,
-        fn_map: &mut symbolica::evaluate::FunctionMap<'a, R>,
+    fn append_map<U>(
+        &self,
+        fn_map: &mut symbolica::evaluate::FunctionMap<R>,
         index_to_atom: impl Fn(&Self::Structure, FlatIndex) -> U,
     ) where
         U: TensorCoefficient,

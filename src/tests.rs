@@ -11,10 +11,7 @@ use rand_xoshiro::Xoroshiro64Star;
 
 use symbolica::atom::AtomCore;
 #[cfg(feature = "shadowing")]
-use symbolica::{
-    atom::{Atom, AtomView},
-    state::State,
-};
+use symbolica::atom::{Atom, AtomView, Symbol};
 
 #[cfg(feature = "shadowing")]
 use slotmap::{SecondaryMap, SlotMap};
@@ -1583,7 +1580,7 @@ fn slotmap() {
     let p: ParamTensor<NamedStructure<symbolica::atom::Symbol, Vec<Atom>>> = ParamTensor::param(
         DataTensor::Sparse(SparseTensor::empty(NamedStructure::from_iter(
             [Lorentz::slot(3, 4)],
-            State::get_symbol("name"),
+            Symbol::new("name"),
             Some(vec![Atom::parse("q").unwrap()]),
         ))),
     );

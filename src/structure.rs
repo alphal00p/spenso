@@ -40,10 +40,7 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::Range;
 #[cfg(feature = "shadowing")]
-use symbolica::{
-    atom::{representation::FunView, Atom, AtomView, FunctionBuilder, MulView, Symbol},
-    state::State,
-};
+use symbolica::atom::{representation::FunView, Atom, AtomView, FunctionBuilder, MulView, Symbol};
 
 use crate::iterators::TensorStructureIndexIterator;
 use std::collections::HashMap;
@@ -1022,7 +1019,7 @@ impl<R: RepName> TryFrom<AtomView<'_>> for VecStructure<R> {
 impl<R: RepName> TryFrom<FunView<'_>> for VecStructure<R> {
     type Error = SlotError;
     fn try_from(value: FunView) -> Result<Self, Self::Error> {
-        if value.get_symbol() == State::get_symbol(ABSTRACTIND) {
+        if value.get_symbol() == Symbol::new(ABSTRACTIND) {
             let mut structure: Vec<Slot<R>> = vec![];
 
             for arg in value.iter() {
@@ -1377,7 +1374,7 @@ impl<'a, R: RepName> TryFrom<FunView<'a>> for AtomStructure<R> {
     type Error = StructureError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         match value.get_symbol() {
-            s if s == State::get_symbol(ABSTRACTIND) => {
+            s if s == Symbol::new(ABSTRACTIND) => {
                 let mut structure: Vec<Slot<R>> = vec![];
 
                 for arg in value.iter() {

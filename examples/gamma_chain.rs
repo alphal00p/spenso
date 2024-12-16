@@ -228,15 +228,13 @@ fn gamma_net_param(
     vbar: [Complex<f64>; 4],
     u: [Complex<f64>; 4],
 ) -> TensorNetwork<MixedTensor<f64, ContractionCountStructure<PhysReps>>, Atom> {
-    use symbolica::state::State;
-
     let mut i: i32 = 0;
     let mut contracting_index = 0.into();
     let mut result: Vec<MixedTensor<f64, ContractionCountStructure<PhysReps>>> =
         vec![euclidean_four_vector(contracting_index, vbar).into()];
     let lor_fouru = PhysReps::new_rep(&Lorentz {}.into(), 4);
     let lor_fourd = lor_fouru.dual();
-    let p = State::get_symbol("p");
+    let p = Symbol::new("p");
     let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;

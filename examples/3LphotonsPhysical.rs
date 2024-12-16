@@ -16,7 +16,6 @@ use symbolica::{
     domains::rational::Rational,
     evaluate::{CompileOptions, FunctionMap, InlineASM},
     id::Replacement,
-    state::State,
 };
 
 use symbolica::domains::float::Complex as SymComplex;
@@ -108,7 +107,7 @@ fn main() {
 
     let mut const_atom_map: AHashMap<Symbol, Complex<f64>> = const_string_map
         .into_iter()
-        .map(|(k, v)| (State::get_symbol(k), v))
+        .map(|(k, v)| (Symbol::new(k), v))
         .collect();
 
     const_atom_map.insert(Atom::I, Complex::i());
@@ -134,8 +133,8 @@ fn main() {
     let mut fn_map: FunctionMap<Rational> = FunctionMap::new();
 
     for (k, v) in const_atom_map.iter() {
-        let name_re = Atom::new_var(State::get_symbol(k.to_string() + "_re"));
-        let name_im = Atom::new_var(State::get_symbol(k.to_string() + "_im"));
+        let name_re = Atom::new_var(Symbol::new(k.to_string() + "_re"));
+        let name_im = Atom::new_var(Symbol::new(k.to_string() + "_im"));
         let i = Atom::new_var(Atom::I);
         let pat = &name_re + i * &name_im;
         replacements.push(Replacement::new(

@@ -31,7 +31,6 @@ use symbolica::{
     },
     id::{Condition, MatchSettings, Pattern, PatternRestriction},
     poly::{factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Variable},
-    state::State,
 };
 use symbolica::{
     atom::{AtomCore, KeyLookup},
@@ -3154,7 +3153,7 @@ where
     pub fn sym_shadow(&mut self, name: &str) -> TensorNetwork<ParamTensor<T::Structure>, S> {
         {
             for (i, n) in &mut self.graph.nodes {
-                n.set_name(State::get_symbol(format!("{}{}", name, i.data().as_ffi())));
+                n.set_name(Symbol::new(format!("{}{}", name, i.data().as_ffi())));
             }
         }
 

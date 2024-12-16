@@ -15,8 +15,7 @@ use derive_more::Sub;
 use derive_more::SubAssign;
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{Atom, AtomCore, FunctionBuilder},
-    state::State,
+    atom::{Atom, AtomCore, FunctionBuilder, Symbol},
     {fun, symb},
 };
 
@@ -82,7 +81,7 @@ impl Deref for DualConciousExpandedIndex {
 #[cfg(feature = "shadowing")]
 impl From<DualConciousExpandedIndex> for Atom {
     fn from(value: DualConciousExpandedIndex) -> Self {
-        let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
+        let mut cind = FunctionBuilder::new(Symbol::new(CONCRETEIND));
         for i in value.iter() {
             cind = cind.add_arg(Atom::from(*i).as_atom_view());
         }
@@ -115,7 +114,7 @@ pub struct ExpandedIndex {
 // #[cfg(feature = "shadowing")]
 // impl From<ExpandedIndex> for Atom {
 //     fn from(value: ExpandedIndex) -> Self {
-//         let mut cind = FunctionBuilder::new(State::get_symbol(CONCRETEIND));
+//         let mut cind = FunctionBuilder::new(Symbol::new(CONCRETEIND));
 //         for i in value.iter() {
 //             cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
 //         }
@@ -170,7 +169,7 @@ pub struct FlatIndex {
 #[cfg(feature = "shadowing")]
 impl From<FlatIndex> for Atom {
     fn from(value: FlatIndex) -> Self {
-        let mut cind = FunctionBuilder::new(State::get_symbol(FLATIND));
+        let mut cind = FunctionBuilder::new(Symbol::new(FLATIND));
         cind = cind.add_arg(Atom::new_num(value.index as i64).as_atom_view());
         cind.finish()
     }

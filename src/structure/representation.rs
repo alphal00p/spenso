@@ -22,7 +22,6 @@ use crate::{
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomCore, FunctionBuilder, Symbol},
-    state::State,
     {fun, symb},
 };
 
@@ -65,7 +64,7 @@ pub trait BaseRepName: RepName<Dual: RepName> + Default {
 
     #[cfg(feature = "shadowing")]
     fn selfless_symbol() -> Symbol {
-        State::get_symbol(Self::NAME)
+        Symbol::new(Self::NAME)
     }
     fn selfless_dual() -> Self::Dual;
     fn rep<D: Into<Dimension>>(dim: D) -> Representation<Self>
@@ -303,9 +302,9 @@ duplicate! {
 
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol,aind:Symbol) -> Result<Self,RepresentationError> {
-        let uind = State::get_symbol(UPIND);
-        let dind = State::get_symbol(DOWNIND);
-        let sind = State::get_symbol(SELFDUALIND);
+        let uind = Symbol::new(UPIND);
+        let dind = Symbol::new(DOWNIND);
+        let sind = Symbol::new(SELFDUALIND);
         if aind == uind {
             if Self::selfless_symbol() == sym {
                 Ok(isnotselfdual::default())
@@ -381,9 +380,9 @@ duplicate! {
     }
         #[cfg(feature = "shadowing")]
         fn try_from_symbol(sym: Symbol,aind:Symbol) -> Result<Self,RepresentationError> {
-            let uind = State::get_symbol(UPIND);
-            let dind = State::get_symbol(DOWNIND);
-            let sind = State::get_symbol(SELFDUALIND);
+            let uind = Symbol::new(UPIND);
+            let dind = Symbol::new(DOWNIND);
+            let sind = Symbol::new(SELFDUALIND);
             if aind == dind {
                 if symb!(constname) == sym {
                     Ok(Dual{inner:isnotselfdual::default()})
@@ -506,9 +505,9 @@ impl RepName for Minkowski {
 
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError> {
-        let uind = State::get_symbol(UPIND);
-        let dind = State::get_symbol(DOWNIND);
-        let sind = State::get_symbol(SELFDUALIND);
+        let uind = Symbol::new(UPIND);
+        let dind = Symbol::new(DOWNIND);
+        let sind = Symbol::new(SELFDUALIND);
         if aind == sind {
             if Self::selfless_symbol() == sym {
                 Ok(Minkowski::default())
@@ -640,9 +639,9 @@ duplicate! {
 
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError> {
-        let uind = State::get_symbol(UPIND);
-        let dind = State::get_symbol(DOWNIND);
-        let sind = State::get_symbol(SELFDUALIND);
+        let uind = Symbol::new(UPIND);
+        let dind = Symbol::new(DOWNIND);
+        let sind = Symbol::new(SELFDUALIND);
         if aind == sind {
             if Self::selfless_symbol() == sym {
                 Ok(isselfdual::default())
@@ -844,39 +843,33 @@ impl RepName for PhysReps {
 
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError> {
-        match State::get_name(aind) {
-            UPIND => match State::get_name(sym) {
-                Euclidean::NAME | Minkowski::NAME | Bispinor::NAME | ColorAdjoint::NAME => {
-                    Err(RepresentationError::ExpectedDualStateError(
-                        State::get_symbol(SELFDUALIND),
-                        aind,
-                    ))
-                }
+        match aind.get_name() {
+            UPIND => match sym.get_name() {
+                Euclidean::NAME | Minkowski::NAME | Bispinor::NAME | ColorAdjoint::NAME => Err(
+                    RepresentationError::ExpectedDualStateError(Symbol::new(SELFDUALIND), aind),
+                ),
                 Lorentz::NAME => Ok(Self::LorentzUp(Lorentz {})),
                 SpinFundamental::NAME => Ok(Self::SpinFund(SpinFundamental {})),
                 ColorFundamental::NAME => Ok(Self::ColorFund(ColorFundamental {})),
                 ColorSextet::NAME => Ok(Self::ColorSextet(ColorSextet {})),
                 _ => Err(RepresentationError::NotRepresentationError(sym)),
             },
-            DOWNIND => match State::get_name(sym) {
-                Euclidean::NAME | Minkowski::NAME | Bispinor::NAME | ColorAdjoint::NAME => {
-                    Err(RepresentationError::ExpectedDualStateError(
-                        State::get_symbol(SELFDUALIND),
-                        aind,
-                    ))
-                }
+            DOWNIND => match sym.get_name() {
+                Euclidean::NAME | Minkowski::NAME | Bispinor::NAME | ColorAdjoint::NAME => Err(
+                    RepresentationError::ExpectedDualStateError(Symbol::new(SELFDUALIND), aind),
+                ),
                 Lorentz::NAME => Ok(Self::LorentzDown(Lorentz {}.dual())),
                 SpinFundamental::NAME => Ok(Self::SpinAntiFund(SpinFundamental {}.dual())),
                 ColorFundamental::NAME => Ok(Self::ColorAntiFund(ColorFundamental {}.dual())),
                 ColorSextet::NAME => Ok(Self::ColorAntiSextet(ColorSextet {}.dual())),
                 _ => Err(RepresentationError::NotRepresentationError(sym)),
             },
-            SELFDUALIND => match State::get_name(sym) {
+            SELFDUALIND => match sym.get_name() {
                 Lorentz::NAME
                 | SpinFundamental::NAME
                 | ColorFundamental::NAME
                 | ColorSextet::NAME => Err(RepresentationError::ExpectedDualStateError(
-                    State::get_symbol(SELFDUALIND),
+                    Symbol::new(SELFDUALIND),
                     aind,
                 )),
                 Euclidean::NAME => Ok(Self::Euclidean(Euclidean::default())),
@@ -892,7 +885,7 @@ impl RepName for PhysReps {
 
     #[cfg(feature = "shadowing")]
     fn try_from_symbol_coerced(sym: Symbol) -> Result<Self, RepresentationError> {
-        match State::get_name(sym) {
+        match sym.get_name() {
             Euclidean::NAME => Ok(Self::Euclidean(Euclidean::default())),
             Minkowski::NAME => Ok(Self::Minkowski(Minkowski::default())),
             Bispinor::NAME => Ok(Self::Bispinor(Bispinor::default())),
@@ -1209,13 +1202,13 @@ impl RepName for Rep {
 
         match rep {
             Rep::Dualizable(_) => {
-                if aind == State::get_symbol(DOWNIND) {
+                if aind == Symbol::new(DOWNIND) {
                     Ok(rep.dual())
-                } else if aind == State::get_symbol(UPIND) {
+                } else if aind == Symbol::new(UPIND) {
                     Ok(rep)
-                } else if aind == State::get_symbol(SELFDUALIND) {
+                } else if aind == Symbol::new(SELFDUALIND) {
                     Err(RepresentationError::ExpectedDualStateError(
-                        State::get_symbol(UPIND),
+                        Symbol::new(UPIND),
                         aind,
                     ))
                 } else {
@@ -1223,11 +1216,11 @@ impl RepName for Rep {
                 }
             }
             Rep::SelfDual(_) => {
-                if aind == State::get_symbol(SELFDUALIND) {
+                if aind == Symbol::new(SELFDUALIND) {
                     Ok(rep)
-                } else if aind == State::get_symbol(UPIND) || aind == State::get_symbol(DOWNIND) {
+                } else if aind == Symbol::new(UPIND) || aind == Symbol::new(DOWNIND) {
                     Err(RepresentationError::ExpectedDualStateError(
-                        State::get_symbol(SELFDUALIND),
+                        Symbol::new(SELFDUALIND),
                         aind,
                     ))
                 } else {

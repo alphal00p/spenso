@@ -39,9 +39,12 @@ mod test {
         atom::Atom,
         id::{Pattern, Replacement},
         poly::{polynomial::MultivariatePolynomial, Variable},
-        state::State,
     };
-    use symbolica::{atom::AtomCore, domains::rational::Q, poly::LexOrder};
+    use symbolica::{
+        atom::{AtomCore, Symbol},
+        domains::rational::Q,
+        poly::LexOrder,
+    };
 
     #[cfg(feature = "shadowing")]
     use crate::symbolic::SymbolicTensor;
@@ -60,7 +63,7 @@ mod test {
     #[cfg(feature = "shadowing")]
     #[test]
     fn three_loop_photon_poly() {
-        use symbolica::atom::AtomCore;
+        use symbolica::atom::{AtomCore, Symbol};
 
         let expr = concat!("-64/729*G^4*ee^6",
     "*(MT*id(aind(bis(4,47),bis(4,135)))+Q(15,aind(mink(4,149)))*γ(aind(mink(4,149),bis(4,47),bis(4,135))))",
@@ -115,9 +118,7 @@ mod test {
                 Pattern::parse(format!("Q{}", i).as_str()).unwrap(),
             ));
 
-            vars.push(Variable::Symbol(State::get_symbol(
-                format!("Q{}", i).as_str(),
-            )));
+            vars.push(Variable::Symbol(Symbol::new(format!("Q{}", i).as_str())));
             qs.push(Atom::parse(format!("Q{}", i).as_str()).unwrap());
         }
 
@@ -211,9 +212,7 @@ mod test {
                 Pattern::parse(format!("Q{}", i).as_str()).unwrap(),
             ));
 
-            vars.push(Variable::Symbol(State::get_symbol(
-                format!("Q{}", i).as_str(),
-            )));
+            vars.push(Variable::Symbol(Symbol::new(format!("Q{}", i).as_str())));
             qs.push(Atom::parse(format!("Q{}", i).as_str()).unwrap());
         }
 

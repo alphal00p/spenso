@@ -19,9 +19,8 @@ use ahash::AHashMap;
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use symbolica::{
-    atom::{Atom, Symbol},
+    atom::{Atom, FunctionAttribute, Symbol},
     evaluate::FunctionMap,
-    state::{FunctionAttribute, State},
     symb,
 };
 use thiserror::Error;
@@ -137,7 +136,7 @@ pub struct ExplicitTensorSymbols {
 }
 
 pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTensorSymbols {
-    id: State::get_symbol_with_attributes(
+    id: Symbol::new_with_attributes(
         ExplicitTensorMap::<f64>::ID_NAME,
         &[FunctionAttribute::Symmetric],
     )
@@ -147,7 +146,7 @@ pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTenso
     proj_m: symb!(ExplicitTensorMap::<f64>::PROJ_M_NAME),
     proj_p: symb!(ExplicitTensorMap::<f64>::PROJ_P_NAME),
     sigma: symb!(ExplicitTensorMap::<f64>::SIGMA_NAME),
-    metric: State::get_symbol_with_attributes(
+    metric: Symbol::new_with_attributes(
         ExplicitTensorMap::<f64>::METRIC_NAME,
         &[FunctionAttribute::Symmetric],
     )

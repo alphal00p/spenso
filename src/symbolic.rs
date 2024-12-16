@@ -14,10 +14,7 @@ use crate::{
 };
 
 use serde::{Deserialize, Serialize};
-use symbolica::{
-    atom::{Atom, AtomView, Symbol},
-    state::State,
-};
+use symbolica::atom::{Atom, AtomView, Symbol};
 
 /// A fully symbolic tensor, with no concrete values.
 ///
@@ -177,7 +174,7 @@ impl HasName for SymbolicTensor {
             AtomView::Fun(f) => {
                 for arg in f.iter() {
                     if let AtomView::Fun(f) = arg {
-                        if f.get_symbol() != State::get_symbol(ABSTRACTIND) {
+                        if f.get_symbol() != Symbol::new(ABSTRACTIND) {
                             args.push(arg.to_owned());
                         }
                     } else {

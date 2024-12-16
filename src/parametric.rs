@@ -142,7 +142,7 @@ impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
     }
 
     fn to_atom_re(&self) -> Option<Atom> {
-        let name = State::get_symbol(self.name?.to_string() + "_re");
+        let name = Symbol::new(self.name?.to_string() + "_re");
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
@@ -155,7 +155,7 @@ impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
     }
 
     fn to_atom_im(&self) -> Option<Atom> {
-        let name = State::get_symbol(self.name?.to_string() + "_im");
+        let name = Symbol::new(self.name?.to_string() + "_im");
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
@@ -222,7 +222,7 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
         Some(fn_builder.finish())
     }
     fn to_atom_re(&self) -> Option<Atom> {
-        let name = State::get_symbol(self.name?.to_string() + "_re");
+        let name = Symbol::new(self.name?.to_string() + "_re");
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
@@ -235,7 +235,7 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
     }
 
     fn to_atom_im(&self) -> Option<Atom> {
-        let name = State::get_symbol(self.name?.to_string() + "_im");
+        let name = Symbol::new(self.name?.to_string() + "_im");
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {

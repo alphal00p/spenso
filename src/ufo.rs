@@ -17,10 +17,7 @@ use crate::{
 };
 
 #[cfg(feature = "shadowing")]
-use symbolica::{
-    atom::{Atom, Symbol},
-    state::State,
-};
+use symbolica::atom::{Atom, Symbol};
 
 #[cfg(feature = "shadowing")]
 use crate::{
@@ -135,7 +132,7 @@ where
         p.to_vec(),
         HistoryStructure::from(NamedStructure::from_iter(
             [Lorentz::slot(4, index)],
-            State::get_symbol("p"),
+            Symbol::new("p"),
             None,
         )),
     )
@@ -167,7 +164,7 @@ where
         p.to_vec(),
         HistoryStructure::from(NamedStructure::from_iter(
             [Euclidean::slot(4, index)],
-            State::get_symbol("p"),
+            Symbol::new("p"),
             None,
         )),
     )
@@ -270,7 +267,7 @@ where
             Slot::<PhysReps>::from(Euclidean::slot(4, indices[0])),
             Euclidean::slot(4, indices[1]).into(),
         ],
-        State::get_symbol("γ"),
+        Symbol::new("γ"),
         None,
     ));
 
@@ -391,7 +388,7 @@ where
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         indices.into_iter().map(|i| Euclidean::slot(4, i)),
-        State::get_symbol("γ5"),
+        Symbol::new("γ5"),
         None,
     ));
 
@@ -452,7 +449,7 @@ where
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         indices.into_iter().map(|i| Euclidean::slot(4, i)),
-        State::get_symbol("ProjM"),
+        Symbol::new("ProjM"),
         None,
     ));
 
@@ -520,7 +517,7 @@ where
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         indices.into_iter().map(|i| Bispinor::slot(4, i)),
-        State::get_symbol("ProjP"),
+        Symbol::new("ProjP"),
         None,
     ));
 
@@ -618,7 +615,7 @@ where
             Lorentz::slot(4, minkdices[0]).into(),
             Lorentz::slot(4, minkdices[1]).into(),
         ],
-        State::get_symbol("σ"),
+        Symbol::new("σ"),
         None,
     ));
 
@@ -692,7 +689,7 @@ where
 #[cfg(test)]
 mod test {
     #[cfg(feature = "shadowing")]
-    use symbolica::{atom::Atom, state::State};
+    use symbolica::atom::Atom;
 
     #[cfg(feature = "shadowing")]
     use super::*;
@@ -1033,7 +1030,7 @@ mod test {
         //         z,
         //         -q0,
         //     ],
-        //     spinstructureb.to_named(State::get_symbol("b").into(), None),
+        //     spinstructureb.to_named(Symbol::new("b").into(), None),
         // )
         // .unwrap();
 
@@ -1132,7 +1129,7 @@ mod test {
                 z.clone(),
                 -p0,
             ],
-            spinstructure.to_named(State::get_symbol("a").into(), None),
+            spinstructure.to_named(Symbol::new("a").into(), None),
         )
         .unwrap();
 
@@ -1173,7 +1170,7 @@ mod test {
                 z,
                 -q0,
             ],
-            spinstructureb.to_named(State::get_symbol("b").into(), None),
+            spinstructureb.to_named(Symbol::new("b").into(), None),
         )
         .unwrap();
 
@@ -1226,7 +1223,7 @@ mod test {
             vec![
                 a00, a01, a02, a03, a10, a11, a12, a13, a20, a21, a22, a23, a30, a31, a32, a33,
             ],
-            spinstructure.to_named(State::get_symbol("a").into(), None),
+            spinstructure.to_named(Symbol::new("a").into(), None),
         )
         .unwrap();
 
@@ -1261,7 +1258,7 @@ mod test {
             vec![
                 b00, b01, b02, b03, b10, b11, b12, b13, b20, b21, b22, b23, b30, b31, b32, b33,
             ],
-            spinstructureb.to_named(State::get_symbol("b").into(), None),
+            spinstructureb.to_named(Symbol::new("b").into(), None),
         )
         .unwrap();
 

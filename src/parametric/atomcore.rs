@@ -89,8 +89,14 @@ impl PatternReplacement for Atom {
         settings: Option<&MatchSettings>,
     ) -> Atom {
         let mut out = self.clone();
+        let mut out_mut = out.clone();
         let rhs = rhs.borrow();
-        while self.replace_all_into(pattern, rhs, conditions, settings, &mut out) {}
+        while out.replace_all_into(pattern, rhs, conditions, settings, &mut out_mut) {
+            if out == out_mut {
+                break;
+            }
+            std::mem::swap(&mut out, &mut out_mut)
+        }
         out
     }
 
@@ -111,10 +117,14 @@ impl PatternReplacement for Atom {
 
     fn replace_all_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Atom {
         let mut out = self.clone();
-        while self
-            .as_atom_view()
-            .replace_all_multiple_into(replacements, &mut out)
-        {}
+        let mut out_mut = out.clone();
+
+        while out.replace_all_multiple_into(replacements, &mut out_mut) {
+            if out == out_mut {
+                break;
+            }
+            std::mem::swap(&mut out, &mut out_mut)
+        }
         out
     }
 

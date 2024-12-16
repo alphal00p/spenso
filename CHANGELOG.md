@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2](https://github.com/alphal00p/spenso/compare/v0.4.1...v0.4.2) - 2024-12-16
+
+### Fixed
+
+- fix atom replace repeat code
+
+### Other
+
+- update to new symbol api
+- update to evaluate api
+- New tensor atom core 
+- Change from Exponent to PositiveExponent for compatibility with latest symbolica
+- back to symbolica main
+
 ## [0.4.1](https://github.com/alphal00p/spenso/compare/v0.4.0...v0.4.1) - 2024-10-26
 
 ### Other

@@ -32,6 +32,8 @@ use symbolica::{
     id::{Condition, MatchSettings, Pattern, PatternRestriction},
     poly::{factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Variable},
 };
+
+#[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{AtomCore, KeyLookup},
     id::{BorrowPatternOrMap, BorrowReplacement},
@@ -61,13 +63,15 @@ use crate::{
     arithmetic::ScalarMul,
     contraction::{Contract, ContractionError, Trace},
     data::{DataTensor, GetTensorData, HasTensorData, StorageTensor},
-    parametric::atomcore::{TensorAtomMaps, TensorAtomOps},
     structure::{
         slot::DualSlotTo, CastStructure, HasName, HasStructure, ScalarTensor, TensorStructure,
         TracksCount,
     },
     upgrading_arithmetic::FallibleMul,
 };
+
+#[cfg(feature = "shadowing")]
+use crate::parametric::atomcore::{TensorAtomMaps, TensorAtomOps};
 
 use anyhow::Result;
 

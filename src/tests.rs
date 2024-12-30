@@ -9,9 +9,8 @@ use insta::{assert_ron_snapshot, assert_snapshot, assert_yaml_snapshot};
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 
-use symbolica::atom::AtomCore;
 #[cfg(feature = "shadowing")]
-use symbolica::atom::{Atom, AtomView, Symbol};
+use symbolica::atom::{Atom, AtomCore, AtomView, Symbol};
 
 #[cfg(feature = "shadowing")]
 use slotmap::{SecondaryMap, SlotMap};
@@ -1446,11 +1445,11 @@ fn test_fallible_mul() {
     }
 }
 
-#[test]
-#[cfg(feature = "shadowing")]
-fn get_license_key() {
-    symbolica::LicenseManager::new();
-}
+// #[test]
+// #[cfg(feature = "shadowing")]
+// fn get_license_key() {
+//     symbolica::LicenseManager::new();
+// }
 
 #[test]
 fn duals() {

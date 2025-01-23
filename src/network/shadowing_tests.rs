@@ -29,6 +29,7 @@ fn pslash_parse() {
 #[test]
 fn three_loop_photon_parse() {
     use crate::structure::representation::PhysReps;
+    let _ = ETS.gamma;
 
     let expr = concat!(
         "-64/729*ee^6*G^4",

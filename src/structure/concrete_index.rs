@@ -21,6 +21,8 @@ use symbolica::{
 
 use serde::{Deserialize, Serialize};
 
+use crate::permutation::Permutation;
+
 pub const CONCRETEIND: &str = "cind";
 pub const FLATIND: &str = "find";
 pub const UP: &str = "u";
@@ -109,6 +111,26 @@ impl From<DualConciousExpandedIndex> for Atom {
 
 pub struct ExpandedIndex {
     indices: Vec<ConcreteIndex>,
+}
+
+impl ExpandedIndex {
+    pub fn apply_permutation(&self, permutation: &Permutation) -> Self {
+        ExpandedIndex {
+            indices: permutation.apply_slice(&self.indices),
+        }
+    }
+
+    pub fn apply_inverse_permutation(&self, permutation: &Permutation) -> Self {
+        ExpandedIndex {
+            indices: permutation.apply_slice_inv(&self.indices),
+        }
+    }
+}
+
+impl AsRef<[ConcreteIndex]> for ExpandedIndex {
+    fn as_ref(&self) -> &[ConcreteIndex] {
+        &self.indices
+    }
 }
 
 // #[cfg(feature = "shadowing")]

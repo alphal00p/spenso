@@ -18,7 +18,7 @@ use crate::{
     contraction::{IsZero, RefZero},
     data::{DataTensor, DenseTensor, GetTensorData, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
-    structure::{concrete_index::ConcreteIndex, HasStructure, TensorStructure},
+    structure::{HasStructure, TensorStructure},
     upgrading_arithmetic::{FallibleAdd, FallibleMul, FallibleSub, TrySmallestUpgrade},
 };
 
@@ -59,14 +59,14 @@ where
     fn add_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
         // Makes rhs into self ,when applied.
-        let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
+        let self_to_rhs = rhs.structure().find_permutation(self.structure()).unwrap();
         let structure = self.structure().clone();
 
+        println!("dense dense add");
         let data: Option<Vec<Out>> = self
             .iter_expanded()
             .map(|(indices, u)| {
-                let permuted_indices: Vec<ConcreteIndex> =
-                    permutation.iter().map(|&index| indices[index]).collect();
+                let permuted_indices = indices.apply_permutation(&self_to_rhs);
                 let t = rhs.get_ref(&permuted_indices).unwrap();
                 u.add_fallible(t)
             })
@@ -315,14 +315,14 @@ where
     type Output = DenseTensor<Out, I>;
     fn add_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
-        let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
+        let self_to_rhs = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = self.structure().clone();
 
+        println!("sparse dense add");
         let data: Option<Vec<Out>> = self
             .iter_expanded()
             .map(|(indices, u)| {
-                let permuted_indices: Vec<ConcreteIndex> =
-                    permutation.iter().map(|&index| indices[index]).collect();
+                let permuted_indices = indices.apply_permutation(&self_to_rhs);
                 let t = rhs.get_ref(&permuted_indices);
                 if let Ok(t) = t {
                     u.add_fallible(t)
@@ -347,14 +347,14 @@ where
     type Output = DenseTensor<Out, I>;
     fn add_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
-        let permutation = rhs.structure().find_permutation(self.structure()).unwrap();
+        let rhs_to_self = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = rhs.structure().clone();
 
+        println!("dense sparse add");
         let data: Option<Vec<Out>> = rhs
             .iter_expanded()
             .map(|(indices, t)| {
-                let permuted_indices: Vec<ConcreteIndex> =
-                    permutation.iter().map(|&index| indices[index]).collect();
+                let permuted_indices = indices.apply_permutation(&rhs_to_self);
                 let u = self.get_ref(&permuted_indices);
                 if let Ok(u) = u {
                     u.add_fallible(t)
@@ -378,12 +378,12 @@ where
     type Output = SparseTensor<Out, I>;
     fn add_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
-        let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
+        let rhs_to_self = self.structure().find_permutation(rhs.structure()).unwrap();
+        println!("sparse sparse add");
         let structure = self.structure().clone();
         let mut data = SparseTensor::empty(structure);
         for (indices, u) in self.iter_expanded() {
-            let permuted_indices: Vec<ConcreteIndex> =
-                permutation.iter().map(|&index| indices[index]).collect();
+            let permuted_indices = indices.apply_inverse_permutation(&rhs_to_self);
             let t = rhs.get_ref(&permuted_indices);
             if let Ok(t) = t {
                 data.smart_set(&indices, u.add_fallible(t)?).unwrap();
@@ -395,13 +395,10 @@ where
             // data.smart_set(&indices, u.add_fallible(&t)?).unwrap();
         }
 
-        let permutation: Vec<usize> = rhs.structure().find_permutation(self.structure()).unwrap();
         for (i, t) in rhs.iter_expanded() {
-            let permuted_indices: Vec<ConcreteIndex> =
-                permutation.iter().map(|&index| i[index]).collect();
-
+            let permuted_indices = i.apply_permutation(&rhs_to_self);
             if self.get_ref(&permuted_indices).is_err() {
-                data.smart_set(&i, t.try_upgrade().unwrap().into_owned())
+                data.smart_set(&permuted_indices, t.try_upgrade().unwrap().into_owned())
                     .unwrap();
             }
         }
@@ -419,6 +416,7 @@ where
 {
     type Output = DataTensor<Out, I>;
     fn add_fallible(&self, rhs: &DataTensor<T, I>) -> Option<Self::Output> {
+        println!("adding");
         match (self, rhs) {
             (DataTensor::Dense(a), DataTensor::Dense(b)) => {
                 Some(DataTensor::Dense(a.add_fallible(b)?))
@@ -543,14 +541,13 @@ where
     type Output = DenseTensor<Out, I>;
     fn sub_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
-        let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
+        let self_to_rhs = rhs.structure().find_permutation(self.structure()).unwrap();
         let structure = self.structure().clone();
 
         let data: Option<Vec<Out>> = self
             .iter_expanded()
             .map(|(indices, u)| {
-                let permuted_indices: Vec<ConcreteIndex> =
-                    permutation.iter().map(|&index| indices[index]).collect();
+                let permuted_indices = indices.apply_permutation(&self_to_rhs);
                 let t = rhs.get_ref(&permuted_indices).unwrap();
                 u.sub_fallible(t)
             })
@@ -570,14 +567,13 @@ where
     type Output = DenseTensor<Out, I>;
     fn sub_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
-        let permutation = rhs.structure().find_permutation(self.structure()).unwrap();
+        let rhs_to_self = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = rhs.structure().clone();
 
         let data: Option<Vec<Out>> = rhs
             .iter_expanded()
             .map(|(indices, t)| {
-                let permuted_indices: Vec<ConcreteIndex> =
-                    permutation.iter().map(|&index| indices[index]).collect();
+                let permuted_indices = indices.apply_permutation(&rhs_to_self);
                 let u = self.get_ref(&permuted_indices);
                 if let Ok(u) = u {
                     u.sub_fallible(t)
@@ -601,14 +597,13 @@ where
     type Output = DenseTensor<Out, I>;
     fn sub_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
-        let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
+        let self_to_rhs = rhs.structure().find_permutation(self.structure()).unwrap();
         let structure = self.structure().clone();
 
         let data: Option<Vec<Out>> = self
             .iter_expanded()
             .map(|(indices, u)| {
-                let permuted_indices: Vec<ConcreteIndex> =
-                    permutation.iter().map(|&index| indices[index]).collect();
+                let permuted_indices = indices.apply_permutation(&self_to_rhs);
                 let t = rhs.get_ref(&permuted_indices);
                 if let Ok(t) = t {
                     u.sub_fallible(t)
@@ -632,12 +627,12 @@ where
     type Output = SparseTensor<Out, I>;
     fn sub_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
-        let permutation = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = self.structure().clone();
         let mut data = SparseTensor::empty(structure);
+        let self_to_rhs = rhs.structure().find_permutation(self.structure()).unwrap();
+
         for (indices, u) in self.iter_expanded() {
-            let permuted_indices: Vec<ConcreteIndex> =
-                permutation.iter().map(|&index| indices[index]).collect();
+            let permuted_indices = indices.apply_permutation(&self_to_rhs);
             let t = rhs.get_ref(&permuted_indices);
             if let Ok(t) = t {
                 data.smart_set(&indices, u.sub_fallible(t)?).unwrap();
@@ -646,10 +641,9 @@ where
                     .unwrap();
             }
         }
-        let permutation: Vec<usize> = rhs.structure().find_permutation(self.structure()).unwrap();
+
         for (i, t) in rhs.iter_expanded() {
-            let permuted_indices: Vec<ConcreteIndex> =
-                permutation.iter().map(|&index| i[index]).collect();
+            let permuted_indices = i.apply_inverse_permutation(&self_to_rhs);
 
             if self.get_ref(&permuted_indices).is_err() {
                 data.smart_set(&i, t.try_upgrade().unwrap().into_owned().neg())

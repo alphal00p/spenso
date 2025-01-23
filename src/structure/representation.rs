@@ -160,7 +160,9 @@ pub enum RepresentationError {
     Any(#[from] anyhow::Error),
 }
 
-pub trait RepName: Copy + Clone + Debug + PartialEq + Eq + Hash + Display + Into<Rep> {
+pub trait RepName:
+    Copy + Clone + Debug + PartialEq + Eq + Hash + Display + Ord + Into<Rep>
+{
     type Dual: RepName<Dual = Self, Base = Self::Base>;
     type Base: RepName;
     fn dual(self) -> Self::Dual;

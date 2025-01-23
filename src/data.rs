@@ -127,13 +127,13 @@ pub trait GetTensorData {
 
     type GetDataOwned;
 
-    fn get_ref<'a>(&'a self, indices: &[ConcreteIndex]) -> Result<Self::GetDataRef<'a>>;
+    fn get_ref<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<Self::GetDataRef<'_>>;
 
     fn get_ref_linear(&self, index: FlatIndex) -> Option<Self::GetDataRef<'_>>;
 
     fn get_mut_linear(&mut self, index: FlatIndex) -> Option<Self::GetDataRefMut<'_>>;
 
-    fn get_owned(&self, indices: &[ConcreteIndex]) -> Result<Self::GetDataOwned>
+    fn get_owned<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<Self::GetDataOwned>
     where
         Self::GetDataOwned: Clone;
 
@@ -479,12 +479,12 @@ where
         Self: 'a;
 
     type GetDataOwned = T;
-    fn get_ref(&self, indices: &[ConcreteIndex]) -> Result<&T> {
-        if let Ok(idx) = self.flat_index(indices) {
+    fn get_ref<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<&T> {
+        if let Ok(idx) = self.flat_index(&indices) {
             self.elements
                 .get(&idx)
                 .ok_or(anyhow!("No elements at that spot"))
-        } else if self.structure.is_scalar() && indices.is_empty() {
+        } else if self.structure.is_scalar() && indices.as_ref().is_empty() {
             self.elements
                 .iter()
                 .next()
@@ -503,7 +503,7 @@ where
         self.elements.get_mut(&index)
     }
 
-    fn get_owned(&self, indices: &[ConcreteIndex]) -> Result<Self::GetDataOwned>
+    fn get_owned<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<Self::GetDataOwned>
     where
         T: Clone,
     {
@@ -1161,10 +1161,10 @@ where
         self.data.get(i)
     }
 
-    fn get_ref(&self, indices: &[ConcreteIndex]) -> Result<&T> {
-        if let Ok(idx) = self.flat_index(indices) {
+    fn get_ref<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<&T> {
+        if let Ok(idx) = self.flat_index(&indices) {
             Ok(&self[idx])
-        } else if self.structure.is_scalar() && indices.is_empty() {
+        } else if self.structure.is_scalar() && indices.as_ref().is_empty() {
             Ok(&self.data[0])
         } else {
             Err(anyhow!("Index out of bounds"))
@@ -1176,7 +1176,7 @@ where
         self.data.get_mut(i)
     }
 
-    fn get_owned(&self, indices: &[ConcreteIndex]) -> Result<Self::GetDataOwned>
+    fn get_owned<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<Self::GetDataOwned>
     where
         Self::GetDataOwned: Clone,
     {
@@ -1506,7 +1506,7 @@ where
         Self: 'a;
 
     type GetDataOwned = T;
-    fn get_ref(&self, indices: &[ConcreteIndex]) -> Result<&T> {
+    fn get_ref<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<&T> {
         match self {
             DataTensor::Dense(d) => d.get_ref(indices),
             DataTensor::Sparse(s) => s.get_ref(indices),
@@ -1527,7 +1527,7 @@ where
         }
     }
 
-    fn get_owned(&self, indices: &[ConcreteIndex]) -> Result<Self::GetDataOwned>
+    fn get_owned<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<Self::GetDataOwned>
     where
         Self::GetDataOwned: Clone,
     {

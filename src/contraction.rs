@@ -460,9 +460,11 @@ where
                 for (a, (neg, _)) in fiber_a.by_ref() {
                     if let Some((b, _)) = fiber_b.next() {
                         if neg {
+                            println!("sub");
                             result_data[result_index]
                                 .sub_assign_fallible(&a.mul_fallible(b).unwrap());
                         } else {
+                            println!("add");
                             result_data[result_index]
                                 .add_assign_fallible(&a.mul_fallible(b).unwrap());
                         }

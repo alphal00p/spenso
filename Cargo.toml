@@ -74,6 +74,7 @@ env_logger = "0.11.5"
 flexi_logger = "0.28.5"
 gat-lending-iterator = "0.1.5"
 indexmap = { version = "2.2.6", features = ["serde"] }
+itertools = "0.14.0"
 log = "0.4.22"
 num = { version = "0.4.3", features = ["serde"] }
 once_cell = "1.20.2"
@@ -93,5 +94,5 @@ thiserror = "1.0.60"
 shadowing = ["dep:symbolica"]
 
 [patch.crates-io]
-# symbolica = { git = "https://github.com/benruijl/symbolica", branch = "main" }
+symbolica = { git = "https://github.com/benruijl/symbolica", branch = "nested_symmetrize" }
 # symbolica = { path = "../gammaloop/python/gammaloop/dependencies/symbolica" }

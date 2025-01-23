@@ -26,6 +26,7 @@ use crate::{
     },
     iterators::{IteratableTensor, IteratorEnum},
     shadowing::{ShadowMapping, Shadowable},
+    structure::concrete_index::ConcreteIndex,
     structure::{
         concrete_index::{DualConciousExpandedIndex, ExpandedIndex, FlatIndex},
         slot::PhysicalSlots,
@@ -1074,10 +1075,7 @@ where
     where
         Self: 'a;
     type GetDataOwned = ConcreteOrParam<C::GetDataOwned>;
-    fn get_ref<'a>(
-        &'a self,
-        indices: &[crate::structure::concrete_index::ConcreteIndex],
-    ) -> Result<Self::GetDataRef<'a>> {
+    fn get_ref<D: AsRef<[ConcreteIndex]>>(&self, indices: D) -> Result<Self::GetDataRef<'_>> {
         match self {
             ParamOrConcrete::Concrete(x) => x.get_ref(indices).map(ConcreteOrParamView::Concrete),
             ParamOrConcrete::Param(x) => x.get_ref(indices).map(ConcreteOrParamView::Param),
@@ -1102,10 +1100,7 @@ where
         }
     }
 
-    fn get_owned(
-        &self,
-        indices: &[crate::structure::concrete_index::ConcreteIndex],
-    ) -> Result<Self::GetDataOwned>
+    fn get_owned<D: AsRef<[ConcreteIndex]>>(&self, indices: D) -> Result<Self::GetDataOwned>
     where
         Self::GetDataOwned: Clone,
     {
@@ -1454,10 +1449,7 @@ impl<S: TensorStructure> GetTensorData for ParamTensor<S> {
     type GetDataRefMut<'a> = &'a mut Atom  where
         Self: 'a;
     type GetDataOwned = Atom;
-    fn get_ref<'a>(
-        &'a self,
-        indices: &[crate::structure::concrete_index::ConcreteIndex],
-    ) -> Result<Self::GetDataRef<'a>> {
+    fn get_ref<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<Self::GetDataRef<'_>> {
         self.tensor.get_ref(indices).map(|x| x.as_view())
     }
 
@@ -1469,10 +1461,7 @@ impl<S: TensorStructure> GetTensorData for ParamTensor<S> {
         self.tensor.get_mut_linear(index)
     }
 
-    fn get_owned(
-        &self,
-        indices: &[crate::structure::concrete_index::ConcreteIndex],
-    ) -> Result<Self::GetDataOwned>
+    fn get_owned<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<Self::GetDataOwned>
     where
         Self::GetDataOwned: Clone,
     {

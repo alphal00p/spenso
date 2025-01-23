@@ -4,3 +4,4 @@
 .envrc
 *.cpp
 *.so
+.idea/

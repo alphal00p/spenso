@@ -3,11 +3,11 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
+use crate::structure::concrete_index::ConcreteIndex;
 use anyhow::{anyhow, Result};
 use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
-
 use num::{Float, One, Zero};
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
@@ -1464,10 +1464,7 @@ impl<T: Clone, S: TensorStructure> GetTensorData for RealOrComplexTensor<T, S> {
 
     type GetDataOwned = RealOrComplex<T>;
 
-    fn get_ref<'a>(
-        &'a self,
-        indices: &[crate::structure::concrete_index::ConcreteIndex],
-    ) -> Result<Self::GetDataRef<'a>> {
+    fn get_ref<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<Self::GetDataRef<'_>> {
         match self {
             RealOrComplexTensor::Real(d) => Ok(RealOrComplexRef::Real(d.get_ref(indices)?)),
             RealOrComplexTensor::Complex(d) => Ok(RealOrComplexRef::Complex(d.get_ref(indices)?)),
@@ -1492,10 +1489,7 @@ impl<T: Clone, S: TensorStructure> GetTensorData for RealOrComplexTensor<T, S> {
         }
     }
 
-    fn get_owned(
-        &self,
-        indices: &[crate::structure::concrete_index::ConcreteIndex],
-    ) -> Result<Self::GetDataOwned>
+    fn get_owned<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<Self::GetDataOwned>
     where
         Self::GetDataOwned: Clone,
     {

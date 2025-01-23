@@ -227,7 +227,7 @@ impl<T: BaseRepName> ConstructibleSlot<T> for Slot<T> {
     }
 }
 
-pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash {
+pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord {
     type R: RepName;
     fn dim(&self) -> Dimension;
     fn aind(&self) -> AbstractIndex;

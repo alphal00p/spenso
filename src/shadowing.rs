@@ -164,7 +164,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
 
     pub fn new() -> Self
     where
-        Data: num::One + num::Zero + Neg<Output = Data>,
+        Data: num::One + num::Zero + Neg<Output = Data> + Default,
     {
         let mut new = Self {
             explicit_dimension: AHashMap::new(),
@@ -225,7 +225,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
 
     fn generic_mink_metric(key: ExplicitKey) -> MixedTensor<Data, ExplicitKey>
     where
-        Data: num::One + Neg<Output = Data>,
+        Data: num::One + Neg<Output = Data> + Default,
     {
         let dim: usize = key.get_dim(0).unwrap().try_into().unwrap();
         let mut tensor = SparseTensor::empty(key);
@@ -265,6 +265,34 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
             (vec![3, 1, 3], cn1.clone()),
             (vec![3, 2, 0], cn1.clone()),
             (vec![3, 3, 1], c1.clone()),
+        ]
+    }
+
+    fn _gamma_data_weyl() -> Vec<(Vec<ConcreteIndex>, Complex<Data>)>
+    where
+        Data: num::Zero + num::One + Neg<Output = Data> + Clone,
+    {
+        let c1 = Complex::<Data>::new(Data::one(), Data::zero());
+        let cn1 = Complex::<Data>::new(-Data::one(), Data::zero());
+        let ci = Complex::<Data>::new(Data::zero(), Data::one());
+        let cni = Complex::<Data>::new(Data::zero(), -Data::one());
+        vec![
+            (vec![0, 2, 0], c1.clone()),
+            (vec![0, 3, 1], c1.clone()),
+            (vec![0, 0, 2], c1.clone()),
+            (vec![0, 1, 3], c1.clone()),
+            (vec![1, 3, 0], c1.clone()),
+            (vec![1, 2, 1], c1.clone()),
+            (vec![1, 1, 2], cn1.clone()),
+            (vec![1, 0, 3], cn1.clone()),
+            (vec![2, 3, 0], cni.clone()),
+            (vec![2, 2, 1], ci.clone()),
+            (vec![2, 1, 2], ci.clone()),
+            (vec![2, 0, 3], cni.clone()),
+            (vec![3, 2, 0], c1.clone()),
+            (vec![3, 3, 1], cn1.clone()),
+            (vec![3, 0, 2], cn1.clone()),
+            (vec![3, 1, 3], c1.clone()),
         ]
     }
 
@@ -405,7 +433,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
 
     pub fn update_ids(&mut self)
     where
-        Data: num::One,
+        Data: num::One + Default,
     {
         for rep in REPS.read().unwrap().reps() {
             self.insert_generic_real(Self::id(*rep), Self::checked_identity);
@@ -426,7 +454,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
 
     pub fn checked_identity(key: ExplicitKey) -> MixedTensor<Data, ExplicitKey>
     where
-        Data: num::One,
+        Data: num::One + Default,
     {
         assert!(key.order() == 2);
         assert!(key.get_rep(0).map(|r| r.dual()) == key.get_rep(1));
@@ -436,7 +464,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
 
     pub fn identity(key: ExplicitKey) -> MixedTensor<Data, ExplicitKey>
     where
-        Data: num::One,
+        Data: num::One + Default,
     {
         let dim: usize = key.get_dim(0).unwrap().try_into().unwrap();
         let mut tensor = SparseTensor::empty(key);
@@ -444,7 +472,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
         for i in 0..dim {
             tensor.set(&[i, i], Data::one()).unwrap();
         }
-        tensor.into()
+        tensor.to_dense().into()
     }
 
     pub fn insert_explicit(&mut self, data: MixedTensor<Data, ExplicitKey>) {
@@ -503,7 +531,9 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
     }
 }
 
-impl<Data: Clone + num::One + num::Zero + Neg<Output = Data>> Default for ExplicitTensorMap<Data> {
+impl<Data: Clone + num::One + num::Zero + Neg<Output = Data> + Default> Default
+    for ExplicitTensorMap<Data>
+{
     fn default() -> Self {
         Self::new()
     }

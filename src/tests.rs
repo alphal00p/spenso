@@ -285,7 +285,7 @@ fn permutation() {
     let permutation = a.find_permutation(&b).unwrap();
     println!("{:?}", permutation);
 
-    let c = permutation.iter().map(|x| b[*x]).collect::<Vec<_>>();
+    let c = permutation.apply_slice(&b);
 
     assert_eq!(c, a);
 }

@@ -35,7 +35,7 @@
           "onSave": true,
           // "features": [],
           "features": ["shadowing"],
-          "command": "clippy"
+          "command": "check"
         }
       }
     }

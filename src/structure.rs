@@ -419,7 +419,7 @@ pub trait TensorStructure {
     }
 
     /// find the permutation of the external indices that would make the two tensors the same. Applying the permutation to other should make it the same as self
-    fn find_permutation(&self, other: &Self) -> Result<Vec<ConcreteIndex>> {
+    fn find_permutation(&self, other: &Self) -> Result<Permutation> {
         if self.order() != other.order() {
             return Err(anyhow!(
                 "Mismatched order: {} vs {}",
@@ -427,31 +427,42 @@ pub trait TensorStructure {
                 other.order()
             ));
         }
+        let other_structure = other.external_structure();
+        let self_structure = self.external_structure();
 
-        let mut index_map = HashMap::new();
-        for (i, item) in other.external_structure_iter().enumerate() {
-            index_map.entry(item).or_insert_with(Vec::new).push(i);
+        let other_sort = Permutation::sort(&other_structure);
+        let self_sort = Permutation::sort(&self_structure);
+
+        if other_sort.apply_slice(&other_structure) == self_sort.apply_slice(&self_structure) {
+            Ok(other_sort.compose(&self_sort.inverse()))
+        } else {
+            Err(anyhow!("Mismatched structure"))
         }
 
-        let mut permutation = Vec::with_capacity(self.order());
-        let mut used_indices = HashSet::new();
-        for item in self.external_structure_iter() {
-            if let Some(indices) = index_map.get_mut(&item) {
-                // Find an index that hasn't been used yet
-                if let Some(&index) = indices.iter().find(|&&i| !used_indices.contains(&i)) {
-                    permutation.push(index);
-                    used_indices.insert(index);
-                } else {
-                    // No available index for this item
-                    return Err(anyhow!("No available index for {:?}", item));
-                }
-            } else {
-                // Item not found in other
-                return Err(anyhow!("Item {:?} not found in other", item));
-            }
-        }
+        // let mut index_map = HashMap::new();
+        // for (i, item) in other.external_structure_iter().enumerate() {
+        //     index_map.entry(item).or_insert_with(Vec::new).push(i);
+        // }
 
-        Ok(permutation)
+        // let mut permutation = Vec::with_capacity(self.order());
+        // let mut used_indices = HashSet::new();
+        // for item in self.external_structure_iter() {
+        //     if let Some(indices) = index_map.get_mut(&item) {
+        //         // Find an index that hasn't been used yet
+        //         if let Some(&index) = indices.iter().find(|&&i| !used_indices.contains(&i)) {
+        //             permutation.push(index);
+        //             used_indices.insert(index);
+        //         } else {
+        //             // No available index for this item
+        //             return Err(anyhow!("No available index for {:?}", item));
+        //         }
+        //     } else {
+        //         // Item not found in other
+        //         return Err(anyhow!("Item {:?} not found in other", item));
+        //     }
+        // }
+
+        // Ok(permutation)
     }
 
     /// yields the strides of the tensor in column major order
@@ -496,11 +507,11 @@ pub trait TensorStructure {
     ///
     /// `Index out of bounds` = if the index is out of bounds for the dimension of that index
     ///
-    fn verify_indices(&self, indices: &[ConcreteIndex]) -> Result<()> {
-        if indices.len() != self.order() {
+    fn verify_indices<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<()> {
+        if indices.as_ref().len() != self.order() {
             return Err(anyhow!(
                 "Mismatched order: {} indices, vs order {}",
-                indices.len(),
+                indices.as_ref().len(),
                 self.order()
             ));
         }
@@ -510,10 +521,10 @@ pub trait TensorStructure {
             .map(|slot| slot.dim())
             .enumerate()
         {
-            if indices[i] >= usize::try_from(dim_len)? {
+            if indices.as_ref()[i] >= usize::try_from(dim_len)? {
                 return Err(anyhow!(
                     "Index {} out of bounds for dimension {} of size {}",
-                    indices[i],
+                    indices.as_ref()[i],
                     i,
                     usize::try_from(dim_len)?
                 ));
@@ -527,12 +538,12 @@ pub trait TensorStructure {
     /// # Errors
     ///
     /// Same as [`Self::verify_indices`]
-    fn flat_index(&self, indices: &[ConcreteIndex]) -> Result<FlatIndex> {
+    fn flat_index<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<FlatIndex> {
         let strides = self.strides()?;
-        self.verify_indices(indices)?;
+        self.verify_indices(&indices)?;
 
         let mut idx = 0;
-        for (i, &index) in indices.iter().enumerate() {
+        for (i, &index) in indices.as_ref().iter().enumerate() {
             idx += index * strides[i];
         }
         Ok(idx.into())
@@ -936,7 +947,7 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
         None
     }
 
-    fn find_permutation(&self, other: &Self) -> Result<Vec<ConcreteIndex>> {
+    fn find_permutation(&self, other: &Self) -> Result<Permutation> {
         if self.order() != other.order() {
             return Err(anyhow!(
                 "Mismatched order: {} vs {}",
@@ -944,31 +955,42 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
                 other.order()
             ));
         }
+        let other_structure = &other.structure;
+        let self_structure = &self.structure;
 
-        let mut index_map = HashMap::new();
-        for (i, item) in other.structure.iter().enumerate() {
-            index_map.entry(item).or_insert_with(Vec::new).push(i);
+        let other_sort = Permutation::sort(other_structure);
+        let self_sort = Permutation::sort(self_structure);
+
+        if other_sort.apply_slice(other_structure) == self_sort.apply_slice(self_structure) {
+            Ok(other_sort.compose(&self_sort.inverse()))
+        } else {
+            Err(anyhow!("Mismatched structure"))
         }
 
-        let mut permutation = Vec::with_capacity(self.order());
-        let mut used_indices = HashSet::new();
-        for item in self.structure.iter() {
-            if let Some(indices) = index_map.get_mut(&item) {
-                // Find an index that hasn't been used yet
-                if let Some(&index) = indices.iter().find(|&&i| !used_indices.contains(&i)) {
-                    permutation.push(index);
-                    used_indices.insert(index);
-                } else {
-                    // No available index for this item
-                    return Err(anyhow!("No available index for {:?}", item));
-                }
-            } else {
-                // Item not found in other
-                return Err(anyhow!("Item {:?} not found in other", item));
-            }
-        }
+        // let mut index_map = HashMap::new();
+        // for (i, item) in other.structure.iter().enumerate() {
+        //     index_map.entry(item).or_insert_with(Vec::new).push(i);
+        // }
 
-        Ok(permutation)
+        // let mut permutation = Vec::with_capacity(self.order());
+        // let mut used_indices = HashSet::new();
+        // for item in self.structure.iter() {
+        //     if let Some(indices) = index_map.get_mut(&item) {
+        //         // Find an index that hasn't been used yet
+        //         if let Some(&index) = indices.iter().find(|&&i| !used_indices.contains(&i)) {
+        //             permutation.push(index);
+        //             used_indices.insert(index);
+        //         } else {
+        //             // No available index for this item
+        //             return Err(anyhow!("No available index for {:?}", item));
+        //         }
+        //     } else {
+        //         // Item not found in other
+        //         return Err(anyhow!("Item {:?} not found in other", item));
+        //     }
+        // }
+
+        // Ok(permutation)
     }
 
     fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>> {

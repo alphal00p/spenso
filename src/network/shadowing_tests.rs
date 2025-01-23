@@ -3,7 +3,7 @@ use crate::{
     data::SparseOrDense,
     shadowing::ETS,
     structure::{
-        representation::{BaseRepName, Bispinor, ExtendibleReps, Minkowski, PhysReps},
+        representation::{BaseRepName, Minkowski},
         NamedStructure,
     },
     symbolic::SymbolicTensor,

@@ -62,7 +62,6 @@ where
         let self_to_rhs = rhs.structure().find_permutation(self.structure()).unwrap();
         let structure = self.structure().clone();
 
-        println!("dense dense add");
         let data: Option<Vec<Out>> = self
             .iter_expanded()
             .map(|(indices, u)| {
@@ -318,7 +317,6 @@ where
         let self_to_rhs = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = self.structure().clone();
 
-        println!("sparse dense add");
         let data: Option<Vec<Out>> = self
             .iter_expanded()
             .map(|(indices, u)| {
@@ -350,7 +348,6 @@ where
         let rhs_to_self = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = rhs.structure().clone();
 
-        println!("dense sparse add");
         let data: Option<Vec<Out>> = rhs
             .iter_expanded()
             .map(|(indices, t)| {
@@ -379,7 +376,6 @@ where
     fn add_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
         let rhs_to_self = self.structure().find_permutation(rhs.structure()).unwrap();
-        println!("sparse sparse add");
         let structure = self.structure().clone();
         let mut data = SparseTensor::empty(structure);
         for (indices, u) in self.iter_expanded() {
@@ -416,7 +412,6 @@ where
 {
     type Output = DataTensor<Out, I>;
     fn add_fallible(&self, rhs: &DataTensor<T, I>) -> Option<Self::Output> {
-        println!("adding");
         match (self, rhs) {
             (DataTensor::Dense(a), DataTensor::Dense(b)) => {
                 Some(DataTensor::Dense(a.add_fallible(b)?))

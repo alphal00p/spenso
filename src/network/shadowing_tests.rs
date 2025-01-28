@@ -14,7 +14,7 @@ use symbolica::fun;
 
 #[test]
 fn other_network() {
-    let mut net: TensorNetwork<DataTensor<symbolica::domains::integer::Integer>, Atom> =
+    let mut net: TensorNetwork<DataTensor<Complex<symbolica::domains::integer::Integer>>, Atom> =
         TensorNetwork::new();
 
     net.contract();

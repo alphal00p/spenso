@@ -956,6 +956,18 @@ impl TrySmallestUpgrade<Integer> for Integer {
 }
 
 #[cfg(feature = "shadowing")]
+impl TrySmallestUpgrade<Complex<Integer>> for Complex<Integer> {
+    type LCM = Complex<Integer>;
+
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    where
+        Self::LCM: Clone,
+    {
+        Some(Cow::Borrowed(self))
+    }
+}
+
+#[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<SerializableAtom> for SerializableAtom {
     type LCM = SerializableAtom;
 

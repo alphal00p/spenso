@@ -7,7 +7,7 @@ use super::{
 };
 use crate::structure::dimension::Dimension;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -227,7 +227,7 @@ impl<T: BaseRepName> ConstructibleSlot<T> for Slot<T> {
     }
 }
 
-pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord {
+pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + Display {
     type R: RepName;
     fn dim(&self) -> Dimension;
     fn aind(&self) -> AbstractIndex;

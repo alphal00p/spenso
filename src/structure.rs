@@ -270,6 +270,13 @@ pub trait TensorStructure {
     //
     fn dual(self) -> Self;
 
+    fn string_rep(&self) -> String {
+        self.external_structure_iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .join("")
+    }
+
     fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
     fn external_dims_iter(&self) -> impl Iterator<Item = Dimension>;
     fn external_reps_iter(
@@ -407,9 +414,6 @@ pub trait TensorStructure {
     fn reps(&self) -> Vec<Representation<<Self::Slot as IsAbstractSlot>::R>> {
         self.external_reps_iter().collect()
     }
-
-    /// yields the order/total valence of the tensor, i.e. the number of indices
-    /// (or misnamed : rank)
 
     /// checks if externally, the two tensors are the same
     fn same_external(&self, other: &Self) -> bool {

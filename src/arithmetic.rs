@@ -57,7 +57,12 @@ where
 {
     type Output = DenseTensor<Out, I>;
     fn add_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
-        assert!(self.structure().same_external(rhs.structure()));
+        assert!(
+            self.structure().same_external(rhs.structure()),
+            "dense dense: {}!={}",
+            self.structure().string_rep(),
+            rhs.structure().string_rep()
+        );
         // Makes rhs into self ,when applied.
         let self_to_rhs = rhs.structure().find_permutation(self.structure()).unwrap();
         let structure = self.structure().clone();
@@ -535,7 +540,12 @@ where
 {
     type Output = DenseTensor<Out, I>;
     fn sub_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
-        assert!(self.structure().same_external(rhs.structure()));
+        assert!(
+            self.structure().same_external(rhs.structure()),
+            "{} != {}",
+            self.structure().string_rep(),
+            rhs.structure().string_rep()
+        );
         let self_to_rhs = rhs.structure().find_permutation(self.structure()).unwrap();
         let structure = self.structure().clone();
 
@@ -561,7 +571,12 @@ where
 {
     type Output = DenseTensor<Out, I>;
     fn sub_fallible(&self, rhs: &DenseTensor<T, I>) -> Option<Self::Output> {
-        assert!(self.structure().same_external(rhs.structure()));
+        assert!(
+            self.structure().same_external(rhs.structure()),
+            "dense sparse: {} != {}",
+            self.structure().string_rep(),
+            rhs.structure().string_rep()
+        );
         let rhs_to_self = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = rhs.structure().clone();
 
@@ -591,7 +606,12 @@ where
 {
     type Output = DenseTensor<Out, I>;
     fn sub_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
-        assert!(self.structure().same_external(rhs.structure()));
+        assert!(
+            self.structure().same_external(rhs.structure()),
+            "sparse dense:{} != {}",
+            self.structure().string_rep(),
+            rhs.structure().string_rep()
+        );
         let self_to_rhs = rhs.structure().find_permutation(self.structure()).unwrap();
         let structure = self.structure().clone();
 
@@ -621,7 +641,12 @@ where
 {
     type Output = SparseTensor<Out, I>;
     fn sub_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
-        assert!(self.structure().same_external(rhs.structure()));
+        assert!(
+            self.structure().same_external(rhs.structure()),
+            "sparse sparse:{} != {}",
+            self.structure().string_rep(),
+            rhs.structure().string_rep()
+        );
         let structure = self.structure().clone();
         let mut data = SparseTensor::empty(structure);
         let self_to_rhs = rhs.structure().find_permutation(self.structure()).unwrap();
@@ -659,6 +684,7 @@ where
 {
     type Output = DataTensor<Out, I>;
     fn sub_fallible(&self, rhs: &DataTensor<T, I>) -> Option<Self::Output> {
+        println!("sub_fallible");
         match (self, rhs) {
             (DataTensor::Dense(a), DataTensor::Dense(b)) => {
                 Some(DataTensor::Dense(a.sub_fallible(b)?))

@@ -1,6 +1,7 @@
 use ahash::AHashMap;
 use duplicate::duplicate;
 use log::trace;
+use symbolica::domains::integer::Integer;
 // use num::Zero;
 #[cfg(feature = "shadowing")]
 use crate::symbolica_utils::SerializableAtom;
@@ -233,6 +234,13 @@ pub trait RefOne {
 impl RefZero for Atom {
     fn ref_zero(&self) -> Self {
         Atom::new_num(0)
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl RefZero for Integer {
+    fn ref_zero(&self) -> Self {
+        Integer::zero()
     }
 }
 

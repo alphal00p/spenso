@@ -4,13 +4,21 @@ use crate::{
     shadowing::ETS,
     structure::{
         representation::{BaseRepName, Minkowski},
-        NamedStructure,
+        NamedStructure, VecStructure,
     },
     symbolic::SymbolicTensor,
     upgrading_arithmetic::FallibleSub,
 };
 use constcat::concat;
 use symbolica::fun;
+
+#[test]
+fn other_network() {
+    let mut net: TensorNetwork<DataTensor<symbolica::domains::integer::Integer>, Atom> =
+        TensorNetwork::new();
+
+    net.contract();
+}
 
 #[test]
 fn pslash_parse() {

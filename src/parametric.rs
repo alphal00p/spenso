@@ -2271,8 +2271,9 @@ impl SerializableExportedCode {
         }
 
         let cpp = match inline_asm {
-            InlineASM::X64 => expr.export_asm_str(function_name, include_header),
+            InlineASM::X64 => expr.export_asm_str(function_name, include_header, inline_asm),
             InlineASM::None => expr.export_cpp_str(function_name, include_header),
+            InlineASM::AArch64 => expr.export_asm_str(function_name, include_header, inline_asm),
         };
 
         std::fs::write(&filename, cpp)?;

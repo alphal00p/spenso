@@ -4,7 +4,7 @@ use duplicate::duplicate;
 use ref_ops::{RefAdd, RefMul, RefSub};
 #[cfg(feature = "shadowing")]
 use std::ops::{Add, Div, Mul, Sub};
-use symbolica::domains::integer::Integer;
+use symbolica::domains::{integer::Integer, rational::Rational};
 
 #[cfg(feature = "shadowing")]
 use crate::symbolica_utils::SerializableAtom;
@@ -958,6 +958,30 @@ impl TrySmallestUpgrade<Integer> for Integer {
 #[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Complex<Integer>> for Complex<Integer> {
     type LCM = Complex<Integer>;
+
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    where
+        Self::LCM: Clone,
+    {
+        Some(Cow::Borrowed(self))
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl TrySmallestUpgrade<Rational> for Rational {
+    type LCM = Rational;
+
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    where
+        Self::LCM: Clone,
+    {
+        Some(Cow::Borrowed(self))
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl TrySmallestUpgrade<Complex<Rational>> for Complex<Rational> {
+    type LCM = Complex<Rational>;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
     where

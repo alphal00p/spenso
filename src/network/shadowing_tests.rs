@@ -4,18 +4,24 @@ use crate::{
     shadowing::ETS,
     structure::{
         representation::{BaseRepName, Minkowski},
-        NamedStructure, VecStructure,
+        NamedStructure, SmartShadowStructure, VecStructure,
     },
     symbolic::SymbolicTensor,
+    symbolica_utils::SerializableSymbol,
     upgrading_arithmetic::FallibleSub,
 };
 use constcat::concat;
-use symbolica::fun;
+use symbolica::{domains::integer::Integer, fun};
 
 #[test]
 fn other_network() {
-    let mut net: TensorNetwork<DataTensor<Complex<symbolica::domains::integer::Integer>>, Atom> =
-        TensorNetwork::new();
+    let mut net: TensorNetwork<
+        DataTensor<
+            Complex<Rational>,
+            SmartShadowStructure<SerializableSymbol, Vec<SerializableAtom>>,
+        >,
+        SerializableAtom,
+    > = TensorNetwork::new();
 
     net.contract();
 }

@@ -2655,6 +2655,8 @@ pub enum TensorNetworkError {
     FailedContract(ContractionError),
     #[error("negative exponent not yet supported")]
     NegativeExponent,
+    #[error("failed to contract: {0}")]
+    FailedContractMsg(String),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
     #[error("Io error")]
@@ -2920,7 +2922,13 @@ where
         for arg in value.iter() {
             let mut net = Self::try_from(arg)?;
             // trace!("mul net: {}", net.dot_nodes());
-            net.contract();
+            //
+            if net.contract().is_err() {
+                return Err(TensorNetworkError::FailedContractMsg(
+                    format!("Mul failed: {}", arg).into(),
+                ));
+            }
+
             if let Some(ref s) = net.scalar {
                 has_scalar = true;
                 scalars = scalars.mul_fallible(s).unwrap();
@@ -3014,7 +3022,11 @@ where
             }
             let mut net = Self::try_from(base)?;
 
-            net.contract();
+            if net.contract().is_err() {
+                return Err(TensorNetworkError::FailedContractMsg(
+                    format!("Pow failed: {}", base).into(),
+                ));
+            }
 
             match net.result() {
                 Ok((res, _s)) => {
@@ -3025,7 +3037,13 @@ where
                         } else {
                             new.push(res.clone());
                         }
-                        new.contract();
+
+                        if new.contract().is_err() {
+                            return Err(TensorNetworkError::FailedContractMsg(
+                                value.as_view().to_string().into(),
+                            ));
+                        }
+
                         n -= 1;
                     }
                 }
@@ -3108,7 +3126,13 @@ where
         for summand in value.iter() {
             // trace!("summand: {}", summand);
             let mut net = Self::try_from(summand)?;
-            net.contract();
+
+            if net.contract().is_err() {
+                return Err(TensorNetworkError::FailedContractMsg(
+                    format!("Sum failed: {}", summand).into(),
+                ));
+            }
+
             match net.result() {
                 Ok((mut t, s)) => {
                     if let Some(s) = s {
@@ -3325,27 +3349,32 @@ where
     T: Contract<T, LCM = T> + HasStructure,
     T::Structure: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
 {
-    pub fn contract_algo(&mut self, edge_choice: impl Fn(&Self) -> Option<HedgeId>) {
+    pub fn contract_algo(
+        &mut self,
+        edge_choice: impl Fn(&Self) -> Option<HedgeId>,
+    ) -> Result<(), ContractionError> {
         if let Some(e) = edge_choice(self) {
-            self.contract_edge(e);
+            self.contract_edge(e)?;
 
             // println!("{}", self.dot());
-            self.contract_algo(edge_choice);
+            self.contract_algo(edge_choice)?;
         }
+        Ok(())
     }
-    fn contract_edge(&mut self, edge_idx: HedgeId) {
+    fn contract_edge(&mut self, edge_idx: HedgeId) -> Result<(), ContractionError> {
         let a = self.graph.nodemap[edge_idx];
         let b = self.graph.nodemap[self.graph.involution[edge_idx].data];
 
         let ai = self.graph.nodes.get(a).unwrap();
         let bi = self.graph.nodes.get(b).unwrap();
 
-        let f = ai.contract(bi).unwrap();
+        let f = ai.contract(bi)?;
 
         self.graph.merge_nodes(a, b, f);
+        Ok(())
     }
 
-    pub fn contract(&mut self) {
+    pub fn contract(&mut self) -> std::result::Result<(), ContractionError> {
         self.contract_algo(Self::edge_to_min_degree_node)
     }
 }

@@ -180,6 +180,9 @@
           pkgs.git
           # pkgs.ripgrep
           pkgs.quarto
+          pkgs.nodejs
+          pkgs.uv
+          pkgs.python313
           pkgs.deno
           pkgs.jujutsu
           pkgs.nixd

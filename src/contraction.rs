@@ -91,6 +91,7 @@ where
         T,
         Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
     >,
+    T: TrySmallestUpgrade<U, LCM = U::Out>,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -98,25 +99,27 @@ where
     fn exterior_product(&self, other: &DenseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         let mut final_structure = self.structure().clone();
         final_structure.merge(other.structure());
-        if let Some((_, s)) = self.flat_iter().next() {
-            let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
-            let mut out = DenseTensor {
-                data: vec![zero.clone(); final_structure.size()?],
-                structure: final_structure,
-            };
-
-            let stride = other.size()?;
-
-            for (i, u) in self.flat_iter() {
-                for (j, t) in other.flat_iter() {
-                    let _ = out.set_flat(i * stride + j, u.mul_fallible(t).unwrap());
-                }
-            }
-
-            Ok(out)
+        let zero = if let Some((_, s)) = self.flat_iter().next() {
+            s.try_upgrade().unwrap().as_ref().ref_zero()
+        } else if let Some((_, o)) = other.iter_flat().next() {
+            o.try_upgrade().unwrap().as_ref().ref_zero()
         } else {
-            Err(ContractionError::EmptySparse)
+            return Err(ContractionError::EmptySparse);
+        };
+        let mut out = DenseTensor {
+            data: vec![zero.clone(); final_structure.size()?],
+            structure: final_structure,
+        };
+
+        let stride = other.size()?;
+
+        for (i, u) in self.flat_iter() {
+            for (j, t) in other.flat_iter() {
+                let _ = out.set_flat(i * stride + j, u.mul_fallible(t).unwrap());
+            }
         }
+
+        Ok(out)
     }
 }
 
@@ -529,6 +532,7 @@ where
         T,
         Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
     >,
+    T: TrySmallestUpgrade<U, LCM = U::Out>,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -540,45 +544,48 @@ where
         j: usize,
     ) -> Result<Self::LCM, ContractionError> {
         trace!("single contract sparse dense");
-        if let Some((_, s)) = self.flat_iter().next() {
-            let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
-            let final_structure = self.structure.merge_at(&other.structure, (i, j));
-            let mut result_data = vec![zero.clone(); final_structure.size()?];
-            let mut result_index = 0;
+        let zero = if let Some((_, s)) = self.flat_iter().next() {
+            s.try_upgrade().unwrap().as_ref().ref_zero()
+        } else if let Some((_, o)) = other.iter_flat().next() {
+            o.try_upgrade().unwrap().as_ref().ref_zero()
+        } else {
+            return Err(ContractionError::EmptySparse);
+        };
 
-            let mut self_iter = self.fiber_class(i.into()).iter();
-            let mut other_iter = other.fiber_class(j.into()).iter();
+        let final_structure = self.structure.merge_at(&other.structure, (i, j));
+        let mut result_data = vec![zero.clone(); final_structure.size()?];
+        let mut result_index = 0;
 
-            let fiber_representation = self.reps()[i];
+        let mut self_iter = self.fiber_class(i.into()).iter();
+        let mut other_iter = other.fiber_class(j.into()).iter();
 
-            for mut fiber_a in self_iter.by_ref() {
-                for mut fiber_b in other_iter.by_ref() {
-                    for (k, (a, skip, _)) in fiber_a.by_ref().enumerate() {
-                        if let Some((b, _)) = fiber_b.by_ref().nth(skip) {
-                            if fiber_representation.is_neg(k + skip) {
-                                result_data[result_index]
-                                    .sub_assign_fallible(&a.mul_fallible(b).unwrap());
-                            } else {
-                                result_data[result_index]
-                                    .add_assign_fallible(&a.mul_fallible(b).unwrap());
-                            }
+        let fiber_representation = self.reps()[i];
+
+        for mut fiber_a in self_iter.by_ref() {
+            for mut fiber_b in other_iter.by_ref() {
+                for (k, (a, skip, _)) in fiber_a.by_ref().enumerate() {
+                    if let Some((b, _)) = fiber_b.by_ref().nth(skip) {
+                        if fiber_representation.is_neg(k + skip) {
+                            result_data[result_index]
+                                .sub_assign_fallible(&a.mul_fallible(b).unwrap());
+                        } else {
+                            result_data[result_index]
+                                .add_assign_fallible(&a.mul_fallible(b).unwrap());
                         }
                     }
-                    result_index += 1;
-                    fiber_a.reset();
                 }
-                other_iter.reset();
+                result_index += 1;
+                fiber_a.reset();
             }
-
-            let result = DenseTensor {
-                data: result_data,
-                structure: final_structure,
-            };
-
-            Ok(result)
-        } else {
-            Err(ContractionError::EmptySparse)
+            other_iter.reset();
         }
+
+        let result = DenseTensor {
+            data: result_data,
+            structure: final_structure,
+        };
+
+        Ok(result)
     }
 }
 
@@ -643,56 +650,59 @@ where
         T,
         Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
     >,
+    T: TrySmallestUpgrade<U, LCM = U::Out>,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
     fn multi_contract(&self, other: &DenseTensor<T, I>) -> Result<Self::LCM, ContractionError> {
         trace!("multi contract sparse dense");
-        if let Some((_, s)) = self.flat_iter().next() {
-            let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
-            // let zero = other.data[0].try_upgrade().unwrap().as_ref().ref_zero();
-            let (permutation, self_matches, other_matches) =
-                self.structure().match_indices(other.structure()).unwrap();
+        let zero = if let Some((_, s)) = self.flat_iter().next() {
+            s.try_upgrade().unwrap().as_ref().ref_zero()
+        } else if let Some((_, o)) = other.iter_flat().next() {
+            o.try_upgrade().unwrap().as_ref().ref_zero()
+        } else {
+            return Err(ContractionError::EmptySparse);
+        };
+        // let zero = other.data[0].try_upgrade().unwrap().as_ref().ref_zero();
+        let (permutation, self_matches, other_matches) =
+            self.structure().match_indices(other.structure()).unwrap();
 
-            let mut final_structure = self.structure.clone();
-            let _ = final_structure.merge(&other.structure);
+        let mut final_structure = self.structure.clone();
+        let _ = final_structure.merge(&other.structure);
 
-            let mut result_data = vec![zero.clone(); final_structure.size()?];
-            let mut result_index = 0;
+        let mut result_data = vec![zero.clone(); final_structure.size()?];
+        let mut result_index = 0;
 
-            let selfiter = self
-                .fiber_class(self_matches.as_slice().into())
-                .iter_perm_metric(permutation);
-            let mut other_iter = other.fiber_class(other_matches.as_slice().into()).iter();
+        let selfiter = self
+            .fiber_class(self_matches.as_slice().into())
+            .iter_perm_metric(permutation);
+        let mut other_iter = other.fiber_class(other_matches.as_slice().into()).iter();
 
-            for mut fiber_a in selfiter {
-                for mut fiber_b in other_iter.by_ref() {
-                    for (a, skip, (neg, _)) in fiber_a.by_ref() {
-                        if let Some((b, _)) = fiber_b.by_ref().nth(skip) {
-                            if neg {
-                                result_data[result_index]
-                                    .sub_assign_fallible(&a.mul_fallible(b).unwrap());
-                            } else {
-                                result_data[result_index]
-                                    .add_assign_fallible(&a.mul_fallible(b).unwrap());
-                            }
+        for mut fiber_a in selfiter {
+            for mut fiber_b in other_iter.by_ref() {
+                for (a, skip, (neg, _)) in fiber_a.by_ref() {
+                    if let Some((b, _)) = fiber_b.by_ref().nth(skip) {
+                        if neg {
+                            result_data[result_index]
+                                .sub_assign_fallible(&a.mul_fallible(b).unwrap());
+                        } else {
+                            result_data[result_index]
+                                .add_assign_fallible(&a.mul_fallible(b).unwrap());
                         }
                     }
-                    result_index += 1;
-                    fiber_a.reset();
                 }
-                other_iter.reset();
+                result_index += 1;
+                fiber_a.reset();
             }
-
-            let result = DenseTensor {
-                data: result_data,
-                structure: final_structure,
-            };
-
-            Ok(result)
-        } else {
-            Err(ContractionError::EmptySparse)
+            other_iter.reset();
         }
+
+        let result = DenseTensor {
+            data: result_data,
+            structure: final_structure,
+        };
+
+        Ok(result)
     }
 }
 

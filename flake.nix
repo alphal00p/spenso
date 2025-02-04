@@ -182,8 +182,10 @@
           pkgs.quarto
           pkgs.nodejs
           pkgs.uv
+          pkgs.marimo
           pkgs.python313
           pkgs.deno
+          pkgs.asciinema
           pkgs.jujutsu
           pkgs.nixd
           pkgs.bfg-repo-cleaner

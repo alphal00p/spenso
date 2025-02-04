@@ -1020,7 +1020,7 @@ fn tensor_net() {
 
     assert_eq!(16, n.graph.neighbors.len());
 
-    n.contract();
+    n.contract().unwrap();
 
     assert_eq!(0, n.graph.neighbors.len());
     assert_eq!(
@@ -1478,7 +1478,7 @@ fn parsing_scalar_mul() {
 
     let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
 
-    network.contract();
+    network.contract().unwrap();
     println!("Network res: {}", network.result().unwrap().0);
 }
 
@@ -1493,7 +1493,7 @@ fn parsing_single_contract() {
     let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
 
     println!("{}", network.dot());
-    network.contract();
+    network.contract().unwrap();
     println!("Network res: {}", network.result().unwrap().0);
 }
 
@@ -1507,7 +1507,7 @@ fn parsing_addition_and_mul() {
 
     let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
 
-    network.contract();
+    network.contract().unwrap();
     println!("Network res: {}", network.result().unwrap().0);
 }
 

@@ -40,6 +40,11 @@ name = "3LphotonsPhysical"
 harness = false
 required-features = ["shadowing"]
 
+[[bench]]
+name = "3LphotonEval"
+harness = false
+required-features = ["shadowing"]
+
 
 [[example]]
 name = "evaluate_network"

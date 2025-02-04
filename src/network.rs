@@ -3159,10 +3159,12 @@ where
             .reduce(|a, b| a.add_fallible(&b).unwrap())
         {
             if is_scalar {
+                // println!("sum: {}", value.as_view());
                 return Err(TensorNetworkError::NotAllScalars);
             }
             TensorNetwork::from(vec![sum])
         } else if !is_scalar {
+            // println!("sum: {}", value.as_view());
             return Err(TensorNetworkError::NotAllScalars);
         } else {
             let mut net = TensorNetwork::new();
@@ -3434,7 +3436,9 @@ where
 
         let nl = if let Some(current_level) = self.levels.last() {
             let mut new_level = current_level.shadow();
-            new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+            new_level
+                .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
+                .unwrap();
             if new_level.graph.nodes.len() == 1 {
                 not_done = false;
             }
@@ -3457,12 +3461,15 @@ where
         R: From<T>,
     {
         self.initial
-            .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+            .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
+            .unwrap();
 
         self.initial.namesym("L0");
         if self.initial.graph.nodes.len() > 1 {
             let mut new_level = self.initial.shadow();
-            new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+            new_level
+                .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
+                .unwrap();
             self.levels.push(new_level);
 
             self.contract_levels(depth);
@@ -3514,7 +3521,9 @@ where
 
         let nl = if let Some(current_level) = self.levels.last() {
             let mut new_level = current_level.shadow();
-            new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+            new_level
+                .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
+                .unwrap();
             if new_level.graph.nodes.len() == 1 {
                 not_done = false;
             }
@@ -3534,12 +3543,15 @@ where
 
     pub fn contract<R>(&mut self, depth: usize, fn_map: &mut FunctionMap<R>) -> ParamTensor<S> {
         self.initial
-            .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+            .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
+            .unwrap();
 
         self.initial.namesym("L0");
         if self.initial.graph.nodes.len() > 1 {
             let mut new_level = self.initial.shadow();
-            new_level.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth));
+            new_level
+                .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
+                .unwrap();
             self.levels.push(new_level);
 
             self.contract_levels(depth);

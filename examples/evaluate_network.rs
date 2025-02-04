@@ -156,7 +156,7 @@ fn main() {
     //         );
     //     }
     // }
-    net.contract();
+    net.contract().unwrap();
     let now = std::time::Instant::now();
     let function_map = HashMap::new();
     net.evaluate_complex(|r| r.into(), &const_map, &function_map);

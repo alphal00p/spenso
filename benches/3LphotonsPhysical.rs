@@ -111,7 +111,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let function_map = AHashMap::new();
 
     truth_net.evaluate_complex(|i| i.into(), &const_map, &function_map);
-    truth_net.contract();
+    truth_net.contract().unwrap();
     let truth = truth_net
         .result()
         .unwrap()
@@ -128,7 +128,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             || network.clone(),
             |mut network| {
                 network.evaluate_complex(|i| i.into(), &const_map, &function_map);
-                network.contract();
+                network.contract().unwrap();
                 assert_relative_eq!(
                     truth,
                     network
@@ -171,7 +171,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.bench_function("3LPhysical postcontracted new", |b| {
         b.iter(|| {
             let mut out = mapped_postcontracted_eval_tree_tensor.evaluate(&values);
-            out.contract();
+            out.contract().unwrap();
             assert_relative_eq!(
                 truth,
                 out.result().unwrap().0.scalar().unwrap().into(),
@@ -217,7 +217,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             assert!(truth.relative_eq(&out.into(), 0.1, 1.))
         })
     });
-    network.contract();
+    network.contract().unwrap();
 
     group.bench_function("3LPhysical precontracted", |b| {
         b.iter_batched(
@@ -244,7 +244,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     let mut contracted_counting_network = counting_network.clone();
-    contracted_counting_network.contract();
+    contracted_counting_network.contract().unwrap();
 
     let mut precontracted_eval_tree_net = contracted_counting_network
         .clone()

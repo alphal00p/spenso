@@ -4,14 +4,14 @@ use crate::{
     shadowing::ETS,
     structure::{
         representation::{BaseRepName, Minkowski},
-        NamedStructure, SmartShadowStructure, VecStructure,
+        NamedStructure, SmartShadowStructure,
     },
     symbolic::SymbolicTensor,
     symbolica_utils::SerializableSymbol,
     upgrading_arithmetic::FallibleSub,
 };
 use constcat::concat;
-use symbolica::{domains::integer::Integer, fun};
+// use symbolica::fun;
 
 #[test]
 fn other_network() {
@@ -23,7 +23,7 @@ fn other_network() {
         SerializableAtom,
     > = TensorNetwork::new();
 
-    net.contract();
+    net.contract().unwrap();
 }
 
 #[test]
@@ -105,15 +105,15 @@ fn three_loop_photon_parse() {
 //         bis.new_slot(j).to_atom()
 //     )
 // }
-fn g(mu: usize, nu: usize) -> Atom {
-    let mink = Minkowski::rep(4);
+// fn g(mu: usize, nu: usize) -> Atom {
+//     let mink = Minkowski::rep(4);
 
-    fun!(
-        ETS.metric,
-        mink.new_slot(mu).to_atom(),
-        mink.new_slot(nu).to_atom()
-    )
-}
+//     fun!(
+//         ETS.metric,
+//         mink.new_slot(mu).to_atom(),
+//         mink.new_slot(nu).to_atom()
+//     )
+// }
 
 fn g_concrete(mu: usize, nu: usize) -> RealOrComplexTensor<f64, NamedStructure<Symbol>> {
     let mink = Minkowski::rep(4);

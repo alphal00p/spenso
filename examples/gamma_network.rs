@@ -77,7 +77,8 @@ fn main() {
     let vec: Vec<i32> = ranges.into_iter().flatten().collect();
 
     let mut net = gamma_net_num(&vec, vbar, u);
-    net.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(1));
+    net.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(1))
+        .unwrap();
 
     println!("{}", net.dot());
     // assert_eq!(

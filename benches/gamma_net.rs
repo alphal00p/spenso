@@ -129,7 +129,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter_batched(
             || netsym.clone(),
             |mut netsym| {
-                netsym.contract();
+                netsym.contract().unwrap();
             },
             criterion::BatchSize::SmallInput,
         )
@@ -139,7 +139,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter_batched(
             || net.clone(),
             |mut net| {
-                net.contract();
+                net.contract().unwrap();
             },
             criterion::BatchSize::SmallInput,
         )

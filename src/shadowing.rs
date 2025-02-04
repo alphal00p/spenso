@@ -704,7 +704,7 @@ mod test {
             MixedTensor<f64, AtomStructure<PhysReps>>,
             SerializableAtom,
         > = expr.as_view().try_into().unwrap();
-        network.contract();
+        network.contract().unwrap();
         let result = network
             .result()
             .unwrap()

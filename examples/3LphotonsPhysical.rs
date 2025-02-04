@@ -153,7 +153,7 @@ fn main() {
 
     let function_map = HashMap::new();
     truth_net.evaluate_complex(|i| i.into(), &const_map, &function_map);
-    truth_net.contract();
+    truth_net.contract().unwrap();
     let truth = truth_net
         .result()
         .unwrap()
@@ -165,7 +165,7 @@ fn main() {
         .try_into_complex()
         .unwrap();
     let mut postcontracted = network.clone();
-    postcontracted.contract();
+    postcontracted.contract().unwrap();
     assert_relative_eq!(
         truth,
         postcontracted
@@ -202,7 +202,7 @@ fn main() {
         postcontracted_eval_tree_tensor.map_coeff::<SymComplex<f64>, _>(&|r| r.into());
 
     let mut out = mapped_postcontracted_eval_tree_tensor.evaluate(&values);
-    out.contract();
+    out.contract().unwrap();
     assert_relative_eq!(
         truth,
         out.result().unwrap().0.scalar().unwrap().into(),
@@ -239,7 +239,7 @@ fn main() {
 
     let out = neet2.evaluate(&values).scalar().unwrap();
     assert!(truth.relative_eq(&out.into(), 0.1, 1.));
-    network.contract();
+    network.contract().unwrap();
 
     let mut precontracted = network.clone();
     precontracted.evaluate_complex(|i| i.into(), &const_map, &function_map);
@@ -259,7 +259,7 @@ fn main() {
     ));
 
     let mut contracted_counting_network = counting_network.clone();
-    contracted_counting_network.contract();
+    contracted_counting_network.contract().unwrap();
 
     let mut precontracted_eval_tree_net = contracted_counting_network
         .clone()

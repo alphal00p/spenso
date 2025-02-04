@@ -1,7 +1,6 @@
 use ahash::AHashMap;
 use duplicate::duplicate;
 use log::trace;
-use num::Rational;
 use symbolica::domains::integer::Integer;
 // use num::Zero;
 #[cfg(feature = "shadowing")]

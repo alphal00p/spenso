@@ -128,7 +128,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     let params = net.generate_params();
 
     println!("{:?}", params.len());
-    net.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(2));
+    net.contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(2))
+        .unwrap();
     let mut const_map = AHashMap::new();
 
     let i = Atom::new_var(Atom::I);
@@ -145,7 +146,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
                 net.evaluate_complex(|r| r.into(), &const_map, &function_map);
 
-                net.contract();
+                net.contract().unwrap();
             },
             criterion::BatchSize::SmallInput,
         )

@@ -720,7 +720,7 @@ mod test {
             )
             .unwrap();
 
-        net.contract();
+        net.contract().unwrap();
 
         insta::assert_ron_snapshot!(net
             .result()
@@ -747,7 +747,7 @@ mod test {
             )
             .unwrap();
 
-        net.contract();
+        net.contract().unwrap();
         let other = Atom::parse("2*Metric(mink(4,1),mink(4,2))*id(bis(4,4),bis(4,3))").unwrap();
 
         let mut net =
@@ -756,7 +756,7 @@ mod test {
             )
             .unwrap();
 
-        net.contract();
+        net.contract().unwrap();
 
         // println!(
         //     "{}",
@@ -778,7 +778,7 @@ mod test {
             )
             .unwrap();
 
-        net.contract();
+        net.contract().unwrap();
 
         println!("{}", net.result().unwrap().0);
 
@@ -790,7 +790,7 @@ mod test {
             )
             .unwrap();
 
-        net.contract();
+        net.contract().unwrap();
 
         println!("{}", net.result().unwrap().0);
     }
@@ -809,7 +809,7 @@ mod test {
             )
             .unwrap();
 
-        net.contract();
+        net.contract().unwrap();
 
         println!("{}", net.result().unwrap().0);
     }
@@ -829,18 +829,18 @@ mod test {
             )
             .unwrap();
         println!("{}", net.dot());
-        net.contract();
+        net.contract().unwrap();
 
         let mut other =
             TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
                 Atom::parse("p(aind(mink (4,1)))").unwrap().as_view(),
             )
             .unwrap();
-        other.contract();
+        other.contract().unwrap();
 
         net.push(other.result().unwrap().0);
 
-        net.contract();
+        net.contract().unwrap();
 
         println!("{}", net.result().unwrap().0);
     }
@@ -860,7 +860,7 @@ mod test {
             )
             .unwrap();
         println!("{}", net.dot());
-        net.contract();
+        net.contract().unwrap();
 
         println!("{}", net.result().unwrap().0);
     }
@@ -1075,7 +1075,7 @@ mod test {
             )
             .unwrap();
         println!("{}", net.dot());
-        net.contract();
+        net.contract().unwrap();
         let res = net.result().unwrap().0;
 
         println!("{}", res);

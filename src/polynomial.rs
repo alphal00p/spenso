@@ -93,7 +93,7 @@ mod test {
         println!("Network created {:?}", time.elapsed());
 
         let time = std::time::Instant::now();
-        network.contract();
+        network.contract().unwrap();
         println!("Network contracted {:?}", time.elapsed());
 
         println!("{}", network.graph.nodes.len());
@@ -187,7 +187,7 @@ mod test {
         println!("Network created {:?}", time.elapsed());
 
         let time = std::time::Instant::now();
-        network.contract();
+        network.contract().unwrap();
         println!("Network contracted {:?}", time.elapsed());
 
         println!("{}", network.graph.nodes.len());

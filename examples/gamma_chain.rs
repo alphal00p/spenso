@@ -366,7 +366,7 @@ fn main() {
 
             println!("{}", chain.dot());
             let start = Instant::now();
-            chain.contract();
+            chain.contract().unwrap();
             let duration = start.elapsed();
             let durationfull = startfull.elapsed();
 

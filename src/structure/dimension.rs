@@ -127,7 +127,7 @@ impl PartialEq<Dimension> for usize {
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
-    use symbolica::{atom::Atom, fun, symb};
+    use symbolica::{atom::Atom, function, symb};
 
     use super::Dimension;
 
@@ -135,7 +135,7 @@ mod shadowing_tests {
     fn dimension_from_view() {
         let a = Atom::new_num(5);
         let b = Atom::new_var(symb!("b"));
-        let c = fun!(symb!("a"), symb!("b"));
+        let c = function!(symb!("a"), symb!("b"));
         let d = Atom::new_num(-1);
         let e = Atom::new_num((1, 2));
 

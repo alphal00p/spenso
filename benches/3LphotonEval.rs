@@ -79,19 +79,15 @@ fn criterion_benchmark(c: &mut Criterion) {
         .evaluator(&fn_map, &params, OptimizationSettings::default())
         .unwrap();
 
-    let mut evalt = eval.clone().map_coeff(&|a| Complex::new_re(a.to_f64()));
+    let evalt = eval.clone().map_coeff(&|a| Complex::new_re(a.to_f64()));
 
-    let mut compiledt = eval
+    let compiledt = eval
         .export_cpp("oneloop", "oneloop", true, InlineASM::X64)
         .unwrap()
         .compile("oneloop.out", CompileOptions::default())
         .unwrap()
         .load()
         .unwrap();
-
-    compiledt.evaluate(&paramdata);
-    println!("hi");
-    evalt.evaluate(&paramdata);
 
     group.bench_function("3LPhysical linearized", |b| {
         b.iter_batched(

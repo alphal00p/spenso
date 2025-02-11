@@ -22,7 +22,7 @@ use crate::{
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomCore, FunctionBuilder, Symbol},
-    {fun, symb},
+    {function, symb},
 };
 
 use thiserror::Error;
@@ -928,7 +928,7 @@ impl<T: RepName> Representation<T> {
     pub fn to_pattern_wrapped(&self, aind: Symbol) -> Atom {
         self.rep.to_symbolic([
             self.dim.to_symbolic(),
-            fun!(symb!("indexid"), Atom::new_var(aind)),
+            function!(symb!("indexid"), Atom::new_var(aind)),
         ])
     }
 }
@@ -1255,7 +1255,7 @@ impl RepName for Rep {
             Self::SelfDual(_) => inner,
             Self::Dualizable(l) => {
                 if *l < 0 {
-                    fun!(symb!(DOWNIND), &inner)
+                    function!(symb!(DOWNIND), &inner)
                 } else {
                     inner
                 }

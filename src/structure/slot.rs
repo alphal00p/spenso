@@ -12,7 +12,7 @@ use std::hash::Hash;
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView, ListIterator, Symbol},
-    {fun, symb},
+    {function, symb},
 };
 
 #[cfg(feature = "shadowing")]
@@ -74,12 +74,12 @@ impl<T: RepName> Slot<T> {
     }
     #[cfg(feature = "shadowing")]
     pub fn kroneker_atom(&self, other: &Slot<T::Dual>) -> Atom {
-        fun!(ETS.id, self.to_atom(), other.to_atom())
+        function!(ETS.id, self.to_atom(), other.to_atom())
     }
 
     #[cfg(feature = "shadowing")]
     pub fn metric_atom(&self, other: &Slot<T>) -> Atom {
-        fun!(ETS.metric, self.to_atom(), other.to_atom())
+        function!(ETS.metric, self.to_atom(), other.to_atom())
     }
 }
 
@@ -293,8 +293,10 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
     }
     #[cfg(feature = "shadowing")]
     fn to_symbolic_wrapped(&self) -> Atom {
+        use symbolica::function;
+
         self.rep
-            .to_symbolic([fun!(symb!("indexid"), Atom::from(self.aind))])
+            .to_symbolic([function!(symb!("indexid"), Atom::from(self.aind))])
     }
     #[cfg(feature = "shadowing")]
     fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError> {

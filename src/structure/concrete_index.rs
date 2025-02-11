@@ -16,7 +16,7 @@ use derive_more::SubAssign;
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomCore, FunctionBuilder, Symbol},
-    {fun, symb},
+    {function, symb},
 };
 
 use serde::{Deserialize, Serialize};
@@ -45,7 +45,7 @@ impl From<DualConciousIndex> for Atom {
     fn from(value: DualConciousIndex) -> Self {
         match value {
             DualConciousIndex::Up(s) => Atom::new_num(s as i64),
-            DualConciousIndex::Down(s) => fun!(symb!(DOWN), Atom::new_num(s as i64)),
+            DualConciousIndex::Down(s) => function!(symb!(DOWN), Atom::new_num(s as i64)),
             DualConciousIndex::SelfDual(s) => Atom::new_num(s as i64),
         }
     }

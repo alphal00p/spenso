@@ -38,6 +38,7 @@ use symbolica::{
     atom::{AtomCore, KeyLookup},
     id::{BorrowPatternOrMap, BorrowReplacement},
     poly::PositiveExponent,
+    symbol,
 };
 
 #[cfg(feature = "shadowing")]
@@ -3186,7 +3187,7 @@ where
     pub fn sym_shadow(&mut self, name: &str) -> TensorNetwork<ParamTensor<T::Structure>, S> {
         {
             for (i, n) in &mut self.graph.nodes {
-                n.set_name(Symbol::new(format!("{}{}", name, i.data().as_ffi())));
+                n.set_name(symbol!(format!("{}{}", name, i.data().as_ffi())));
             }
         }
 

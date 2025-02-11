@@ -50,6 +50,7 @@ use symbolica::{
     },
     id::{BorrowPatternOrMap, Condition, MatchSettings, Pattern, PatternRestriction},
     state::State,
+    symbol,
 };
 
 use std::hash::Hash;
@@ -143,7 +144,7 @@ impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
     }
 
     fn to_atom_re(&self) -> Option<Atom> {
-        let name = Symbol::new(self.name?.to_string() + "_re");
+        let name = symbol!(self.name?.to_string() + "_re");
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
@@ -156,7 +157,7 @@ impl<Args: IntoArgs> TensorCoefficient for FlatCoefficent<Args> {
     }
 
     fn to_atom_im(&self) -> Option<Atom> {
-        let name = Symbol::new(self.name?.to_string() + "_im");
+        let name = symbol!(self.name?.to_string() + "_im");
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
@@ -223,7 +224,7 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
         Some(fn_builder.finish())
     }
     fn to_atom_re(&self) -> Option<Atom> {
-        let name = Symbol::new(self.name?.to_string() + "_re");
+        let name = symbol!(self.name?.to_string() + "_re");
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
@@ -236,7 +237,7 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
     }
 
     fn to_atom_im(&self) -> Option<Atom> {
-        let name = Symbol::new(self.name?.to_string() + "_im");
+        let name = symbol!(self.name?.to_string() + "_im");
 
         let mut fn_builder = FunctionBuilder::new(name);
         if let Some(ref args) = self.args {
@@ -281,7 +282,9 @@ pub struct ParamTensor<S: TensorStructure = VecStructure> {
 impl<S: TensorStructure + Clone> StorageTensor for ParamTensor<S> {
     type Data = Atom;
     type ContainerData<Data> = DataTensor<Data, S>;
-    type ContainerStructure<Structure> = ParamTensor<Structure> where
+    type ContainerStructure<Structure>
+        = ParamTensor<Structure>
+    where
         Structure: TensorStructure;
 
     fn map_data<U>(self, f: impl Fn(Self::Data) -> U) -> Self::ContainerData<U> {
@@ -730,7 +733,10 @@ impl<S: TensorStructure + Clone> ParamTensorSet<S> {
 }
 
 impl<S: TensorStructure> IteratableTensor for ParamTensor<S> {
-    type Data<'a> =  AtomView<'a> where Self: 'a;
+    type Data<'a>
+        = AtomView<'a>
+    where
+        Self: 'a;
 
     fn iter_expanded(&self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'_>)> {
         self.tensor.iter_expanded().map(|(i, x)| (i, x.as_view()))
@@ -1070,8 +1076,12 @@ where
     C: HasStructure<Structure = S> + Clone + GetTensorData<GetDataOwned: Clone>,
     S: TensorStructure + Clone,
 {
-    type GetDataRef<'a> = ConcreteOrParamView<'a,C::GetDataRef<'a>> where Self: 'a;
-    type GetDataRefMut<'a> = ConcreteOrParamViewMut<'a,C::GetDataRefMut<'a>>
+    type GetDataRef<'a>
+        = ConcreteOrParamView<'a, C::GetDataRef<'a>>
+    where
+        Self: 'a;
+    type GetDataRefMut<'a>
+        = ConcreteOrParamViewMut<'a, C::GetDataRefMut<'a>>
     where
         Self: 'a;
     type GetDataOwned = ConcreteOrParam<C::GetDataOwned>;
@@ -1212,7 +1222,10 @@ impl<C: IteratableTensor + Clone, S: TensorStructure + Clone> IteratableTensor
 where
     C: HasStructure<Structure = S>,
 {
-    type Data<'a> = AtomViewOrConcrete<'a, C::Data<'a>> where Self:'a ;
+    type Data<'a>
+        = AtomViewOrConcrete<'a, C::Data<'a>>
+    where
+        Self: 'a;
 
     fn iter_flat(&self) -> impl Iterator<Item = (FlatIndex, Self::Data<'_>)> {
         match self {
@@ -1445,8 +1458,13 @@ where
 }
 
 impl<S: TensorStructure> GetTensorData for ParamTensor<S> {
-    type GetDataRef<'a> = AtomView<'a> where Self: 'a;
-    type GetDataRefMut<'a> = &'a mut Atom  where
+    type GetDataRef<'a>
+        = AtomView<'a>
+    where
+        Self: 'a;
+    type GetDataRefMut<'a>
+        = &'a mut Atom
+    where
         Self: 'a;
     type GetDataOwned = Atom;
     fn get_ref<C: AsRef<[ConcreteIndex]>>(&self, indices: C) -> Result<Self::GetDataRef<'_>> {

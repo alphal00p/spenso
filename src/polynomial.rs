@@ -37,14 +37,10 @@ mod test {
     #[cfg(feature = "shadowing")]
     use symbolica::{
         atom::Atom,
-        id::{Pattern, Replacement},
+        id::Replacement,
         poly::{polynomial::MultivariatePolynomial, Variable},
     };
-    use symbolica::{
-        atom::{AtomCore, Symbol},
-        domains::rational::Q,
-        poly::LexOrder,
-    };
+    use symbolica::{atom::AtomCore, domains::rational::Q, parse, poly::LexOrder, symbol};
 
     #[cfg(feature = "shadowing")]
     use crate::symbolic::SymbolicTensor;
@@ -63,7 +59,7 @@ mod test {
     #[cfg(feature = "shadowing")]
     #[test]
     fn three_loop_photon_poly() {
-        use symbolica::atom::{AtomCore, Symbol};
+        use symbolica::{atom::AtomCore, symbol};
 
         let expr = concat!("-64/729*G^4*ee^6",
     "*(MT*id(aind(bis(4,47),bis(4,135)))+Q(15,aind(mink(4,149)))*γ(aind(mink(4,149),bis(4,47),bis(4,135))))",
@@ -84,7 +80,7 @@ mod test {
     "*ϵ(0,aind(mink(4,45)))*ϵ(1,aind(mink(4,81)))*ϵbar(2,aind(mink(4,94)))*ϵbar(3,aind(mink(4,108)))*ϵbar(4,aind(mink(4,115)))*ϵbar(5,aind(mink(4,128)))"
 );
 
-        let atom = Atom::parse(expr).unwrap();
+        let atom = parse!(expr).unwrap();
 
         let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
@@ -114,12 +110,14 @@ mod test {
 
         for i in 0..18 {
             reps.push(Replacement::new(
-                Pattern::parse(format!("Q({},cind(0))", i).as_str()).unwrap(),
-                Pattern::parse(format!("Q{}", i).as_str()).unwrap(),
+                parse!(format!("Q({},cind(0))", i).as_str())
+                    .unwrap()
+                    .to_pattern(),
+                parse!(format!("Q{}", i).as_str()).unwrap().to_pattern(),
             ));
 
-            vars.push(Variable::Symbol(Symbol::new(format!("Q{}", i).as_str())));
-            qs.push(Atom::parse(format!("Q{}", i).as_str()).unwrap());
+            vars.push(Variable::Symbol(symbol!(format!("Q{}", i).as_str())));
+            qs.push(parse!(format!("Q{}", i).as_str()).unwrap());
         }
 
         res = res.replace_all_multiple(&reps);
@@ -178,7 +176,7 @@ mod test {
         let expr = concat!("4096/729*Nc*(MT*id(aind(bis(4,3),bis(4,0)))+Q(6,aind(mink(4,13)))*γ(aind(mink(4,13),bis(4,3),bis(4,0))))*(MT*id(aind(bis(4,5),bis(4,2)))+Q(7,aind(mink(4,27)))*γ(aind(mink(4,27),bis(4,5),bis(4,2))))*(MT*id(aind(bis(4,7),bis(4,4)))+Q(8,aind(mink(4,69)))*γ(aind(mink(4,69),bis(4,7),bis(4,4))))*(MT*id(aind(bis(4,9),bis(4,6)))+Q(9,aind(mink(4,181)))*γ(aind(mink(4,181),bis(4,9),bis(4,6))))*(MT*id(aind(bis(4,11),bis(4,8)))+Q(10,aind(mink(4,475)))*γ(aind(mink(4,475),bis(4,11),bis(4,8))))*(-MT*id(aind(bis(4,1),bis(4,10)))-Q(11,aind(mink(4,1245)))*γ(aind(mink(4,1245),bis(4,1),bis(4,10))))*sqrt(pi)^6*sqrt(aEW)^6*γ(aind(mink(4,6),bis(4,1),bis(4,0)))*γ(aind(mink(4,7),bis(4,3),bis(4,2)))*γ(aind(mink(4,8),bis(4,5),bis(4,4)))*γ(aind(mink(4,9),bis(4,7),bis(4,6)))*γ(aind(mink(4,10),bis(4,9),bis(4,8)))*γ(aind(mink(4,11),bis(4,11),bis(4,10)))*ϵ(0,aind(mink(4,6)))*ϵ(1,aind(mink(4,7)))*ϵbar(2,aind(mink(4,11)))*ϵbar(3,aind(mink(4,10)))*ϵbar(4,aind(mink(4,9)))*ϵbar(5,aind(mink(4,8)))"
 );
 
-        let atom = Atom::parse(expr).unwrap();
+        let atom = parse!(expr).unwrap();
 
         let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
@@ -208,12 +206,14 @@ mod test {
 
         for i in 0..11 {
             reps.push(Replacement::new(
-                Pattern::parse(format!("Q({},cind(0))", i).as_str()).unwrap(),
-                Pattern::parse(format!("Q{}", i).as_str()).unwrap(),
+                parse!(format!("Q({},cind(0))", i).as_str())
+                    .unwrap()
+                    .to_pattern(),
+                parse!(format!("Q{}", i).as_str()).unwrap().to_pattern(),
             ));
 
-            vars.push(Variable::Symbol(Symbol::new(format!("Q{}", i).as_str())));
-            qs.push(Atom::parse(format!("Q{}", i).as_str()).unwrap());
+            vars.push(Variable::Symbol(symbol!(format!("Q{}", i).as_str())));
+            qs.push(parse!(format!("Q{}", i).as_str()).unwrap());
         }
 
         res = res.replace_all_multiple(&reps);
@@ -240,7 +240,7 @@ mod test {
             let bytes = exp.to_expression().as_view().get_byte_size();
 
             println!("{:?}:{}", &a[0..11], bytes);
-            let mut monomial = Atom::parse(format!("C{}", i).as_str()).unwrap();
+            let mut monomial = parse!(format!("C{}", i).as_str()).unwrap();
             for (i, pow) in a[0..11].iter().enumerate() {
                 for _ in 0..*pow {
                     monomial = monomial * &qs[i];

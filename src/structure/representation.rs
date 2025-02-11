@@ -22,7 +22,7 @@ use crate::{
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomCore, FunctionBuilder, Symbol},
-    {function, symb},
+    {function, symbol},
 };
 
 use thiserror::Error;
@@ -64,7 +64,7 @@ pub trait BaseRepName: RepName<Dual: RepName> + Default {
 
     #[cfg(feature = "shadowing")]
     fn selfless_symbol() -> Symbol {
-        Symbol::new(Self::NAME)
+        symbol!(Self::NAME)
     }
     fn selfless_dual() -> Self::Dual;
     fn rep<D: Into<Dimension>>(dim: D) -> Representation<Self>
@@ -295,7 +295,7 @@ duplicate! {
     }
     #[cfg(feature = "shadowing")]
     fn to_symbolic(&self, args: impl IntoIterator<Item=Atom>) -> Atom{
-        let mut fun = FunctionBuilder::new(symb!(constname));
+        let mut fun = FunctionBuilder::new(symbol!(constname));
         for a in args {
             fun = fun.add_arg(&a);
         }
@@ -304,9 +304,9 @@ duplicate! {
 
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol,aind:Symbol) -> Result<Self,RepresentationError> {
-        let uind = Symbol::new(UPIND);
-        let dind = Symbol::new(DOWNIND);
-        let sind = Symbol::new(SELFDUALIND);
+        let uind = symbol!(UPIND);
+        let dind = symbol!(DOWNIND);
+        let sind = symbol!(SELFDUALIND);
         if aind == uind {
             if Self::selfless_symbol() == sym {
                 Ok(isnotselfdual::default())
@@ -382,11 +382,11 @@ duplicate! {
     }
         #[cfg(feature = "shadowing")]
         fn try_from_symbol(sym: Symbol,aind:Symbol) -> Result<Self,RepresentationError> {
-            let uind = Symbol::new(UPIND);
-            let dind = Symbol::new(DOWNIND);
-            let sind = Symbol::new(SELFDUALIND);
+            let uind = symbol!(UPIND);
+            let dind = symbol!(DOWNIND);
+            let sind = symbol!(SELFDUALIND);
             if aind == dind {
-                if symb!(constname) == sym {
+                if symbol!(constname) == sym {
                     Ok(Dual{inner:isnotselfdual::default()})
                 } else {
                     Err(RepresentationError::NotRepresentationError(sym))
@@ -411,11 +411,11 @@ duplicate! {
 
         #[cfg(feature = "shadowing")]
         fn to_symbolic(&self, args: impl IntoIterator<Item= Atom>) -> Atom{
-            let mut fun = FunctionBuilder::new(symb!(constname));
+            let mut fun = FunctionBuilder::new(symbol!(constname));
             for a in args {
                 fun = fun.add_arg(&a);
             }
-            FunctionBuilder::new(symb!(DOWNIND)).add_arg(fun.finish()).finish()
+            FunctionBuilder::new(symbol!(DOWNIND)).add_arg(fun.finish()).finish()
         }
 
         fn is_neg(self, i: usize) -> bool {
@@ -507,9 +507,9 @@ impl RepName for Minkowski {
 
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError> {
-        let uind = Symbol::new(UPIND);
-        let dind = Symbol::new(DOWNIND);
-        let sind = Symbol::new(SELFDUALIND);
+        let uind = symbol!(UPIND);
+        let dind = symbol!(DOWNIND);
+        let sind = symbol!(SELFDUALIND);
         if aind == sind {
             if Self::selfless_symbol() == sym {
                 Ok(Minkowski::default())
@@ -534,7 +534,7 @@ impl RepName for Minkowski {
 
     #[cfg(feature = "shadowing")]
     fn to_symbolic(&self, args: impl IntoIterator<Item = Atom>) -> Atom {
-        let mut fun = FunctionBuilder::new(symb!(ExtendibleReps::mink_name()));
+        let mut fun = FunctionBuilder::new(symbol!(ExtendibleReps::mink_name()));
         for a in args {
             fun = fun.add_arg(&a);
         }
@@ -641,9 +641,9 @@ duplicate! {
 
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError> {
-        let uind = Symbol::new(UPIND);
-        let dind = Symbol::new(DOWNIND);
-        let sind = Symbol::new(SELFDUALIND);
+        let uind = symbol!(UPIND);
+        let dind = symbol!(DOWNIND);
+        let sind = symbol!(SELFDUALIND);
         if aind == sind {
             if Self::selfless_symbol() == sym {
                 Ok(isselfdual::default())
@@ -668,7 +668,7 @@ duplicate! {
 
     #[cfg(feature = "shadowing")]
     fn to_symbolic(&self, args: impl IntoIterator<Item=Atom>) -> Atom{
-        let mut fun = FunctionBuilder::new(symb!(constname));
+        let mut fun = FunctionBuilder::new(symbol!(constname));
         for a in args {
             fun = fun.add_arg(&a);
         }
@@ -848,7 +848,7 @@ impl RepName for PhysReps {
         match aind.get_name() {
             UPIND => match sym.get_name() {
                 Euclidean::NAME | Minkowski::NAME | Bispinor::NAME | ColorAdjoint::NAME => Err(
-                    RepresentationError::ExpectedDualStateError(Symbol::new(SELFDUALIND), aind),
+                    RepresentationError::ExpectedDualStateError(symbol!(SELFDUALIND), aind),
                 ),
                 Lorentz::NAME => Ok(Self::LorentzUp(Lorentz {})),
                 SpinFundamental::NAME => Ok(Self::SpinFund(SpinFundamental {})),
@@ -858,7 +858,7 @@ impl RepName for PhysReps {
             },
             DOWNIND => match sym.get_name() {
                 Euclidean::NAME | Minkowski::NAME | Bispinor::NAME | ColorAdjoint::NAME => Err(
-                    RepresentationError::ExpectedDualStateError(Symbol::new(SELFDUALIND), aind),
+                    RepresentationError::ExpectedDualStateError(symbol!(SELFDUALIND), aind),
                 ),
                 Lorentz::NAME => Ok(Self::LorentzDown(Lorentz {}.dual())),
                 SpinFundamental::NAME => Ok(Self::SpinAntiFund(SpinFundamental {}.dual())),
@@ -871,7 +871,7 @@ impl RepName for PhysReps {
                 | SpinFundamental::NAME
                 | ColorFundamental::NAME
                 | ColorSextet::NAME => Err(RepresentationError::ExpectedDualStateError(
-                    Symbol::new(SELFDUALIND),
+                    symbol!(SELFDUALIND),
                     aind,
                 )),
                 Euclidean::NAME => Ok(Self::Euclidean(Euclidean::default())),
@@ -928,7 +928,7 @@ impl<T: RepName> Representation<T> {
     pub fn to_pattern_wrapped(&self, aind: Symbol) -> Atom {
         self.rep.to_symbolic([
             self.dim.to_symbolic(),
-            function!(symb!("indexid"), Atom::new_var(aind)),
+            function!(symbol!("indexid"), Atom::new_var(aind)),
         ])
     }
 }
@@ -1008,7 +1008,7 @@ impl ExtendibleReps {
 
         self.name_map.insert(name.into(), rep);
         #[cfg(feature = "shadowing")]
-        let symbol = symb!(name);
+        let symbol = symbol!(name);
         #[cfg(feature = "shadowing")]
         self.symbol_map.insert(symbol, rep);
 
@@ -1036,7 +1036,7 @@ impl ExtendibleReps {
         let rep = Rep::SelfDual(SELF_DUAL.len() as u16);
         self.name_map.insert(name.into(), rep);
         #[cfg(feature = "shadowing")]
-        let symbol = symb!(name);
+        let symbol = symbol!(name);
         #[cfg(feature = "shadowing")]
         self.symbol_map.insert(symbol, rep);
 
@@ -1204,13 +1204,13 @@ impl RepName for Rep {
 
         match rep {
             Rep::Dualizable(_) => {
-                if aind == Symbol::new(DOWNIND) {
+                if aind == symbol!(DOWNIND) {
                     Ok(rep.dual())
-                } else if aind == Symbol::new(UPIND) {
+                } else if aind == symbol!(UPIND) {
                     Ok(rep)
-                } else if aind == Symbol::new(SELFDUALIND) {
+                } else if aind == symbol!(SELFDUALIND) {
                     Err(RepresentationError::ExpectedDualStateError(
-                        Symbol::new(UPIND),
+                        symbol!(UPIND),
                         aind,
                     ))
                 } else {
@@ -1218,11 +1218,11 @@ impl RepName for Rep {
                 }
             }
             Rep::SelfDual(_) => {
-                if aind == Symbol::new(SELFDUALIND) {
+                if aind == symbol!(SELFDUALIND) {
                     Ok(rep)
-                } else if aind == Symbol::new(UPIND) || aind == Symbol::new(DOWNIND) {
+                } else if aind == symbol!(UPIND) || aind == symbol!(DOWNIND) {
                     Err(RepresentationError::ExpectedDualStateError(
-                        Symbol::new(SELFDUALIND),
+                        symbol!(SELFDUALIND),
                         aind,
                     ))
                 } else {
@@ -1255,7 +1255,7 @@ impl RepName for Rep {
             Self::SelfDual(_) => inner,
             Self::Dualizable(l) => {
                 if *l < 0 {
-                    function!(symb!(DOWNIND), &inner)
+                    function!(symbol!(DOWNIND), &inner)
                 } else {
                     inner
                 }
@@ -1562,7 +1562,7 @@ where
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
-    use symbolica::symb;
+    use symbolica::symbol;
 
     use crate::structure::representation::{BaseRepName, Dual};
 
@@ -1570,10 +1570,10 @@ mod shadowing_tests {
 
     #[test]
     fn rep_pattern() {
-        println!("{}", Dual::<Lorentz>::pattern(symb!("d_")));
+        println!("{}", Dual::<Lorentz>::pattern(symbol!("d_")));
         println!(
             "{}",
-            Dual::<Lorentz>::rep(3).to_pattern_wrapped(symb!("d_"))
+            Dual::<Lorentz>::rep(3).to_pattern_wrapped(symbol!("d_"))
         );
     }
 }

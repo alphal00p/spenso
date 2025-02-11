@@ -1405,7 +1405,7 @@ mod test {
     use ahash::{HashMap, HashMapExt};
 
     #[cfg(feature = "shadowing")]
-    use symbolica::atom::Atom;
+    use symbolica::{atom::Atom, parse};
 
     #[cfg(feature = "shadowing")]
     use crate::complex::Complex;
@@ -1442,8 +1442,8 @@ mod test {
         assert_eq!(d, Some(16.));
         assert_eq!(e, Some(16.));
 
-        let a = Atom::parse("a(2)").unwrap();
-        let b = &Atom::parse("b(1)").unwrap();
+        let a = parse!("a(2)").unwrap();
+        let b = &parse!("b(1)").unwrap();
 
         let mut f = a.mul_fallible(&4.).unwrap();
         f.add_assign_fallible(b);

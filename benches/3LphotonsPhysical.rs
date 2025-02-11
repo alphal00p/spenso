@@ -16,6 +16,7 @@ use symbolica::{
     domains::rational::Rational,
     evaluate::{CompileOptions, FunctionMap, InlineASM},
     id::Replacement,
+    parse, symbol,
 };
 
 use symbolica::domains::float::Complex as SymComplex;
@@ -40,7 +41,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     "*ϵ(0,aind(lord(4,45)))*ϵ(1,aind(lord(4,81)))*ϵbar(2,aind(lord(4,94)))*ϵbar(3,aind(lord(4,108)))*ϵbar(4,aind(lord(4,115)))*ϵbar(5,aind(lord(4,128)))"
 );
 
-    let atom = Atom::parse(expr).unwrap();
+    let atom = parse!(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
@@ -60,12 +61,12 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let data_atom_map: (Vec<Atom>, Vec<Complex<f64>>) = data_string_map
         .into_iter()
-        .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
+        .map(|(k, v)| (parse!(&k).unwrap(), v))
         .unzip();
 
     let mut const_atom_map: AHashMap<Symbol, Complex<f64>> = const_string_map
         .into_iter()
-        .map(|(k, v)| (Symbol::new(k), v))
+        .map(|(k, v)| (symbol!(&k), v))
         .collect();
 
     const_atom_map.insert(Atom::I, Complex::i());
@@ -91,8 +92,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut fn_map: FunctionMap<Rational> = FunctionMap::new();
 
     for (k, v) in const_atom_map.iter() {
-        let name_re = Atom::new_var(Symbol::new(k.to_string() + "_re"));
-        let name_im = Atom::new_var(Symbol::new(k.to_string() + "_im"));
+        let name_re = Atom::new_var(symbol!(k.to_string() + "_re"));
+        let name_im = Atom::new_var(symbol!(k.to_string() + "_im"));
         let i = Atom::new_var(Atom::I);
         let pat = &name_re + i * &name_im;
         replacements.push(Replacement::new(

@@ -11,7 +11,7 @@ use crate::{
     upgrading_arithmetic::FallibleSub,
 };
 use constcat::concat;
-// use symbolica::fun;
+use symbolica::parse;
 
 #[test]
 fn other_network() {
@@ -31,7 +31,7 @@ fn pslash_parse() {
     use crate::structure::representation::PhysReps;
 
     let expr = "Q(15,dind(lor(4,75257)))   *γ(lor(4,75257),bis(4,1),bis(4,18))";
-    let atom = Atom::parse(expr).unwrap();
+    let atom = parse!(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
@@ -85,7 +85,7 @@ fn three_loop_photon_parse() {
         "*ϵbar(5,mink(4,9))"
     );
 
-    let atom = Atom::parse(expr).unwrap();
+    let atom = parse!(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 

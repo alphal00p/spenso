@@ -19,7 +19,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
-use symbolica::atom::{Atom, AtomView, Symbol};
+use symbolica::{
+    atom::{Atom, AtomView},
+    symbol,
+};
 
 fn indices(n: i32, m: i32) -> Vec<i32> {
     let spacings: [i32; 2] = [n, m];
@@ -45,7 +48,7 @@ fn gamma_net_param(
         vec![euclidean_four_vector(contracting_index, vbar).into()];
     let lor_fouru = PhysReps::new_rep(&Lorentz {}.into(), 4);
     let lor_fourd = lor_fouru.dual();
-    let p = Symbol::new("p");
+    let p = symbol!("p");
     let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;

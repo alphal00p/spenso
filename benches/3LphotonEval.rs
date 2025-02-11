@@ -10,6 +10,7 @@ use symbolica::{
     atom::{Atom, Symbol},
     domains::rational::Rational,
     evaluate::{CompileOptions, FunctionMap, InlineASM, OptimizationSettings},
+    parse, symbol,
 };
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -30,7 +31,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     "*ϵ(0,mink(4,45))*ϵ(1,mink(4,81))*ϵbar(2,mink(4,94))*ϵbar(3,mink(4,108))*ϵbar(4,mink(4,115))*ϵbar(5,mink(4,128))"
 );
 
-    let atom = Atom::parse(expr).unwrap();
+    let atom = parse!(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
@@ -50,12 +51,12 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let data_atom_map: (Vec<Atom>, Vec<Complex<f64>>) = data_string_map
         .into_iter()
-        .map(|(k, v)| (Atom::parse(&k).unwrap(), v))
+        .map(|(k, v)| (parse!(&k).unwrap(), v))
         .unzip();
 
     let const_atom_map: AHashMap<Symbol, Complex<f64>> = const_string_map
         .into_iter()
-        .map(|(k, v)| (Symbol::new(k), v))
+        .map(|(k, v)| (symbol!(&k), v))
         .collect();
 
     let fn_map: FunctionMap<Rational> = FunctionMap::new();

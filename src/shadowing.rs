@@ -19,9 +19,9 @@ use ahash::AHashMap;
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use symbolica::{
-    atom::{Atom, FunctionAttribute, Symbol},
+    atom::{Atom, Symbol},
     evaluate::FunctionMap,
-    symb,
+    symbol,
 };
 use thiserror::Error;
 
@@ -136,21 +136,13 @@ pub struct ExplicitTensorSymbols {
 }
 
 pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTensorSymbols {
-    id: Symbol::new_with_attributes(
-        ExplicitTensorMap::<f64>::ID_NAME,
-        &[FunctionAttribute::Symmetric],
-    )
-    .unwrap(),
-    gamma: symb!(ExplicitTensorMap::<f64>::GAMMA_NAME),
-    gamma5: symb!(ExplicitTensorMap::<f64>::GAMMA5_NAME),
-    proj_m: symb!(ExplicitTensorMap::<f64>::PROJ_M_NAME),
-    proj_p: symb!(ExplicitTensorMap::<f64>::PROJ_P_NAME),
-    sigma: symb!(ExplicitTensorMap::<f64>::SIGMA_NAME),
-    metric: Symbol::new_with_attributes(
-        ExplicitTensorMap::<f64>::METRIC_NAME,
-        &[FunctionAttribute::Symmetric],
-    )
-    .unwrap(),
+    id: symbol!(ExplicitTensorMap::<f64>::ID_NAME;Symmetric).unwrap(),
+    gamma: symbol!(ExplicitTensorMap::<f64>::GAMMA_NAME),
+    gamma5: symbol!(ExplicitTensorMap::<f64>::GAMMA5_NAME),
+    proj_m: symbol!(ExplicitTensorMap::<f64>::PROJ_M_NAME),
+    proj_p: symbol!(ExplicitTensorMap::<f64>::PROJ_P_NAME),
+    sigma: symbol!(ExplicitTensorMap::<f64>::SIGMA_NAME),
+    metric: symbol!(ExplicitTensorMap::<f64>::METRIC_NAME;Symmetric).unwrap(),
 });
 
 impl<Data: Clone> ExplicitTensorMap<Data> {
@@ -210,7 +202,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
                 ExtendibleReps::BISPINOR.new_rep(4),
                 ExtendibleReps::BISPINOR.new_rep(4),
             ],
-            symb!(Self::GAMMA_NAME),
+            symbol!(Self::GAMMA_NAME),
             None,
         )
     }
@@ -218,7 +210,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
     fn metric_key(rep: Rep) -> ExplicitKey {
         ExplicitKey::from_iter(
             [rep.new_rep(4), rep.new_rep(4)],
-            symb!(Self::METRIC_NAME),
+            symbol!(Self::METRIC_NAME),
             None,
         )
     }
@@ -302,7 +294,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
                 ExtendibleReps::BISPINOR.new_rep(4),
                 ExtendibleReps::BISPINOR.new_rep(4),
             ],
-            symb!(Self::GAMMA5_NAME),
+            symbol!(Self::GAMMA5_NAME),
             None,
         )
     }
@@ -327,7 +319,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
                 ExtendibleReps::BISPINOR.new_rep(4),
                 ExtendibleReps::BISPINOR.new_rep(4),
             ],
-            symb!(Self::PROJ_M_NAME),
+            symbol!(Self::PROJ_M_NAME),
             None,
         )
     }
@@ -338,7 +330,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
                 ExtendibleReps::BISPINOR.new_rep(4),
                 ExtendibleReps::BISPINOR.new_rep(4),
             ],
-            symb!(Self::PROJ_P_NAME),
+            symbol!(Self::PROJ_P_NAME),
             None,
         )
     }
@@ -365,7 +357,7 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
                 ExtendibleReps::BISPINOR.new_rep(4),
                 ExtendibleReps::BISPINOR.new_rep(4),
             ],
-            symb!(Self::SIGMA_NAME),
+            symbol!(Self::SIGMA_NAME),
             None,
         )
     }
@@ -437,19 +429,20 @@ impl<Data: Clone> ExplicitTensorMap<Data> {
     {
         for rep in REPS.read().unwrap().reps() {
             self.insert_generic_real(Self::id(*rep), Self::checked_identity);
-            let id_metric = GenericKey::new(symb!(Self::METRIC_NAME), None, vec![*rep, rep.dual()]);
+            let id_metric =
+                GenericKey::new(symbol!(Self::METRIC_NAME), None, vec![*rep, rep.dual()]);
             self.insert_generic_real(id_metric, Self::checked_identity);
             if rep.dual() != *rep {
                 self.insert_generic_real(Self::id(rep.dual()), Self::checked_identity);
                 let id_metric =
-                    GenericKey::new(symb!(Self::METRIC_NAME), None, vec![rep.dual(), *rep]);
+                    GenericKey::new(symbol!(Self::METRIC_NAME), None, vec![rep.dual(), *rep]);
                 self.insert_generic_real(id_metric, Self::checked_identity);
             }
         }
     }
 
     pub fn id(rep: Rep) -> GenericKey {
-        GenericKey::new(symb!(Self::ID_NAME), None, vec![rep, rep.dual()])
+        GenericKey::new(symbol!(Self::ID_NAME), None, vec![rep, rep.dual()])
     }
 
     pub fn checked_identity(key: ExplicitKey) -> MixedTensor<Data, ExplicitKey>
@@ -612,7 +605,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use symbolica::atom::Atom;
+    use symbolica::parse;
 
     use crate::{
         contraction::Contract,
@@ -699,7 +692,7 @@ mod test {
 
     #[test]
     fn pslash() {
-        let expr = Atom::parse("p(1,mink(4,mu))*γ(mink(4,mu),bis(4,i),bis(4,j))").unwrap();
+        let expr = parse!("p(1,mink(4,mu))*γ(mink(4,mu),bis(4,i),bis(4,j))").unwrap();
         let mut network: TensorNetwork<
             MixedTensor<f64, AtomStructure<PhysReps>>,
             SerializableAtom,

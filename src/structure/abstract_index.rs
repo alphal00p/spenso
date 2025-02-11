@@ -8,6 +8,7 @@ use std::hash::Hash;
 use std::ops::AddAssign;
 #[cfg(feature = "shadowing")]
 use symbolica::atom::{Atom, AtomView};
+use symbolica::parse;
 
 #[cfg(feature = "shadowing")]
 use symbolica::coefficient::CoefficientView;
@@ -176,7 +177,7 @@ impl TryFrom<std::string::String> for AbstractIndex {
     type Error = AbstractIndexError;
 
     fn try_from(value: std::string::String) -> Result<Self, Self::Error> {
-        let atom = Atom::parse(&value).map_err(AbstractIndexError::ParsingError)?;
+        let atom = parse!(&value).map_err(AbstractIndexError::ParsingError)?;
         Self::try_from(atom.as_view())
     }
 }
@@ -186,7 +187,7 @@ impl TryFrom<&'_ str> for AbstractIndex {
     type Error = AbstractIndexError;
 
     fn try_from(value: &'_ str) -> Result<Self, Self::Error> {
-        let atom = Atom::parse(value).map_err(AbstractIndexError::ParsingError)?;
+        let atom = parse!(value).map_err(AbstractIndexError::ParsingError)?;
         Self::try_from(atom.as_view())
     }
 }

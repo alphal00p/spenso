@@ -12,7 +12,7 @@ use std::hash::Hash;
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView, ListIterator, Symbol},
-    {function, symb},
+    {function, symbol},
 };
 
 #[cfg(feature = "shadowing")]
@@ -296,7 +296,7 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
         use symbolica::function;
 
         self.rep
-            .to_symbolic([function!(symb!("indexid"), Atom::from(self.aind))])
+            .to_symbolic([function!(symbol!("indexid"), Atom::from(self.aind))])
     }
     #[cfg(feature = "shadowing")]
     fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError> {
@@ -337,7 +337,7 @@ pub type PhysicalSlots = Slot<PhysReps>;
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
-    use symbolica::{atom::Atom, symb};
+    use symbolica::{parse, symbol};
 
     use crate::structure::{
         representation::{BaseRepName, Dual, Lorentz, Rep, RepName, Representation},
@@ -393,12 +393,12 @@ mod shadowing_tests {
             mu.dual()
         );
 
-        let expr = Atom::parse("dind(lor(4,-1))").unwrap();
+        let expr = parse!("dind(lor(4,-1))").unwrap();
 
         let _slot: Slot<Rep> = Slot::try_from(expr.as_view()).unwrap();
         let _slot: Slot<Dual<Lorentz>> = Slot::try_from(expr.as_view()).unwrap();
 
         println!("{}", _slot.to_symbolic_wrapped());
-        println!("{}", _slot.to_pattern(symb!("d_")));
+        println!("{}", _slot.to_pattern(symbol!("d_")));
     }
 }

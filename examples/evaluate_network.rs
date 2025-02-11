@@ -18,7 +18,9 @@ use spenso::{
 
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
-use symbolica::atom::{Atom, AtomView, Symbol};
+use symbolica::atom::{Atom, AtomView};
+use symbolica::symbol;
+
 fn gamma_net_param(
     minkindices: &[i32],
     vbar: [Complex<f64>; 4],
@@ -30,7 +32,7 @@ fn gamma_net_param(
         vec![euclidean_four_vector(contracting_index, vbar).into()];
     let lor_fouru = PhysReps::new_rep(&Lorentz {}.into(), 4);
     let lor_fourd = lor_fouru.dual();
-    let p = Symbol::new("p");
+    let p = symbol!("p");
     let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;

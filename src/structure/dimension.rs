@@ -127,15 +127,15 @@ impl PartialEq<Dimension> for usize {
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
-    use symbolica::{atom::Atom, function, symb};
+    use symbolica::{atom::Atom, function, symbol};
 
     use super::Dimension;
 
     #[test]
     fn dimension_from_view() {
         let a = Atom::new_num(5);
-        let b = Atom::new_var(symb!("b"));
-        let c = function!(symb!("a"), symb!("b"));
+        let b = Atom::new_var(symbol!("b"));
+        let c = function!(symbol!("a"), symbol!("b"));
         let d = Atom::new_num(-1);
         let e = Atom::new_num((1, 2));
 
@@ -143,7 +143,7 @@ mod shadowing_tests {
 
         assert_eq!(dima, Dimension::Concrete(5));
         let dimb = Dimension::try_from(b.as_view()).unwrap();
-        assert_eq!(dimb, Dimension::Symbolic(symb!("b").into()));
+        assert_eq!(dimb, Dimension::Symbolic(symbol!("b").into()));
         let dimc = Dimension::try_from(c.as_view());
         assert!(dimc.is_err());
         let dimd = Dimension::try_from(d.as_view());

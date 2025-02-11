@@ -12,7 +12,7 @@ use dimension::Dimension;
 use indexmap::IndexMap;
 
 #[cfg(feature = "shadowing")]
-use symbolica::symb;
+use symbolica::symbol;
 use thiserror::Error;
 
 use crate::permutation::Permutation;
@@ -1045,7 +1045,7 @@ impl<R: RepName> TryFrom<AtomView<'_>> for VecStructure<R> {
 impl<R: RepName> TryFrom<FunView<'_>> for VecStructure<R> {
     type Error = SlotError;
     fn try_from(value: FunView) -> Result<Self, Self::Error> {
-        if value.get_symbol() == Symbol::new(ABSTRACTIND) {
+        if value.get_symbol() == symbol!(ABSTRACTIND) {
             let mut structure: Vec<Slot<R>> = vec![];
 
             for arg in value.iter() {
@@ -1400,7 +1400,7 @@ impl<'a, R: RepName> TryFrom<FunView<'a>> for AtomStructure<R> {
     type Error = StructureError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         match value.get_symbol() {
-            s if s == Symbol::new(ABSTRACTIND) => {
+            s if s == symbol!(ABSTRACTIND) => {
                 let mut structure: Vec<Slot<R>> = vec![];
 
                 for arg in value.iter() {
@@ -1425,7 +1425,7 @@ impl<'a, R: RepName> TryFrom<FunView<'a>> for AtomStructure<R> {
                         }
                         Err(e) => {
                             if let AtomView::Fun(f) = arg {
-                                if f.get_symbol() == symb!(ABSTRACTIND) {
+                                if f.get_symbol() == symbol!(ABSTRACTIND) {
                                     let internal_s = AtomStructure::try_from(f);
 
                                     if let Ok(s) = internal_s {
@@ -2204,11 +2204,12 @@ where
 mod shadowing_tests {
     use super::representation::Lorentz;
     use super::*;
-    use symbolica::atom::{Atom, AtomCore};
+    use symbolica::atom::AtomCore;
+    use symbolica::parse;
 
     #[test]
     fn named_structure_from_atom() {
-        let expr = Atom::parse("p(1,mu,aind(lor(4,4)))").unwrap();
+        let expr = parse!("p(1,mu,aind(lor(4,4)))").unwrap();
 
         if let AtomView::Fun(f) = expr.as_atom_view() {
             let named_structure = AtomStructure::<Lorentz>::try_from(f);

@@ -6,6 +6,7 @@ use symbolica::{
     atom::{Atom, AtomCore, AtomView, FunctionBuilder, Symbol},
     id::Pattern,
     state::State,
+    symbol,
 };
 
 extern crate derive_more;
@@ -41,7 +42,7 @@ impl<'d> Deserialize<'d> for SerializableSymbol {
     {
         let value = String::deserialize(deserializer)?;
         Ok(SerializableSymbol {
-            symbol: Symbol::new(value),
+            symbol: symbol!(&value),
         })
     }
 }
@@ -223,7 +224,7 @@ pub fn atomic_flat_label_id(index: usize, id: Symbol) -> Atom {
 #[allow(clippy::cast_possible_wrap)]
 pub fn atomic_expanded_label_id(indices: &[ConcreteIndex], name: Symbol, args: &[Atom]) -> Atom {
     let mut value_builder = FunctionBuilder::new(name);
-    let mut index_func = FunctionBuilder::new(Symbol::new("cind"));
+    let mut index_func = FunctionBuilder::new(symbol!("cind"));
     for arg in args {
         value_builder = value_builder.add_arg(arg);
     }
@@ -342,7 +343,7 @@ impl<const N: usize> IntoArgs for [Atom; N] {
 #[cfg(feature = "shadowing")]
 impl IntoSymbol for SmartString<LazyCompact> {
     fn ref_into_symbol(&self) -> Symbol {
-        Symbol::new(self)
+        symbol!(self)
     }
 
     fn from_str(s: &str) -> Self {
@@ -357,7 +358,7 @@ impl IntoSymbol for Symbol {
     }
 
     fn from_str(s: &str) -> Self {
-        Symbol::new(s)
+        symbol!(s)
     }
 }
 
@@ -368,16 +369,14 @@ impl IntoSymbol for SerializableSymbol {
     }
 
     fn from_str(s: &str) -> Self {
-        Self {
-            symbol: Symbol::new(s),
-        }
+        Self { symbol: symbol!(s) }
     }
 }
 
 #[cfg(feature = "shadowing")]
 impl IntoSymbol for std::string::String {
     fn ref_into_symbol(&self) -> Symbol {
-        Symbol::new(self)
+        symbol!(self)
     }
     fn from_str(s: &str) -> Self {
         s.into()

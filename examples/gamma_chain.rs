@@ -7,7 +7,7 @@ use std::{collections::HashSet, time::Instant};
 use num::traits::ToPrimitive;
 
 #[cfg(feature = "shadowing")]
-use symbolica::atom::{Atom, Symbol};
+use symbolica::{atom::Atom, atom::Symbol, symbol};
 
 #[cfg(feature = "shadowing")]
 use spenso::{
@@ -234,7 +234,7 @@ fn gamma_net_param(
         vec![euclidean_four_vector(contracting_index, vbar).into()];
     let lor_fouru = PhysReps::new_rep(&Lorentz {}.into(), 4);
     let lor_fourd = lor_fouru.dual();
-    let p = Symbol::new("p");
+    let p = symbol!("p");
     let mut seen = HashSet::new();
     for m in minkindices {
         let ui = contracting_index;

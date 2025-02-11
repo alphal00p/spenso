@@ -2,7 +2,7 @@ use spenso::structure::representation::PhysReps;
 #[cfg(feature = "shadowing")]
 use spenso::symbolic::SymbolicTensor;
 #[cfg(feature = "shadowing")]
-use symbolica::atom::Atom;
+use symbolica::parse;
 
 fn main() {
     #[cfg(feature = "shadowing")]
@@ -19,7 +19,7 @@ fn main() {
     "*ϵ(0,aind(loru(4,187)))*ϵbar(1,aind(loru(4,219)))*ϵbar(2,aind(loru(4,224)))*ϵbar(3,aind(loru(4,229)))",
 );
     #[cfg(feature = "shadowing")]
-    let atom = Atom::parse(expr).unwrap();
+    let atom = parse!(expr).unwrap();
     #[cfg(feature = "shadowing")]
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
     #[cfg(feature = "shadowing")]

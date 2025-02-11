@@ -10,7 +10,10 @@ use rand::{distributions::Uniform, Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro64Star;
 
 #[cfg(feature = "shadowing")]
-use symbolica::atom::{Atom, AtomCore, AtomView, Symbol};
+use symbolica::{
+    atom::{Atom, AtomCore, AtomView},
+    parse, symbol,
+};
 
 #[cfg(feature = "shadowing")]
 use slotmap::{SecondaryMap, SlotMap};
@@ -1261,7 +1264,7 @@ fn convert_sym() {
         "6",
     ]
     .iter()
-    .map(|x| Atom::parse(x).unwrap())
+    .map(|x| parse!(x).unwrap())
     .collect();
 
     assert_eq!(
@@ -1380,7 +1383,7 @@ fn symbolic_contract() {
 
     assert_eq!(
         *f.get_atom(),
-        Atom::parse("T(euc(2,1),euc(3,4))*P(euc(2,3),euc(3,2))").unwrap()
+        parse!("T(euc(2,1),euc(3,4))*P(euc(2,3),euc(3,2))").unwrap()
     );
 
     let a = f.to_network::<PhysReps>().unwrap();
@@ -1409,9 +1412,9 @@ fn test_fallible_mul() {
 
     #[cfg(feature = "shadowing")]
     {
-        let a = &Atom::parse("a(2)").unwrap();
+        let a = &parse!("a(2)").unwrap();
 
-        let b = &Atom::parse("b(1)").unwrap();
+        let b = &parse!("b(1)").unwrap();
         let i = Atom::new_var(Atom::I);
         let mut f = a.mul_fallible(&4.).unwrap();
         f.add_assign_fallible(b);
@@ -1472,7 +1475,7 @@ fn duals() {
 #[test]
 fn parsing_scalar_mul() {
     let expr = "MT*id(aind(bis(4,105),bis(4,175)))";
-    let atom = Atom::parse(expr).unwrap();
+    let atom = parse!(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
@@ -1486,7 +1489,7 @@ fn parsing_scalar_mul() {
 #[test]
 fn parsing_single_contract() {
     let expr = "Q(15,mink(4,192))*γ(aind(mink(4,192),bis(4,105),bis(4,175)))";
-    let atom = Atom::parse(expr).unwrap();
+    let atom = parse!(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
@@ -1501,7 +1504,7 @@ fn parsing_single_contract() {
 #[test]
 fn parsing_addition_and_mul() {
     let expr = "(MT*id(aind(bis(4,105),bis(4,175)))+Q(15,aind(mink(4,192)))*γ(aind(mink(4,192),bis(4,105),bis(4,175))))";
-    let atom = Atom::parse(expr).unwrap();
+    let atom = parse!(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
@@ -1579,8 +1582,8 @@ fn slotmap() {
     let p: ParamTensor<NamedStructure<symbolica::atom::Symbol, Vec<Atom>>> = ParamTensor::param(
         DataTensor::Sparse(SparseTensor::empty(NamedStructure::from_iter(
             [Lorentz::slot(3, 4)],
-            Symbol::new("name"),
-            Some(vec![Atom::parse("q").unwrap()]),
+            symbol!("name"),
+            Some(vec![parse!("q").unwrap()]),
         ))),
     );
 

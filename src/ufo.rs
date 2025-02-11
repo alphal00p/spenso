@@ -17,7 +17,10 @@ use crate::{
 };
 
 #[cfg(feature = "shadowing")]
-use symbolica::atom::{Atom, Symbol};
+use symbolica::{
+    atom::{Atom, Symbol},
+    symbol,
+};
 
 #[cfg(feature = "shadowing")]
 use crate::{
@@ -132,7 +135,7 @@ where
         p.to_vec(),
         HistoryStructure::from(NamedStructure::from_iter(
             [Lorentz::slot(4, index)],
-            Symbol::new("p"),
+            symbol!("p"),
             None,
         )),
     )
@@ -164,7 +167,7 @@ where
         p.to_vec(),
         HistoryStructure::from(NamedStructure::from_iter(
             [Euclidean::slot(4, index)],
-            Symbol::new("p"),
+            symbol!("p"),
             None,
         )),
     )
@@ -267,7 +270,7 @@ where
             Slot::<PhysReps>::from(Euclidean::slot(4, indices[0])),
             Euclidean::slot(4, indices[1]).into(),
         ],
-        Symbol::new("γ"),
+        symbol!("γ"),
         None,
     ));
 
@@ -388,7 +391,7 @@ where
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         indices.into_iter().map(|i| Euclidean::slot(4, i)),
-        Symbol::new("γ5"),
+        symbol!("γ5"),
         None,
     ));
 
@@ -449,7 +452,7 @@ where
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         indices.into_iter().map(|i| Euclidean::slot(4, i)),
-        Symbol::new("ProjM"),
+        symbol!("ProjM"),
         None,
     ));
 
@@ -517,7 +520,7 @@ where
 {
     let structure = HistoryStructure::from(NamedStructure::from_iter(
         indices.into_iter().map(|i| Bispinor::slot(4, i)),
-        Symbol::new("ProjP"),
+        symbol!("ProjP"),
         None,
     ));
 
@@ -615,7 +618,7 @@ where
             Lorentz::slot(4, minkdices[0]).into(),
             Lorentz::slot(4, minkdices[1]).into(),
         ],
-        Symbol::new("σ"),
+        symbol!("σ"),
         None,
     ));
 
@@ -689,7 +692,7 @@ where
 #[cfg(test)]
 mod test {
     #[cfg(feature = "shadowing")]
-    use symbolica::atom::Atom;
+    use symbolica::{atom::Atom, parse};
 
     #[cfg(feature = "shadowing")]
     use super::*;
@@ -710,8 +713,8 @@ mod test {
     #[test]
     #[cfg(feature = "shadowing")]
     fn clifford() {
-        let expr = Atom::parse(
-            "γ(mink(4,1),bis(4,4),bis(4,3))*γ(mink(4,2),bis(4,3),bis(4,4))+γ(mink(4,2),bis(4,4),bis(4,3))*γ(mink(4,1),bis(4,3),bis(4,4))",
+        let expr = parse!(
+            "γ(mink(4,1),bis(4,4),bis(4,3))*γ(mink(4,2),bis(4,3),bis(4,4))+γ(mink(4,2),bis(4,4),bis(4,3))*γ(mink(4,1),bis(4,3),bis(4,4))"
         )
         .unwrap();
         let mut net =
@@ -736,8 +739,8 @@ mod test {
     #[test]
     #[cfg(feature = "shadowing")]
     fn clifford2() {
-        let expr = Atom::parse(
-            "γ(mink(4,1),bis(4,4),bis(4,3))*γ(mink(4,2),bis(4,3),bis(4,1))+γ(mink(4,2),bis(4,4),bis(4,3))*γ(mink(4,1),bis(4,3),bis(4,1))",
+        let expr = parse!(
+            "γ(mink(4,1),bis(4,4),bis(4,3))*γ(mink(4,2),bis(4,3),bis(4,1))+γ(mink(4,2),bis(4,4),bis(4,3))*γ(mink(4,1),bis(4,3),bis(4,1))"
         )
         .unwrap();
         // +γ(aind(bis(4,4),bis(4,3),mink(4,2)))*γ(aind(bis(4,3),bis(4,4),mink(4,1))))
@@ -748,7 +751,7 @@ mod test {
             .unwrap();
 
         net.contract().unwrap();
-        let other = Atom::parse("2*Metric(mink(4,1),mink(4,2))*id(bis(4,4),bis(4,3))").unwrap();
+        let other = parse!("2*Metric(mink(4,1),mink(4,2))*id(bis(4,4),bis(4,3))").unwrap();
 
         let mut net =
             TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
@@ -770,7 +773,7 @@ mod test {
     #[cfg(feature = "shadowing")]
     fn gamma_algebra() {
         let _ = env_logger::builder().is_test(true).try_init();
-        let expr = Atom::parse("γ(aind(mink(4,1),bis(4,4),bis(4,3)))*Q(1,aind(mink(4,1)))*γ(aind(mink(4,2),bis(4,3),bis(4,4)))*Q(2,aind(mink(4,2)))").unwrap();
+        let expr = parse!("γ(aind(mink(4,1),bis(4,4),bis(4,3)))*Q(1,aind(mink(4,1)))*γ(aind(mink(4,2),bis(4,3),bis(4,4)))*Q(2,aind(mink(4,2)))").unwrap();
 
         let mut net =
             TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
@@ -782,7 +785,7 @@ mod test {
 
         println!("{}", net.result().unwrap().0);
 
-        let expr = Atom::parse("γ(aind(bis(4,1),bis(4,4),bis(4,3)))*Q(1,aind(bis(4,1)))*γ(aind(bis(4,2),bis(4,3),bis(4,4)))*Q(2,aind(bis(4,2)))").unwrap();
+        let expr = parse!("γ(aind(bis(4,1),bis(4,4),bis(4,3)))*Q(1,aind(bis(4,1)))*γ(aind(bis(4,2),bis(4,3),bis(4,4)))*Q(2,aind(bis(4,2)))").unwrap();
 
         let mut net =
             TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
@@ -798,10 +801,9 @@ mod test {
     #[test]
     #[cfg(feature = "shadowing")]
     fn gamma_algebra2() {
-        let expr = Atom::parse(
-            "γ(aind(mink(4,1),bis(4,4),bis(4,3)))*γ(aind(mink(4,1),bis(4,1),bis(4,2)))",
-        )
-        .unwrap();
+        let expr =
+            parse!("γ(aind(mink(4,1),bis(4,4),bis(4,3)))*γ(aind(mink(4,1),bis(4,1),bis(4,2)))")
+                .unwrap();
 
         let mut net =
             TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
@@ -818,10 +820,9 @@ mod test {
     #[cfg(feature = "shadowing")]
     fn data() {
         let _ = env_logger::builder().is_test(true).try_init();
-        let expr = Atom::parse(
-            "γ(aind(mink(4,1),bis(4,4),bis(4,3)))*γ(aind(mink(4,2),bis(4,3),bis(4,4)))",
-        )
-        .unwrap();
+        let expr =
+            parse!("γ(aind(mink(4,1),bis(4,4),bis(4,3)))*γ(aind(mink(4,2),bis(4,3),bis(4,4)))")
+                .unwrap();
 
         let mut net =
             TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
@@ -833,7 +834,7 @@ mod test {
 
         let mut other =
             TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
-                Atom::parse("p(aind(mink (4,1)))").unwrap().as_view(),
+                parse!("p(aind(mink (4,1)))").unwrap().as_view(),
             )
             .unwrap();
         other.contract().unwrap();
@@ -849,10 +850,9 @@ mod test {
     #[cfg(feature = "shadowing")]
     fn data2() {
         let _ = env_logger::builder().is_test(true).try_init();
-        let expr = Atom::parse(
-            "γ(aind(mink(4,1),bis(4,4),bis(4,3)))*γ(aind(mink(4,2),bis(4,3),bis(4,4)))",
-        )
-        .unwrap();
+        let expr =
+            parse!("γ(aind(mink(4,1),bis(4,4),bis(4,3)))*γ(aind(mink(4,2),bis(4,3),bis(4,4)))")
+                .unwrap();
 
         let mut net =
             TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
@@ -871,13 +871,13 @@ mod test {
         use symbolica::atom::AtomCore;
 
         let _ = env_logger::builder().is_test(true).try_init();
-        let g1 = Atom::parse("γ(aind(mink(4,1),bis(4,3),bis(4,4)))").unwrap();
-        let g2 = Atom::parse("γ(aind(mink(4,2),bis(4,3),bis(4,4)))").unwrap();
-        let p = Atom::parse("p(aind(mink (4,1)))").unwrap();
-        let u = Atom::parse("u(aind(bis (4,3)))").unwrap();
-        let v = Atom::parse("v(aind(bis (4,4)))").unwrap();
+        let g1 = parse!("γ(aind(mink(4,1),bis(4,3),bis(4,4)))").unwrap();
+        let g2 = parse!("γ(aind(mink(4,2),bis(4,3),bis(4,4)))").unwrap();
+        let p = parse!("p(aind(mink (4,1)))").unwrap();
+        let u = parse!("u(aind(bis (4,3)))").unwrap();
+        let v = parse!("v(aind(bis (4,4)))").unwrap();
 
-        let q = Atom::parse("q(aind(mink (4,2)))").unwrap();
+        let q = parse!("q(aind(mink (4,2)))").unwrap();
 
         let g1_tensor: ParamOrConcrete<
             RealOrComplexTensor<
@@ -1067,7 +1067,7 @@ mod test {
         use crate::{parametric::MixedTensor, structure::AtomStructure};
 
         let _ = env_logger::builder().is_test(true).try_init();
-        let expr = Atom::parse("A(aind(mink(4,1),bis(4,4),bis(4,3)))*B(aind(mink(4,1)))").unwrap();
+        let expr = parse!("A(aind(mink(4,1),bis(4,4),bis(4,3)))*B(aind(mink(4,1)))").unwrap();
 
         let mut net =
             TensorNetwork::<MixedTensor<f64, AtomStructure<PhysReps>>, SerializableAtom>::try_from(
@@ -1093,19 +1093,19 @@ mod test {
             Bispinor::slot(4, 4).into(),
         ]);
 
-        let p0 = Atom::parse("p(0)").unwrap();
-        let p1 = Atom::parse("p(1)").unwrap();
-        let p2 = Atom::parse("p(2)").unwrap();
-        let p3 = Atom::parse("p(3)").unwrap();
-        let i = Atom::parse("i").unwrap();
+        let p0 = parse!("p(0)").unwrap();
+        let p1 = parse!("p(1)").unwrap();
+        let p2 = parse!("p(2)").unwrap();
+        let p3 = parse!("p(3)").unwrap();
+        let i = parse!("i").unwrap();
         let p12 = &p1 + &i * &p2;
         let abar = &p1 - &i * &p2;
         let z = Atom::new_num(0);
 
-        let _q0 = Atom::parse("q(0)").unwrap();
-        let _q1 = Atom::parse("q(1)").unwrap();
-        let _q2 = Atom::parse("q(2)").unwrap();
-        let _q3 = Atom::parse("q(3)").unwrap();
+        let _q0 = parse!("q(0)").unwrap();
+        let _q1 = parse!("q(1)").unwrap();
+        let _q2 = parse!("q(2)").unwrap();
+        let _q3 = parse!("q(3)").unwrap();
 
         let a: DenseTensor<
             Atom,
@@ -1129,7 +1129,7 @@ mod test {
                 z.clone(),
                 -p0,
             ],
-            spinstructure.to_named(Symbol::new("a").into(), None),
+            spinstructure.to_named(symbol!("a").into(), None),
         )
         .unwrap();
 
@@ -1140,11 +1140,11 @@ mod test {
             Bispinor::slot(4, 3).into(),
         ]);
 
-        let q0 = Atom::parse("q(0)").unwrap();
-        let q1 = Atom::parse("q(1)").unwrap();
-        let q2 = Atom::parse("q(2)").unwrap();
-        let q3 = Atom::parse("q(3)").unwrap();
-        let i = Atom::parse("i").unwrap();
+        let q0 = parse!("q(0)").unwrap();
+        let q1 = parse!("q(1)").unwrap();
+        let q2 = parse!("q(2)").unwrap();
+        let q3 = parse!("q(3)").unwrap();
+        let i = parse!("i").unwrap();
         let q12 = &q1 + &i * &q2;
         let bbar = &q1 - &i * &q2;
 
@@ -1170,7 +1170,7 @@ mod test {
                 z,
                 -q0,
             ],
-            spinstructureb.to_named(Symbol::new("b").into(), None),
+            spinstructureb.to_named(symbol!("b").into(), None),
         )
         .unwrap();
 
@@ -1199,22 +1199,22 @@ mod test {
             Bispinor::slot(4, 4).into(),
         ]);
 
-        let a00 = Atom::parse("a(0,0)").unwrap();
-        let a01 = Atom::parse("a(0,1)").unwrap();
-        let a02 = Atom::parse("a(0,2)").unwrap();
-        let a03 = Atom::parse("a(0,3)").unwrap();
-        let a10 = Atom::parse("a(1,0)").unwrap();
-        let a11 = Atom::parse("a(1,1)").unwrap();
-        let a12 = Atom::parse("a(1,2)").unwrap();
-        let a13 = Atom::parse("a(1,3)").unwrap();
-        let a20 = Atom::parse("a(2,0)").unwrap();
-        let a21 = Atom::parse("a(2,1)").unwrap();
-        let a22 = Atom::parse("a(2,2)").unwrap();
-        let a23 = Atom::parse("a(2,3)").unwrap();
-        let a30 = Atom::parse("a(3,0)").unwrap();
-        let a31 = Atom::parse("a(3,1)").unwrap();
-        let a32 = Atom::parse("a(3,2)").unwrap();
-        let a33 = Atom::parse("a(3,3)").unwrap();
+        let a00 = parse!("a(0,0)").unwrap();
+        let a01 = parse!("a(0,1)").unwrap();
+        let a02 = parse!("a(0,2)").unwrap();
+        let a03 = parse!("a(0,3)").unwrap();
+        let a10 = parse!("a(1,0)").unwrap();
+        let a11 = parse!("a(1,1)").unwrap();
+        let a12 = parse!("a(1,2)").unwrap();
+        let a13 = parse!("a(1,3)").unwrap();
+        let a20 = parse!("a(2,0)").unwrap();
+        let a21 = parse!("a(2,1)").unwrap();
+        let a22 = parse!("a(2,2)").unwrap();
+        let a23 = parse!("a(2,3)").unwrap();
+        let a30 = parse!("a(3,0)").unwrap();
+        let a31 = parse!("a(3,1)").unwrap();
+        let a32 = parse!("a(3,2)").unwrap();
+        let a33 = parse!("a(3,3)").unwrap();
 
         let a: DenseTensor<
             Atom,
@@ -1223,7 +1223,7 @@ mod test {
             vec![
                 a00, a01, a02, a03, a10, a11, a12, a13, a20, a21, a22, a23, a30, a31, a32, a33,
             ],
-            spinstructure.to_named(Symbol::new("a").into(), None),
+            spinstructure.to_named(symbol!("a").into(), None),
         )
         .unwrap();
 
@@ -1234,22 +1234,22 @@ mod test {
             Bispinor::slot(4, 3).into(),
         ]);
 
-        let b00 = Atom::parse("b(0,0)").unwrap();
-        let b01 = Atom::parse("b(0,1)").unwrap();
-        let b02 = Atom::parse("b(0,2)").unwrap();
-        let b03 = Atom::parse("b(0,3)").unwrap();
-        let b10 = Atom::parse("b(1,0)").unwrap();
-        let b11 = Atom::parse("b(1,1)").unwrap();
-        let b12 = Atom::parse("b(1,2)").unwrap();
-        let b13 = Atom::parse("b(1,3)").unwrap();
-        let b20 = Atom::parse("b(2,0)").unwrap();
-        let b21 = Atom::parse("b(2,1)").unwrap();
-        let b22 = Atom::parse("b(2,2)").unwrap();
-        let b23 = Atom::parse("b(2,3)").unwrap();
-        let b30 = Atom::parse("b(3,0)").unwrap();
-        let b31 = Atom::parse("b(3,1)").unwrap();
-        let b32 = Atom::parse("b(3,2)").unwrap();
-        let b33 = Atom::parse("b(3,3)").unwrap();
+        let b00 = parse!("b(0,0)").unwrap();
+        let b01 = parse!("b(0,1)").unwrap();
+        let b02 = parse!("b(0,2)").unwrap();
+        let b03 = parse!("b(0,3)").unwrap();
+        let b10 = parse!("b(1,0)").unwrap();
+        let b11 = parse!("b(1,1)").unwrap();
+        let b12 = parse!("b(1,2)").unwrap();
+        let b13 = parse!("b(1,3)").unwrap();
+        let b20 = parse!("b(2,0)").unwrap();
+        let b21 = parse!("b(2,1)").unwrap();
+        let b22 = parse!("b(2,2)").unwrap();
+        let b23 = parse!("b(2,3)").unwrap();
+        let b30 = parse!("b(3,0)").unwrap();
+        let b31 = parse!("b(3,1)").unwrap();
+        let b32 = parse!("b(3,2)").unwrap();
+        let b33 = parse!("b(3,3)").unwrap();
 
         let b: DenseTensor<
             Atom,
@@ -1258,7 +1258,7 @@ mod test {
             vec![
                 b00, b01, b02, b03, b10, b11, b12, b13, b20, b21, b22, b23, b30, b31, b32, b33,
             ],
-            spinstructureb.to_named(Symbol::new("b").into(), None),
+            spinstructureb.to_named(symbol!("b").into(), None),
         )
         .unwrap();
 

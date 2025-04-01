@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2](https://github.com/alphal00p/spenso/compare/v0.4.1...v0.4.2) - 2025-04-01
+
+### Fixed
+
+- fix contraction sparse dense to always obtain a zero
+- fixed tensor additions with permutation
+- fix atom replace repeat code
+
+### Other
+
+- update to 0.16 symbolica
+- update to 0.15 symbolica
+- update symbolica
+- remove warnings
+- update asm enum matching
+- impl contract for Complex<Rational>
+- enable contraction of complex integer
+- enable contraction of symbolica integers
+- remove additional prints
+- remove prints
+- update to symbolica 0.14
+- update to new symbol api
+- update to evaluate api
+- New tensor atom core 
+- Change from Exponent to PositiveExponent for compatibility with latest symbolica
+- back to symbolica main
+
 ## [0.4.1](https://github.com/alphal00p/spenso/compare/v0.4.0...v0.4.1) - 2024-10-26
 
 ### Other

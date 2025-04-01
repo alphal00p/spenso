@@ -29,14 +29,15 @@ use symbolica::{
         CompileOptions, CompiledCode, CompiledEvaluator, EvalTree, EvaluationFn, ExportedCode,
         ExpressionEvaluator, FunctionMap, InlineASM,
     },
-    id::{Condition, MatchSettings, Pattern, PatternRestriction},
+    id::Pattern,
     poly::{factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Variable},
+    utils::BorrowedOrOwned,
 };
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{AtomCore, KeyLookup},
-    id::{BorrowPatternOrMap, BorrowReplacement},
+    id::BorrowReplacement,
     poly::PositiveExponent,
     symbol,
 };
@@ -64,6 +65,7 @@ use crate::{
     arithmetic::ScalarMul,
     contraction::{Contract, ContractionError, Trace},
     data::{DataTensor, GetTensorData, HasTensorData},
+    parametric::atomcore::ReplaceBuilderGeneric,
     structure::{
         slot::DualSlotTo, CastStructure, HasName, HasStructure, ScalarTensor, TensorStructure,
         TracksCount,
@@ -79,7 +81,6 @@ use crate::{
 
 use anyhow::Result;
 
-use smartstring::alias::String;
 use std::fmt::{Debug, Display};
 
 new_key_type! {
@@ -1613,25 +1614,38 @@ where
     P::Structure: Clone + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>>,
 {
     type ContainerData<T> = TensorNetwork<P::ContainerData<T>, T>;
+    type Ref<'a>
+        = &'a Self
+    where
+        Self: 'a;
 
-    fn replace_all<R: symbolica::id::BorrowPatternOrMap>(
+    // fn replace_all<R: symbolica::id::BorrowPatternOrMap>(
+    //     &self,
+    //     pattern: &Pattern,
+    //     rhs: R,
+    //     conditions: Option<&Condition<PatternRestriction>>,
+    //     settings: Option<&MatchSettings>,
+    // ) -> Self {
+    //     let rhs = rhs.borrow();
+    //     let graph = self
+    //         .graph
+    //         .map_nodes_ref(|(_, a)| a.replace_all(pattern, rhs, conditions, settings));
+    //     TensorNetwork {
+    //         graph,
+    //         scalar: self
+    //             .scalar
+    //             .as_ref()
+    //             .map(|a| a.replace_all(pattern, rhs, conditions, settings)),
+    //     }
+    // }
+    fn replace<'b, Pat: Into<symbolica::utils::BorrowedOrOwned<'b, Pattern>>>(
         &self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Self {
-        let rhs = rhs.borrow();
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.replace_all(pattern, rhs, conditions, settings));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.replace_all(pattern, rhs, conditions, settings)),
-        }
+        pattern: Pat,
+    ) -> crate::parametric::atomcore::ReplaceBuilderGeneric<'b, Self::Ref<'_>, Self>
+    where
+        Self: Sized,
+    {
+        ReplaceBuilderGeneric::new(self, pattern)
     }
 
     fn apart(&self, x: Symbol) -> Self {
@@ -1900,21 +1914,6 @@ where
         }
     }
 
-    fn replace_all_mut<R: symbolica::id::BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) {
-        let rhs = rhs.borrow();
-        self.graph
-            .map_nodes_mut(|(_, a)| a.replace_all_mut(pattern, rhs, conditions, settings));
-        if let Some(a) = &mut self.scalar {
-            a.replace_all_mut(pattern, rhs, conditions, settings)
-        }
-    }
-
     fn replace_map_mut<F: Fn(AtomView, &symbolica::id::Context, &mut Atom) -> bool>(
         &mut self,
         m: &F,
@@ -1922,26 +1921,6 @@ where
         self.graph.map_nodes_mut(|(_, a)| a.replace_map_mut(m));
         if let Some(a) = self.scalar.as_mut() {
             a.replace_map_mut(m);
-        }
-    }
-
-    fn replace_all_repeat<R: symbolica::id::BorrowPatternOrMap>(
-        &self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Self {
-        let rhs = rhs.borrow();
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.replace_all_repeat(pattern, rhs, conditions, settings));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.replace_all_repeat(pattern, rhs, conditions, settings)),
         }
     }
 
@@ -1953,16 +1932,16 @@ where
         }
     }
 
-    fn replace_all_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
+    fn replace_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
         let graph = self
             .graph
-            .map_nodes_ref(|(_, a)| a.replace_all_multiple(replacements));
+            .map_nodes_ref(|(_, a)| a.replace_multiple(replacements));
         TensorNetwork {
             graph,
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| a.replace_all_multiple(replacements)),
+                .map(|a| a.replace_multiple(replacements)),
         }
     }
 
@@ -2015,22 +1994,6 @@ where
         }
     }
 
-    fn replace_all_repeat_mut<R: symbolica::id::BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) {
-        let rhs = rhs.borrow();
-        self.graph
-            .map_nodes_mut(|(_, a)| a.replace_all_repeat_mut(pattern, rhs, conditions, settings));
-
-        if let Some(a) = self.scalar.as_mut() {
-            a.replace_all_repeat_mut(pattern, rhs, conditions, settings);
-        }
-    }
-
     fn to_rational_polynomial<
         R: EuclideanDomain + ConvertToRing,
         RO: EuclideanDomain + PolynomialGCD<E>,
@@ -2070,32 +2033,32 @@ where
         }
     }
 
-    fn replace_all_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
+    fn replace_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
         self.graph
-            .map_nodes_mut(|(_, a)| a.replace_all_multiple_mut(replacements));
+            .map_nodes_mut(|(_, a)| a.replace_multiple_mut(replacements));
         if let Some(a) = self.scalar.as_mut() {
-            a.replace_all_multiple_mut(replacements);
+            a.replace_multiple_mut(replacements);
         }
     }
 
-    fn replace_all_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
+    fn replace_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
         let graph = self
             .graph
-            .map_nodes_ref(|(_, a)| a.replace_all_multiple_repeat(replacements));
+            .map_nodes_ref(|(_, a)| a.replace_multiple_repeat(replacements));
         TensorNetwork {
             graph,
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| a.replace_all_multiple_repeat(replacements)),
+                .map(|a| a.replace_multiple_repeat(replacements)),
         }
     }
 
-    fn replace_all_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
+    fn replace_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
         self.graph
-            .map_nodes_mut(|(_, a)| a.replace_all_multiple_repeat_mut(replacements));
+            .map_nodes_mut(|(_, a)| a.replace_multiple_repeat_mut(replacements));
         if let Some(a) = self.scalar.as_mut() {
-            a.replace_all_multiple_repeat_mut(replacements);
+            a.replace_multiple_repeat_mut(replacements);
         }
     }
 
@@ -2126,70 +2089,6 @@ where
         }
     }
 }
-
-// use crate::parametric::atomcore::PatternReplacement;
-// fn replace_all(
-//     &self,
-//     pattern: &Pattern,
-//     rhs: &PatternOrMap,
-//     conditions: Option<&Condition<PatternRestriction>>,
-//     settings: Option<&MatchSettings>,
-// ) -> Self {
-//     let graph = self
-//         .graph
-//         .map_nodes_ref(|(_, a)| a.replace_all(pattern, rhs, conditions, settings));
-//     TensorNetwork {
-//         graph,
-//         scalar: self
-//             .scalar
-//             .as_ref()
-//             .map(|a| SerializableAtom(a.0.replace_all(pattern, rhs, conditions, settings))),
-//     }
-// }
-
-// fn replace_all_mut(
-//     &mut self,
-//     pattern: &Pattern,
-//     rhs: &PatternOrMap,
-//     conditions: Option<&Condition<PatternRestriction>>,
-//     settings: Option<&MatchSettings>,
-// ) {
-//     self.graph
-//         .map_nodes_mut(|(_, a)| a.replace_all_mut(pattern, rhs, conditions, settings));
-
-//     if let Some(a) = self.scalar.as_mut() {
-//         a.0 = a.0.replace_all(pattern, rhs, conditions, settings);
-//     }
-// }
-
-// fn replace_all_multiple<R: BorrowReplacement>(&self, replacements: &[R]) -> Self {
-//     let graph = self
-//         .graph
-//         .map_nodes_ref(|(_, a)| a.replace_all_multiple(replacements));
-//     TensorNetwork {
-//         graph,
-//         scalar: self
-//             .scalar
-//             .as_ref()
-//             .map(|a| SerializableAtom(a.0.replace_all_multiple(replacements))),
-//     }
-// }
-
-// fn replace_all_multiple_mut(&mut self, replacements: &[Replacement<'_>]) {
-//     self.graph
-//         .map_nodes_mut(|(_, a)| a.replace_all_multiple_mut(replacements));
-//     if let Some(a) = self.scalar.as_mut() {
-//         a.0 = a.0.replace_all_multiple(replacements);
-//     }
-// }
-
-// fn replace_all_multiple_repeat_mut(&mut self, replacements: &[Replacement<'_>]) {
-//     self.graph
-//         .map_nodes_mut(|(_, a)| a.replace_all_multiple_repeat_mut(replacements));
-//     if let Some(a) = self.scalar.as_mut() {
-//         Self::replace_repeat_multiple_atom(&mut a.0, replacements);
-//     }
-// }
 
 #[cfg(feature = "shadowing")]
 impl<S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone>
@@ -2844,39 +2743,23 @@ where
     S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone,
     T: Clone,
 {
-    pub fn replace_all<R: BorrowPatternOrMap>(
+    fn replace<'b, P: Into<BorrowedOrOwned<'b, Pattern>>>(
         &self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Self
-    where
-        S: Clone,
-    {
-        let rhs = rhs.borrow();
-        let new_graph = self
-            .graph
-            .map_nodes_ref(|(_, t)| t.replace_all(pattern, rhs, conditions, settings));
-        TensorNetwork {
-            graph: new_graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| SerializableAtom(a.0.replace_all(pattern, rhs, conditions, settings))),
-        }
+        pattern: P,
+    ) -> ReplaceBuilderGeneric<'b, &'_ Self, Self> {
+        ReplaceBuilderGeneric::new(self, pattern)
     }
 
-    pub fn replace_all_multiple<R: BorrowReplacement>(&self, replacements: &[R]) -> Self {
+    pub fn replace_multiple<R: BorrowReplacement>(&self, replacements: &[R]) -> Self {
         let new_graph = self
             .graph
-            .map_nodes_ref(|(_, t)| t.replace_all_multiple(replacements));
+            .map_nodes_ref(|(_, t)| t.replace_multiple(replacements));
         TensorNetwork {
             graph: new_graph,
             scalar: self
                 .scalar
                 .as_ref()
-                .map(|a| SerializableAtom(a.0.replace_all_multiple(replacements))),
+                .map(|a| SerializableAtom(a.0.replace_multiple(replacements))),
         }
     }
 

@@ -10,7 +10,7 @@ use ahash::HashMap;
 use anyhow::anyhow;
 use anyhow::{Error, Result};
 
-use atomcore::TensorAtomMaps;
+use atomcore::{ReplaceBuilderGeneric, TensorAtomMaps};
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
 use log::trace;
@@ -48,9 +48,10 @@ use symbolica::{
         CompileOptions, CompiledCode, CompiledEvaluator, CompiledEvaluatorFloat, EvalTree,
         EvaluationFn, ExportedCode, Expression, ExpressionEvaluator, FunctionMap, InlineASM,
     },
-    id::{BorrowPatternOrMap, Condition, MatchSettings, Pattern, PatternRestriction},
+    id::{Condition, MatchSettings, Pattern, PatternRestriction},
     state::State,
     symbol,
+    utils::BorrowedOrOwned,
 };
 
 use std::hash::Hash;
@@ -785,26 +786,16 @@ pub enum ParamOrConcrete<C: HasStructure<Structure = S> + Clone, S: TensorStruct
 }
 
 impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> ParamOrConcrete<C, S> {
-    pub fn replace_all<R: BorrowPatternOrMap>(
+    pub fn replace<'b, P: Into<BorrowedOrOwned<'b, Pattern>>>(
         &self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Self {
-        match self {
-            ParamOrConcrete::Param(p) => {
-                ParamOrConcrete::Param(p.replace_all(pattern, rhs, conditions, settings))
-            }
-            _ => self.clone(),
-        }
+        pattern: P,
+    ) -> ReplaceBuilderGeneric<'b, &'_ Self, Self> {
+        ReplaceBuilderGeneric::new(self, pattern)
     }
 
-    pub fn replace_all_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
+    pub fn replace_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
         match self {
-            ParamOrConcrete::Param(p) => {
-                ParamOrConcrete::Param(p.replace_all_multiple(replacements))
-            }
+            ParamOrConcrete::Param(p) => ParamOrConcrete::Param(p.replace_multiple(replacements)),
             _ => self.clone(),
         }
     }

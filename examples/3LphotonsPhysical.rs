@@ -185,7 +185,7 @@ fn main() {
     let counting_network: TensorNetwork<
         MixedTensor<_, SmartShadowStructure<_, _>>,
         SerializableAtom,
-    > = network.clone().cast().replace_all_multiple(&replacements);
+    > = network.clone().cast().replace_multiple(&replacements);
     let mut values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
     values.push(SymComplex::from(Complex::i()));
 

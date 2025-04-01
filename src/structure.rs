@@ -31,8 +31,6 @@ use slot::DualSlotTo;
 use slot::IsAbstractSlot;
 use slot::Slot;
 use slot::SlotError;
-use smartstring::LazyCompact;
-use smartstring::SmartString;
 use std::fmt::Debug;
 
 #[cfg(feature = "shadowing")]
@@ -1255,8 +1253,7 @@ impl<R: RepName<Dual = R>> StructureContract for VecStructure<R> {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
-pub struct IndexlessNamedStructure<Name = SmartString<LazyCompact>, Args = usize, R: RepName = Rep>
-{
+pub struct IndexlessNamedStructure<Name = String, Args = usize, R: RepName = Rep> {
     pub structure: IndexLess<R>,
     pub global_name: Option<Name>,
     pub additional_args: Option<Args>,
@@ -1353,7 +1350,7 @@ impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for IndexlessNamedStructure
 ///
 /// It is useful when you want to shadow tensors, to nest tensor network contraction operations.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
-pub struct NamedStructure<Name = SmartString<LazyCompact>, Args = usize, R: RepName = PhysReps> {
+pub struct NamedStructure<Name = String, Args = usize, R: RepName = PhysReps> {
     pub structure: VecStructure<R>,
     pub global_name: Option<Name>,
     pub additional_args: Option<Args>,
@@ -1713,11 +1710,7 @@ impl<R: RepName<Dual = R>> StructureContract for ContractionCountStructure<R> {
 
 /// A structure to enable smart shadowing of tensors in a tensor network contraction algorithm.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Hash)]
-pub struct SmartShadowStructure<
-    Name = SmartString<LazyCompact>,
-    Args = usize,
-    R: RepName = PhysReps,
-> {
+pub struct SmartShadowStructure<Name = String, Args = usize, R: RepName = PhysReps> {
     pub structure: VecStructure<R>,
     pub contractions: usize,
     pub global_name: Option<Name>,

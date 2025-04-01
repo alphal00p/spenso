@@ -120,7 +120,7 @@ mod test {
             qs.push(parse!(format!("Q{}", i).as_str()).unwrap());
         }
 
-        res = res.replace_all_multiple(&reps);
+        res = res.replace_multiple(&reps);
         println!(
             "Applied replacements, size: :{}",
             res.as_view().get_byte_size()
@@ -216,7 +216,7 @@ mod test {
             qs.push(parse!(format!("Q{}", i).as_str()).unwrap());
         }
 
-        res = res.replace_all_multiple(&reps);
+        res = res.replace_multiple(&reps);
         println!(
             "Applied replacements, size: :{}",
             res.as_view().get_byte_size()

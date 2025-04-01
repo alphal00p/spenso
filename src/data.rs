@@ -24,7 +24,6 @@ use indexmap::IndexMap;
 use num::Zero;
 
 use serde::{Deserialize, Serialize};
-use smartstring::alias::String;
 use std::{
     borrow::Cow,
     fmt::{Display, LowerExp},
@@ -46,7 +45,11 @@ pub trait DataIterator<T> {
 }
 
 impl<T, I> DataIterator<T> for SparseTensor<T, I> {
-    type FlatIter<'a> = SparseTensorLinearIterator<'a, T> where  I:'a,T: 'a;
+    type FlatIter<'a>
+        = SparseTensorLinearIterator<'a, T>
+    where
+        I: 'a,
+        T: 'a;
 
     fn flat_iter(&self) -> Self::FlatIter<'_> {
         SparseTensorLinearIterator::new(self)
@@ -54,7 +57,11 @@ impl<T, I> DataIterator<T> for SparseTensor<T, I> {
 }
 
 impl<T, I: TensorStructure> DataIterator<T> for DenseTensor<T, I> {
-    type FlatIter<'a> = DenseTensorLinearIterator<'a,T,I> where  I:'a,T: 'a;
+    type FlatIter<'a>
+        = DenseTensorLinearIterator<'a, T, I>
+    where
+        I: 'a,
+        T: 'a;
 
     fn flat_iter(&self) -> Self::FlatIter<'_> {
         DenseTensorLinearIterator::new(self)
@@ -474,8 +481,13 @@ impl<T, I> GetTensorData for SparseTensor<T, I>
 where
     I: TensorStructure,
 {
-    type GetDataRef<'a> = &'a T where Self: 'a;
-    type GetDataRefMut<'a> = &'a mut T where
+    type GetDataRef<'a>
+        = &'a T
+    where
+        Self: 'a;
+    type GetDataRefMut<'a>
+        = &'a mut T
+    where
         Self: 'a;
 
     type GetDataOwned = T;
@@ -1151,8 +1163,13 @@ impl<T, I> GetTensorData for DenseTensor<T, I>
 where
     I: TensorStructure,
 {
-    type GetDataRef<'a> = &'a T where Self: 'a;
-    type GetDataRefMut<'a> = &'a mut T where
+    type GetDataRef<'a>
+        = &'a T
+    where
+        Self: 'a;
+    type GetDataRefMut<'a>
+        = &'a mut T
+    where
         Self: 'a;
 
     type GetDataOwned = T;
@@ -1501,8 +1518,13 @@ impl<T, S> GetTensorData for DataTensor<T, S>
 where
     S: TensorStructure,
 {
-    type GetDataRef<'a> =  &'a T where Self:'a;
-    type GetDataRefMut<'a> = &'a mut T where
+    type GetDataRef<'a>
+        = &'a T
+    where
+        Self: 'a;
+    type GetDataRefMut<'a>
+        = &'a mut T
+    where
         Self: 'a;
 
     type GetDataOwned = T;
@@ -1748,7 +1770,9 @@ impl<S: TensorStructure + Clone, T> StorageTensor for DataTensor<T, S> {
     type Data = T;
     type ContainerData<Data> = DataTensor<Data, S>;
     type ContainerStructure<Sts>
-    = DataTensor<T,Sts> where Sts: TensorStructure;
+        = DataTensor<T, Sts>
+    where
+        Sts: TensorStructure;
 
     fn map_data_self(self, f: impl Fn(Self::Data) -> Self::Data) -> Self {
         self.map_data(f)
@@ -1939,7 +1963,10 @@ impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
     }
 }
 impl<S: TensorStructure + Clone, D> StorageTensor for DenseTensor<D, S> {
-    type ContainerStructure<Structure> = DenseTensor<D, Structure> where Structure: TensorStructure;
+    type ContainerStructure<Structure>
+        = DenseTensor<D, Structure>
+    where
+        Structure: TensorStructure;
     type ContainerData<Data> = DenseTensor<Data, S>;
 
     type Data = D;

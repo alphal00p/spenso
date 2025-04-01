@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use ahash::{HashMap, HashSet, HashSetExt};
 use dyn_clone::DynClone;
@@ -20,14 +20,16 @@ use symbolica::{
     },
     evaluate::{EvaluationFn, ExpressionEvaluator, FunctionMap, OptimizationSettings},
     id::{
-        BorrowPatternOrMap, BorrowReplacement, Condition, ConditionResult, Context, MatchSettings,
-        Pattern, PatternRestriction,
+        BorrowReplacement, Condition, ConditionResult, Context, MatchMap, MatchSettings, Pattern,
+        PatternRestriction, ReplaceBuilder, ReplaceWith,
     },
     poly::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, series::Series,
         Exponent, PositiveExponent, Variable,
     },
+    state::RecycledAtom,
     tensors::matrix::Matrix,
+    utils::BorrowedOrOwned,
 };
 
 use crate::{
@@ -39,59 +41,22 @@ use crate::{
 use super::{EvalTensor, EvalTreeTensor, ParamTensor};
 
 pub trait PatternReplacement {
-    fn replace_all_mut<R: BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    );
-
-    fn replace_all_repeat<R: BorrowPatternOrMap>(
-        &self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Self;
-
-    fn replace_all_repeat_mut<R: BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    );
-
-    fn replace_all_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self;
-    fn replace_all_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
-    fn replace_all_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
+    fn replace_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self;
+    fn replace_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
+    fn replace_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
     fn replace_map_mut<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&mut self, m: &F);
 }
 
 impl PatternReplacement for Atom {
-    fn replace_all_mut<R: BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) {
-        let a = self.replace_all(pattern, rhs, conditions, settings);
-        *self = a;
+    fn replace_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
+        *self = self.as_atom_view().replace_multiple(replacements);
     }
 
-    fn replace_all_repeat<R: BorrowPatternOrMap>(
-        &self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Atom {
+    fn replace_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Atom {
         let mut out = self.clone();
         let mut out_mut = out.clone();
-        let rhs = rhs.borrow();
-        while out.replace_all_into(pattern, rhs, conditions, settings, &mut out_mut) {
+
+        while out.replace_multiple_into(replacements, &mut out_mut) {
             if out == out_mut {
                 break;
             }
@@ -100,36 +65,8 @@ impl PatternReplacement for Atom {
         out
     }
 
-    fn replace_all_repeat_mut<R: BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) {
-        let atom = self.replace_all_repeat(pattern, rhs, conditions, settings);
-        *self = atom;
-    }
-
-    fn replace_all_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
-        *self = self.as_atom_view().replace_all_multiple(replacements);
-    }
-
-    fn replace_all_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Atom {
-        let mut out = self.clone();
-        let mut out_mut = out.clone();
-
-        while out.replace_all_multiple_into(replacements, &mut out_mut) {
-            if out == out_mut {
-                break;
-            }
-            std::mem::swap(&mut out, &mut out_mut)
-        }
-        out
-    }
-
-    fn replace_all_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
-        let atom = self.replace_all_multiple_repeat(replacements);
+    fn replace_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
+        let atom = self.replace_multiple_repeat(replacements);
         *self = atom;
     }
 
@@ -147,36 +84,225 @@ pub trait TensorAtomMapsTest {
 impl<S: StorageTensor<Data = Atom>> TensorAtomMapsTest for S {
     type ContainerData<T> = <S as StorageTensor>::ContainerData<T>;
 }
-pub trait TensorAtomMaps {
-    type ContainerData<T>;
 
-    fn replace_all_mut<R: BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    );
+/// Construct a replacement by specifying the pattern and finishing it with the right-hand side
+/// using [ReplaceBuilder::with], [ReplaceBuilder::with_into], or [ReplaceBuilder::iter].
+#[derive(Debug, Clone)]
+pub struct ReplaceBuilderGeneric<'b, R, T> {
+    target: R,
+    pattern: BorrowedOrOwned<'b, Pattern>,
+    conditions: Option<BorrowedOrOwned<'b, Condition<PatternRestriction>>>,
+    settings: MatchSettings,
+    repeat: bool,
+    _marker: PhantomData<T>,
+}
 
-    fn replace_all_repeat<R: BorrowPatternOrMap>(
-        &self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
+pub trait ReplaceWithBuilder: Sized {
+    type Ref<'a>: Copy
+    where
+        Self: 'a;
+    type RefMut<'a>
+    where
+        Self: 'a;
+    fn with<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: &'a ReplaceBuilderGeneric<'c, Self::Ref<'a>, Self>,
+        with: C,
     ) -> Self;
 
-    fn replace_all_repeat_mut<R: BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
+    fn with_into<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: &'a ReplaceBuilderGeneric<'c, Self::Ref<'a>, Self>,
+        with: C,
+        into: &mut Self,
+    ) -> bool;
+
+    fn with_map<'a, 'c: 'a, M: MatchMap + 'static + Clone>(
+        replacement: &'a ReplaceBuilderGeneric<'c, Self::Ref<'a>, Self>,
+        rhs: M,
+    ) -> Self;
+
+    fn recycled<'a>(ref_self: Self::Ref<'a>) -> Self;
+    // fn fill_in<'a>(&'a mut self, ref_self: Self::Ref<'a>);
+
+    fn ref_mut<'a>(&'a mut self) -> Self::RefMut<'a>;
+    fn reference<'a>(&'a self) -> Self::Ref<'a>;
+
+    fn with_owned<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: ReplaceBuilderGeneric<'c, Self, Self>,
+        with: C,
+    ) -> Self;
+
+    fn with_owned_map<'a, 'c: 'a, M: MatchMap + 'static + Clone>(
+        replacement: ReplaceBuilderGeneric<'c, Self, Self>,
+        rhs: M,
+    ) -> Self;
+
+    fn with_mut<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: &'a mut ReplaceBuilderGeneric<'c, Self::RefMut<'a>, Self>,
+        with: C,
     );
 
-    fn replace_all_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self;
-    fn replace_all_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
-    fn replace_all_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
+    fn with_mut_map<'a, 'c: 'a, M: MatchMap + 'static + Clone>(
+        replacement: &'a mut ReplaceBuilderGeneric<'c, Self::RefMut<'a>, Self>,
+        rhs: M,
+    );
+}
+
+impl<'b, R, Phantom> ReplaceBuilderGeneric<'b, R, Phantom> {
+    pub fn new<T: Into<BorrowedOrOwned<'b, Pattern>>>(target: R, replacement: T) -> Self {
+        ReplaceBuilderGeneric {
+            target,
+            pattern: replacement.into(),
+            conditions: None,
+            settings: MatchSettings::default(),
+            repeat: false,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn update_symbolica_builder<'c, 'a>(
+        &'c self,
+        builder: ReplaceBuilder<'a, 'b>,
+    ) -> ReplaceBuilder<'a, 'b>
+    where
+        'c: 'b,
+    {
+        let builder = if self.repeat {
+            builder.repeat()
+        } else {
+            builder
+        };
+
+        if let Some(conditions) = &self.conditions {
+            builder.when(conditions.borrow())
+        } else {
+            builder
+        }
+        .non_greedy_wildcards(self.settings.non_greedy_wildcards.clone())
+        .allow_new_wildcards_on_rhs(self.settings.allow_new_wildcards_on_rhs)
+        .level_range(self.settings.level_range)
+        .level_is_tree_depth(self.settings.level_is_tree_depth)
+        .rhs_cache_size(self.settings.rhs_cache_size)
+    }
+
+    /// Specifies wildcards that try to match as little as possible.
+    pub fn non_greedy_wildcards(mut self, non_greedy_wildcards: Vec<Symbol>) -> Self {
+        self.settings.non_greedy_wildcards = non_greedy_wildcards;
+        self
+    }
+    /// Specifies the `[min,max]` level at which the pattern is allowed to match.
+    /// The first level is 0 and the level is increased when entering a function, or going one level deeper in the expression tree,
+    /// depending on `level_is_tree_depth`.
+    pub fn level_range(mut self, level_range: (usize, Option<usize>)) -> Self {
+        self.settings.level_range = level_range;
+        self
+    }
+    /// Determine whether a level reflects the expression tree depth or the function depth.
+    pub fn level_is_tree_depth(mut self, level_is_tree_depth: bool) -> Self {
+        self.settings.level_is_tree_depth = level_is_tree_depth;
+        self
+    }
+    /// Allow wildcards on the right-hand side that do not appear in the pattern.
+    pub fn allow_new_wildcards_on_rhs(mut self, allow: bool) -> Self {
+        self.settings.allow_new_wildcards_on_rhs = allow;
+        self
+    }
+    /// The maximum size of the cache for the right-hand side of a replacement.
+    /// This can be used to prevent expensive recomputations.
+    pub fn rhs_cache_size(mut self, rhs_cache_size: usize) -> Self {
+        self.settings.rhs_cache_size = rhs_cache_size;
+        self
+    }
+
+    /// Add a condition to the replacement.
+    pub fn when<C: Into<BorrowedOrOwned<'b, Condition<PatternRestriction>>>>(
+        mut self,
+        conditions: C,
+    ) -> Self {
+        self.conditions = Some(conditions.into());
+        self
+    }
+
+    /// Repeat the replacement until no more matches are found.
+    pub fn repeat(mut self) -> Self {
+        self.repeat = true;
+        self
+    }
+}
+
+impl<'a, 'b, R: ReplaceWithBuilder> ReplaceBuilderGeneric<'b, R::Ref<'a>, R> {
+    /// Execute the replacement by specifying the right-hand side.
+    ///
+    /// To use a map as a right-hand side, use [ReplaceBuilder::with_map].
+    pub fn with<'c: 'a, C: Into<BorrowedOrOwned<'c, Pattern>>>(&'a self, rhs: C) -> R
+    where
+        'b: 'c,
+    {
+        // let rhs = ReplaceWith::Pattern(rhs.into());
+        R::with(self, rhs)
+    }
+
+    /// Execute the replacement by specifying the right-hand side and writing the result in `out`.
+    pub fn with_into<'c: 'a, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        &'a self,
+        rhs: C,
+        out: &mut R,
+    ) -> bool
+    where
+        'b: 'c,
+    {
+        R::with_into(self, rhs, out)
+    }
+
+    /// Execute the replacement by specifying the right-hand side as a map on the matched wildcards.
+    ///
+    /// # Example
+    ///
+    /// Prefix the argument of a function with `p`:
+    /// ```
+    /// use symbolica::{atom::AtomCore, function, parse, printer::PrintOptions, symbol};
+    /// let (f, x_) = symbol!("f", "x_");
+    /// let a = function!(f, 1) * function!(f, 3);
+    /// let p = function!(f, x_);
+    ///
+    /// let r = a.replace(p).with_map(move |m| {
+    ///     function!(
+    ///         f,
+    ///         parse!(&format!(
+    ///             "p{}",
+    ///             m.get(x_)
+    ///                 .unwrap()
+    ///                 .to_atom()
+    ///                 .printer(PrintOptions::file()),
+    ///         ))
+    ///         .unwrap()
+    ///     )
+    /// });
+    /// let res = parse!("f(p1)*f(p3)").unwrap();
+    /// assert_eq!(r, res);
+    /// ```
+    pub fn with_map<'c: 'a, M: MatchMap + 'static + Clone>(&'a self, rhs: M) -> R {
+        R::with_map(self, rhs)
+    }
+}
+
+pub trait TensorAtomMaps {
+    type ContainerData<T>;
+    type Ref<'a>
+    where
+        Self: 'a;
+
+    fn replace<'b, P: Into<BorrowedOrOwned<'b, Pattern>>>(
+        &self,
+        pattern: P,
+    ) -> ReplaceBuilderGeneric<'b, Self::Ref<'_>, Self>
+    where
+        Self: Sized;
+
+    /// Replace all occurrences of the patterns, where replacements are tested in the order that they are given.
+    fn replace_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self;
+    fn replace_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self;
+    fn replace_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
+    fn replace_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
     fn replace_map_mut<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&mut self, m: &F);
     /// Collect terms involving the same power of `x`, where `x` is a variable or function, e.g.
     ///
@@ -401,18 +527,6 @@ pub trait TensorAtomMaps {
 
     fn to_pattern(&self) -> Self::ContainerData<Pattern>;
 
-    /// Replace all occurrences of the pattern.
-    fn replace_all<R: BorrowPatternOrMap>(
-        &self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Self;
-
-    /// Replace all occurrences of the patterns, where replacements are tested in the order that they are given.
-    fn replace_all_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self;
-
     fn replace_map<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&self, m: &F) -> Self;
 
     // fn replace_iter<'a>(
@@ -424,50 +538,280 @@ pub trait TensorAtomMaps {
     // ) -> Self::ContainerData<ReplaceIterator<'a, 'a>>;
 }
 
+impl<S: StorageTensor<Data = Atom> + Clone + PartialEq> ReplaceWithBuilder for S {
+    type Ref<'a>
+        = &'a Self
+    where
+        Self: 'a;
+    type RefMut<'a>
+        = &'a mut Self
+    where
+        Self: 'a;
+
+    fn ref_mut<'a>(&'a mut self) -> Self::RefMut<'a> {
+        self
+    }
+
+    fn recycled<'a>(ref_self: Self::Ref<'a>) -> Self {
+        ref_self.map_data_ref_self(|_| RecycledAtom::new().into_inner())
+    }
+    fn reference<'a>(&'a self) -> Self::Ref<'a> {
+        self
+    }
+
+    fn with<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: &'a ReplaceBuilderGeneric<'c, Self::Ref<'a>, Self>,
+        with: C,
+    ) -> Self {
+        let with: BorrowedOrOwned<'c, Pattern> = with.into();
+
+        let with_borrowed = with.borrow();
+        replacement.target.map_data_ref_self(|a| {
+            let rep = replacement.update_symbolica_builder(a.replace(replacement.pattern.borrow()));
+            rep.with(with_borrowed)
+        })
+    }
+
+    fn with_map<'a, 'c: 'a, M: MatchMap + 'static + Clone>(
+        replacement: &'a ReplaceBuilderGeneric<'c, Self::Ref<'a>, Self>,
+        rhs: M,
+    ) -> Self {
+        // let rhs = Box::new(rhs);
+        // dyn_clone::clone_box(&rhs);
+        replacement.target.map_data_ref_self(|a| {
+            let rep = replacement.update_symbolica_builder(a.replace(replacement.pattern.borrow()));
+            rep.with_map(dyn_clone::clone_box(&rhs))
+        })
+    }
+
+    fn with_into<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: &'a ReplaceBuilderGeneric<'c, Self::Ref<'a>, Self>,
+        with: C,
+        into: &mut Self,
+    ) -> bool {
+        let with: BorrowedOrOwned<'c, Pattern> = with.into();
+
+        let with_borrowed = with.borrow();
+        *into = replacement.target.map_data_ref_self(move |expr| {
+            let rep =
+                replacement.update_symbolica_builder(expr.replace(replacement.pattern.borrow()));
+            let out = rep.with(with_borrowed);
+            out
+        });
+        replacement.target == into
+    }
+
+    fn with_mut<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: &'a mut ReplaceBuilderGeneric<'c, Self::RefMut<'a>, Self>,
+        with: C,
+    ) {
+        let with: BorrowedOrOwned<'c, Pattern> = with.into();
+
+        let with_borrowed = with.borrow();
+        // let pattern = replacement.pattern.borrow().clone();
+        let pattern_borrowed = replacement.pattern.borrow();
+        replacement.target.map_data_mut(|a| {
+            let builder = a.replace(pattern_borrowed);
+
+            let builder = if replacement.repeat {
+                builder.repeat()
+            } else {
+                builder
+            };
+
+            let builder = if let Some(conditions) = &replacement.conditions {
+                builder.when(conditions.borrow())
+            } else {
+                builder
+            }
+            .non_greedy_wildcards(replacement.settings.non_greedy_wildcards.clone())
+            .allow_new_wildcards_on_rhs(replacement.settings.allow_new_wildcards_on_rhs)
+            .level_range(replacement.settings.level_range)
+            .level_is_tree_depth(replacement.settings.level_is_tree_depth)
+            .rhs_cache_size(replacement.settings.rhs_cache_size);
+            *a = builder.with(with_borrowed);
+        })
+    }
+
+    fn with_mut_map<'a, 'c: 'a, M: MatchMap + 'static + Clone>(
+        replacement: &'a mut ReplaceBuilderGeneric<'c, Self::RefMut<'a>, Self>,
+        rhs: M,
+    ) {
+        replacement.target.map_data_mut(|a| {
+            let builder = a.replace(replacement.pattern.borrow());
+
+            let builder = if replacement.repeat {
+                builder.repeat()
+            } else {
+                builder
+            };
+
+            let builder = if let Some(conditions) = &replacement.conditions {
+                builder.when(conditions.borrow())
+            } else {
+                builder
+            }
+            .non_greedy_wildcards(replacement.settings.non_greedy_wildcards.clone())
+            .allow_new_wildcards_on_rhs(replacement.settings.allow_new_wildcards_on_rhs)
+            .level_range(replacement.settings.level_range)
+            .level_is_tree_depth(replacement.settings.level_is_tree_depth)
+            .rhs_cache_size(replacement.settings.rhs_cache_size);
+            *a = builder.with_map(dyn_clone::clone_box(&rhs));
+        })
+    }
+
+    fn with_owned<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: ReplaceBuilderGeneric<'c, Self, Self>,
+        with: C,
+    ) -> Self {
+        let with: BorrowedOrOwned<'c, Pattern> = with.into();
+
+        let with_borrowed = with.borrow();
+        replacement.target.map_data_self(|a| {
+            let builder = a.replace(replacement.pattern.borrow());
+
+            let builder = if replacement.repeat {
+                builder.repeat()
+            } else {
+                builder
+            };
+
+            let builder = if let Some(conditions) = &replacement.conditions {
+                builder.when(conditions.borrow())
+            } else {
+                builder
+            }
+            .non_greedy_wildcards(replacement.settings.non_greedy_wildcards.clone())
+            .allow_new_wildcards_on_rhs(replacement.settings.allow_new_wildcards_on_rhs)
+            .level_range(replacement.settings.level_range)
+            .level_is_tree_depth(replacement.settings.level_is_tree_depth)
+            .rhs_cache_size(replacement.settings.rhs_cache_size);
+            builder.with(with_borrowed)
+        })
+    }
+
+    fn with_owned_map<'a, 'c: 'a, M: MatchMap + 'static + Clone>(
+        replacement: ReplaceBuilderGeneric<'c, Self, Self>,
+        rhs: M,
+    ) -> Self {
+        replacement.target.map_data_self(|a| {
+            let builder = a.replace(replacement.pattern.borrow());
+
+            let builder = if replacement.repeat {
+                builder.repeat()
+            } else {
+                builder
+            };
+
+            let builder = if let Some(conditions) = &replacement.conditions {
+                builder.when(conditions.borrow())
+            } else {
+                builder
+            }
+            .non_greedy_wildcards(replacement.settings.non_greedy_wildcards.clone())
+            .allow_new_wildcards_on_rhs(replacement.settings.allow_new_wildcards_on_rhs)
+            .level_range(replacement.settings.level_range)
+            .level_is_tree_depth(replacement.settings.level_is_tree_depth)
+            .rhs_cache_size(replacement.settings.rhs_cache_size);
+            builder.with_map(dyn_clone::clone_box(&rhs))
+        })
+    }
+
+    // fn with_owned_map<'a, 'c: 'a, M: MatchMap + 'static + Clone>(
+    //     replacement: ReplaceBuilderGeneric<'c, Self, Self>,
+    //     rhs: M,
+    // ) -> Self {
+
+    // }
+
+    // fn replace_mut<'a, 'b>(
+    //     replacement: &'a mut ReplaceBuilderGeneric<'b, Self::RefMut<'a>, Self>,
+    //     with: &ReplaceWith<'a>,
+    // ) {
+    //     replacement.target.map_data_mut(|expr_ref| {
+    //         let rep = replacement
+    //             .update_symbolica_builder(expr_ref.replace(replacement.pattern.borrow()));
+
+    //         match with {
+    //             ReplaceWith::Pattern(p) => {
+    //                 *expr_ref = rep.with(p.borrow());
+    //             }
+    //             ReplaceWith::Map(m) => {
+    //                 *expr_ref = rep.with_map(m.as_ref());
+    //             }
+    //         }
+    //     });
+    // }
+
+    // fn replace_owned<'a, 'b>(
+    //     replacement: ReplaceBuilderGeneric<'b, Self, Self>,
+    //     with: &ReplaceWith<'a>,
+    // ) -> Self {
+    //     replacement.target.map_data_self(|expr_ref| {
+    //         let rep = replacement
+    //             .update_symbolica_builder(expr_ref.replace(replacement.pattern.borrow()));
+    //         match with {
+    //             ReplaceWith::Pattern(p) => rep.with(p.borrow()),
+    //             ReplaceWith::Map(m) => rep.with_map(m.as_ref()),
+    //         }
+    //     })
+    // }
+
+    // fn replace<'a, 'b>(
+    //     replacement: &'a ReplaceBuilderGeneric<'b, Self::Ref<'a>, Self>,
+    //     with: &ReplaceWith<'a>,
+    // ) -> Self {
+    //     replacement.target.map_data_ref_self(|expr| {
+    //         let rep = replacement.update_symbolica_builder(expr.replace(&replacement.pattern));
+    //         rep.with(with)
+    //     })
+    // }
+
+    // fn replace_into<'a, 'b>(
+    //     replacement: &'a ReplaceBuilderGeneric<'b, Self::Ref<'a>, Self>,
+    //     with: &ReplaceWith<'a>,
+    //     into: &mut Self,
+    // ) -> bool {
+    //     let mut modified = false;
+    //     *into = replacement.target.map_data_ref_self(|expr| {
+    //         let rep = replacement.update_symbolica_builder(expr.replace(&replacement.pattern));
+    //         let out = rep.with(with);
+    //         if out != expr {
+    //             modified = true;
+    //         }
+    //         out
+    //     });
+    //     modified
+    // }
+}
+
 impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
     type ContainerData<T> = <S as StorageTensor>::ContainerData<T>;
+    type Ref<'a>
+        = &'a Self
+    where
+        Self: 'a;
 
-    fn replace_all_mut<R: BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) {
-        let rhs = rhs.borrow();
-        self.map_data_mut(|a| a.replace_all_mut(pattern, rhs, conditions, settings));
-    }
-
-    fn replace_all_repeat<R: BorrowPatternOrMap>(
+    fn replace<'b, P: Into<BorrowedOrOwned<'b, Pattern>>>(
         &self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Self {
-        let rhs = rhs.borrow();
-        self.map_data_ref_self(|a| a.replace_all_repeat(pattern, rhs, conditions, settings))
+        pattern: P,
+    ) -> ReplaceBuilderGeneric<'b, Self::Ref<'_>, Self> {
+        ReplaceBuilderGeneric::new(self, pattern)
     }
 
-    fn replace_all_repeat_mut<R: BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) {
-        let rhs = rhs.borrow();
-        self.map_data_mut(|a| a.replace_all_repeat_mut(pattern, rhs, conditions, settings));
+    /// Replace all occurrences of the patterns, where replacements are tested in the order that they are given.
+    fn replace_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
+        self.map_data_ref_self(|a| a.replace_multiple(replacements))
     }
 
-    fn replace_all_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
-        self.map_data_ref_self(|a| a.replace_all_multiple_repeat(replacements))
+    fn replace_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
+        self.map_data_ref_self(|a| a.replace_multiple_repeat(replacements))
     }
-    fn replace_all_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
-        self.map_data_mut(|a| a.replace_all_multiple_mut(replacements));
+    fn replace_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
+        self.map_data_mut(|a| a.replace_multiple_mut(replacements));
     }
-    fn replace_all_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
-        self.map_data_mut(|a| a.replace_all_multiple_repeat_mut(replacements));
+    fn replace_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
+        self.map_data_mut(|a| a.replace_multiple_repeat_mut(replacements));
     }
     fn replace_map_mut<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&mut self, m: &F) {
         self.map_data_mut(|a| a.replace_map_mut(m));
@@ -780,23 +1124,6 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
         self.map_data_ref(|a| a.to_pattern())
     }
 
-    /// Replace all occurrences of the pattern.
-    fn replace_all<R: BorrowPatternOrMap>(
-        &self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&Condition<PatternRestriction>>,
-        settings: Option<&MatchSettings>,
-    ) -> Self {
-        let rhs = rhs.borrow();
-        self.map_data_ref_self(|a| a.replace_all(pattern, rhs, conditions, settings))
-    }
-
-    /// Replace all occurrences of the patterns, where replacements are tested in the order that they are given.
-    fn replace_all_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
-        self.map_data_ref_self(|a| a.replace_all_multiple(replacements))
-    }
-
     fn replace_map<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&self, m: &F) -> Self {
         self.map_data_ref_self(|a| a.replace_map(m))
     }
@@ -929,7 +1256,7 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DenseTensor<Atom, S> {
         let mut list = vec![];
 
         for (_, a) in self.iter_flat() {
-            list.extend(a.coefficient_list::<E, _>(xs))
+            list.extend(a.coefficient_list::<E>(xs))
         }
         list
     }
@@ -1021,7 +1348,7 @@ impl<S: TensorStructure + Clone> TensorAtomOps for SparseTensor<Atom, S> {
         let mut list = vec![];
 
         for (_, a) in self.iter_flat() {
-            list.extend(a.coefficient_list::<E, _>(xs))
+            list.extend(a.coefficient_list::<E>(xs))
         }
         list
     }

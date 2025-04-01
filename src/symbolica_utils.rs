@@ -1,7 +1,6 @@
 use crate::{parametric::atomcore::PatternReplacement, structure::concrete_index::ConcreteIndex};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use smartstring::{LazyCompact, SmartString};
 use symbolica::{
     atom::{Atom, AtomCore, AtomView, FunctionBuilder, Symbol},
     id::Pattern,
@@ -69,16 +68,6 @@ impl From<SerializableSymbol> for u32 {
 pub struct SerializableAtom(pub Atom);
 
 impl PatternReplacement for SerializableAtom {
-    fn replace_all_mut<R: symbolica::id::BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&symbolica::id::Condition<symbolica::id::PatternRestriction>>,
-        settings: Option<&symbolica::id::MatchSettings>,
-    ) {
-        self.0.replace_all_mut(pattern, rhs, conditions, settings)
-    }
-
     fn replace_map_mut<F: Fn(AtomView, &symbolica::id::Context, &mut Atom) -> bool>(
         &mut self,
         m: &F,
@@ -86,49 +75,22 @@ impl PatternReplacement for SerializableAtom {
         self.0.replace_map_mut(m)
     }
 
-    fn replace_all_repeat<R: symbolica::id::BorrowPatternOrMap>(
-        &self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&symbolica::id::Condition<symbolica::id::PatternRestriction>>,
-        settings: Option<&symbolica::id::MatchSettings>,
-    ) -> Self {
-        SerializableAtom(
-            self.0
-                .replace_all_repeat(pattern, rhs, conditions, settings),
-        )
+    fn replace_multiple_mut<T: symbolica::id::BorrowReplacement>(&mut self, replacements: &[T]) {
+        self.0.replace_multiple_mut(replacements)
     }
 
-    fn replace_all_repeat_mut<R: symbolica::id::BorrowPatternOrMap>(
-        &mut self,
-        pattern: &Pattern,
-        rhs: R,
-        conditions: Option<&symbolica::id::Condition<symbolica::id::PatternRestriction>>,
-        settings: Option<&symbolica::id::MatchSettings>,
-    ) {
-        self.0
-            .replace_all_repeat_mut(pattern, rhs, conditions, settings)
-    }
-
-    fn replace_all_multiple_mut<T: symbolica::id::BorrowReplacement>(
-        &mut self,
-        replacements: &[T],
-    ) {
-        self.0.replace_all_multiple_mut(replacements)
-    }
-
-    fn replace_all_multiple_repeat<T: symbolica::id::BorrowReplacement>(
+    fn replace_multiple_repeat<T: symbolica::id::BorrowReplacement>(
         &self,
         replacements: &[T],
     ) -> Self {
-        self.0.replace_all_multiple_repeat(replacements).into()
+        self.0.replace_multiple_repeat(replacements).into()
     }
 
-    fn replace_all_multiple_repeat_mut<T: symbolica::id::BorrowReplacement>(
+    fn replace_multiple_repeat_mut<T: symbolica::id::BorrowReplacement>(
         &mut self,
         replacements: &[T],
     ) {
-        self.0.replace_all_multiple_repeat_mut(replacements)
+        self.0.replace_multiple_repeat_mut(replacements)
     }
 }
 
@@ -340,16 +302,16 @@ impl<const N: usize> IntoArgs for [Atom; N] {
     }
 }
 
-#[cfg(feature = "shadowing")]
-impl IntoSymbol for SmartString<LazyCompact> {
-    fn ref_into_symbol(&self) -> Symbol {
-        symbol!(self)
-    }
+// #[cfg(feature = "shadowing")]
+// impl IntoSymbol for String {
+//     fn ref_into_symbol(&self) -> Symbol {
+//         symbol!(self)
+//     }
 
-    fn from_str(s: &str) -> Self {
-        s.into()
-    }
-}
+//     fn from_str(s: &str) -> Self {
+//         s.into()
+//     }
+// }
 
 #[cfg(feature = "shadowing")]
 impl IntoSymbol for Symbol {

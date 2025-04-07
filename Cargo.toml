@@ -102,4 +102,5 @@ shadowing = ["dep:symbolica"]
 
 [patch.crates-io]
 # symbolica = { git = "https://github.com/benruijl/symbolica", branch = "no_namespace" }
-# symbolica = { path = "../gammaloop/python/gammaloop/dependencies/symbolica" }
+# symbolica = { path = "../symbolica" }
+symbolica={git="https://github.com/alphal00p/symbolica",rev="d1e34cbadce9c7b196063d92602c7a15ca2305b2"}

@@ -1454,11 +1454,13 @@ impl<T: Clone, S: TensorStructure> SetTensorData for RealOrComplexTensor<T, S> {
 }
 
 impl<T: Clone, S: TensorStructure> GetTensorData for RealOrComplexTensor<T, S> {
-    type GetDataRef<'a> = RealOrComplexRef<'a, T>
+    type GetDataRef<'a>
+        = RealOrComplexRef<'a, T>
     where
         Self: 'a;
 
-    type GetDataRefMut<'a> = RealOrComplexMut<'a, T>
+    type GetDataRefMut<'a>
+        = RealOrComplexMut<'a, T>
     where
         Self: 'a;
 
@@ -1706,6 +1708,26 @@ pub enum RealOrComplex<T> {
     Complex(Complex<T>),
 }
 
+impl<T: Default> RealOrComplex<T> {
+    pub fn to_complex(self) -> Complex<T> {
+        match self {
+            RealOrComplex::Real(r) => Complex::new(r, T::default()),
+            RealOrComplex::Complex(c) => c,
+        }
+    }
+}
+
+impl<T: Neg<Output = T>> Neg for RealOrComplex<T> {
+    type Output = RealOrComplex<T>;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            RealOrComplex::Real(r) => RealOrComplex::Real(-r),
+            RealOrComplex::Complex(c) => RealOrComplex::Complex(-c),
+        }
+    }
+}
+
 impl<T: Display> Display for RealOrComplex<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1802,9 +1824,10 @@ where
 }
 
 impl<T: Clone, S: TensorStructure> IteratableTensor for RealOrComplexTensor<T, S> {
-    type Data<'a>=  RealOrComplexRef<'a,T>
-        where
-            Self: 'a;
+    type Data<'a>
+        = RealOrComplexRef<'a, T>
+    where
+        Self: 'a;
 
     fn iter_expanded(&self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'_>)> {
         match self {

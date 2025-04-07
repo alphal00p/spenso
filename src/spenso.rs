@@ -82,6 +82,8 @@ pub mod shadowing;
 
 #[cfg(feature = "shadowing")]
 pub mod polynomial;
+#[cfg(feature = "shadowing")]
+pub mod tensor_library;
 
 #[cfg(test)]
 mod tests;

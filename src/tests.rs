@@ -51,6 +51,7 @@ use crate::{
 use crate::{
     iterators::IteratableTensor,
     parametric::{MixedTensor, ParamTensor},
+    shadowing::test::EXPLICIT_TENSOR_MAP,
     structure::{TensorShell, ToSymbolic},
     symbolic::SymbolicTensor,
     upgrading_arithmetic::TryIntoUpgrade,
@@ -1386,7 +1387,7 @@ fn symbolic_contract() {
         parse!("T(euc(2,1),euc(3,4))*P(euc(2,3),euc(3,2))").unwrap()
     );
 
-    let a = f.to_network::<PhysReps>().unwrap();
+    let a = f.to_network(&EXPLICIT_TENSOR_MAP.read().unwrap()).unwrap();
 
     // let syms = a.to_symbolic_tensor_vec();
 
@@ -1479,7 +1480,9 @@ fn parsing_scalar_mul() {
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-    let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
+    let mut network = sym_tensor
+        .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
+        .unwrap();
 
     network.contract().unwrap();
     println!("Network res: {}", network.result().unwrap().0);
@@ -1493,7 +1496,9 @@ fn parsing_single_contract() {
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-    let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
+    let mut network = sym_tensor
+        .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
+        .unwrap();
 
     println!("{}", network.dot());
     network.contract().unwrap();
@@ -1508,7 +1513,9 @@ fn parsing_addition_and_mul() {
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-    let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
+    let mut network = sym_tensor
+        .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
+        .unwrap();
 
     network.contract().unwrap();
     println!("Network res: {}", network.result().unwrap().0);

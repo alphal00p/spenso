@@ -3,6 +3,7 @@ extern crate derive_more;
 use std::{
     fmt::{Debug, Display},
     io::Cursor,
+    process::Output,
 };
 
 use ahash::HashMap;
@@ -919,6 +920,23 @@ pub enum ConcreteOrParam<C> {
     Param(Atom),
 }
 
+impl<C: Default> Default for ConcreteOrParam<C> {
+    fn default() -> Self {
+        ConcreteOrParam::Concrete(C::default())
+    }
+}
+
+impl<C: std::ops::Neg<Output = C>> std::ops::Neg for ConcreteOrParam<C> {
+    type Output = ConcreteOrParam<C>;
+
+    fn neg(self) -> Self {
+        match self {
+            ConcreteOrParam::Concrete(c) => ConcreteOrParam::Concrete(-c),
+            ConcreteOrParam::Param(p) => ConcreteOrParam::Param(-p),
+        }
+    }
+}
+
 impl<C> From<SerializableAtom> for ConcreteOrParam<C> {
     fn from(value: SerializableAtom) -> Self {
         ConcreteOrParam::Param(value.into())
@@ -1277,25 +1295,25 @@ impl<T: Clone, S: TensorStructure + Clone> MixedTensor<T, S> {
 //     Symbolic(DataTensor<Atom, T>),
 // }
 
-impl<'a> TryFrom<FunView<'a>> for MixedTensor {
-    type Error = anyhow::Error;
+// impl<'a> TryFrom<FunView<'a>> for MixedTensor {
+//     type Error = anyhow::Error;
 
-    fn try_from(f: FunView<'a>) -> Result<Self> {
-        let mut structure: Vec<PhysicalSlots> = vec![];
-        let f_id = f.get_symbol();
-        let mut args = vec![];
+//     fn try_from(f: FunView<'a>) -> Result<Self> {
+//         let mut structure: Vec<PhysicalSlots> = vec![];
+//         let f_id = f.get_symbol();
+//         let mut args = vec![];
 
-        for arg in f.iter() {
-            if let Ok(arg) = arg.try_into() {
-                structure.push(arg);
-            } else {
-                args.push(arg.to_owned());
-            }
-        }
-        let s = NamedStructure::from_iter(structure, f_id, Some(args));
-        s.to_shell().to_explicit().ok_or(anyhow!("Cannot shadow"))
-    }
-}
+//         for arg in f.iter() {
+//             if let Ok(arg) = arg.try_into() {
+//                 structure.push(arg);
+//             } else {
+//                 args.push(arg.to_owned());
+//             }
+//         }
+//         let s = NamedStructure::from_iter(structure, f_id, Some(args));
+//         s.to_shell().to_explicit().ok_or(anyhow!("Cannot shadow"))
+//     }
+// }
 
 impl<T: Clone, S: TensorStructure + Clone> PartialEq<MixedTensor<T, S>> for MixedTensor<T, S> {
     fn eq(&self, other: &MixedTensor<T, S>) -> bool {

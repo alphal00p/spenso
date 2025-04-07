@@ -11,6 +11,7 @@ use crate::{
         ToSymbolic, VecStructure,
     },
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
+    tensor_library::{ExplicitKey, ShadowedStructure, TensorLibrary},
 };
 
 use serde::{Deserialize, Serialize};
@@ -124,20 +125,18 @@ impl SymbolicTensor {
         &self.expression
     }
 
-    pub fn to_mixed(self) -> MixedTensor {
-        self.to_named().to_shell().to_explicit().unwrap()
-    }
+    // pub fn to_mixed(self) -> MixedTensor {
+    //     self.to_named().to_shell().to_explicit().unwrap()
+    // }
     #[allow(clippy::type_complexity)]
-    pub fn to_network<R: RepName<Dual = R> + for<'r> Deserialize<'r> + Serialize>(
+    pub fn to_network(
         &self,
-    ) -> Result<
-        TensorNetwork<MixedTensor<f64, AtomStructure<R>>, SerializableAtom>,
-        TensorNetworkError,
-    >
-    where
-        Rep: From<R>,
-    {
-        self.expression.as_view().try_into()
+        library: &TensorLibrary<MixedTensor<f64, ExplicitKey>>,
+    ) -> Result<TensorNetwork<MixedTensor<f64, ShadowedStructure>, Atom>, TensorNetworkError> {
+        TensorNetwork::<MixedTensor<f64, ShadowedStructure>, Atom>::try_from_view(
+            self.expression.as_view(),
+            library,
+        )
     }
 }
 

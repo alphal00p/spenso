@@ -70,6 +70,7 @@ use crate::{
         slot::DualSlotTo, CastStructure, HasName, HasStructure, ScalarTensor, TensorStructure,
         TracksCount,
     },
+    tensor_library::{LibraryTensor, TensorLibrary},
     upgrading_arithmetic::FallibleMul,
 };
 
@@ -81,7 +82,10 @@ use crate::{
 
 use anyhow::Result;
 
-use std::fmt::{Debug, Display};
+use std::{
+    convert::Infallible,
+    fmt::{Debug, Display},
+};
 
 new_key_type! {
     pub struct NodeId;
@@ -2561,6 +2565,14 @@ pub enum TensorNetworkError {
     Other(#[from] anyhow::Error),
     #[error("Io error")]
     InOut(#[from] std::io::Error),
+    #[error("Infallible")]
+    Infallible,
+}
+
+impl From<Infallible> for TensorNetworkError {
+    fn from(_: Infallible) -> Self {
+        TensorNetworkError::Infallible
+    }
 }
 
 impl<T, S> TensorNetwork<T, S>
@@ -2779,7 +2791,7 @@ where
 // use log::trace;
 
 #[cfg(feature = "shadowing")]
-impl<'a, S, Sc> TryFrom<MulView<'a>> for TensorNetwork<MixedTensor<f64, S>, Sc>
+impl<'a, Sc, S, T: HasStructure<Structure = S>> TensorNetwork<T, Sc>
 where
     Sc: for<'r> TryFrom<AtomView<'r>>
         + FallibleMul<Output = Sc>
@@ -2791,12 +2803,36 @@ where
     S::Args: IntoArgs,
     S::Slot: Serialize + for<'de> Deserialize<'de>,
     Rep: From<<S::Slot as IsAbstractSlot>::R>,
-    MixedTensor<f64, S>: Contract<MixedTensor<f64, S>, LCM = MixedTensor<f64, S>>
+    T: Contract<T, LCM = T>
         + Trace
-        + ScalarMul<Sc, Output = MixedTensor<f64, S>>,
+        + ScalarMul<Sc, Output = T>
+        + Clone
+        + FallibleAdd<T, Output = T>,
 {
-    type Error = TensorNetworkError;
-    fn try_from(value: MulView<'a>) -> Result<Self, Self::Error> {
+    pub fn try_from_view<LibT: LibraryTensor<WithIndices = T> + Clone>(
+        value: AtomView<'a>,
+        library: &TensorLibrary<LibT>,
+    ) -> Result<Self, TensorNetworkError> {
+        match value {
+            AtomView::Mul(m) => Self::try_from_mul(m, library),
+            AtomView::Fun(f) => Self::try_from_fun(f, library),
+            AtomView::Add(a) => Self::try_from_add(a, library),
+            AtomView::Pow(p) => Self::try_from_pow(p, library),
+            a => {
+                let mut network: Self = TensorNetwork::new();
+                // let a = a.to_owned();
+
+                // trace!("scalar atomview not a: {}", a);
+                network.scalar = Some(a.try_into()?);
+                Ok(network)
+            }
+        }
+    }
+
+    fn try_from_mul<LibT: LibraryTensor<WithIndices = T> + Clone>(
+        value: MulView<'a>,
+        library: &TensorLibrary<LibT>,
+    ) -> Result<Self, TensorNetworkError> {
         let mut network: Self = TensorNetwork::new();
 
         let one = Atom::new_num(1);
@@ -2804,7 +2840,7 @@ where
         let mut has_scalar = false;
 
         for arg in value.iter() {
-            let mut net = Self::try_from(arg)?;
+            let mut net = Self::try_from_view(arg, library)?;
             // trace!("mul net: {}", net.dot_nodes());
             //
             if net.contract().is_err() {
@@ -2831,64 +2867,34 @@ where
         }
         Ok(network)
     }
-}
 
-#[cfg(feature = "shadowing")]
-impl<'a, S, Sc> TryFrom<AtomView<'a>> for TensorNetwork<MixedTensor<f64, S>, Sc>
-where
-    Sc: for<'r> TryFrom<AtomView<'r>>
-        + FallibleMul<Output = Sc>
-        + Clone
-        + FallibleAdd<Sc, Output = Sc>,
-    TensorNetworkError: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
-    S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
-    S::Name: IntoSymbol + Clone,
-    S::Args: IntoArgs,
-    S::Slot: Serialize + for<'de> Deserialize<'de>,
-    Rep: From<<S::Slot as IsAbstractSlot>::R>,
-    MixedTensor<f64, S>: Contract<MixedTensor<f64, S>, LCM = MixedTensor<f64, S>>
-        + Trace
-        + ScalarMul<Sc, Output = MixedTensor<f64, S>>,
-{
-    type Error = TensorNetworkError;
-    fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
-        match value {
-            AtomView::Mul(m) => m.try_into(),
-            AtomView::Fun(f) => f.try_into(),
-            AtomView::Add(a) => a.try_into(),
-            AtomView::Pow(p) => p.try_into(),
-            a => {
-                let mut network: Self = TensorNetwork::new();
-                // let a = a.to_owned();
+    fn try_from_fun<LibT: LibraryTensor<WithIndices = T> + Clone>(
+        value: FunView<'a>,
+        library: &TensorLibrary<LibT>,
+    ) -> Result<Self, TensorNetworkError> {
+        let mut network: Self = TensorNetwork::new();
+        let s: Result<S, _> = value.try_into();
 
-                // trace!("scalar atomview not a: {}", a);
-                network.scalar = Some(a.try_into()?);
-                Ok(network)
-            }
+        let mut scalar = None;
+        if let Ok(s) = s {
+            let t = s
+                .to_shell()
+                .to_explicit(library)
+                .ok_or(anyhow!("Cannot shadow"))?
+                .internal_contract();
+            network.push(t);
+        } else {
+            scalar = Some(value.as_view().try_into().map_err(Into::into)?);
         }
+
+        network.scalar = scalar;
+        Ok(network)
     }
-}
 
-#[cfg(feature = "shadowing")]
-impl<'a, S, Sc> TryFrom<PowView<'a>> for TensorNetwork<MixedTensor<f64, S>, Sc>
-where
-    Sc: for<'r> TryFrom<AtomView<'r>>
-        + FallibleMul<Output = Sc>
-        + Clone
-        + FallibleAdd<Sc, Output = Sc>,
-    TensorNetworkError: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
-    S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
-    S::Name: IntoSymbol + Clone,
-    S::Args: IntoArgs,
-    S::Slot: Serialize + for<'de> Deserialize<'de>,
-    Rep: From<<S::Slot as IsAbstractSlot>::R>,
-    MixedTensor<f64, S>: Contract<MixedTensor<f64, S>, LCM = MixedTensor<f64, S>>
-        + Trace
-        + ScalarMul<Sc, Output = MixedTensor<f64, S>>,
-{
-    type Error = TensorNetworkError;
-
-    fn try_from(value: PowView<'a>) -> std::result::Result<Self, Self::Error> {
+    fn try_from_pow<LibT: LibraryTensor<WithIndices = T> + Clone>(
+        value: PowView<'a>,
+        library: &TensorLibrary<LibT>,
+    ) -> std::result::Result<Self, TensorNetworkError> {
         let mut new: Self = TensorNetwork::new();
 
         let (base, exp) = value.get_base_exp();
@@ -2902,9 +2908,9 @@ where
                 new.scalar = Some(one.as_view().try_into()?);
                 return Ok(new);
             } else if n == 1 {
-                return base.try_into();
+                return Self::try_from_view(base, library);
             }
-            let mut net = Self::try_from(base)?;
+            let mut net = Self::try_from_view(base, library)?;
 
             if net.contract().is_err() {
                 return Err(TensorNetworkError::FailedContractMsg(
@@ -2942,66 +2948,11 @@ where
 
         Ok(new)
     }
-}
 
-#[cfg(feature = "shadowing")]
-impl<'a, S, Sc> TryFrom<FunView<'a>> for TensorNetwork<MixedTensor<f64, S>, Sc>
-where
-    Sc: for<'r> TryFrom<AtomView<'r>>
-        + FallibleMul<Output = Sc>
-        + Clone
-        + FallibleAdd<Sc, Output = Sc>,
-    TensorNetworkError: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
-    S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
-    S::Name: IntoSymbol + Clone,
-    S::Args: IntoArgs,
-    S::Slot: Serialize + for<'de> Deserialize<'de>,
-    Rep: From<<S::Slot as IsAbstractSlot>::R>,
-    MixedTensor<f64, S>: Contract<MixedTensor<f64, S>, LCM = MixedTensor<f64, S>>
-        + Trace
-        + ScalarMul<Sc, Output = MixedTensor<f64, S>>,
-{
-    type Error = TensorNetworkError;
-    fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
-        let mut network: Self = TensorNetwork::new();
-        let s: Result<S, _> = value.try_into();
-
-        let mut scalar = None;
-        if let Ok(s) = s {
-            let t = s
-                .to_shell()
-                .to_explicit()
-                .ok_or(anyhow!("Cannot shadow"))?
-                .internal_contract();
-            network.push(t);
-        } else {
-            scalar = Some(value.as_view().try_into().map_err(Into::into)?);
-        }
-
-        network.scalar = scalar;
-        Ok(network)
-    }
-}
-// use log::trace;
-#[cfg(feature = "shadowing")]
-impl<'a, S, Sc> TryFrom<AddView<'a>> for TensorNetwork<MixedTensor<f64, S>, Sc>
-where
-    Sc: for<'r> TryFrom<AtomView<'r>>
-        + FallibleMul<Output = Sc>
-        + Clone
-        + FallibleAdd<Sc, Output = Sc>,
-    TensorNetworkError: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
-    S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
-    S::Name: IntoSymbol + Clone,
-    S::Args: IntoArgs,
-    S::Slot: Serialize + for<'de> Deserialize<'de>,
-    Rep: From<<S::Slot as IsAbstractSlot>::R>,
-    MixedTensor<f64, S>: Contract<MixedTensor<f64, S>, LCM = MixedTensor<f64, S>>
-        + Trace
-        + ScalarMul<Sc, Output = MixedTensor<f64, S>>,
-{
-    type Error = TensorNetworkError;
-    fn try_from(value: AddView<'a>) -> Result<Self, Self::Error> {
+    fn try_from_add<LibT: LibraryTensor<WithIndices = T> + Clone>(
+        value: AddView<'a>,
+        library: &TensorLibrary<LibT>,
+    ) -> Result<Self, TensorNetworkError> {
         // trace!("AddView: {}", value.as_view());
         let mut tensors = vec![];
         let zero = Atom::new_num(0);
@@ -3009,7 +2960,7 @@ where
         let mut is_scalar = false;
         for summand in value.iter() {
             // trace!("summand: {}", summand);
-            let mut net = Self::try_from(summand)?;
+            let mut net = Self::try_from_view(summand, library)?;
 
             if net.contract().is_err() {
                 return Err(TensorNetworkError::FailedContractMsg(
@@ -3060,6 +3011,7 @@ where
         Ok(net)
     }
 }
+// use log::trace;
 
 #[cfg(feature = "shadowing")]
 impl<T, S> TensorNetwork<T, S>

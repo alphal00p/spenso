@@ -159,6 +159,20 @@ pub struct SparseTensor<T, I = VecStructure> {
     pub structure: I,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Tensor<Store, Structure> {
+    pub elements: Store,
+    pub structure: Structure,
+}
+
+pub struct SparseStore<T> {
+    pub elements: AHashMap<FlatIndex, T>,
+}
+
+pub struct DenseStore<T> {
+    pub elements: Vec<T>,
+}
+
 impl<T: Hash, I: Hash> Hash for SparseTensor<T, I> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let mut vecel: Vec<_> = self.elements.iter().collect();

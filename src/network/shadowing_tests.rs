@@ -1,13 +1,14 @@
 use super::*;
 use crate::{
     data::SparseOrDense,
-    shadowing::ETS,
+    shadowing::test::EXPLICIT_TENSOR_MAP,
     structure::{
-        representation::{BaseRepName, Minkowski},
+        representation::{BaseRepName, Minkowski, PhysReps},
         NamedStructure, SmartShadowStructure,
     },
     symbolic::SymbolicTensor,
     symbolica_utils::SerializableSymbol,
+    tensor_library::{ShadowedStructure, ETS},
     upgrading_arithmetic::FallibleSub,
 };
 use constcat::concat;
@@ -35,7 +36,9 @@ fn pslash_parse() {
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-    let network = sym_tensor.to_network::<PhysReps>().unwrap();
+    let network = sym_tensor
+        .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
+        .unwrap();
 
     println!("{}", network.dot());
 }
@@ -43,7 +46,7 @@ fn pslash_parse() {
 #[test]
 fn three_loop_photon_parse() {
     use crate::structure::representation::PhysReps;
-    let _ = ETS.gamma;
+    // let _ = ETS.gamma;
 
     let expr = concat!(
         "-64/729*ee^6*G^4",
@@ -89,7 +92,9 @@ fn three_loop_photon_parse() {
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
-    let _network = sym_tensor.to_network::<PhysReps>().unwrap();
+    let _network = sym_tensor
+        .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
+        .unwrap();
 
     // println!("{}", network.rich_graph().dot());
 }
@@ -115,15 +120,19 @@ fn three_loop_photon_parse() {
 //     )
 // }
 
-fn g_concrete(mu: usize, nu: usize) -> RealOrComplexTensor<f64, NamedStructure<Symbol>> {
+fn g_concrete(mu: usize, nu: usize) -> RealOrComplexTensor<f64, ShadowedStructure> {
     let mink = Minkowski::rep(4);
 
-    NamedStructure::from_iter([mink.new_slot(mu), mink.new_slot(nu)], ETS.metric, None)
-        .to_shell()
-        .to_explicit()
-        .unwrap()
-        .try_into_concrete()
-        .unwrap()
+    NamedStructure::<_, (), PhysReps>::from_iter(
+        [mink.new_slot(mu), mink.new_slot(nu)],
+        ETS.metric,
+        None,
+    )
+    .to_shell()
+    .to_explicit(&EXPLICIT_TENSOR_MAP.read().unwrap())
+    .unwrap()
+    .try_into_concrete()
+    .unwrap()
 }
 #[test]
 fn sparse_dense_addition() {

@@ -33,6 +33,7 @@ impl<F: Ring, E: Exponent, O: MonomialOrder> RefOne for MultivariatePolynomial<F
 #[cfg(test)]
 mod test {
 
+    use crate::shadowing::test::EXPLICIT_TENSOR_MAP;
     use constcat::concat;
     #[cfg(feature = "shadowing")]
     use symbolica::{
@@ -85,7 +86,10 @@ mod test {
         let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
         let time = std::time::Instant::now();
-        let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
+
+        let mut network = sym_tensor
+            .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
+            .unwrap();
         println!("Network created {:?}", time.elapsed());
 
         let time = std::time::Instant::now();
@@ -181,7 +185,9 @@ mod test {
         let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
 
         let time = std::time::Instant::now();
-        let mut network = sym_tensor.to_network::<PhysReps>().unwrap();
+        let mut network = sym_tensor
+            .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
+            .unwrap();
         println!("Network created {:?}", time.elapsed());
 
         let time = std::time::Instant::now();

@@ -1297,6 +1297,14 @@ impl<Name, Args, R: RepName> IndexlessNamedStructure<Name, Args, R> {
             additional_args: args,
         }
     }
+
+    pub fn to_indexed(self, indices: &[AbstractIndex]) -> NamedStructure<Name, Args, R> {
+        NamedStructure {
+            structure: VecStructure::from_iter(self.structure.to_indexed(indices)),
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+        }
+    }
 }
 
 impl<N, A, R: RepName> HasName for IndexlessNamedStructure<N, A, R>

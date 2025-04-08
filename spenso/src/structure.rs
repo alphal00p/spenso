@@ -15,7 +15,6 @@ use indexmap::IndexMap;
 use symbolica::symbol;
 use thiserror::Error;
 
-use crate::permutation::Permutation;
 #[cfg(feature = "shadowing")]
 use crate::{
     data::DenseTensor,
@@ -24,7 +23,8 @@ use crate::{
     structure::slot::ConstructibleSlot,
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom, SerializableSymbol},
 };
-use representation::{PhysReps, Rep, RepName, Representation};
+use linnet::permutation::Permutation;
+use representation::{LibraryRep, RepName, Representation};
 use serde::Deserialize;
 use serde::Serialize;
 use slot::DualSlotTo;
@@ -815,7 +815,7 @@ impl<S: DualSlotTo<Dual = S, R: RepName>> StructureContract for Vec<S> {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
-pub struct IndexLess<T: RepName = PhysReps> {
+pub struct IndexLess<T: RepName = LibraryRep> {
     pub structure: Vec<Representation<T>>,
 }
 impl<R: RepName> std::fmt::Display for IndexLess<R> {
@@ -897,7 +897,7 @@ impl<T: RepName> IndexLess<T> {
             .iter()
             .cloned()
             .zip(self.structure.iter().cloned())
-            .map(|(i, r)| Representation::new_slot(&r, i))
+            .map(|(i, r)| Representation::slot(&r, i))
             .collect()
     }
 }
@@ -1008,7 +1008,7 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
 impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {}
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Hash)]
-pub struct VecStructure<R: RepName = PhysReps> {
+pub struct VecStructure<R: RepName = LibraryRep> {
     pub structure: Vec<Slot<R>>,
 }
 
@@ -1074,10 +1074,10 @@ impl<R: RepName> TryFrom<MulView<'_>> for VecStructure<R> {
     }
 }
 
-impl<R: RepName> FromIterator<Slot<R>> for VecStructure<R> {
-    fn from_iter<T: IntoIterator<Item = Slot<R>>>(iter: T) -> Self {
+impl<S: RepName, R: From<S> + RepName> FromIterator<Slot<S>> for VecStructure<R> {
+    fn from_iter<T: IntoIterator<Item = Slot<S>>>(iter: T) -> Self {
         Self {
-            structure: iter.into_iter().collect(),
+            structure: iter.into_iter().map(|a| a.cast()).collect(),
         }
     }
 }
@@ -1253,7 +1253,7 @@ impl<R: RepName<Dual = R>> StructureContract for VecStructure<R> {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
-pub struct IndexlessNamedStructure<Name = String, Args = usize, R: RepName = Rep> {
+pub struct IndexlessNamedStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
     pub structure: IndexLess<R>,
     pub global_name: Option<Name>,
     pub additional_args: Option<Args>,
@@ -1358,7 +1358,7 @@ impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for IndexlessNamedStructure
 ///
 /// It is useful when you want to shadow tensors, to nest tensor network contraction operations.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
-pub struct NamedStructure<Name = String, Args = usize, R: RepName = PhysReps> {
+pub struct NamedStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
     pub structure: VecStructure<R>,
     pub global_name: Option<Name>,
     pub additional_args: Option<Args>,
@@ -1371,11 +1371,12 @@ impl<Name, Args, R: RepName> NamedStructure<Name, Args, R> {
     #[must_use]
     pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> Self
     where
-        I: Into<Slot<R>>,
-        T: IntoIterator<Item = I>,
+        R: From<I>,
+        I: RepName,
+        T: IntoIterator<Item = Slot<I>>,
     {
         Self {
-            structure: iter.into_iter().map(I::into).collect(),
+            structure: iter.into_iter().map(|a| a.cast()).collect(),
             global_name: Some(name),
             additional_args: args,
         }
@@ -1718,7 +1719,7 @@ impl<R: RepName<Dual = R>> StructureContract for ContractionCountStructure<R> {
 
 /// A structure to enable smart shadowing of tensors in a tensor network contraction algorithm.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Hash)]
-pub struct SmartShadowStructure<Name = String, Args = usize, R: RepName = PhysReps> {
+pub struct SmartShadowStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
     pub structure: VecStructure<R>,
     pub contractions: usize,
     pub global_name: Option<Name>,
@@ -1868,7 +1869,7 @@ impl<N, A, R: RepName<Dual = R>> From<NamedStructure<N, A, R>> for SmartShadowSt
 /// It enables keeping track of the contraction history of the tensor, mostly for debugging and display purposes.
 /// A [`SymbolicTensor`] can also be used in this way, however it needs a symbolica state and workspace during contraction.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct HistoryStructure<Name, Args = (), R: RepName = PhysReps> {
+pub struct HistoryStructure<Name, Args = (), R: RepName = LibraryRep> {
     internal: VecStructure<R>,
     pub names: AHashMap<Range<usize>, Name>, //ideally this is a named partion.. maybe a btreemap<usize, N>, and the range is from previous to next
     external: NamedStructure<Name, Args, R>,

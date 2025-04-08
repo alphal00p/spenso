@@ -1,12 +1,11 @@
 use ahash::AHashMap;
 use duplicate::duplicate;
 use log::trace;
-use symbolica::domains::integer::Integer;
 // use num::Zero;
 #[cfg(feature = "shadowing")]
 use crate::symbolica_utils::SerializableAtom;
 #[cfg(feature = "shadowing")]
-use symbolica::{atom::Atom, domains::float::Real};
+use symbolica::{atom::Atom, domains::float::Real, domains::integer::Integer};
 
 use crate::{
     data::{DataIterator, DataTensor, DenseTensor, NumTensor, SetTensorData, SparseTensor},

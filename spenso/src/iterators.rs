@@ -15,16 +15,16 @@ use std::{
 use crate::{
     contraction::{ContractableWith, RefZero},
     data::{DataTensor, DenseTensor, GetTensorData, SparseTensor},
-    permutation::Permutation,
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
         dimension::Dimension,
-        representation::{PhysReps, RepName, Representation},
+        representation::{LibraryRep, RepName, Representation},
         slot::IsAbstractSlot,
         HasStructure, TensorStructure, VecStructure,
     },
     upgrading_arithmetic::{FallibleAddAssign, FallibleSubAssign},
 };
+use linnet::permutation::Permutation;
 
 use gat_lending_iterator::LendingIterator;
 // use log::trace;
@@ -1198,19 +1198,19 @@ mod iteratortests {
         let rep = Euclidean {};
 
         let structura: VecStructure<Euclidean> = VecStructure::new(vec![
-            rep.new_slot(4, 0),
-            rep.new_slot(4, 4),
-            rep.new_slot(5, 1),
-            rep.new_slot(7, 3),
-            rep.new_slot(8, 2),
+            rep.slot(4, 0),
+            rep.slot(4, 4),
+            rep.slot(5, 1),
+            rep.slot(7, 3),
+            rep.slot(8, 2),
         ]);
 
         let structurb = VecStructure::new(vec![
-            rep.new_slot(8, 2),
-            rep.new_slot(7, 3),
-            rep.new_slot(4, 0),
-            rep.new_slot(5, 1),
-            rep.new_slot(4, 5),
+            rep.slot(8, 2),
+            rep.slot(7, 3),
+            rep.slot(4, 0),
+            rep.slot(5, 1),
+            rep.slot(4, 5),
         ]);
 
         let fibera = Fiber::from(
@@ -1245,12 +1245,12 @@ mod iteratortests {
     #[test]
     fn mutiter() {
         let rep = Euclidean {};
-        let structa = VecStructure::new(vec![
-            rep.new_slot(2, 0).into(),
-            rep.new_slot(4, 4).into(),
-            rep.new_slot(5, 1).into(),
-            rep.new_slot(7, 3).into(),
-            rep.new_slot(8, 3).into(),
+        let structa: VecStructure = VecStructure::new(vec![
+            LibraryRep::from(rep).slot(2, 0),
+            LibraryRep::from(rep).slot(4, 4),
+            LibraryRep::from(rep).slot(5, 1),
+            LibraryRep::from(rep).slot(7, 3),
+            LibraryRep::from(rep).slot(8, 3),
         ]);
 
         let mut a: DenseTensor<f64> = DenseTensor::zero(structa);
@@ -1469,7 +1469,7 @@ impl<'a, S: TensorStructure, I: IteratesAlongPermutedFibers<<S::Slot as IsAbstra
     }
 }
 
-impl<'a, I: IteratesAlongFibers<PhysReps>> Iterator for FiberIterator<'a, VecStructure, I> {
+impl<'a, I: IteratesAlongFibers<LibraryRep>> Iterator for FiberIterator<'a, VecStructure, I> {
     type Item = I::Item;
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next()
@@ -1551,7 +1551,10 @@ impl<
 where
     It: FiberIteratorItem,
 {
-    type Item<'r> = (&'r mut T, usize, It::OtherData) where Self: 'r;
+    type Item<'r>
+        = (&'r mut T, usize, It::OtherData)
+    where
+        Self: 'r;
     fn next(&mut self) -> Option<Self::Item<'_>> {
         let flat = self.iter.next()?;
         if self.fiber.structure.is_empty_at_flat(flat.flat_idx()) {
@@ -1582,7 +1585,10 @@ impl<
 where
     It: FiberIteratorItem,
 {
-    type Item<'r> = (&'r mut T,  It::OtherData) where Self: 'r;
+    type Item<'r>
+        = (&'r mut T, It::OtherData)
+    where
+        Self: 'r;
     fn next(&mut self) -> Option<Self::Item<'_>> {
         self.iter.next().map(|x| {
             // println!("dense {}", x.flat_idx());
@@ -1699,7 +1705,10 @@ impl<
 impl<'a, S: TensorStructure + 'a, I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R>>
     LendingIterator for FiberClassIterator<'a, S, I>
 {
-    type Item<'r> = &'r mut FiberIterator<'a, S, I> where Self: 'r;
+    type Item<'r>
+        = &'r mut FiberIterator<'a, S, I>
+    where
+        Self: 'r;
 
     fn next(&mut self) -> Option<Self::Item<'_>> {
         let shift = self.class_iter.next()?;
@@ -1912,7 +1921,10 @@ where
 }
 
 impl<T, S: TensorStructure> IteratableTensor for SparseTensor<T, S> {
-    type Data<'a> = &'a T where Self:'a ;
+    type Data<'a>
+        = &'a T
+    where
+        Self: 'a;
 
     fn fiber<'r>(&'r self, fiber_data: FiberData<'_>) -> Fiber<'r, Self> {
         Fiber::from(fiber_data, self)
@@ -2238,7 +2250,10 @@ impl<T, S> IteratableTensor for DenseTensor<T, S>
 where
     S: TensorStructure,
 {
-    type Data<'a> = &'a T where Self: 'a;
+    type Data<'a>
+        = &'a T
+    where
+        Self: 'a;
 
     fn iter_expanded(&self) -> impl Iterator<Item = (ExpandedIndex, &T)> {
         DenseTensorIterator::new(self)
@@ -2306,7 +2321,10 @@ impl<'a, T, S: TensorStructure> Iterator for DataTensorExpandedIterator<'a, T, S
 }
 
 impl<T: Clone, S: TensorStructure> IteratableTensor for DataTensor<T, S> {
-    type Data<'a> = &'a T where Self: 'a;
+    type Data<'a>
+        = &'a T
+    where
+        Self: 'a;
 
     fn iter_expanded(&self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'_>)> {
         match self {

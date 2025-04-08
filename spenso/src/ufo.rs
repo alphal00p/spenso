@@ -8,9 +8,7 @@ use crate::{
     structure::{
         abstract_index::AbstractIndex,
         dimension::Dimension,
-        representation::{
-            BaseRepName, Bispinor, Dual, Euclidean, Lorentz, PhysReps, RepName, Representation,
-        },
+        representation::{BaseRepName, Euclidean, Lorentz, RepName, Representation},
         slot::Slot,
         TensorStructure,
     },
@@ -42,7 +40,7 @@ where
     //TODO: make it just swap indices
     let structure = indices
         .into_iter()
-        .map(|i| Representation::new_slot(&signature, i))
+        .map(|i| Representation::slot(&signature, i))
         .collect();
     let mut identity = SparseTensor::empty(structure);
     for i in 0..signature.try_into().unwrap() {

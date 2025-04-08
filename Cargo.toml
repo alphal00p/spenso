@@ -1,106 +1,22 @@
-[package]
-name = "spenso"
-version = "0.4.1"
-edition = "2021"
-license = "MIT OR Apache-2.0"
+[workspace]
+members = [
+    "spenso",
+    "spenso-macros"
+]
+resolver = "2" # Add this line
+
+[workspace.package]
 authors = ["Lucien Huber <cargo+mail@lucien.ch>"]
-description = "A tensor (n-dim array) network, iterating, and contraction (using automatic abstract index matching) library."
-documentation = "https://docs.rs/spenso/latest/spenso/"
-keywords = ["tensors", "contraction"]
-readme = "README.md"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/alphal00p/spenso"
-
-
-[package.metadata.docs.rs]
-all-features = true
-
-[lib]
-path = "src/spenso.rs"
-
+edition = "2021"
 
 [profile.bench]
 lto = "fat"
 
-[dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
-insta = { version = "1.38.0", features = ["yaml", "json", "ron", "toml"] }
-
-[[bench]]
-name = "gamma_net"
-harness = false
-required-features = ["shadowing"]
-
-[[bench]]
-name = "evaluate_net"
-harness = false
-required-features = ["shadowing"]
-
-[[bench]]
-name = "3LphotonsPhysical"
-harness = false
-required-features = ["shadowing"]
-
-[[bench]]
-name = "3LphotonEval"
-harness = false
-required-features = ["shadowing"]
-
-
-[[example]]
-name = "evaluate_network"
-required-features = ["shadowing"]
-
-[[example]]
-name = "3LphotonsPhysical"
-required-features = ["shadowing"]
-
-[[example]]
-name = "pres"
-required-features = ["shadowing"]
-
-
-[dependencies]
-ahash = { version = "0.8.11", features = ["serde"] }
-# ambassador = "0.3.6"
-anyhow = { version = "1.0.86", features = ["backtrace"] }
-append-only-vec = "0.1.6"
-approx = "0.5.1"
-# auto_enums = "0.8.6"
-bincode = "2.0.1"
-# bincode = "2"
-bitvec = { version = "1.0.1", features = ["serde"] }
-# const_format = { version = "0.2.32", features = ["rust_1_51"] }
-constcat = "0.5.0"
-delegate = "0.12.0"
-derive_more = "0.99.17"
-# disjoint_impls = "0.7.1"
-duplicate = "1.0.0"
-dyn-clone = "1.0.17"
-enum-try-as-inner = "0.1.1"
-env_logger = "0.11.5"
-# flexi_logger = "0.28.5"
-gat-lending-iterator = "0.1.5"
-indexmap = { version = "2.2.6", features = ["serde"] }
-# itertools = "0.14.0"
-log = "0.4.22"
-num = { version = "0.4.3", features = ["serde"] }
-once_cell = "1.20.2"
-rand = "0.8.5"
-rand_xoshiro = "0.6.0"
-ref-ops = "0.2.5"
-serde = "1.0.201"
-serde_json = "1.0.117"
-# serde_toml = "0.0.1"
-slotmap = { version = "1.0.7", features = ["serde"] }
-# smartstring = { version = "1.0.1", features = ["serde"] }
-symbolica = { version = "0.16.0", optional = true }
-thiserror = "1.0.60"
-
-
-[features]
-shadowing = ["dep:symbolica"]
 
 [patch.crates-io]
-# symbolica = { git = "https://github.com/benruijl/symbolica", branch = "no_namespace" }
+symbolica = { git = "https://github.com/benruijl/symbolica", rev = "57f25f34928ca667bd5889d94ed616d15e2ad94f" }
+# linnet = {path = "../linnet"}
 # symbolica = { path = "../symbolica" }
-symbolica={git="https://github.com/alphal00p/symbolica",rev="d1e34cbadce9c7b196063d92602c7a15ca2305b2"}
+# symbolica={git="https://github.com/alphal00p/symbolica",rev="d1e34cbadce9c7b196063d92602c7a15ca2305b2"}

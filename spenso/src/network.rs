@@ -48,16 +48,18 @@ use crate::{
     contraction::RefZero,
     data::{DataIterator, DenseTensor, SetTensorData, SparseTensor},
     iterators::IteratableTensor,
+    parametric::atomcore::ReplaceBuilderGeneric,
     parametric::{
         atomcore::PatternReplacement, AtomViewOrConcrete, CompiledEvalTensor, EvalTensor,
         EvalTreeTensor, MixedTensor, ParamTensor, SerializableCompiledCode,
         SerializableCompiledEvaluator, SerializableExportedCode,
     },
     shadowing::{ShadowMapping, Shadowable},
-    structure::representation::Rep,
+    structure::representation::LibraryRep,
     structure::slot::IsAbstractSlot,
     structure::{StructureContract, ToSymbolic},
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
+    tensor_library::{LibraryTensor, TensorLibrary},
     upgrading_arithmetic::{FallibleAdd, TrySmallestUpgrade},
 };
 
@@ -65,12 +67,10 @@ use crate::{
     arithmetic::ScalarMul,
     contraction::{Contract, ContractionError, Trace},
     data::{DataTensor, GetTensorData, HasTensorData},
-    parametric::atomcore::ReplaceBuilderGeneric,
     structure::{
         slot::DualSlotTo, CastStructure, HasName, HasStructure, ScalarTensor, TensorStructure,
         TracksCount,
     },
-    tensor_library::{LibraryTensor, TensorLibrary},
     upgrading_arithmetic::FallibleMul,
 };
 
@@ -2802,7 +2802,7 @@ where
     S::Name: IntoSymbol + Clone,
     S::Args: IntoArgs,
     S::Slot: Serialize + for<'de> Deserialize<'de>,
-    Rep: From<<S::Slot as IsAbstractSlot>::R>,
+    LibraryRep: From<<S::Slot as IsAbstractSlot>::R>,
     T: Contract<T, LCM = T>
         + Trace
         + ScalarMul<Sc, Output = T>

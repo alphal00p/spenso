@@ -5,8 +5,7 @@ use crate::{
     shadowing::Shadowable,
     structure::{
         abstract_index::ABSTRACTIND,
-        representation::{Rep, RepName},
-        slot::PhysicalSlots,
+        representation::{LibraryRep, LibrarySlot, RepName},
         AtomStructure, HasName, HasStructure, NamedStructure, StructureContract, TensorStructure,
         ToSymbolic, VecStructure,
     },
@@ -95,7 +94,7 @@ impl StructureContract for SymbolicTensor {
 impl SymbolicTensor {
     pub fn from_named<N>(structure: &N) -> Option<Self>
     where
-        N: ToSymbolic + HasName + TensorStructure<Slot = PhysicalSlots>,
+        N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot>,
         N::Name: IntoSymbol + Clone,
         N::Args: IntoArgs,
     {

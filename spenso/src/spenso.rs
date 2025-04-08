@@ -21,7 +21,7 @@ Namely
 - [`MixedTensor`]
 
 */
-
+extern crate self as spenso;
 /// All tooling for tensor structures, indices and representations
 pub mod structure;
 // pub use structure::*;
@@ -70,20 +70,18 @@ pub mod arithmetic;
 pub mod scalar;
 // pub use scalar::*;
 
-/// Permutation
-pub mod permutation;
-// pub use permutation::*;
-
 /// Tensors as defined in the UFO format
-pub mod ufo;
+// pub mod ufo;
 
 #[cfg(feature = "shadowing")]
 pub mod shadowing;
 
 #[cfg(feature = "shadowing")]
-pub mod polynomial;
+// pub mod polynomial;
 #[cfg(feature = "shadowing")]
 pub mod tensor_library;
 
+#[cfg(feature = "shadowing")]
+pub mod api;
 #[cfg(test)]
 mod tests;

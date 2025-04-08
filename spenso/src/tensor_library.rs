@@ -8,7 +8,7 @@ use crate::{
     structure::{
         abstract_index::{AbstractIndex, ABSTRACTIND},
         concrete_index::ConcreteIndex,
-        representation::{Rep, RepName, REPS},
+        representation::{LibraryRep, RepName, REPS},
         slot::{IsAbstractSlot, Slot, SlotError},
         AtomStructure, HasName, HasStructure, IndexlessNamedStructure, NamedStructure,
         StructureError, TensorShell, TensorStructure, VecStructure,
@@ -23,14 +23,14 @@ use symbolica::{
 };
 use thiserror::Error;
 
-pub type ExplicitKey = IndexlessNamedStructure<Symbol, Vec<Atom>, Rep>;
+pub type ExplicitKey = IndexlessNamedStructure<Symbol, Vec<Atom>, LibraryRep>;
 
 impl ExplicitKey {
     pub fn from_structure<S: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs>>(
         structure: S,
     ) -> Option<Self>
     where
-        Rep: From<<S::Slot as IsAbstractSlot>::R>,
+        LibraryRep: From<<S::Slot as IsAbstractSlot>::R>,
     {
         Some(IndexlessNamedStructure::from_iter(
             structure.reps().into_iter().map(|r| r.cast()),
@@ -93,7 +93,7 @@ impl<D: Clone> LibraryTensor for DataTensor<D, ExplicitKey> {
     }
 }
 
-pub type ShadowedStructure = NamedStructure<Symbol, Vec<Atom>, Rep>;
+pub type ShadowedStructure = NamedStructure<Symbol, Vec<Atom>, LibraryRep>;
 
 #[cfg(feature = "shadowing")]
 impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
@@ -101,7 +101,7 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         match value.get_symbol() {
             s if s == symbol!(ABSTRACTIND) => {
-                let mut structure: Vec<Slot<Rep>> = vec![];
+                let mut structure: Vec<Slot<LibraryRep>> = vec![];
 
                 for arg in value.iter() {
                     structure.push(arg.try_into()?);
@@ -116,7 +116,7 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
                 let mut is_structure = Some(SlotError::EmptyStructure);
 
                 for arg in value.iter() {
-                    let slot: Result<Slot<Rep>, _> = arg.try_into();
+                    let slot: Result<Slot<LibraryRep>, _> = arg.try_into();
 
                     match slot {
                         Ok(slot) => {
@@ -275,11 +275,11 @@ impl<D: Default + Clone> LibraryTensor for MixedTensor<D, ExplicitKey> {
 pub struct GenericKey {
     global_name: Symbol,
     args: Option<Vec<Atom>>,
-    reps: Vec<Rep>,
+    reps: Vec<LibraryRep>,
 }
 
 impl GenericKey {
-    pub fn new(global_name: Symbol, args: Option<Vec<Atom>>, reps: Vec<Rep>) -> Self {
+    pub fn new(global_name: Symbol, args: Option<Vec<Atom>>, reps: Vec<LibraryRep>) -> Self {
         Self {
             global_name,
             args,
@@ -385,12 +385,8 @@ impl<T: TensorLibraryData> TensorLibraryData for ConcreteOrParam<T> {
 }
 
 impl<T: LibraryTensor> TensorLibrary<T> {
-    fn metric_key(rep: Rep) -> ExplicitKey {
-        ExplicitKey::from_iter(
-            [rep.new_rep(4), rep.new_rep(4)],
-            symbol!(Self::METRIC_NAME),
-            None,
-        )
+    fn metric_key(rep: LibraryRep) -> ExplicitKey {
+        ExplicitKey::from_iter([rep.rep(4), rep.rep(4)], symbol!(Self::METRIC_NAME), None)
     }
 
     fn generic_mink_metric(key: ExplicitKey) -> T
@@ -428,7 +424,7 @@ impl<T: LibraryTensor> TensorLibrary<T> {
         }
     }
 
-    pub fn id(rep: Rep) -> GenericKey {
+    pub fn id(rep: LibraryRep) -> GenericKey {
         GenericKey::new(symbol!(Self::ID_NAME), None, vec![rep, rep.dual()])
     }
 

@@ -4,7 +4,6 @@ use duplicate::duplicate;
 use ref_ops::{RefAdd, RefMul, RefSub};
 #[cfg(feature = "shadowing")]
 use std::ops::{Add, Div, Mul, Sub};
-use symbolica::domains::{integer::Integer, rational::Rational};
 
 #[cfg(feature = "shadowing")]
 use crate::symbolica_utils::SerializableAtom;
@@ -12,7 +11,11 @@ use crate::symbolica_utils::SerializableAtom;
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::Atom,
-    domains::float::{Complex as SymbolicaComplex, Real},
+    domains::{
+        float::{Complex as SymbolicaComplex, Real},
+        integer::Integer,
+        rational::Rational,
+    },
 };
 
 use crate::{

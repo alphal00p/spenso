@@ -165,10 +165,12 @@ pub struct Tensor<Store, Structure> {
     pub structure: Structure,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SparseStore<T> {
     pub elements: AHashMap<FlatIndex, T>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DenseStore<T> {
     pub elements: Vec<T>,
 }

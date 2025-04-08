@@ -7,8 +7,10 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::AddAssign;
 #[cfg(feature = "shadowing")]
-use symbolica::atom::{Atom, AtomView};
-use symbolica::parse;
+use symbolica::{
+    atom::{Atom, AtomView},
+    parse,
+};
 
 #[cfg(feature = "shadowing")]
 use symbolica::coefficient::CoefficientView;

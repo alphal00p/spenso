@@ -46,10 +46,7 @@ mod test {
     #[cfg(feature = "shadowing")]
     use crate::symbolic::SymbolicTensor;
 
-    use crate::{
-        structure::{representation::PhysReps, HasStructure},
-        upgrading_arithmetic::FallibleAdd,
-    };
+    use crate::upgrading_arithmetic::FallibleAdd;
 
     #[test]
     fn fallible_add_poly() {

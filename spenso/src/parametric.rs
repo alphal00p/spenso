@@ -3,7 +3,6 @@ extern crate derive_more;
 use std::{
     fmt::{Debug, Display},
     io::Cursor,
-    process::Output,
 };
 
 use ahash::HashMap;
@@ -27,10 +26,10 @@ use crate::{
     },
     iterators::{IteratableTensor, IteratorEnum},
     shadowing::{ShadowMapping, Shadowable},
-    structure::concrete_index::ConcreteIndex,
     structure::{
-        concrete_index::{DualConciousExpandedIndex, ExpandedIndex, FlatIndex},
-        slot::PhysicalSlots,
+        concrete_index::{ConcreteIndex, DualConciousExpandedIndex, ExpandedIndex, FlatIndex},
+        representation::LibraryRep,
+        slot::Slot,
         CastStructure, HasName, HasStructure, NamedStructure, ScalarStructure, ScalarTensor,
         StructureContract, TensorStructure, ToSymbolic, TracksCount, VecStructure,
     },
@@ -49,7 +48,7 @@ use symbolica::{
         CompileOptions, CompiledCode, CompiledEvaluator, CompiledEvaluatorFloat, EvalTree,
         EvaluationFn, ExportedCode, Expression, ExpressionEvaluator, FunctionMap, InlineASM,
     },
-    id::{Condition, MatchSettings, Pattern, PatternRestriction},
+    id::Pattern,
     state::State,
     symbol,
     utils::BorrowedOrOwned,
@@ -256,7 +255,7 @@ impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<A
     type Error = Error;
 
     fn try_from(f: FunView<'a>) -> Result<Self> {
-        let mut structure: Vec<PhysicalSlots> = vec![];
+        let mut structure: Vec<Slot<LibraryRep>> = vec![];
         let f_id = f.get_symbol();
         let mut args = vec![];
 

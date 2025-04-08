@@ -10,7 +10,7 @@ use crate::{
     parametric::{MixedTensor, ParamTensor, TensorCoefficient},
     structure::{
         concrete_index::{ConcreteIndex, FlatIndex},
-        representation::{ExtendibleReps, Rep, RepName, REPS},
+        representation::{ExtendibleReps, LibraryRep, RepName, REPS},
         slot::IsAbstractSlot,
         HasName, HasStructure, IndexlessNamedStructure, TensorShell, TensorStructure, ToSymbolic,
     },
@@ -59,7 +59,7 @@ pub trait Shadowable:
         library: &'b TensorLibrary<T>,
     ) -> Option<T::WithIndices>
     where
-        Rep: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::R>,
+        LibraryRep: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::R>,
         'a: 'b,
     {
         let key = ExplicitKey::from_structure(self.structure().clone())?;
@@ -626,7 +626,7 @@ pub mod test {
         network::TensorNetwork,
         parametric::MixedTensor,
         structure::{
-            representation::{PhysReps, Rep, RepName, REPS},
+            representation::{LibraryRep, RepName, REPS},
             AtomStructure, HasStructure, IndexlessNamedStructure, NamedStructure, TensorStructure,
             VecStructure,
         },
@@ -643,19 +643,16 @@ pub mod test {
         tensor_library.update_ids();
 
         for rep in REPS.read().unwrap().reps() {
-            let structure = [rep.new_rep(4), rep.new_rep(4).dual()];
+            let structure = [rep.rep(4), rep.rep(4).dual()];
 
-            let idstructure: IndexlessNamedStructure<String, (), Rep> =
+            let idstructure: IndexlessNamedStructure<String, (), LibraryRep> =
                 IndexlessNamedStructure::from_iter(structure, "id".into(), None);
 
             let idkey = ExplicitKey::from_structure(idstructure).unwrap();
 
             let id = tensor_library.get(&idkey).unwrap().into_owned();
 
-            let trace_structure = vec![
-                rep.new_rep(4).new_slot(3),
-                rep.new_rep(4).dual().new_slot(4),
-            ];
+            let trace_structure = vec![rep.rep(4).slot(3), rep.rep(4).dual().slot(4)];
             let id1 = id.map_structure(|_| trace_structure.clone());
             let id2 = id1
                 .clone()
@@ -675,17 +672,14 @@ pub mod test {
                 rep
             );
 
-            let idstructure: IndexlessNamedStructure<String, (), Rep> =
+            let idstructure: IndexlessNamedStructure<String, (), LibraryRep> =
                 IndexlessNamedStructure::from_iter(structure, "Metric".into(), None);
 
             let idkey = ExplicitKey::from_structure(idstructure).unwrap();
 
             let id = tensor_library.get(&idkey).unwrap().into_owned();
 
-            let trace_structure = vec![
-                rep.new_rep(4).new_slot(3),
-                rep.new_rep(4).dual().new_slot(4),
-            ];
+            let trace_structure = vec![rep.rep(4).slot(3), rep.rep(4).dual().slot(4)];
             let id1 = id.map_structure(|_| trace_structure.clone());
             let id2 = id1
                 .clone()

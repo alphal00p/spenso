@@ -3,7 +3,7 @@ use crate::{
     data::SparseOrDense,
     shadowing::test::EXPLICIT_TENSOR_MAP,
     structure::{
-        representation::{BaseRepName, Minkowski, PhysReps},
+        representation::{BaseRepName, Minkowski, RepName},
         NamedStructure, SmartShadowStructure,
     },
     symbolic::SymbolicTensor,
@@ -29,8 +29,6 @@ fn other_network() {
 
 #[test]
 fn pslash_parse() {
-    use crate::structure::representation::PhysReps;
-
     let expr = "Q(15,dind(lor(4,75257)))   *γ(lor(4,75257),bis(4,1),bis(4,18))";
     let atom = parse!(expr).unwrap();
 
@@ -45,7 +43,6 @@ fn pslash_parse() {
 
 #[test]
 fn three_loop_photon_parse() {
-    use crate::structure::representation::PhysReps;
     // let _ = ETS.gamma;
 
     let expr = concat!(
@@ -121,18 +118,14 @@ fn three_loop_photon_parse() {
 // }
 
 fn g_concrete(mu: usize, nu: usize) -> RealOrComplexTensor<f64, ShadowedStructure> {
-    let mink = Minkowski::rep(4);
+    let mink = LibraryRep::from(Minkowski {}).rep(4);
 
-    NamedStructure::<_, (), PhysReps>::from_iter(
-        [mink.new_slot(mu), mink.new_slot(nu)],
-        ETS.metric,
-        None,
-    )
-    .to_shell()
-    .to_explicit(&EXPLICIT_TENSOR_MAP.read().unwrap())
-    .unwrap()
-    .try_into_concrete()
-    .unwrap()
+    NamedStructure::<_, (), LibraryRep>::from_iter([mink.slot(mu), mink.slot(nu)], ETS.metric, None)
+        .to_shell()
+        .to_explicit(&EXPLICIT_TENSOR_MAP.read().unwrap())
+        .unwrap()
+        .try_into_concrete()
+        .unwrap()
 }
 #[test]
 fn sparse_dense_addition() {

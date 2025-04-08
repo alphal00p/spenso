@@ -21,7 +21,7 @@ use symbolica::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::permutation::Permutation;
+use linnet::permutation::Permutation;
 
 pub const CONCRETEIND: &str = "cind";
 pub const FLATIND: &str = "find";

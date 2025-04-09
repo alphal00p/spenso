@@ -2,18 +2,14 @@ use crate::{
     contraction::{Contract, ContractionError},
     network::{TensorNetwork, TensorNetworkError},
     parametric::MixedTensor,
-    shadowing::Shadowable,
     structure::{
-        abstract_index::ABSTRACTIND,
-        representation::{LibraryRep, LibrarySlot, RepName},
-        AtomStructure, HasName, HasStructure, NamedStructure, StructureContract, TensorStructure,
-        ToSymbolic, VecStructure,
+        abstract_index::ABSTRACTIND, representation::LibrarySlot, HasName, HasStructure,
+        NamedStructure, StructureContract, TensorStructure, ToSymbolic, VecStructure,
     },
-    symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
+    symbolica_utils::{IntoArgs, IntoSymbol},
     tensor_library::{ExplicitKey, ShadowedStructure, TensorLibrary},
 };
 
-use serde::{Deserialize, Serialize};
 use symbolica::atom::{Atom, AtomView, Symbol};
 use symbolica::symbol;
 

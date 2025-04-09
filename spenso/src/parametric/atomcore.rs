@@ -21,7 +21,7 @@ use symbolica::{
     evaluate::{EvaluationFn, ExpressionEvaluator, FunctionMap, OptimizationSettings},
     id::{
         BorrowReplacement, Condition, ConditionResult, Context, MatchMap, MatchSettings, Pattern,
-        PatternRestriction, ReplaceBuilder, ReplaceWith,
+        PatternRestriction, ReplaceBuilder,
     },
     poly::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, series::Series,

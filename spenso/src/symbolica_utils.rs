@@ -3,7 +3,6 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use symbolica::{
     atom::{Atom, AtomCore, AtomView, FunctionBuilder, Symbol},
-    id::Pattern,
     state::State,
     symbol,
 };

@@ -21,7 +21,7 @@ use slotmap::{SecondaryMap, SlotMap};
 use std::hash::{DefaultHasher, Hash};
 
 use crate::{
-    complex::{Complex, RealOrComplexTensor},
+    complex::Complex,
     contraction::{Contract, Trace},
     data::{
         DataTensor, DenseTensor, GetTensorData, HasTensorData, NumTensor, SetTensorData,
@@ -31,14 +31,12 @@ use crate::{
         AbstractFiber, CoreExpandedFiberIterator, CoreFlatFiberIterator, Fiber, FiberClass,
         IteratesAlongFibers,
     },
-    network::TensorNetwork,
     structure::{
         abstract_index::AbstractIndex,
         concrete_index::{ExpandedIndex, FlatIndex},
         dimension::Dimension,
         representation::{
-            BaseRepName, Euclidean, LibraryRep, LibrarySlot, Lorentz, Minkowski, RepName,
-            Representation,
+            Euclidean, LibraryRep, LibrarySlot, Lorentz, Minkowski, RepName, Representation,
         },
         slot::{DualSlotTo, Slot},
         HasStructure, HistoryStructure, NamedStructure, StructureContract, TensorStructure,
@@ -1441,8 +1439,6 @@ fn test_fallible_mul() {
 
         h.add_assign_fallible(a);
         let _f = a.mul_fallible(a);
-
-        Atom::default();
 
         println!("{}", h);
     }

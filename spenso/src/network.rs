@@ -2755,7 +2755,7 @@ where
     S: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a>> + Clone,
     T: Clone,
 {
-    fn replace<'b, P: Into<BorrowedOrOwned<'b, Pattern>>>(
+    pub fn replace<'b, P: Into<BorrowedOrOwned<'b, Pattern>>>(
         &self,
         pattern: P,
     ) -> ReplaceBuilderGeneric<'b, &'_ Self, Self> {

@@ -1,5 +1,6 @@
 use super::{
     abstract_index::{AbstractIndex, AbstractIndexError},
+    concrete_index::ConcreteIndex,
     dimension::{Dimension, DimensionError},
     slot::Slot,
 };
@@ -9,6 +10,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use spenso_macros::SimpleRepresentation;
 use std::{
+    convert::Infallible,
     fmt::{Debug, Display},
     sync::RwLock,
 };
@@ -74,7 +76,7 @@ pub trait BaseRepName: RepName<Dual: RepName> + Default {
         aind: AbstractIndex,
     ) -> Result<Slot<Self>, SlotError> {
         if sym == Self::selfless_symbol() {
-            Ok(Slot {
+            ::std::result::Result::Ok(Slot {
                 rep: Representation {
                     dim,
                     rep: Self::default(),
@@ -106,6 +108,8 @@ pub enum RepresentationError {
     DimErr(#[from] DimensionError),
     #[error("{0}")]
     Any(#[from] anyhow::Error),
+    #[error("infallible")]
+    Infallible(#[from] Infallible),
 }
 
 pub trait RepName:
@@ -113,15 +117,22 @@ pub trait RepName:
 {
     type Dual: RepName<Dual = Self, Base = Self::Base>;
     type Base: RepName;
+
+    fn from_library_rep(rep: LibraryRep) -> Result<Self, RepresentationError>;
+
     fn dual(self) -> Self::Dual;
     fn is_dual(self) -> bool;
     fn base(&self) -> Self::Base;
     fn is_base(&self) -> bool;
     fn matches(&self, other: &Self::Dual) -> bool;
     #[cfg(feature = "shadowing")]
-    fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError>;
+    fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError> {
+        Self::from_library_rep(LibraryRep::try_from_symbol(sym, aind)?)
+    }
     #[cfg(feature = "shadowing")]
-    fn try_from_symbol_coerced(sym: Symbol) -> Result<Self, RepresentationError>;
+    fn try_from_symbol_coerced(sym: Symbol) -> Result<Self, RepresentationError> {
+        Self::from_library_rep(LibraryRep::try_from_symbol_coerced(sym)?)
+    }
 
     // fn try_from<B: BaseRepName>(b: B) -> Result<B, SlotError>;
 
@@ -137,7 +148,10 @@ pub trait RepName:
     #[cfg(feature = "shadowing")]
     /// yields a function builder for the representation, adding a first variable: the dimension.
     ///
-    fn to_symbolic<It: Into<Atom>>(&self, args: impl IntoIterator<Item = It>) -> Atom;
+    fn to_symbolic<It: Into<Atom>>(&self, args: impl IntoIterator<Item = It>) -> Atom {
+        let librep: LibraryRep = (*self).into();
+        librep.to_symbolic(args)
+    }
 
     #[cfg(feature = "shadowing")]
     fn to_pattern(&self, symbol: Symbol) -> Atom {
@@ -216,6 +230,10 @@ impl RepName for Minkowski {
     type Base = Minkowski;
     type Dual = Minkowski;
 
+    fn from_library_rep(rep: LibraryRep) -> Result<Self, RepresentationError> {
+        rep.try_into()
+    }
+
     fn base(&self) -> Self::Base {
         Minkowski::selfless_base()
     }
@@ -239,42 +257,6 @@ impl RepName for Minkowski {
     fn is_neg(self, i: usize) -> bool {
         i > 0
     }
-
-    #[cfg(feature = "shadowing")]
-    fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError> {
-        let uind = symbol!(UPIND);
-        let dind = symbol!(DOWNIND);
-        let sind = symbol!(SELFDUALIND);
-        if aind == sind {
-            if Self::selfless_symbol() == sym {
-                Ok(Minkowski::default())
-            } else {
-                Err(RepresentationError::NotRepresentationError(sym))
-            }
-        } else if aind == dind && aind == uind {
-            Err(RepresentationError::ExpectedDualStateError(sind, aind))
-        } else {
-            Err(RepresentationError::SymbolError(aind))
-        }
-    }
-
-    #[cfg(feature = "shadowing")]
-    fn try_from_symbol_coerced(sym: Symbol) -> Result<Self, RepresentationError> {
-        if Self::selfless_symbol() == sym {
-            Ok(Minkowski::default())
-        } else {
-            Err(RepresentationError::NotRepresentationError(sym))
-        }
-    }
-
-    #[cfg(feature = "shadowing")]
-    fn to_symbolic<It: Into<Atom>>(&self, args: impl IntoIterator<Item = It>) -> Atom {
-        let mut fun = FunctionBuilder::new(symbol!(ExtendibleReps::mink_name()));
-        for a in args {
-            fun = fun.add_arg(&(a.into()));
-        }
-        fun.finish()
-    }
 }
 
 impl Display for Minkowski {
@@ -283,12 +265,23 @@ impl Display for Minkowski {
     }
 }
 
-impl BaseRepName for Minkowski {
-    const NAME: &'static str = ExtendibleReps::mink_name();
+impl TryFrom<LibraryRep> for Minkowski {
+    type Error = RepresentationError;
 
-    // fn selfless_name() -> String {
-    //     constname.to_string()
-    // }
+    fn try_from(value: LibraryRep) -> std::result::Result<Self, Self::Error> {
+        if value == ExtendibleReps::MINKOWSKI {
+            std::result::Result::Ok(Minkowski {})
+        } else {
+            Err(RepresentationError::WrongRepresentationError(
+                "mink".to_string(),
+                value.to_string(),
+            ))
+        }
+    }
+}
+
+impl BaseRepName for Minkowski {
+    const NAME: &'static str = "mink";
 
     fn selfless_base() -> Self::Base {
         Self::default()
@@ -325,6 +318,7 @@ impl<T: RepName> Representation<T> {
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum LibraryRep {
     SelfDual(u16),
+    InlineMetric(u16),
     Dualizable(i16),
 }
 
@@ -333,14 +327,15 @@ pub type LibrarySlot = Slot<LibraryRep>;
 pub(crate) static REPS: Lazy<RwLock<ExtendibleReps>> =
     Lazy::new(|| RwLock::new(ExtendibleReps::new()));
 pub(crate) static SELF_DUAL: AppendOnlyVec<(LibraryRep, RepData)> = AppendOnlyVec::new();
+pub(crate) static INLINE_METRIC: AppendOnlyVec<(LibraryRep, MetricRepData)> = AppendOnlyVec::new();
 pub(crate) static DUALIZABLE: AppendOnlyVec<(LibraryRep, RepData)> = AppendOnlyVec::new();
 
 impl LibraryRep {
-    pub fn new_dual(name: &str) -> Result<Self, RepError> {
+    pub fn new_dual(name: &str) -> Result<Self, RepLibraryError> {
         REPS.write().unwrap().new_dual_impl(name)
     }
 
-    pub fn new_self_dual(name: &str) -> Result<Self, RepError> {
+    pub fn new_self_dual(name: &str) -> Result<Self, RepLibraryError> {
         REPS.write().unwrap().new_self_dual(name)
     }
 
@@ -351,6 +346,15 @@ impl LibraryRep {
     pub fn all_dualizables() -> impl Iterator<Item = &'static LibraryRep> {
         DUALIZABLE.iter().map(|(rep, _)| rep)
     }
+
+    pub fn all_inline_metrics() -> impl Iterator<Item = &'static LibraryRep> {
+        INLINE_METRIC.iter().map(|(rep, _)| rep)
+    }
+}
+
+pub struct MetricRepData {
+    metric_data: fn(ConcreteIndex) -> bool,
+    rep_data: RepData,
 }
 
 pub struct RepData {
@@ -367,19 +371,21 @@ pub struct ExtendibleReps {
 }
 
 #[derive(Debug, Error)]
-pub enum RepError {
+pub enum RepLibraryError {
     #[error("{0} Already exists and is of different type")]
     AlreadyExistsDifferentType(String),
+    #[error("{0} Already exists and has different metric function")]
+    AlreadyExistsDifferentMetric(String),
 }
 
 impl ExtendibleReps {
     pub fn reps(&self) -> impl Iterator<Item = &LibraryRep> {
         self.name_map.values()
     }
-    pub fn new_dual_impl(&mut self, name: &str) -> Result<LibraryRep, RepError> {
+    pub fn new_dual_impl(&mut self, name: &str) -> Result<LibraryRep, RepLibraryError> {
         if let Some(rep) = self.name_map.get(name) {
             if let LibraryRep::SelfDual(_) = rep {
-                return Err(RepError::AlreadyExistsDifferentType(name.into()));
+                return Err(RepLibraryError::AlreadyExistsDifferentType(name.into()));
             } else {
                 return Ok(*rep);
             }
@@ -403,14 +409,14 @@ impl ExtendibleReps {
         Ok(rep)
     }
 
-    pub fn new_dual(name: &str) -> Result<LibraryRep, RepError> {
+    pub fn new_dual(name: &str) -> Result<LibraryRep, RepLibraryError> {
         REPS.write().unwrap().new_dual_impl(name)
     }
 
-    pub fn new_self_dual(&mut self, name: &str) -> Result<LibraryRep, RepError> {
+    pub fn new_self_dual(&mut self, name: &str) -> Result<LibraryRep, RepLibraryError> {
         if let Some(rep) = self.name_map.get(name) {
             if let LibraryRep::Dualizable(_) = rep {
-                return Err(RepError::AlreadyExistsDifferentType(name.into()));
+                return Err(RepLibraryError::AlreadyExistsDifferentType(name.into()));
             } else {
                 return Ok(*rep);
             }
@@ -433,6 +439,50 @@ impl ExtendibleReps {
         ));
         Ok(rep)
     }
+
+    #[allow(unpredictable_function_pointer_comparisons)]
+    pub fn new_inline_metric(
+        &mut self,
+        name: &str,
+        metric_fn: fn(ConcreteIndex) -> bool,
+    ) -> Result<LibraryRep, RepLibraryError> {
+        if let Some(rep) = self.name_map.get(name) {
+            match rep {
+                LibraryRep::SelfDual(_) | LibraryRep::Dualizable(_) => {
+                    return Err(RepLibraryError::AlreadyExistsDifferentType(name.into()))
+                }
+                LibraryRep::InlineMetric(a) => {
+                    if INLINE_METRIC[*a as usize].1.metric_data == metric_fn {
+                        return Ok(*rep);
+                    } else {
+                        return Err(RepLibraryError::AlreadyExistsDifferentMetric(
+                            name.to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+
+        let rep = LibraryRep::InlineMetric(INLINE_METRIC.len() as u16);
+        self.name_map.insert(name.into(), rep);
+        #[cfg(feature = "shadowing")]
+        let symbol = symbol!(name);
+        #[cfg(feature = "shadowing")]
+        self.symbol_map.insert(symbol, rep);
+
+        INLINE_METRIC.push((
+            rep,
+            MetricRepData {
+                metric_data: metric_fn,
+                rep_data: RepData {
+                    name: name.to_string(),
+                    #[cfg(feature = "shadowing")]
+                    symbol,
+                },
+            },
+        ));
+        Ok(rep)
+    }
 }
 
 impl Index<LibraryRep> for ExtendibleReps {
@@ -441,6 +491,7 @@ impl Index<LibraryRep> for ExtendibleReps {
     fn index(&self, index: LibraryRep) -> &Self::Output {
         match index {
             LibraryRep::SelfDual(l) => &SELF_DUAL[l as usize].1,
+            LibraryRep::InlineMetric(l) => &INLINE_METRIC[l as usize].1.rep_data,
             LibraryRep::Dualizable(l) => &DUALIZABLE[l.unsigned_abs() as usize - 1].1,
         }
     }
@@ -448,53 +499,9 @@ impl Index<LibraryRep> for ExtendibleReps {
 
 impl ExtendibleReps {
     pub const EUCLIDEAN: LibraryRep = LibraryRep::SelfDual(0);
-    pub const BISPINOR: LibraryRep = LibraryRep::SelfDual(1);
-    pub const COLORADJ: LibraryRep = LibraryRep::SelfDual(2);
-    pub const MINKOWSKI: LibraryRep = LibraryRep::SelfDual(3);
-
+    pub const MINKOWSKI: LibraryRep = LibraryRep::InlineMetric(0);
     pub const LORENTZ_UP: LibraryRep = LibraryRep::Dualizable(1);
     pub const LORENTZ_DOWN: LibraryRep = LibraryRep::Dualizable(-1);
-    pub const SPINFUND: LibraryRep = LibraryRep::Dualizable(2);
-    pub const SPINANTIFUND: LibraryRep = LibraryRep::Dualizable(-2);
-    pub const COLORFUND: LibraryRep = LibraryRep::Dualizable(3);
-    pub const COLORANTIFUND: LibraryRep = LibraryRep::Dualizable(-3);
-    pub const COLORSEXT: LibraryRep = LibraryRep::Dualizable(4);
-    pub const COLORANTISEXT: LibraryRep = LibraryRep::Dualizable(-4);
-
-    pub const BUILTIN_SELFDUAL_NAMES: [&'static str; 4] = ["euc", "bis", "coad", "mink"];
-    pub const BUILTIN_DUALIZABLE_NAMES: [&'static str; 4] = ["lor", "spf", "cof", "cos"];
-
-    pub const fn euc_name() -> &'static str {
-        Self::BUILTIN_SELFDUAL_NAMES[0]
-    }
-
-    pub const fn bis_name() -> &'static str {
-        Self::BUILTIN_SELFDUAL_NAMES[1]
-    }
-
-    pub const fn coad_name() -> &'static str {
-        Self::BUILTIN_SELFDUAL_NAMES[2]
-    }
-
-    pub const fn mink_name() -> &'static str {
-        Self::BUILTIN_SELFDUAL_NAMES[3]
-    }
-
-    pub const fn lor_name() -> &'static str {
-        Self::BUILTIN_DUALIZABLE_NAMES[0]
-    }
-
-    pub const fn spf_name() -> &'static str {
-        Self::BUILTIN_DUALIZABLE_NAMES[1]
-    }
-
-    pub const fn cof_name() -> &'static str {
-        Self::BUILTIN_DUALIZABLE_NAMES[2]
-    }
-
-    pub const fn cos_name() -> &'static str {
-        Self::BUILTIN_DUALIZABLE_NAMES[3]
-    }
 
     pub fn new() -> Self {
         let mut new = Self {
@@ -505,14 +512,13 @@ impl ExtendibleReps {
 
         #[cfg(feature = "shadowing")]
         ETS.id;
-
-        for &name in Self::BUILTIN_SELFDUAL_NAMES.iter() {
-            new.new_self_dual(name).unwrap();
+        new.new_self_dual(Euclidean::NAME).unwrap();
+        fn mink_is_neg(id: ConcreteIndex) -> bool {
+            Minkowski {}.is_neg(id)
         }
+        new.new_inline_metric(Minkowski::NAME, mink_is_neg).unwrap();
+        new.new_dual_impl(Lorentz::NAME).unwrap();
 
-        for &name in Self::BUILTIN_DUALIZABLE_NAMES.iter() {
-            new.new_dual_impl(name).unwrap();
-        }
         new
     }
 
@@ -532,6 +538,7 @@ impl Display for LibraryRep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::SelfDual(_) => write!(f, "{}", REPS.read().unwrap()[*self].name),
+            Self::InlineMetric(_) => write!(f, "{}", REPS.read().unwrap()[*self].name),
             Self::Dualizable(l) => {
                 if *l < 0 {
                     write!(f, "{}🠓", REPS.read().unwrap()[*self].name)
@@ -547,13 +554,20 @@ impl RepName for LibraryRep {
     type Dual = LibraryRep;
     type Base = LibraryRep;
 
+    fn from_library_rep(rep: LibraryRep) -> Result<Self, RepresentationError> {
+        Ok(rep)
+    }
+
+    #[inline]
     fn dual(self) -> Self::Dual {
         match self {
             Self::SelfDual(l) => Self::SelfDual(l),
+            Self::InlineMetric(l) => Self::InlineMetric(l),
             Self::Dualizable(l) => Self::Dualizable(-l),
         }
     }
 
+    #[inline]
     fn is_base(&self) -> bool {
         match self {
             Self::Dualizable(l) => *l > 0,
@@ -561,6 +575,7 @@ impl RepName for LibraryRep {
         }
     }
 
+    #[inline]
     fn is_dual(self) -> bool {
         match self {
             Self::Dualizable(l) => l < 0,
@@ -568,6 +583,7 @@ impl RepName for LibraryRep {
         }
     }
 
+    #[inline]
     fn base(&self) -> Self::Base {
         match self {
             Self::Dualizable(l) => Self::Dualizable(l.abs()),
@@ -575,6 +591,7 @@ impl RepName for LibraryRep {
         }
     }
 
+    #[inline]
     fn matches(&self, other: &Self::Dual) -> bool {
         match (self, other) {
             (Self::SelfDual(s), Self::SelfDual(o)) => s == o,
@@ -618,6 +635,18 @@ impl RepName for LibraryRep {
                     Err(RepresentationError::SymbolError(aind))
                 }
             }
+            LibraryRep::InlineMetric(_) => {
+                if aind == symbol!(SELFDUALIND) {
+                    Ok(rep)
+                } else if aind == symbol!(UPIND) || aind == symbol!(DOWNIND) {
+                    Err(RepresentationError::ExpectedDualStateError(
+                        symbol!(SELFDUALIND),
+                        aind,
+                    ))
+                } else {
+                    Err(RepresentationError::SymbolError(aind))
+                }
+            }
         }
     }
 
@@ -627,6 +656,14 @@ impl RepName for LibraryRep {
             .unwrap()
             .find_symbol(sym)
             .ok_or(RepresentationError::NotRepresentationError(sym))
+    }
+
+    fn is_neg(self, i: usize) -> bool {
+        if let LibraryRep::InlineMetric(a) = self {
+            (INLINE_METRIC[a as usize].1.metric_data)(i)
+        } else {
+            false
+        }
     }
 
     #[cfg(feature = "shadowing")]
@@ -642,6 +679,7 @@ impl RepName for LibraryRep {
 
         match self {
             Self::SelfDual(_) => inner,
+            Self::InlineMetric(_) => inner,
             Self::Dualizable(l) => {
                 if *l < 0 {
                     function!(symbol!(DOWNIND), &inner)
@@ -660,13 +698,13 @@ fn extendible_reps() {
     let e = LibraryRep::new_self_dual("euc").unwrap();
 
     println!(
-        "{r}{r:?}, {e}{e:?},{rd}{rd:?},{}",
-        ExtendibleReps::BISPINOR.base()
+        "{r}{r:?}, {e}{e:?},{rd}{rd:?}",
+        // ExtendibleReps::BISPINOR.base()
     );
 
     assert!(ExtendibleReps::LORENTZ_UP.matches(&ExtendibleReps::LORENTZ_DOWN));
     assert!(!ExtendibleReps::LORENTZ_UP.matches(&ExtendibleReps::LORENTZ_UP));
-    assert!(ExtendibleReps::BISPINOR.matches(&ExtendibleReps::BISPINOR));
+    // assert!(ExtendibleReps::BISPINOR.matches(&ExtendibleReps::BISPINOR));
 
     // let rs = r.new_slot(10, 1);
     // let rr = r.new_dimed_rep(1);
@@ -833,9 +871,9 @@ impl<'a, T: RepName> FromIterator<&'a Representation<T>> for Vec<Dimension> {
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
-    use symbolica::symbol;
+    // use symbolica::symbol;
 
-    use crate::structure::representation::BaseRepName;
+    // use crate::structure::representation::BaseRepName;
 
     // use super::Lorentz;
 

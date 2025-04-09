@@ -12,15 +12,12 @@ use syn::{
     Expr,
     ExprLit,
     ExprPath,
-    Fields,
     Ident,
     Lit,
     LitStr,
     Meta,
     Path, // Use Path and Meta
     Token,
-    Type,
-    Visibility,
 };
 
 // --- RepresentationAttrs struct and parse_representation_attributes function (keep as is) ---
@@ -249,12 +246,12 @@ pub fn derive_simple_representation(input: TokenStream) -> TokenStream {
 
     // --- Common RepName Implementation Parts ---
     let base_repname_common_impl = quote! {
+        #[inline]
+        fn from_library_rep(rep: ::spenso::structure::representation::LibraryRep) -> ::std::result::Result<Self, ::spenso::structure::representation::RepresentationError>{
+            rep.try_into()
+        }
         #[inline] fn base(&self) -> Self::Base where Self::Base: Default { Self::Base::default() }
         #[inline] fn is_base(&self) -> bool { ::std::any::TypeId::of::<Self>() == ::std::any::TypeId::of::<Self::Base>() }
-        #[inline] #[cfg(feature = "shadowing")] fn to_symbolic<__It: Into<::symbolica::atom::Atom>>(&self, args: impl IntoIterator<Item = __It>) -> ::symbolica::atom::Atom where Self: Sized + Copy + Into<::spenso::structure::representation::LibraryRep> { ::spenso::structure::representation::LibraryRep::from(*self).to_symbolic(args) }
-        #[inline] #[cfg(feature = "shadowing")] fn try_from_symbol(sym: ::symbolica::atom::Symbol, aind: ::symbolica::atom::Symbol) -> Result<Self, ::spenso::structure::representation::RepresentationError> where Self: Sized + TryFrom<::spenso::structure::representation::LibraryRep, Error=::spenso::structure::representation::RepresentationError> + Copy + Default { ::spenso::structure::representation::LibraryRep::try_from_symbol(sym, aind)?.try_into() }
-        #[inline] #[cfg(feature = "shadowing")] fn try_from_symbol_coerced(sym: ::symbolica::atom::Symbol) -> Result<Self, ::spenso::structure::representation::RepresentationError> where Self: Sized + TryFrom<::spenso::structure::representation::LibraryRep, Error=::spenso::structure::representation::RepresentationError> + Copy + Default { ::spenso::structure::representation::LibraryRep::try_from_symbol_coerced(sym)?.try_into() }
-
     };
 
     // --- Display Impls ---
@@ -269,10 +266,52 @@ pub fn derive_simple_representation(input: TokenStream) -> TokenStream {
         // ===== Self-Dual Case ===== (Remains Correct)
         let rep_new_call =
             quote! { ::spenso::structure::representation::LibraryRep::new_self_dual(#name_lit) };
-        let base_from_impl = quote! { impl From<#base_type_ident> for ::spenso::structure::representation::LibraryRep where #base_type_ident: Copy { fn from(_value: #base_type_ident) -> Self { #rep_new_call.expect(concat!("Failed to create self-dual Rep for ", #name_lit)) } } };
-        let base_try_from_impl = quote! { impl TryFrom<::spenso::structure::representation::LibraryRep> for #base_type_ident where #base_type_ident: Default { type Error = ::spenso::structure::representation::RepresentationError; fn try_from(rep: ::spenso::structure::representation::LibraryRep) -> Result<Self, Self::Error> { let expected_rep = #rep_new_call.expect(concat!("Failed to create self-dual Rep for ", #name_lit)); if rep == expected_rep { Ok(#base_type_ident::default()) } else { Err(::spenso::structure::representation::RepresentationError::WrongRepresentationError(#name_lit.to_owned(), rep.to_string())) } } } };
-        let base_repname_impl = quote! { impl ::spenso::structure::representation::RepName for #base_type_ident where #base_type_ident: #base_bounds { type Base = #base_type_ident; type Dual = #base_type_ident; #base_repname_common_impl #[inline] fn is_dual(self) -> bool { false } #[inline] fn matches(&self, _other: &Self::Dual) -> bool { true } #[inline] fn dual(self) -> Self::Dual { self } } };
-        quote! { impl #base_type_ident { pub const NAME: &'static str = #name_lit; } #base_from_impl #base_try_from_impl #base_repname_impl #base_display_impl }
+        let base_from_impl = quote! {
+            impl From<#base_type_ident> for ::spenso::structure::representation::LibraryRep
+                where #base_type_ident: Copy
+                {
+                    fn from(_value: #base_type_ident) -> Self {
+                        #rep_new_call.expect(concat!("Failed to create self-dual Rep for ", #name_lit))
+                    }
+                }
+        };
+
+        let base_try_from_impl = quote! {
+            impl TryFrom<::spenso::structure::representation::LibraryRep> for #base_type_ident where #base_type_ident: Default {
+                type Error = ::spenso::structure::representation::RepresentationError;
+
+                fn try_from(rep: ::spenso::structure::representation::LibraryRep) -> ::std::result::Result<Self, Self::Error>   {
+                    let expected_rep = #rep_new_call.expect(concat!("Failed to create self-dual Rep for ", #name_lit));
+                    if rep == expected_rep {
+                        ::std::result::Result::Ok(#base_type_ident::default())
+                    } else {
+                        ::std::result::Result::Err(::spenso::structure::representation::RepresentationError::WrongRepresentationError(#name_lit.to_owned(), rep.to_string()))
+                    }
+                }
+            }
+        };
+
+        let base_repname_impl = quote! {
+            impl ::spenso::structure::representation::RepName for #base_type_ident where #base_type_ident: #base_bounds {
+                type Base = #base_type_ident;
+                type Dual = #base_type_ident;
+
+                #base_repname_common_impl
+                #[inline]
+                fn is_dual(self) -> bool { false }
+                #[inline] fn matches(&self, _other: &Self::Dual) -> bool { true }
+                #[inline] fn dual(self) -> Self::Dual { self }
+            }
+        };
+        quote! {
+            impl #base_type_ident {
+                pub const NAME: &'static str = #name_lit;
+            }
+            #base_from_impl
+            #base_try_from_impl
+            #base_repname_impl
+            #base_display_impl
+        }
     } else {
         // ===== Dualizable Case =====
 
@@ -300,18 +339,104 @@ pub fn derive_simple_representation(input: TokenStream) -> TokenStream {
         let rep_new_dual_call = quote! { #rep_new_base_call.expect(concat!("Failed to create dual Rep for ", #name_lit)).dual() };
 
         // 4. Implementations for the BASE type (Remains Correct)
-        let base_from_impl = quote! { impl From<#base_type_ident> for ::spenso::structure::representation::LibraryRep where #base_type_ident: Copy { fn from(_value: #base_type_ident) -> Self { #rep_new_base_call.expect(concat!("Failed to create Rep for ", #name_lit)) } } };
-        let base_try_from_impl = quote! { impl TryFrom<::spenso::structure::representation::LibraryRep> for #base_type_ident where #base_type_ident: Default { type Error = ::spenso::structure::representation::RepresentationError; fn try_from(rep: ::spenso::structure::representation::LibraryRep) -> Result<Self, Self::Error> { let expected_rep = #rep_new_base_call.expect(concat!("Failed to create Rep for ", #name_lit)); if rep == expected_rep { Ok(#base_type_ident::default()) } else { Err(::spenso::structure::representation::RepresentationError::WrongRepresentationError(#name_lit.to_owned(), rep.to_string())) } } } };
-        let base_repname_impl = quote! { impl ::spenso::structure::representation::RepName for #base_type_ident where #base_type_ident: #base_bounds, #dual_type_ident: #dual_bounds { type Base = #base_type_ident; type Dual = #dual_type_ident; #base_repname_common_impl #[inline] fn is_dual(self) -> bool { false } #[inline] fn matches(&self, _other: &Self::Dual) -> bool { true } #[inline] fn dual(self) -> Self::Dual where Self::Dual: Default { #dual_type_ident::default() } } };
-        let base_impls = quote! { impl #base_type_ident { pub const NAME: &'static str = #name_lit; } #base_from_impl #base_try_from_impl #base_repname_impl #base_display_impl };
+        let base_from_impl = quote! {
+            impl From<#base_type_ident> for ::spenso::structure::representation::LibraryRep where #base_type_ident: Copy {
+                fn from(_value: #base_type_ident) -> Self {
+                    #rep_new_base_call.expect(concat!("Failed to create Rep for ", #name_lit))
+                }
+            }
+        };
+        let base_try_from_impl = quote! {
+            impl TryFrom<::spenso::structure::representation::LibraryRep> for #base_type_ident where #base_type_ident: Default {
+                type Error = ::spenso::structure::representation::RepresentationError;
+
+                fn try_from(rep: ::spenso::structure::representation::LibraryRep) -> ::std::result::Result<Self, Self::Error> {
+                    let expected_rep = #rep_new_base_call.expect(concat!("Failed to create Rep for ", #name_lit));
+                    if rep == expected_rep {
+                        ::std::result::Result::Ok(#base_type_ident::default())
+                    } else {
+                        ::std::result::Result::Err(::spenso::structure::representation::RepresentationError::WrongRepresentationError(#name_lit.to_owned(), rep.to_string()))
+                    }
+                }
+            }
+        };
+
+        let base_repname_impl = quote! {
+            impl ::spenso::structure::representation::RepName for #base_type_ident where #base_type_ident: #base_bounds, #dual_type_ident: #dual_bounds {
+                type Base = #base_type_ident;
+                type Dual = #dual_type_ident;
+
+                #base_repname_common_impl
+                #[inline]
+                fn is_dual(self) -> bool { false }
+                #[inline]
+                fn matches(&self, _other: &Self::Dual) -> bool { true }
+                #[inline]
+                fn dual(self) -> Self::Dual where Self::Dual: Default {
+                    #dual_type_ident::default()
+                }
+            }
+        };
+        let base_impls = quote! {
+            impl #base_type_ident {
+                pub const NAME: &'static str = #name_lit;
+            }
+            #base_from_impl
+            #base_try_from_impl
+            #base_repname_impl
+            #base_display_impl
+        };
 
         // 5. Implementations for the generated DUAL type (Remains Correct)
-        let dual_display_impl = quote! { impl ::std::fmt::Display for #dual_type_ident where #dual_type_ident: Copy + Into<::spenso::structure::representation::LibraryRep> { fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result { write!(f, "{}", ::spenso::structure::representation::LibraryRep::from(*self)) } } };
-        let dual_from_impl = quote! { impl From<#dual_type_ident> for ::spenso::structure::representation::LibraryRep where #dual_type_ident: Copy { fn from(_value: #dual_type_ident) -> Self { #rep_new_dual_call } } };
-        let dual_try_from_impl = quote! { impl TryFrom<::spenso::structure::representation::LibraryRep> for #dual_type_ident where #dual_type_ident: Default { type Error = ::spenso::structure::representation::RepresentationError; fn try_from(rep: ::spenso::structure::representation::LibraryRep) -> Result<Self, Self::Error> { let base_rep = #rep_new_base_call.expect(concat!("Failed to create dual Rep for ", #name_lit)); let expected_rep = base_rep.dual(); if rep == expected_rep { Ok(#dual_type_ident::default()) } else { Err(::spenso::structure::representation::RepresentationError::WrongRepresentationError(expected_rep.to_string(), rep.to_string())) } } } };
-        let dual_repname_impl = quote! { impl ::spenso::structure::representation::RepName for #dual_type_ident where #dual_type_ident: #dual_bounds, #base_type_ident: #base_bounds { type Base = #base_type_ident; type Dual = #base_type_ident; #base_repname_common_impl #[inline] fn dual(self) -> Self::Dual where Self::Dual: Default { #base_type_ident::default() } #[inline] fn is_dual(self) -> bool { true } #[inline] fn matches(&self, _other: &Self::Dual) -> bool { true } #[inline] fn is_neg(self, i: usize) -> bool where Self: Copy, Self::Dual: Copy + ::spenso::structure::representation::RepName { self.dual().is_neg(i) } } };
-        let dual_impls =
-            quote! { #dual_from_impl #dual_try_from_impl #dual_repname_impl #dual_display_impl };
+        let dual_display_impl = quote! {
+            impl ::std::fmt::Display for #dual_type_ident where #dual_type_ident: Copy + Into<::spenso::structure::representation::LibraryRep> {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                    write!(f, "{}", ::spenso::structure::representation::LibraryRep::from(*self))
+                }
+            }
+        };
+        let dual_from_impl = quote! {
+            impl From<#dual_type_ident> for ::spenso::structure::representation::LibraryRep where #dual_type_ident: Copy {
+                fn from(_value: #dual_type_ident) -> Self { #rep_new_dual_call }
+            }
+        };
+        let dual_try_from_impl = quote! {
+            impl TryFrom<::spenso::structure::representation::LibraryRep> for #dual_type_ident where #dual_type_ident: Default {
+                type Error = ::spenso::structure::representation::RepresentationError; fn try_from(rep: ::spenso::structure::representation::LibraryRep) -> ::std::result::Result<Self, Self::Error> {
+                    let base_rep = #rep_new_base_call.expect(concat!("Failed to create dual Rep for ", #name_lit));
+                    let expected_rep = base_rep.dual();
+                    if rep == expected_rep {
+                        ::std::result::Result::Ok(#dual_type_ident::default())
+                    } else {
+                        ::std::result::Result::Err(::spenso::structure::representation::RepresentationError::WrongRepresentationError(expected_rep.to_string(), rep.to_string()))
+                    }
+                }
+            }
+        };
+        let dual_repname_impl = quote! {
+            impl ::spenso::structure::representation::RepName for #dual_type_ident where #dual_type_ident: #dual_bounds, #base_type_ident: #base_bounds {
+                type Base = #base_type_ident;
+                type Dual = #base_type_ident;
+
+                #base_repname_common_impl
+                #[inline]
+                fn dual(self) -> Self::Dual where Self::Dual: Default { #base_type_ident::default() }
+                #[inline]
+                fn is_dual(self) -> bool { true }
+                #[inline]
+                fn matches(&self, _other: &Self::Dual) -> bool { true }
+                #[inline]
+                fn is_neg(self, i: usize) -> bool where Self: Copy, Self::Dual: Copy + ::spenso::structure::representation::RepName {
+                    self.dual().is_neg(i)
+                }
+            }
+        };
+        let dual_impls = quote! {
+            #dual_from_impl
+            #dual_try_from_impl
+            #dual_repname_impl
+            #dual_display_impl
+        };
 
         // 6. Combine generated code
         quote! {

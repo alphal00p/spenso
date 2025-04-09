@@ -1477,7 +1477,7 @@ mod test {
         h.add_assign_fallible(&a);
         let _f = a.mul_fallible(&a);
 
-        Atom::default();
+        // Atom::default();
 
         println!("{}", h);
     }

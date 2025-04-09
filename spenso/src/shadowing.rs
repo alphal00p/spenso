@@ -1,31 +1,15 @@
-use std::{
-    borrow::Cow,
-    ops::Neg,
-    sync::{LazyLock, RwLock},
-};
-
 use crate::{
-    complex::Complex,
-    data::{DenseTensor, SetTensorData, SparseTensor},
-    parametric::{MixedTensor, ParamTensor, TensorCoefficient},
+    data::DenseTensor,
+    parametric::{ParamTensor, TensorCoefficient},
     structure::{
-        concrete_index::{ConcreteIndex, FlatIndex},
-        representation::{ExtendibleReps, LibraryRep, RepName, REPS},
-        slot::IsAbstractSlot,
-        HasName, HasStructure, IndexlessNamedStructure, TensorShell, TensorStructure, ToSymbolic,
+        concrete_index::FlatIndex, representation::LibraryRep, slot::IsAbstractSlot, HasName,
+        HasStructure, TensorShell, TensorStructure, ToSymbolic,
     },
     symbolica_utils::{IntoArgs, IntoSymbol},
     tensor_library::{ExplicitKey, LibraryTensor, TensorLibrary},
 };
-use ahash::AHashMap;
 use anyhow::Result;
-use once_cell::sync::Lazy;
-use symbolica::{
-    atom::{Atom, Symbol},
-    evaluate::FunctionMap,
-    symbol,
-};
-use thiserror::Error;
+use symbolica::{atom::Atom, evaluate::FunctionMap};
 
 /// Trait that enables shadowing of a tensor
 ///
@@ -606,10 +590,7 @@ pub mod test {
     use std::sync::RwLock;
 
     use once_cell::sync::Lazy;
-    use symbolica::{
-        atom::{Atom, Symbol},
-        parse,
-    };
+    use symbolica::{atom::Atom, parse};
 
     use crate::tensor_library::TensorLibrary;
 
@@ -627,11 +608,9 @@ pub mod test {
         parametric::MixedTensor,
         structure::{
             representation::{LibraryRep, RepName, REPS},
-            AtomStructure, HasStructure, IndexlessNamedStructure, NamedStructure, TensorStructure,
-            VecStructure,
+            HasStructure, IndexlessNamedStructure, TensorStructure, VecStructure,
         },
-        symbolica_utils::SerializableAtom,
-        tensor_library::{self, ShadowedStructure},
+        tensor_library::ShadowedStructure,
     };
 
     use super::ExplicitKey;

@@ -3,7 +3,7 @@ use crate::{
     data::SparseOrDense,
     shadowing::test::EXPLICIT_TENSOR_MAP,
     structure::{
-        representation::{BaseRepName, Minkowski, RepName},
+        representation::{Minkowski, RepName},
         NamedStructure, SmartShadowStructure,
     },
     symbolic::SymbolicTensor,

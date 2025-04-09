@@ -2,16 +2,15 @@ use std::{borrow::Cow, ops::Neg, sync::LazyLock};
 
 use crate::{
     complex::{Complex, RealOrComplex, RealOrComplexTensor},
-    data::{DataTensor, DenseTensor, SetTensorData, SparseTensor, StorageTensor},
+    data::{DataTensor, DenseTensor, SetTensorData, SparseTensor},
     parametric::{ConcreteOrParam, MixedTensor, ParamOrConcrete, ParamTensor},
-    scalar::Scalar,
     structure::{
         abstract_index::{AbstractIndex, ABSTRACTIND},
         concrete_index::ConcreteIndex,
         representation::{LibraryRep, RepName, REPS},
         slot::{IsAbstractSlot, Slot, SlotError},
-        AtomStructure, HasName, HasStructure, IndexlessNamedStructure, NamedStructure,
-        StructureError, TensorShell, TensorStructure, VecStructure,
+        HasName, HasStructure, IndexlessNamedStructure, NamedStructure, StructureError,
+        TensorShell, TensorStructure, VecStructure,
     },
     symbolica_utils::{IntoArgs, IntoSymbol},
 };
@@ -54,10 +53,10 @@ pub trait LibraryTensor: SetTensorData + HasStructure<Structure = ExplicitKey> +
     fn with_indices(&self, indices: &[AbstractIndex]) -> Self::WithIndices;
 }
 
-pub struct DataStoreRefTensor<'a, T, S> {
-    data: &'a T,
-    structure: S,
-}
+// pub struct DataStoreRefTensor<'a, T, S> {
+//     data: &'a T,
+//     structure: S,
+// }
 
 impl<D: Clone> LibraryTensor for DataTensor<D, ExplicitKey> {
     type WithIndices = DataTensor<D, ShadowedStructure>;
@@ -330,6 +329,13 @@ impl<T: HasStructure<Structure = ExplicitKey>> TensorLibrary<T> {
             generic_dimension: AHashMap::new(),
         }
     }
+
+    pub fn merge(&mut self, other: &mut Self) {
+        self.explicit_dimension
+            .extend(other.explicit_dimension.drain());
+        self.generic_dimension
+            .extend(other.generic_dimension.drain());
+    }
 }
 
 pub trait TensorLibraryData: Neg<Output = Self> {
@@ -385,11 +391,11 @@ impl<T: TensorLibraryData> TensorLibraryData for ConcreteOrParam<T> {
 }
 
 impl<T: LibraryTensor> TensorLibrary<T> {
-    fn metric_key(rep: LibraryRep) -> ExplicitKey {
+    pub fn metric_key(rep: LibraryRep) -> ExplicitKey {
         ExplicitKey::from_iter([rep.rep(4), rep.rep(4)], symbol!(Self::METRIC_NAME), None)
     }
 
-    fn generic_mink_metric(key: ExplicitKey) -> T
+    pub fn generic_mink_metric(key: ExplicitKey) -> T
     where
         T::SetData: TensorLibraryData,
     {
@@ -413,19 +419,17 @@ impl<T: LibraryTensor> TensorLibrary<T> {
         for rep in REPS.read().unwrap().reps() {
             self.insert_generic(Self::id(*rep), Self::checked_identity);
             if rep.dual() != *rep {
-                let id_metric =
-                    GenericKey::new(symbol!(Self::METRIC_NAME), None, vec![*rep, rep.dual()]);
+                let id_metric = GenericKey::new(ETS.metric, None, vec![*rep, rep.dual()]);
                 self.insert_generic(id_metric, Self::checked_identity);
                 self.insert_generic(Self::id(rep.dual()), Self::checked_identity);
-                let id_metric =
-                    GenericKey::new(symbol!(Self::METRIC_NAME), None, vec![rep.dual(), *rep]);
+                let id_metric = GenericKey::new(ETS.metric, None, vec![rep.dual(), *rep]);
                 self.insert_generic(id_metric, Self::checked_identity);
             }
         }
     }
 
     pub fn id(rep: LibraryRep) -> GenericKey {
-        GenericKey::new(symbol!(Self::ID_NAME), None, vec![rep, rep.dual()])
+        GenericKey::new(ETS.id, None, vec![rep, rep.dual()])
     }
 
     pub fn checked_identity(key: ExplicitKey) -> T

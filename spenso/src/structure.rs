@@ -908,10 +908,7 @@ impl<T: RepName<Dual = T>> ScalarStructure for IndexLess<T> {
     }
 }
 
-impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T>
-// where
-//     T::Base: Rep<Dual = T::Dual, Base = T::Base>,
-{
+impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T> {
     type Slot = Slot<T>;
     // type R = T;
     //
@@ -1288,11 +1285,12 @@ impl<Name, Args, R: RepName> IndexlessNamedStructure<Name, Args, R> {
     #[must_use]
     pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> Self
     where
-        I: Into<Representation<R>>,
-        T: IntoIterator<Item = I>,
+        I: RepName,
+        R: From<I>,
+        T: IntoIterator<Item = Representation<I>>,
     {
         Self {
-            structure: iter.into_iter().map(I::into).collect(),
+            structure: iter.into_iter().map(|a| a.cast()).collect(),
             global_name: Some(name),
             additional_args: args,
         }

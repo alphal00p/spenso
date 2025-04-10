@@ -603,13 +603,13 @@ impl RepName for LibraryRep {
 
         match rep {
             LibraryRep::Dualizable(_) => {
-                if aind == AIND_SYMBOLS.uind {
+                if aind == AIND_SYMBOLS.dind {
                     Ok(rep.dual())
-                } else if aind == AIND_SYMBOLS.dind {
+                } else if aind == AIND_SYMBOLS.uind {
                     Ok(rep)
                 } else if aind == AIND_SYMBOLS.selfdualind {
                     Err(RepresentationError::ExpectedDualStateError(
-                        AIND_SYMBOLS.dind,
+                        AIND_SYMBOLS.uind,
                         aind,
                     ))
                 } else {
@@ -677,7 +677,7 @@ impl RepName for LibraryRep {
             Self::InlineMetric(_) => inner,
             Self::Dualizable(l) => {
                 if *l < 0 {
-                    function!(AIND_SYMBOLS.uind, &inner)
+                    function!(AIND_SYMBOLS.dind, &inner)
                 } else {
                     inner
                 }

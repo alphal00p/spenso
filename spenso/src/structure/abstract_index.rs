@@ -43,7 +43,7 @@ pub struct AindSymbols {
 #[cfg(test)]
 mod test {
 
-    use symbolica::function;
+    use symbolica::{atom::AtomCore, function, id::Replacement, parse_lit};
 
     use super::*;
 
@@ -53,8 +53,43 @@ mod test {
             AIND_SYMBOLS.dind,
             function!(AIND_SYMBOLS.dind, function!(AIND_SYMBOLS.uind, Atom::Zero))
         );
+        assert_eq!(atom, Atom::Zero, "{atom}");
+        let atom = parse_lit!(dind(dind(f(1)))).unwrap();
 
-        assert_eq!(atom, Atom::Zero);
+        assert_eq!(atom, parse_lit!(f(1)).unwrap(), "{atom}");
+
+        let f = symbol!("f");
+        let fa = function!(f, symbol!("a__"));
+
+        let atom = parse_lit!(g(dind(f(1)), f(2))).unwrap();
+        let tgt = parse_lit!(g(f(1), dind(f(2)))).unwrap();
+
+        let rep = atom
+            .replace(fa.clone())
+            .with(function!(AIND_SYMBOLS.dind, fa));
+
+        assert_eq!(rep, tgt, "{rep} not equal to {tgt}");
+
+        let atom = parse_lit!(g(aind(f(1)), f(2))).unwrap();
+        let tgt = parse_lit!(g(f(1), aind(f(2)))).unwrap();
+        let rep = atom.replace_multiple(&[
+            Replacement::new(
+                fa.clone().to_pattern(),
+                function!(AIND_SYMBOLS.aind, fa).to_pattern(),
+            ),
+            Replacement::new(function!(AIND_SYMBOLS.aind, fa).to_pattern(), fa.clone()),
+        ]);
+
+        let rep2 = atom.replace_multiple(&[
+            Replacement::new(function!(AIND_SYMBOLS.aind, fa).to_pattern(), fa.clone()),
+            Replacement::new(
+                fa.clone().to_pattern(),
+                function!(AIND_SYMBOLS.aind, fa).to_pattern(),
+            ),
+        ]);
+
+        assert_eq!(rep, tgt, "{rep} not equal to {tgt}");
+        assert_eq!(rep2, tgt, "{rep2} not equal to {tgt}");
     }
 }
 #[cfg(feature = "shadowing")]
@@ -76,13 +111,17 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
         })
         .unwrap(),
         dind: symbol!(DOWNIND;;|view,out|{
-            if let AtomView::Fun(f)=view{
-                if f.get_nargs()==1{
-                    let arg = f.iter().next().unwrap();
-                    if let AtomView::Fun(f)=arg{
-                        if f.get_nargs()==1{
-                            *out=f.iter().next().unwrap().to_owned();
+            if let AtomView::Fun(dind1)=view{
+                if dind1.get_nargs()==1{
+                    let arg = dind1.iter().next().unwrap();
+                    if let AtomView::Fun(arg)=arg{
+                        if arg.get_nargs()==1{
+                            if arg.get_symbol()==symbol!(DOWNIND){
+                                *out=arg.iter().next().unwrap().to_owned();
                             return true;
+                            }else {
+                                return false;
+                            }
                         }
                     }
                     false

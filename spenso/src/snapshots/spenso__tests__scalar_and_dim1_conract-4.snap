@@ -1,6 +1,6 @@
 ---
-source: src/tests.rs
+source: spenso/src/tests.rs
 expression: f.structure().to_string()
 ---
-102 (lor4)
-28  (lor5)
+102 (mink4)
+28  (mink5)

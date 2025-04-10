@@ -11,15 +11,13 @@ use delegate::delegate;
 use dimension::Dimension;
 use indexmap::IndexMap;
 
-#[cfg(feature = "shadowing")]
-use symbolica::symbol;
 use thiserror::Error;
 
 #[cfg(feature = "shadowing")]
 use crate::{
     data::DenseTensor,
     parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
-    structure::abstract_index::ABSTRACTIND,
+    structure::abstract_index::AIND_SYMBOLS,
     structure::slot::ConstructibleSlot,
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom, SerializableSymbol},
 };
@@ -1040,7 +1038,7 @@ impl<R: RepName> TryFrom<AtomView<'_>> for VecStructure<R> {
 impl<R: RepName> TryFrom<FunView<'_>> for VecStructure<R> {
     type Error = SlotError;
     fn try_from(value: FunView) -> Result<Self, Self::Error> {
-        if value.get_symbol() == symbol!(ABSTRACTIND) {
+        if value.get_symbol() == AIND_SYMBOLS.aind {
             let mut structure: Vec<Slot<R>> = vec![];
 
             for arg in value.iter() {
@@ -1404,7 +1402,7 @@ impl<'a, R: RepName> TryFrom<FunView<'a>> for AtomStructure<R> {
     type Error = StructureError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         match value.get_symbol() {
-            s if s == symbol!(ABSTRACTIND) => {
+            s if s == AIND_SYMBOLS.aind => {
                 let mut structure: Vec<Slot<R>> = vec![];
 
                 for arg in value.iter() {
@@ -1429,7 +1427,7 @@ impl<'a, R: RepName> TryFrom<FunView<'a>> for AtomStructure<R> {
                         }
                         Err(e) => {
                             if let AtomView::Fun(f) = arg {
-                                if f.get_symbol() == symbol!(ABSTRACTIND) {
+                                if f.get_symbol() == AIND_SYMBOLS.aind {
                                     let internal_s = AtomStructure::try_from(f);
 
                                     if let Ok(s) = internal_s {

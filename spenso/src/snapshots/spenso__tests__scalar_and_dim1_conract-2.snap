@@ -1,5 +1,5 @@
 ---
-source: src/tests.rs
+source: spenso/src/tests.rs
 expression: structa.to_string()
 ---
-102 (lor4)
+102 (mink4)

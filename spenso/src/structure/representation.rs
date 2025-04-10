@@ -17,11 +17,7 @@ use std::{
 use std::{hash::Hash, ops::Index};
 
 #[cfg(feature = "shadowing")]
-use crate::{
-    structure::abstract_index::{DOWNIND, SELFDUALIND, UPIND},
-    structure::slot::SlotError,
-    tensor_library::ETS,
-};
+use crate::{structure::slot::SlotError, tensor_library::ETS};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -151,11 +147,6 @@ pub trait RepName:
     fn to_symbolic<It: Into<Atom>>(&self, args: impl IntoIterator<Item = It>) -> Atom {
         let librep: LibraryRep = (*self).into();
         librep.to_symbolic(args)
-    }
-
-    #[cfg(feature = "shadowing")]
-    fn to_pattern(&self, symbol: Symbol) -> Atom {
-        self.to_symbolic([Atom::new_var(symbol)])
     }
 
     fn slot<D: Into<Dimension>, A: Into<AbstractIndex>>(self, dim: D, aind: A) -> Slot<Self>
@@ -602,6 +593,8 @@ impl RepName for LibraryRep {
 
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError> {
+        use super::abstract_index::AIND_SYMBOLS;
+
         let rep = REPS
             .read()
             .unwrap()
@@ -610,13 +603,13 @@ impl RepName for LibraryRep {
 
         match rep {
             LibraryRep::Dualizable(_) => {
-                if aind == symbol!(DOWNIND) {
+                if aind == AIND_SYMBOLS.uind {
                     Ok(rep.dual())
-                } else if aind == symbol!(UPIND) {
+                } else if aind == AIND_SYMBOLS.dind {
                     Ok(rep)
-                } else if aind == symbol!(SELFDUALIND) {
+                } else if aind == AIND_SYMBOLS.selfdualind {
                     Err(RepresentationError::ExpectedDualStateError(
-                        symbol!(UPIND),
+                        AIND_SYMBOLS.dind,
                         aind,
                     ))
                 } else {
@@ -624,11 +617,11 @@ impl RepName for LibraryRep {
                 }
             }
             LibraryRep::SelfDual(_) => {
-                if aind == symbol!(SELFDUALIND) {
+                if aind == AIND_SYMBOLS.selfdualind {
                     Ok(rep)
-                } else if aind == symbol!(UPIND) || aind == symbol!(DOWNIND) {
+                } else if aind == AIND_SYMBOLS.dind || aind == AIND_SYMBOLS.uind {
                     Err(RepresentationError::ExpectedDualStateError(
-                        symbol!(SELFDUALIND),
+                        AIND_SYMBOLS.selfdualind,
                         aind,
                     ))
                 } else {
@@ -636,11 +629,11 @@ impl RepName for LibraryRep {
                 }
             }
             LibraryRep::InlineMetric(_) => {
-                if aind == symbol!(SELFDUALIND) {
+                if aind == AIND_SYMBOLS.selfdualind {
                     Ok(rep)
-                } else if aind == symbol!(UPIND) || aind == symbol!(DOWNIND) {
+                } else if aind == AIND_SYMBOLS.dind || aind == AIND_SYMBOLS.uind {
                     Err(RepresentationError::ExpectedDualStateError(
-                        symbol!(SELFDUALIND),
+                        AIND_SYMBOLS.selfdualind,
                         aind,
                     ))
                 } else {
@@ -671,6 +664,8 @@ impl RepName for LibraryRep {
     ///
 
     fn to_symbolic<It: Into<Atom>>(&self, args: impl IntoIterator<Item = It>) -> Atom {
+        use crate::structure::abstract_index::AIND_SYMBOLS;
+
         let mut fun = FunctionBuilder::new(REPS.read().unwrap()[*self].symbol);
         for a in args {
             fun = fun.add_arg(&a.into());
@@ -682,7 +677,7 @@ impl RepName for LibraryRep {
             Self::InlineMetric(_) => inner,
             Self::Dualizable(l) => {
                 if *l < 0 {
-                    function!(symbol!(DOWNIND), &inner)
+                    function!(AIND_SYMBOLS.uind, &inner)
                 } else {
                     inner
                 }

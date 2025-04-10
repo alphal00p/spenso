@@ -1,5 +1,5 @@
 ---
-source: src/tests.rs
+source: spenso/src/tests.rs
 expression: dense_dense
 ---
 DenseTensor(
@@ -27,14 +27,14 @@ DenseTensor(
         aind: Normal(6),
         rep: Representation(
           dim: Concrete(4),
-          rep: LorentzUp(Lorentz()),
+          rep: Dualizable(1),
         ),
       ),
       Slot(
         aind: Normal(5),
         rep: Representation(
           dim: Concrete(4),
-          rep: LorentzUp(Lorentz()),
+          rep: Dualizable(1),
         ),
       ),
     ],

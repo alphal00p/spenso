@@ -164,7 +164,7 @@ fn rng_is_deterministic() {
 #[test]
 fn indexflatten() {
     let a = test_structure(4, 32);
-    println!("{}", a);
+    // println!("{}", a);
     let idx = vec![1, 5, 0, 2];
     let flatidx = a.flat_index(&idx).unwrap();
     assert_eq!(ExpandedIndex::from(idx), a.expanded_index(flatidx).unwrap());

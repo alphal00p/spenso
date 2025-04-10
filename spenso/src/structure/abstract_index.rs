@@ -8,8 +8,9 @@ use std::hash::Hash;
 use std::ops::AddAssign;
 #[cfg(feature = "shadowing")]
 use symbolica::{
+    atom::Symbol,
     atom::{Atom, AtomView},
-    parse,
+    parse, symbol,
 };
 
 #[cfg(feature = "shadowing")]
@@ -29,6 +30,86 @@ pub const UPIND: &str = "uind";
 pub const DOWNIND: &str = "dind";
 
 pub const SELFDUALIND: &str = "sind";
+
+#[cfg(feature = "shadowing")]
+pub struct AindSymbols {
+    pub aind: Symbol,
+    pub uind: Symbol,
+    pub dind: Symbol,
+    pub selfdualind: Symbol,
+}
+
+#[cfg(feature = "shadowing")]
+#[cfg(test)]
+mod test {
+
+    use symbolica::function;
+
+    use super::*;
+
+    #[test]
+    fn normalisation() {
+        let atom = function!(
+            AIND_SYMBOLS.dind,
+            function!(AIND_SYMBOLS.dind, function!(AIND_SYMBOLS.uind, Atom::Zero))
+        );
+
+        assert_eq!(atom, Atom::Zero);
+    }
+}
+#[cfg(feature = "shadowing")]
+pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
+    std::sync::LazyLock::new(|| AindSymbols {
+        aind: symbol!(ABSTRACTIND),
+        uind: symbol!(UPIND;;|view,out|{
+            if let AtomView::Fun(f)=view{
+                if f.get_nargs()==1{
+                    *out=f.iter().next().unwrap().to_owned();
+                    true
+                }else{
+                    // panic!("can only take one argument")
+                    false
+                }
+            } else{
+                false
+            }
+        })
+        .unwrap(),
+        dind: symbol!(DOWNIND;;|view,out|{
+            if let AtomView::Fun(f)=view{
+                if f.get_nargs()==1{
+                    let arg = f.iter().next().unwrap();
+                    if let AtomView::Fun(f)=arg{
+                        if f.get_nargs()==1{
+                            *out=f.iter().next().unwrap().to_owned();
+                            return true;
+                        }
+                    }
+                    false
+                }else{
+                    // panic!("can only take one argument")
+                    false
+                }
+            } else{
+                false
+            }
+        })
+        .unwrap(),
+        selfdualind: symbol!(SELFDUALIND;;|view,out|{
+            if let AtomView::Fun(f)=view{
+                if f.get_nargs()==1{
+                    *out=f.iter().next().unwrap().to_owned();
+                    true
+                }else{
+                    // panic!("can only take one argument")
+                    false
+                }
+            } else{
+                false
+            }
+        })
+        .unwrap(),
+    });
 
 /// A type that represents the name of an index in a tensor.
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, Serialize, Deserialize)]

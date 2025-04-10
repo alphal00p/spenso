@@ -1,5 +1,5 @@
 ---
-source: src/tests.rs
+source: spenso/src/tests.rs
 expression: "(a, fciter, fiberclass)"
 ---
 (VecStructure(
@@ -8,35 +8,35 @@ expression: "(a, fciter, fiberclass)"
       aind: Normal(221),
       rep: Representation(
         dim: Concrete(4),
-        rep: Euclidean(Euclidean()),
+        rep: SelfDual(0),
       ),
     ),
     Slot(
       aind: Normal(61),
       rep: Representation(
         dim: Concrete(4),
-        rep: LorentzUp(Lorentz()),
+        rep: InlineMetric(0),
       ),
     ),
     Slot(
       aind: Normal(152),
       rep: Representation(
         dim: Concrete(1),
-        rep: Euclidean(Euclidean()),
+        rep: SelfDual(0),
       ),
     ),
     Slot(
       aind: Normal(118),
       rep: Representation(
         dim: Concrete(2),
-        rep: LorentzUp(Lorentz()),
+        rep: InlineMetric(0),
       ),
     ),
     Slot(
       aind: Normal(251),
       rep: Representation(
         dim: Concrete(7),
-        rep: Euclidean(Euclidean()),
+        rep: SelfDual(0),
       ),
     ),
   ],

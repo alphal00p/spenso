@@ -3,7 +3,7 @@ use crate::{
     network::{TensorNetwork, TensorNetworkError},
     parametric::MixedTensor,
     structure::{
-        abstract_index::ABSTRACTIND, representation::LibrarySlot, HasName, HasStructure,
+        abstract_index::AIND_SYMBOLS, representation::LibrarySlot, HasName, HasStructure,
         NamedStructure, StructureContract, TensorStructure, ToSymbolic, VecStructure,
     },
     symbolica_utils::{IntoArgs, IntoSymbol},
@@ -11,7 +11,6 @@ use crate::{
 };
 
 use symbolica::atom::{Atom, AtomView, Symbol};
-use symbolica::symbol;
 
 /// A fully symbolic tensor, with no concrete values.
 ///
@@ -169,7 +168,7 @@ impl HasName for SymbolicTensor {
             AtomView::Fun(f) => {
                 for arg in f.iter() {
                     if let AtomView::Fun(f) = arg {
-                        if f.get_symbol() != symbol!(ABSTRACTIND) {
+                        if f.get_symbol() != AIND_SYMBOLS.aind {
                             args.push(arg.to_owned());
                         }
                     } else {

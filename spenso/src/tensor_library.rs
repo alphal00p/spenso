@@ -5,7 +5,7 @@ use crate::{
     data::{DataTensor, DenseTensor, SetTensorData, SparseTensor},
     parametric::{ConcreteOrParam, MixedTensor, ParamOrConcrete, ParamTensor},
     structure::{
-        abstract_index::{AbstractIndex, ABSTRACTIND},
+        abstract_index::{AbstractIndex, AIND_SYMBOLS},
         concrete_index::ConcreteIndex,
         representation::{LibraryRep, RepName, REPS},
         slot::{IsAbstractSlot, Slot, SlotError},
@@ -99,7 +99,7 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
     type Error = StructureError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         match value.get_symbol() {
-            s if s == symbol!(ABSTRACTIND) => {
+            s if s == AIND_SYMBOLS.aind => {
                 let mut structure: Vec<Slot<LibraryRep>> = vec![];
 
                 for arg in value.iter() {
@@ -124,7 +124,7 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
                         }
                         Err(e) => {
                             if let AtomView::Fun(f) = arg {
-                                if f.get_symbol() == symbol!(ABSTRACTIND) {
+                                if f.get_symbol() == AIND_SYMBOLS.aind {
                                     let internal_s = Self::try_from(f);
 
                                     if let Ok(s) = internal_s {

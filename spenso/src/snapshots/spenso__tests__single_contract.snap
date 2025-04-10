@@ -1,5 +1,5 @@
 ---
-source: src/tests.rs
+source: spenso/src/tests.rs
 expression: "(structa, structb)"
 ---
 (VecStructure(
@@ -8,14 +8,14 @@ expression: "(structa, structb)"
       aind: Normal(1),
       rep: Representation(
         dim: Concrete(4),
-        rep: LorentzUp(Lorentz()),
+        rep: Dualizable(1),
       ),
     ),
     Slot(
       aind: Normal(2),
       rep: Representation(
         dim: Concrete(4),
-        rep: LorentzUp(Lorentz()),
+        rep: Dualizable(1),
       ),
     ),
   ],
@@ -25,25 +25,21 @@ expression: "(structa, structb)"
       aind: Normal(3),
       rep: Representation(
         dim: Concrete(4),
-        rep: LorentzDown(Dual(
-          inner: Lorentz(),
-        )),
+        rep: Dualizable(-1),
       ),
     ),
     Slot(
       aind: Normal(1),
       rep: Representation(
         dim: Concrete(4),
-        rep: LorentzDown(Dual(
-          inner: Lorentz(),
-        )),
+        rep: Dualizable(-1),
       ),
     ),
     Slot(
       aind: Normal(4),
       rep: Representation(
         dim: Concrete(5),
-        rep: LorentzUp(Lorentz()),
+        rep: Dualizable(1),
       ),
     ),
   ],

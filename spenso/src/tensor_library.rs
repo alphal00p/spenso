@@ -50,7 +50,7 @@ pub trait LibraryTensor: SetTensorData + HasStructure<Structure = ExplicitKey> +
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::SetData)>,
     ) -> Result<Self>;
 
-    fn with_indices(&self, indices: &[AbstractIndex]) -> Self::WithIndices;
+    fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError>;
 }
 
 // pub struct DataStoreRefTensor<'a, T, S> {
@@ -76,10 +76,10 @@ impl<D: Clone> LibraryTensor for DataTensor<D, ExplicitKey> {
         Ok(DataTensor::Sparse(SparseTensor::from_data(data, key)?))
     }
 
-    fn with_indices(&self, indices: &[AbstractIndex]) -> Self::WithIndices {
-        let new_structure = self.structure().clone().to_indexed(indices);
+    fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError> {
+        let new_structure = self.structure().clone().to_indexed(indices)?;
 
-        match self {
+        Ok(match self {
             DataTensor::Dense(d) => DataTensor::Dense(DenseTensor {
                 data: d.data.clone(),
                 structure: new_structure,
@@ -88,7 +88,7 @@ impl<D: Clone> LibraryTensor for DataTensor<D, ExplicitKey> {
                 elements: s.elements.clone(),
                 structure: new_structure,
             }),
-        }
+        })
     }
 }
 
@@ -180,15 +180,15 @@ impl<D: Clone + Default> LibraryTensor for RealOrComplexTensor<D, ExplicitKey> {
         Ok(RealOrComplexTensor::Complex(complex_tensor))
     }
 
-    fn with_indices(&self, indices: &[AbstractIndex]) -> Self::WithIndices {
+    fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError> {
         match self {
             RealOrComplexTensor::Real(real_tensor) => {
-                let new_real_tensor = real_tensor.with_indices(indices);
-                RealOrComplexTensor::Real(new_real_tensor)
+                let new_real_tensor = real_tensor.with_indices(indices)?;
+                Ok(RealOrComplexTensor::Real(new_real_tensor))
             }
             RealOrComplexTensor::Complex(complex_tensor) => {
-                let new_complex_tensor = complex_tensor.with_indices(indices);
-                RealOrComplexTensor::Complex(new_complex_tensor)
+                let new_complex_tensor = complex_tensor.with_indices(indices)?;
+                Ok(RealOrComplexTensor::Complex(new_complex_tensor))
             }
         }
     }
@@ -211,12 +211,12 @@ impl LibraryTensor for ParamTensor<ExplicitKey> {
         Ok(ParamTensor::composite(DataTensor::from_sparse(key, data)?))
     }
 
-    fn with_indices(&self, indices: &[AbstractIndex]) -> Self::WithIndices {
-        let new_tensor = self.tensor.with_indices(indices);
-        ParamTensor {
+    fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError> {
+        let new_tensor = self.tensor.with_indices(indices)?;
+        Ok(ParamTensor {
             tensor: new_tensor,
             param_type: self.param_type,
-        }
+        })
     }
 }
 
@@ -262,11 +262,11 @@ impl<D: Default + Clone> LibraryTensor for MixedTensor<D, ExplicitKey> {
         )?))
     }
 
-    fn with_indices(&self, indices: &[AbstractIndex]) -> Self::WithIndices {
-        match self {
-            ParamOrConcrete::Concrete(c) => ParamOrConcrete::Concrete(c.with_indices(indices)),
-            ParamOrConcrete::Param(p) => ParamOrConcrete::Param(p.with_indices(indices)),
-        }
+    fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError> {
+        Ok(match self {
+            ParamOrConcrete::Concrete(c) => ParamOrConcrete::Concrete(c.with_indices(indices)?),
+            ParamOrConcrete::Param(p) => ParamOrConcrete::Param(p.with_indices(indices)?),
+        })
     }
 }
 

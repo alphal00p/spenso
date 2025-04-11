@@ -890,13 +890,20 @@ impl<T: RepName> IndexLess<T> {
         Self { structure: vec![] }
     }
 
-    pub fn to_indexed(self, indices: &[AbstractIndex]) -> Vec<Slot<T>> {
-        indices
+    pub fn to_indexed(self, indices: &[AbstractIndex]) -> Result<Vec<Slot<T>>, StructureError> {
+        if self.structure.len() != indices.len() {
+            return Err(StructureError::WrongNumberOfArguments(
+                indices.len(),
+                self.structure.len(),
+            ));
+        }
+
+        Ok(indices
             .iter()
             .cloned()
             .zip(self.structure.iter().cloned())
             .map(|(i, r)| Representation::slot(&r, i))
-            .collect()
+            .collect())
     }
 }
 
@@ -1294,12 +1301,15 @@ impl<Name, Args, R: RepName> IndexlessNamedStructure<Name, Args, R> {
         }
     }
 
-    pub fn to_indexed(self, indices: &[AbstractIndex]) -> NamedStructure<Name, Args, R> {
-        NamedStructure {
-            structure: VecStructure::from_iter(self.structure.to_indexed(indices)),
+    pub fn to_indexed(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<NamedStructure<Name, Args, R>, StructureError> {
+        Ok(NamedStructure {
+            structure: VecStructure::from_iter(self.structure.to_indexed(indices)?),
             global_name: self.global_name,
             additional_args: self.additional_args,
-        }
+        })
     }
 }
 
@@ -1385,6 +1395,8 @@ pub enum StructureError {
     SlotError(#[from] SlotError),
     #[error("empty structure {0}")]
     EmptyStructure(SlotError),
+    #[error("wrong number of arguments {0}, expected {1}")]
+    WrongNumberOfArguments(usize, usize),
 }
 
 #[cfg(feature = "shadowing")]

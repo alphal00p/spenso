@@ -50,7 +50,7 @@ pub trait Shadowable:
         library
             .get(&key)
             .ok()
-            .map(|t| t.with_indices(&self.external_indices()))
+            .map(|t| t.with_indices(&self.external_indices()).unwrap())
     }
 }
 

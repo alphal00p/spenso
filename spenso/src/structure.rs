@@ -2212,6 +2212,8 @@ where
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
+    use crate::tensor_library::ShadowedStructure;
+
     use super::representation::Lorentz;
     use super::*;
     use symbolica::atom::AtomCore;
@@ -2227,6 +2229,10 @@ mod shadowing_tests {
                 Ok(named_structure) => println!("{}", named_structure),
                 Err(e) => println!("{}", e),
             }
+        }
+
+        if let AtomView::Fun(f) = parse!("gamma(1,mink(1,2),mink(1,2))").unwrap().as_view() {
+            let a = ShadowedStructure::try_from(f).unwrap();
         }
     }
 }

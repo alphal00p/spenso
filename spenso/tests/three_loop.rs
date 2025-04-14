@@ -3,6 +3,7 @@ use std::{fs::File, io::BufReader};
 use ahash::{AHashMap, HashMap, HashMapExt};
 
 use approx::{assert_relative_eq, RelativeEq};
+use common::WEYLIB;
 use spenso::{
     complex::Complex,
     network::{Levels, TensorNetwork},
@@ -16,80 +17,39 @@ use symbolica::{
     domains::rational::Rational,
     evaluate::{CompileOptions, FunctionMap, InlineASM},
     id::Replacement,
-    parse, symbol,
+    parse, parse_lit, symbol,
 };
+
+mod common;
 
 use symbolica::domains::float::Complex as SymComplex;
 
 fn main() {
-    let _expr = concat!("-64/729*G^4*ee^6",
-    "*(MT*id(aind(bis(4,47),bis(4,135)))+Q(15,aind(lor(4,149)))*γ(aind(lor(4,149),bis(4,47),bis(4,135))))",
-    "*(MT*id(aind(bis(4,83),bis(4,46)))+Q(6,aind(lor(4,138)))*γ(aind(lor(4,138),bis(4,83),bis(4,46))))",
-    "*(MT*id(aind(bis(4,88),bis(4,82)))+γ(aind(lor(4,140),bis(4,88),bis(4,82)))*Q(7,aind(lor(4,140))))",
-    "*(MT*id(aind(bis(4,96),bis(4,142)))+γ(aind(lor(4,141),bis(4,96),bis(4,142)))*Q(8,aind(lor(4,141))))",
-    "*(MT*id(aind(bis(4,103),bis(4,95)))+γ(aind(lor(4,143),bis(4,103),bis(4,95)))*Q(9,aind(lor(4,143))))",
-    "*(MT*id(aind(bis(4,110),bis(4,102)))+γ(aind(lor(4,144),bis(4,110),bis(4,102)))*Q(10,aind(lor(4,144))))",
-    "*(MT*id(aind(bis(4,117),bis(4,109)))+γ(aind(lor(4,145),bis(4,117),bis(4,109)))*Q(11,aind(lor(4,145))))",
-    "*(MT*id(aind(bis(4,122),bis(4,116)))+γ(aind(lor(4,146),bis(4,122),bis(4,116)))*Q(12,aind(lor(4,146))))",
-    "*(MT*id(aind(bis(4,129),bis(4,123)))+γ(aind(lor(4,147),bis(4,129),bis(4,123)))*Q(13,aind(lor(4,147))))",
-    "*(MT*id(aind(bis(4,134),bis(4,130)))+γ(aind(lor(4,148),bis(4,134),bis(4,130)))*Q(14,aind(lor(4,148))))",
-    // "*id(coaf(3,46),cof(3,47))*id(coaf(3,82),cof(3,83))*id(coaf(3,95),cof(3,96))*id(coaf(3,109),cof(3,110))*id(coaf(3,116),cof(3,117))*id(coaf(3,130),cof(3,129))",
-    "*γ(aind(lor(4,45),bis(4,47),bis(4,46)))*γ(aind(lor(4,81),bis(4,83),bis(4,82)))*γ(aind(lor(4,87),bis(4,88),bis(4,142)))*γ(aind(lor(4,94),bis(4,96),bis(4,95)))",
-    "*γ(aind(lor(4,101),bis(4,103),bis(4,102)))*γ(aind(lor(4,108),bis(4,110),bis(4,109)))*γ(aind(lor(4,115),bis(4,117),bis(4,116)))*γ(aind(lor(4,121),bis(4,122),bis(4,123)))",
-    "*γ(aind(lor(4,128),bis(4,129),bis(4,130)))*γ(aind(lor(4,133),bis(4,134),bis(4,135)))*Metric(aind(lor(4,121),lor(4,87)))*Metric(aind(lor(4,133),lor(4,101)))",
-    // "*T(coad(8,87),cof(3,88),coaf(3,46))*T(coad(8,101),cof(3,103),coaf(3,102))*T(coad(8,121),cof(3,122),coaf(3,123))*T(coad(8,133),cof(3,134),coaf(3,135))",
-    "*ϵ(0,aind(lor(4,45)))*ϵ(1,aind(lor(4,81)))*ϵbar(2,aind(lor(4,94)))*ϵbar(3,aind(lor(4,108)))*ϵbar(4,aind(lor(4,115)))*ϵbar(5,aind(lor(4,128)))"
-);
+    // let atom = parse_lit!(
+    //     -64 / 729 * G
+    //         ^ 4 * ee
+    //         ^ 6
+    // *(MT*id(bis(4,47),bis(4,135))+Q(15,mink(4,149)))*gamma(mink(4,149),bis(4,47),bis(4,135)))
+    // *(MT*id(bis(4,83),bis(4,46))+Q(6,mink(4,138)))*gamma(mink(4,138),bis(4,83),bis(4,46))
+    // *(MT*id(bis(4,88),bis(4,82))+gamma(mink(4,140),bis(4,88),bis(4,82)))*Q(7,mink(4,140))
+    // *(MT*id(bis(4,96),bis(4,142))+gamma(mink(4,141),bis(4,96),bis(4,142)))*Q(8,mink(4,141))
+    // *(MT*id(bis(4,103),bis(4,95))+gamma(mink(4,143),bis(4,103),bis(4,95)))*Q(9,mink(4,143))
+    // *(MT*id(bis(4,110),bis(4,102))+gamma(mink(4,144),bis(4,110),bis(4,102)))*Q(10,mink(4,144))
+    // *(MT*id(bis(4,117),bis(4,109))+gamma(mink(4,145),bis(4,117),bis(4,109)))*Q(11,mink(4,145))
+    // *(MT*id(bis(4,122),bis(4,116))+gamma(mink(4,146),bis(4,122),bis(4,116)))*Q(12,mink(4,146))
+    // *(MT*id(bis(4,129),bis(4,123))+gamma(mink(4,147),bis(4,129),bis(4,123)))*Q(13,mink(4,147))
+    // *(MT*id(bis(4,134),bis(4,130))+gamma(mink(4,148),bis(4,134),bis(4,130)))*Q(14,mink(4,148))
+    // *gamma(mink(4,45),bis(4,47),bis(4,46))*gamma(mink(4,81),bis(4,83),bis(4,82))*gamma(mink(4,87),bis(4,88),bis(4,142))*gamma(mink(4,94),bis(4,96),bis(4,95))
+    // *gamma(mink(4,101),bis(4,103),bis(4,102))*gamma(mink(4,108),bis(4,110),bis(4,109))*gamma(mink(4,115),bis(4,117),bis(4,116))*gamma(mink(4,121),bis(4,122),bis(4,123))
+    // *gamma(mink(4,128),bis(4,129),bis(4,130))*gamma(mink(4,133),bis(4,134),bis(4,135))*g(mink(4,121),mink(4,87))*g(mink(4,133),mink(4,101))).unwrap();
+    // *ϵ(0,mink(4,45))*ϵ(1,mink(4,81))*ϵbar(2,mink(4,94))*ϵbar(3,mink(4,108))*ϵbar(4,lord(4,115))*ϵbar(5,mink(4,128))
+    // *id(coaf(3,46),cof(3,47))*id(coaf(3,82),cof(3,83))*id(coaf(3,95),cof(3,96))*id(coaf(3,109),cof(3,110))*id(coaf(3,116),cof(3,117))*id(coaf(3,130),cof(3,129))",
+    // *T(coad(8,87),cof(3,88),coaf(3,46))*T(coad(8,101),cof(3,103),coaf(3,102))*T(coad(8,121),cof(3,122),coaf(3,123))*T(coad(8,133),cof(3,134),coaf(3,135))",
+    let sym_tensor: SymbolicTensor = Atom::Zero.try_into().unwrap();
 
-    let _expr=concat!("-64/729*ee^6*G^4",
-    "*(MT*id(aind(bis(4,105),bis(4,175)))+Q(15,aind(loru(4,192)))*γ(aind(lord(4,192),bis(4,105),bis(4,175))))",
-    "*(MT*id(aind(bis(4,137),bis(4,104)))+Q(6,aind(loru(4,182)))*γ(aind(lord(4,182),bis(4,137),bis(4,104))))",
-    "*(MT*id(aind(bis(4,141),bis(4,136)))+Q(7,aind(loru(4,183)))*γ(aind(lord(4,183),bis(4,141),bis(4,136))))",
-    "*(MT*id(aind(bis(4,146),bis(4,185)))+Q(8,aind(loru(4,184)))*γ(aind(lord(4,184),bis(4,146),bis(4,185))))",
-    "*(MT*id(aind(bis(4,151),bis(4,145)))+Q(9,aind(loru(4,186)))*γ(aind(lord(4,186),bis(4,151),bis(4,145))))",
-    "*(MT*id(aind(bis(4,156),bis(4,150)))+Q(10,aind(loru(4,187)))*γ(aind(lord(4,187),bis(4,156),bis(4,150))))",
-    "*(MT*id(aind(bis(4,161),bis(4,155)))+Q(11,aind(loru(4,188)))*γ(aind(lord(4,188),bis(4,161),bis(4,155))))",
-    "*(MT*id(aind(bis(4,166),bis(4,160)))+Q(12,aind(loru(4,189)))*γ(aind(lord(4,189),bis(4,166),bis(4,160))))",
-    "*(MT*id(aind(bis(4,171),bis(4,165)))+Q(13,aind(loru(4,190)))*γ(aind(lord(4,190),bis(4,171),bis(4,165))))",
-    "*(MT*id(aind(bis(4,176),bis(4,170)))+Q(14,aind(loru(4,191)))*γ(aind(lord(4,191),bis(4,176),bis(4,170))))",
-    "*Metric(aind(lord(4,167),lord(4,142)))*Metric(aind(lord(4,177),lord(4,152)))",
-    // "*T(aind(coad(8,142),cof(3,141),coaf(3,104)))*T(aind(coad(8,152),cof(3,151),coaf(3,150)))*T(aind(coad(8,167),cof(3,166),coaf(3,165)))*T(aind(coad(8,177),cof(3,176),coaf(3,175)))",
-    // "*id(aind(coaf(3,104),cof(3,105)))*id(aind(coaf(3,136),cof(3,137)))*id(aind(coaf(3,145),cof(3,146)))*id(aind(coaf(3,155),cof(3,156)))*id(aind(coaf(3,160),cof(3,161)))*id(aind(coaf(3,170),cof(3,171)))",
-    "*γ(aind(loru(4,106),bis(4,105),bis(4,104)))",
-    "*γ(aind(loru(4,138),bis(4,137),bis(4,136)))",
-    "*γ(aind(loru(4,142),bis(4,141),bis(4,104)))",
-    "*γ(aind(loru(4,147),bis(4,146),bis(4,145)))",
-    "*γ(aind(loru(4,152),bis(4,151),bis(4,150)))",
-    "*γ(aind(loru(4,157),bis(4,156),bis(4,155)))",
-    "*γ(aind(loru(4,162),bis(4,161),bis(4,160)))",
-    "*γ(aind(loru(4,167),bis(4,166),bis(4,165)))",
-    "*γ(aind(loru(4,172),bis(4,171),bis(4,170)))",
-    "*γ(aind(loru(4,177),bis(4,176),bis(4,175)))",
-    "*ϵ(0,aind(lord(4,106)))*ϵ(1,aind(lord(4,138)))*ϵbar(2,aind(lord(4,147)))*ϵbar(3,aind(lord(4,157)))*ϵbar(4,aind(lord(4,162)))*ϵbar(5,aind(lord(4,172)))");
-
-    let expr = concat!("-64/729*G^4*ee^6",
-    "*(MT*id(aind(bis(4,47),bis(4,135)))+Q(15,aind(loru(4,149)))*γ(aind(lord(4,149),bis(4,47),bis(4,135))))",
-    "*(MT*id(aind(bis(4,83),bis(4,46)))+Q(6,aind(loru(4,138)))*γ(aind(lord(4,138),bis(4,83),bis(4,46))))",
-    "*(MT*id(aind(bis(4,88),bis(4,82)))+γ(aind(lord(4,140),bis(4,88),bis(4,82)))*Q(7,aind(loru(4,140))))",
-    "*(MT*id(aind(bis(4,96),bis(4,142)))+γ(aind(lord(4,141),bis(4,96),bis(4,142)))*Q(8,aind(loru(4,141))))",
-    "*(MT*id(aind(bis(4,103),bis(4,95)))+γ(aind(lord(4,143),bis(4,103),bis(4,95)))*Q(9,aind(loru(4,143))))",
-    "*(MT*id(aind(bis(4,110),bis(4,102)))+γ(aind(lord(4,144),bis(4,110),bis(4,102)))*Q(10,aind(loru(4,144))))",
-    "*(MT*id(aind(bis(4,117),bis(4,109)))+γ(aind(lord(4,145),bis(4,117),bis(4,109)))*Q(11,aind(loru(4,145))))",
-    "*(MT*id(aind(bis(4,122),bis(4,116)))+γ(aind(lord(4,146),bis(4,122),bis(4,116)))*Q(12,aind(loru(4,146))))",
-    "*(MT*id(aind(bis(4,129),bis(4,123)))+γ(aind(lord(4,147),bis(4,129),bis(4,123)))*Q(13,aind(loru(4,147))))",
-    "*(MT*id(aind(bis(4,134),bis(4,130)))+γ(aind(lord(4,148),bis(4,134),bis(4,130)))*Q(14,aind(loru(4,148))))",
-    // "*id(coaf(3,46),cof(3,47))*id(coaf(3,82),cof(3,83))*id(coaf(3,95),cof(3,96))*id(coaf(3,109),cof(3,110))*id(coaf(3,116),cof(3,117))*id(coaf(3,130),cof(3,129))",
-    "*γ(aind(loru(4,45),bis(4,47),bis(4,46)))*γ(aind(loru(4,81),bis(4,83),bis(4,82)))*γ(aind(loru(4,87),bis(4,88),bis(4,142)))*γ(aind(loru(4,94),bis(4,96),bis(4,95)))",
-    "*γ(aind(loru(4,101),bis(4,103),bis(4,102)))*γ(aind(loru(4,108),bis(4,110),bis(4,109)))*γ(aind(loru(4,115),bis(4,117),bis(4,116)))*γ(aind(loru(4,121),bis(4,122),bis(4,123)))",
-    "*γ(aind(loru(4,128),bis(4,129),bis(4,130)))*γ(aind(loru(4,133),bis(4,134),bis(4,135)))*Metric(aind(lord(4,121),lord(4,87)))*Metric(aind(lord(4,133),lord(4,101)))",
-    // "*T(coad(8,87),cof(3,88),coaf(3,46))*T(coad(8,101),cof(3,103),coaf(3,102))*T(coad(8,121),cof(3,122),coaf(3,123))*T(coad(8,133),cof(3,134),coaf(3,135))",
-    "*ϵ(0,aind(lord(4,45)))*ϵ(1,aind(lord(4,81)))*ϵbar(2,aind(lord(4,94)))*ϵbar(3,aind(lord(4,108)))*ϵbar(4,aind(lord(4,115)))*ϵbar(5,aind(lord(4,128)))"
-);
-    let atom = parse!(expr).unwrap();
-
-    let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
-
-    let mut network = sym_tensor.to_network().unwrap();
+    let mut network = sym_tensor
+        .to_network(WEYLIB.read().as_ref().unwrap())
+        .unwrap();
 
     let file = File::open("./examples/data.json").unwrap();
     let reader = BufReader::new(file);
@@ -182,10 +142,10 @@ fn main() {
         epsilon = 0.1
     );
 
-    let counting_network: TensorNetwork<
-        MixedTensor<_, SmartShadowStructure<_, _>>,
-        SerializableAtom,
-    > = network.clone().cast().replace_multiple(&replacements);
+    let mut counting_network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
+        network.clone().cast();
+
+    // (&replacements);
     let mut values: Vec<SymComplex<f64>> = data_atom_map.1.iter().map(|c| (*c).into()).collect();
     values.push(SymComplex::from(Complex::i()));
 
@@ -210,7 +170,7 @@ fn main() {
         epsilon = 0.1
     );
 
-    let mut levels: Levels<_, _> = counting_network.clone().into();
+    let mut levels: Levels<_, _, Atom> = counting_network.clone().into();
     let mut levels2 = levels.clone();
 
     let mut eval_tree_leveled_tensor = levels

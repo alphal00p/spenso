@@ -3,6 +3,7 @@ use crate::{
     data::SparseOrDense,
     shadowing::test::EXPLICIT_TENSOR_MAP,
     structure::{
+        abstract_index::{ABSTRACTIND, AIND_SYMBOLS},
         representation::{Minkowski, RepName},
         NamedStructure, SmartShadowStructure,
     },
@@ -28,8 +29,66 @@ fn other_network() {
 }
 
 #[test]
+fn parsing_id() {
+    let expr = "γ(aind(mink(4,192),euc(4,105),euc(4,175)))";
+    let atom = parse!(expr).unwrap();
+
+    let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
+
+    let mut network = sym_tensor
+        .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
+        .unwrap();
+
+    // for (id, n) in &network.graph.nodes {
+    //     println!("Node id: {:?}", id);
+    //     println!("Structure {}", n.structure())
+    // }
+    // println!("{}", network.dot());
+    network.contract().unwrap();
+    // println!("Network res: {}", network.result().unwrap().0);
+}
+
+#[test]
+fn parsing_single_contract() {
+    let expr = "Q(15,mink(4,192))*γ(aind(mink(4,192),euc(4,105),euc(4,175)))";
+    let atom = parse!(expr).unwrap();
+
+    let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
+
+    let mut network = sym_tensor
+        .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
+        .unwrap();
+
+    println!("{}", network.dot());
+    network.contract().unwrap();
+    println!("Network res: {}", network.result().unwrap().0);
+}
+
+#[test]
+fn parsing_addition_and_mul() {
+    let expr = "(MT*id(aind(euc(4,105),euc(4,175)))+Q(15,aind(mink(4,192)))*γ(aind(mink(4,192),euc(4,105),euc(4,175))))";
+    let atom = parse!(expr).unwrap();
+
+    let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
+
+    let mut network = sym_tensor
+        .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
+        .unwrap();
+
+    for (id, n) in &network.graph.nodes {
+        println!("Node id: {:?}", id);
+        println!("Structure {}", n.structure())
+    }
+
+    network.contract().unwrap();
+    println!("Network res: {}", network.result().unwrap().0);
+}
+
+#[test]
 fn pslash_parse() {
-    let expr = "Q(15,dind(lor(4,75257)))   *γ(lor(4,75257),bis(4,1),bis(4,18))";
+    let _ = AIND_SYMBOLS.dind;
+
+    let expr = "Q(15,dind(lor(4,75257)))   *γ(lor(4,75257),euc(4,1),euc(4,18))";
     let atom = parse!(expr).unwrap();
 
     let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
@@ -47,16 +106,16 @@ fn three_loop_photon_parse() {
 
     let expr = concat!(
         "-64/729*ee^6*G^4",
-        "*(MT*id(bis(4,1),bis(4,18)))", //+Q(15,aind(loru(4,75257)))    *γ(aind(loru(4,75257),bis(4,1),bis(4,18))))",
-        "*(MT*id(bis(4,3),bis(4,0)))", //+Q(6,aind(loru(4,17)))        *γ(aind(loru(4,17),bis(4,3),bis(4,0))))",
-        "*(MT*id(bis(4,5),bis(4,2))   )", //+Q(7,aind(loru(4,35)))        *γ(aind(loru(4,35),bis(4,5),bis(4,2))))",
-        "*(MT*id(bis(4,7),bis(4,4))   )", //+Q(8,aind(loru(4,89)))        *γ(aind(loru(4,89),bis(4,7),bis(4,4))))",
-        "*(MT*id(bis(4,9),bis(4,6))   )", //+Q(9,aind(loru(4,233)))       *γ(aind(loru(4,233),bis(4,9),bis(4,6))))",
-        "*(MT*id(bis(4,11),bis(4,8))  )", //+Q(10,aind(loru(4,611)))      *γ(aind(loru(4,611),bis(4,11),bis(4,8))))",
-        "*(MT*id(bis(4,13),bis(4,10)) )", //+Q(11,aind(loru(4,1601)))    *γ(aind(loru(4,1601),bis(4,13),bis(4,10))))",
-        "*(MT*id(bis(4,15),bis(4,12)) )", //+Q(12,aind(loru(4,4193)))    *γ(aind(loru(4,4193),bis(4,15),bis(4,12))))",
-        "*(MT*id(bis(4,17),bis(4,14)) )", //+Q(13,aind(loru(4,10979)))   *γ(aind(loru(4,10979),bis(4,17),bis(4,14))))",
-        "*(MT*id(bis(4,19),bis(4,16)) )", //+Q(14,aind(loru(4,28745)))   *γ(aind(loru(4,28745),bis(4,19),bis(4,16))))",
+        "*(MT*id(euc(4,1),euc(4,18)))", //+Q(15,aind(loru(4,75257)))    *γ(aind(loru(4,75257),euc(4,1),euc(4,18))))",
+        "*(MT*id(euc(4,3),euc(4,0)))", //+Q(6,aind(loru(4,17)))        *γ(aind(loru(4,17),euc(4,3),euc(4,0))))",
+        "*(MT*id(euc(4,5),euc(4,2))   )", //+Q(7,aind(loru(4,35)))        *γ(aind(loru(4,35),euc(4,5),euc(4,2))))",
+        "*(MT*id(euc(4,7),euc(4,4))   )", //+Q(8,aind(loru(4,89)))        *γ(aind(loru(4,89),euc(4,7),euc(4,4))))",
+        "*(MT*id(euc(4,9),euc(4,6))   )", //+Q(9,aind(loru(4,233)))       *γ(aind(loru(4,233),euc(4,9),euc(4,6))))",
+        "*(MT*id(euc(4,11),euc(4,8))  )", //+Q(10,aind(loru(4,611)))      *γ(aind(loru(4,611),euc(4,11),euc(4,8))))",
+        "*(MT*id(euc(4,13),euc(4,10)) )", //+Q(11,aind(loru(4,1601)))    *γ(aind(loru(4,1601),euc(4,13),euc(4,10))))",
+        "*(MT*id(euc(4,15),euc(4,12)) )", //+Q(12,aind(loru(4,4193)))    *γ(aind(loru(4,4193),euc(4,15),euc(4,12))))",
+        "*(MT*id(euc(4,17),euc(4,14)) )", //+Q(13,aind(loru(4,10979)))   *γ(aind(loru(4,10979),euc(4,17),euc(4,14))))",
+        "*(MT*id(euc(4,19),euc(4,16)) )", //+Q(14,aind(loru(4,28745)))   *γ(aind(loru(4,28745),euc(4,19),euc(4,16))))",
         "*Metric(mink(4,13),mink(4,8))",
         "*Metric(mink(4,15),mink(4,10))",
         // "*T(coad(8,9),cof(3,8),coaf(3,7))",
@@ -67,16 +126,16 @@ fn three_loop_photon_parse() {
         // "*id(coaf(3,8),cof(3,5))*id(coaf(3,10),cof(3,11))*id(coaf(3,11),cof(3,7))*id(coaf(3,13),cof(3,10))",
         // "*id(coaf(3,15),cof(3,16))*id(coaf(3,16),cof(3,12))*id(coaf(3,17),cof(3,18))*id(coaf(3,18),cof(3,15))",
         // "*id(coaf(3,20),cof(3,17))*id(coaf(3,22),cof(3,23))*id(coaf(3,23),cof(3,19))*id(coaf(3,25),cof(3,22))*id(coad(8,21),coad(8,9))*id(coad(8,26),coad(8,14))",
-        "*γ(mink(4,6),bis(4,1),bis(4,0))",
-        "*γ(mink(4,7),bis(4,3),bis(4,2))",
-        "*γ(mink(4,8),bis(4,5),bis(4,4))",
-        "*γ(mink(4,9),bis(4,7),bis(4,6))",
-        "*γ(mink(4,10),bis(4,9),bis(4,8))",
-        "*γ(mink(4,11),bis(4,11),bis(4,10))",
-        "*γ(mink(4,12),bis(4,13),bis(4,12))",
-        "*γ(mink(4,13),bis(4,15),bis(4,14))",
-        "*γ(mink(4,14),bis(4,17),bis(4,16))",
-        "*γ(mink(4,15),bis(4,19),bis(4,18))",
+        "*γ(mink(4,6),euc(4,1),euc(4,0))",
+        "*γ(mink(4,7),euc(4,3),euc(4,2))",
+        "*γ(mink(4,8),euc(4,5),euc(4,4))",
+        "*γ(mink(4,9),euc(4,7),euc(4,6))",
+        "*γ(mink(4,10),euc(4,9),euc(4,8))",
+        "*γ(mink(4,11),euc(4,11),euc(4,10))",
+        "*γ(mink(4,12),euc(4,13),euc(4,12))",
+        "*γ(mink(4,13),euc(4,15),euc(4,14))",
+        "*γ(mink(4,14),euc(4,17),euc(4,16))",
+        "*γ(mink(4,15),euc(4,19),euc(4,18))",
         "*ϵ(0,mink(4,6))",
         "*ϵ(1,mink(4,7))",
         "*ϵbar(2,mink(4,14))",
@@ -98,7 +157,7 @@ fn three_loop_photon_parse() {
 
 // fn g(i: usize,) -> Atom {
 //     let mink = Minkowski::rep(4);
-//     let bis = Bispinor::rep(4);
+//     let euc = Bispinor::rep(4);
 
 //     function!(
 //         ETS.gamma,
@@ -118,9 +177,10 @@ fn three_loop_photon_parse() {
 // }
 
 fn g_concrete(mu: usize, nu: usize) -> RealOrComplexTensor<f64, ShadowedStructure> {
+    let _ = AIND_SYMBOLS.dind;
     let mink = LibraryRep::from(Minkowski {}).rep(4);
 
-    NamedStructure::<_, (), LibraryRep>::from_iter([mink.slot(mu), mink.slot(nu)], ETS.metric, None)
+    NamedStructure::<_, (), LibraryRep>::from_iter([mink.slot(mu), mink.slot(nu)], ETS.id, None)
         .to_shell()
         .to_explicit(&EXPLICIT_TENSOR_MAP.read().unwrap())
         .unwrap()

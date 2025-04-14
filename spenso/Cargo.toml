@@ -18,44 +18,15 @@ all-features = true
 path = "src/spenso.rs"
 
 
-
+[[test]]
+name = "three_loop"
+path = "tests/three_loop.rs"
+required-features = ["shadowing"]
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 insta = { version = "1.38.0", features = ["yaml", "json", "ron", "toml"] }
 
-[[bench]]
-name = "gamma_net"
-harness = false
-required-features = ["shadowing"]
-
-[[bench]]
-name = "evaluate_net"
-harness = false
-required-features = ["shadowing"]
-
-[[bench]]
-name = "3LphotonsPhysical"
-harness = false
-required-features = ["shadowing"]
-
-[[bench]]
-name = "3LphotonEval"
-harness = false
-required-features = ["shadowing"]
-
-
-[[example]]
-name = "evaluate_network"
-required-features = ["shadowing"]
-
-[[example]]
-name = "3LphotonsPhysical"
-required-features = ["shadowing"]
-
-[[example]]
-name = "pres"
-required-features = ["shadowing"]
 
 
 [dependencies]

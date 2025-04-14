@@ -785,6 +785,14 @@ pub enum ParamOrConcrete<C: HasStructure<Structure = S> + Clone, S: TensorStruct
     Param(ParamTensor<S>),
 }
 
+impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> From<ParamTensor<S>>
+    for ParamOrConcrete<C, S>
+{
+    fn from(tensor: ParamTensor<S>) -> Self {
+        ParamOrConcrete::Param(tensor)
+    }
+}
+
 impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> ParamOrConcrete<C, S> {
     pub fn replace<'b, P: Into<BorrowedOrOwned<'b, Pattern>>>(
         &self,

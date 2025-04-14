@@ -273,7 +273,7 @@ fn fiber_from_structure() {
 fn permutation() {
     let a: Vec<LibrarySlot> = vec![
         Euclidean {}.slot(1, 2).cast(),
-        Lorentz {}.dual().slot(3, 4).cast(),
+        Lorentz {}.slot(3, 4).cast(),
         Euclidean {}.slot(5, 6).cast(),
     ];
 
@@ -284,7 +284,7 @@ fn permutation() {
     ];
 
     let permutation = a.find_permutation(&b).unwrap();
-    println!("{:?}", permutation);
+    // println!("{:?}", permutation);
 
     let c = permutation.apply_slice(&b);
 
@@ -1465,55 +1465,6 @@ fn duals() {
     let rho: LibrarySlot = Minkowski {}.dual().slot(4, 1).cast();
 
     assert!(!mu.matches(&rho))
-}
-
-#[cfg(feature = "shadowing")]
-#[test]
-fn parsing_scalar_mul() {
-    let expr = "MT*id(aind(bis(4,105),bis(4,175)))";
-    let atom = parse!(expr).unwrap();
-
-    let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
-
-    let mut network = sym_tensor
-        .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
-        .unwrap();
-
-    network.contract().unwrap();
-    println!("Network res: {}", network.result().unwrap().0);
-}
-
-#[cfg(feature = "shadowing")]
-#[test]
-fn parsing_single_contract() {
-    let expr = "Q(15,mink(4,192))*γ(aind(mink(4,192),bis(4,105),bis(4,175)))";
-    let atom = parse!(expr).unwrap();
-
-    let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
-
-    let mut network = sym_tensor
-        .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
-        .unwrap();
-
-    println!("{}", network.dot());
-    network.contract().unwrap();
-    println!("Network res: {}", network.result().unwrap().0);
-}
-
-#[cfg(feature = "shadowing")]
-#[test]
-fn parsing_addition_and_mul() {
-    let expr = "(MT*id(aind(bis(4,105),bis(4,175)))+Q(15,aind(mink(4,192)))*γ(aind(mink(4,192),bis(4,105),bis(4,175))))";
-    let atom = parse!(expr).unwrap();
-
-    let sym_tensor: SymbolicTensor = atom.try_into().unwrap();
-
-    let mut network = sym_tensor
-        .to_network(&EXPLICIT_TENSOR_MAP.read().unwrap())
-        .unwrap();
-
-    network.contract().unwrap();
-    println!("Network res: {}", network.result().unwrap().0);
 }
 
 #[test]

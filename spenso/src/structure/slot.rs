@@ -1,7 +1,9 @@
 use super::{
     abstract_index::{AbstractIndex, AbstractIndexError},
     dimension::DimensionError,
-    representation::{BaseRepName, RepName, Representation, RepresentationError},
+    representation::{
+        BaseRepName, LibraryRep, LibrarySlot, RepName, Representation, RepresentationError,
+    },
 };
 use crate::structure::dimension::Dimension;
 use serde::{Deserialize, Serialize};
@@ -201,6 +203,10 @@ impl<T: BaseRepName> ConstructibleSlot<T> for Slot<T> {
 pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + Display {
     type R: RepName;
     fn dim(&self) -> Dimension;
+    fn to_lib(&self) -> LibrarySlot {
+        let rep: LibraryRep = self.rep_name().into();
+        rep.slot(self.dim(), self.aind())
+    }
     fn aind(&self) -> AbstractIndex;
     fn set_aind(&mut self, aind: AbstractIndex);
     fn rep_name(&self) -> Self::R;
@@ -321,7 +327,7 @@ mod shadowing_tests {
         let muu: Slot<DualLorentz> = mink.slot(0).dual();
 
         assert!(mud.matches(&muu));
-        assert_eq!("lord4|₀", format!("{muu}"));
+        assert_eq!("lor🠓4|₀", format!("{muu}"));
 
         let custom_mink = LibraryRep::new_dual("custom_lor").unwrap();
 
@@ -337,8 +343,8 @@ mod shadowing_tests {
         let mink = Lorentz {}.rep(4);
         let mu = mink.slot(0);
         println!("{}", mu.to_atom());
-        assert_eq!("lor(4,0)", mu.to_atom().to_string());
-        assert_eq!("lor4|₀", mu.to_string());
+        assert_eq!("spenso::lor(4,0)", mu.to_atom().to_string());
+        assert_eq!("lor🠑4|₀", mu.to_string());
 
         let mink = Lorentz {}.rep(4);
         let mu = mink.slot(0);

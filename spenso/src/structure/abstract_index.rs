@@ -1,6 +1,7 @@
 #[cfg(feature = "shadowing")]
 use anyhow::Result;
 
+use bincode::{Decode, Encode};
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt::Debug;
@@ -18,7 +19,6 @@ use symbolica::coefficient::CoefficientView;
 
 #[cfg(feature = "shadowing")]
 use crate::symbolica_utils::SerializableSymbol;
-
 use crate::utils::{to_subscript, to_superscript};
 
 use thiserror::Error;
@@ -151,7 +151,11 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
     });
 
 /// A type that represents the name of an index in a tensor.
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(
+    feature = "shadowing",
+    bincode(decode_context = "symbolica::state::StateMap")
+)]
 pub enum AbstractIndex {
     Normal(usize),
     Dualize(usize),
@@ -179,20 +183,20 @@ impl std::ops::Add<AbstractIndex> for AbstractIndex {
                 AbstractIndex::Normal(r) => AbstractIndex::Normal(l + r),
                 AbstractIndex::Dualize(r) => AbstractIndex::Normal(l + r),
                 #[cfg(feature = "shadowing")]
-                AbstractIndex::Symbol(r) => AbstractIndex::Normal(l + u32::from(r) as usize),
+                AbstractIndex::Symbol(r) => AbstractIndex::Normal(l + r.get_id() as usize),
             },
             AbstractIndex::Dualize(l) => match rhs {
                 AbstractIndex::Normal(r) => AbstractIndex::Normal(l + r),
                 AbstractIndex::Dualize(r) => AbstractIndex::Normal(l + r),
                 #[cfg(feature = "shadowing")]
-                AbstractIndex::Symbol(r) => AbstractIndex::Normal(l + u32::from(r) as usize),
+                AbstractIndex::Symbol(r) => AbstractIndex::Normal(l + r.get_id() as usize),
             },
             #[cfg(feature = "shadowing")]
             AbstractIndex::Symbol(l) => match rhs {
-                AbstractIndex::Normal(r) => AbstractIndex::Normal(u32::from(l) as usize + r),
-                AbstractIndex::Dualize(r) => AbstractIndex::Normal(u32::from(l) as usize + r),
+                AbstractIndex::Normal(r) => AbstractIndex::Normal(l.get_id() as usize + r),
+                AbstractIndex::Dualize(r) => AbstractIndex::Normal(l.get_id() as usize + r),
                 AbstractIndex::Symbol(r) => {
-                    AbstractIndex::Normal(u32::from(l) as usize + u32::from(r) as usize)
+                    AbstractIndex::Normal(l.get_id() as usize + r.get_id() as usize)
                 }
             },
         }
@@ -241,7 +245,7 @@ impl From<AbstractIndex> for usize {
             AbstractIndex::Dualize(v) => v,
             AbstractIndex::Normal(v) => v,
             #[cfg(feature = "shadowing")]
-            AbstractIndex::Symbol(v) => u32::from(v) as usize,
+            AbstractIndex::Symbol(v) => v.get_id() as usize,
         }
     }
 }

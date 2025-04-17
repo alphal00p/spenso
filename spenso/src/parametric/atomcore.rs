@@ -287,6 +287,7 @@ impl<'a, 'b, R: ReplaceWithBuilder> ReplaceBuilderGeneric<'b, R::Ref<'a>, R> {
 
 pub trait TensorAtomMaps {
     type ContainerData<T>;
+    type AtomContainer;
     type Ref<'a>
     where
         Self: 'a;
@@ -299,8 +300,11 @@ pub trait TensorAtomMaps {
         Self: Sized;
 
     /// Replace all occurrences of the patterns, where replacements are tested in the order that they are given.
-    fn replace_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self;
-    fn replace_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self;
+    fn replace_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self::AtomContainer;
+    fn replace_multiple_repeat<T: BorrowReplacement>(
+        &self,
+        replacements: &[T],
+    ) -> Self::AtomContainer;
     fn replace_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
     fn replace_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
     fn replace_map_mut<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&mut self, m: &F);
@@ -335,41 +339,41 @@ pub trait TensorAtomMaps {
     // ) -> Self;
 
     /// Collect terms involving the literal occurrence of `x`.
-    fn coefficient<T: AtomCore>(&self, x: T) -> Self;
+    fn coefficient<T: AtomCore>(&self, x: T) -> Self::AtomContainer;
 
     /// Write the expression over a common denominator.
-    fn together(&self) -> Self;
+    fn together(&self) -> Self::AtomContainer;
 
     /// Write the expression as a sum of terms with minimal denominators.
-    fn apart(&self, x: Symbol) -> Self;
+    fn apart(&self, x: Symbol) -> Self::AtomContainer;
 
     /// Cancel all common factors between numerators and denominators.
     /// Any non-canceling parts of the expression will not be rewritten.
-    fn cancel(&self) -> Self;
+    fn cancel(&self) -> Self::AtomContainer;
 
     /// Factor the expression over the rationals.
-    fn factor(&self) -> Self;
+    fn factor(&self) -> Self::AtomContainer;
 
     /// Collect numerical factors by removing the numerical content from additions.
     /// For example, `-2*x + 4*x^2 + 6*x^3` will be transformed into `-2*(x - 2*x^2 - 3*x^3)`.
     ///
     /// The first argument of the addition is normalized to a positive quantity.
-    fn collect_num(&self) -> Self;
+    fn collect_num(&self) -> Self::AtomContainer;
 
     /// Expand an expression. The function [AtomCore::expand_via_poly] may be faster.
-    fn expand(&self) -> Self;
+    fn expand(&self) -> Self::AtomContainer;
 
     /// Expand the expression by converting it to a polynomial, optionally
     /// only in the indeterminate `var`. The parameter `E` should be a numerical type
     /// that fits the largest exponent in the expanded expression. Often,
     /// `u8` or `u16` is sufficient.
-    fn expand_via_poly<E: Exponent, T: AtomCore>(&self, var: Option<T>) -> Self;
+    fn expand_via_poly<E: Exponent, T: AtomCore>(&self, var: Option<T>) -> Self::AtomContainer;
 
     /// Expand an expression in the variable `var`. The function [AtomCore::expand_via_poly] may be faster.
-    fn expand_in<T: AtomCore>(&self, var: T) -> Self;
+    fn expand_in<T: AtomCore>(&self, var: T) -> Self::AtomContainer;
 
     /// Expand an expression in the variable `var`.
-    fn expand_in_symbol(&self, var: Symbol) -> Self;
+    fn expand_in_symbol(&self, var: Symbol) -> Self::AtomContainer;
 
     // /// Expand an expression, returning `true` iff the expression changed.
     // fn expand_into(&self, var: Option<AtomView>, out: &mut Atom) -> bool {
@@ -378,10 +382,10 @@ pub trait TensorAtomMaps {
 
     /// Distribute numbers in the expression, for example:
     /// `2*(x+y)` -> `2*x+2*y`.
-    fn expand_num(&self) -> Self;
+    fn expand_num(&self) -> Self::AtomContainer;
 
     /// Take a derivative of the expression with respect to `x`.
-    fn derivative(&self, x: Symbol) -> Self;
+    fn derivative(&self, x: Symbol) -> Self::AtomContainer;
 
     // /// Take a derivative of the expression with respect to `x` and
     // /// write the result in `out`.
@@ -425,11 +429,11 @@ pub trait TensorAtomMaps {
     fn zero_test(&self, iterations: usize, tolerance: f64) -> Self::ContainerData<ConditionResult>;
 
     /// Set the coefficient ring to the multivariate rational polynomial with `vars` variables.
-    fn set_coefficient_ring(&self, vars: &Arc<Vec<Variable>>) -> Self;
+    fn set_coefficient_ring(&self, vars: &Arc<Vec<Variable>>) -> Self::AtomContainer;
 
     /// Convert all coefficients to floats with a given precision `decimal_prec``.
     /// The precision of floating point coefficients in the input will be truncated to `decimal_prec`.
-    fn coefficients_to_float(&self, decimal_prec: u32) -> Self;
+    fn coefficients_to_float(&self, decimal_prec: u32) -> Self::AtomContainer;
 
     // /// Convert all coefficients to floats with a given precision `decimal_prec``.
     // /// The precision of floating point coefficients in the input will be truncated to `decimal_prec`.
@@ -439,7 +443,10 @@ pub trait TensorAtomMaps {
     // }
 
     /// Map all coefficients using a given function.
-    fn map_coefficient<F: Fn(CoefficientView) -> Coefficient + Copy>(&self, f: F) -> Self;
+    fn map_coefficient<F: Fn(CoefficientView) -> Coefficient + Copy>(
+        &self,
+        f: F,
+    ) -> Self::AtomContainer;
 
     // /// Map all coefficients using a given function.
     // fn map_coefficient_into<F: Fn(CoefficientView) -> Coefficient + Copy>(
@@ -452,7 +459,7 @@ pub trait TensorAtomMaps {
 
     /// Map all floating point and rational coefficients to the best rational approximation
     /// in the interval `[self*(1-relative_error),self*(1+relative_error)]`.
-    fn rationalize_coefficients(&self, relative_error: &Rational) -> Self;
+    fn rationalize_coefficients(&self, relative_error: &Rational) -> Self::AtomContainer;
 
     /// Convert the atom to a polynomial, optionally in the variable ordering
     /// specified by `var_map`. If new variables are encountered, they are
@@ -519,15 +526,21 @@ pub trait TensorAtomMaps {
     fn to_canonical_string(&self) -> Self::ContainerData<String>;
 
     /// Map the function `f` over all terms.
-    fn map_terms_single_core(&self, f: impl Fn(AtomView) -> Atom + Clone) -> Self;
+    fn map_terms_single_core(&self, f: impl Fn(AtomView) -> Atom + Clone) -> Self::AtomContainer;
 
     /// Map the function `f` over all terms, using parallel execution with `n_cores` cores.
-    fn map_terms(&self, f: impl Fn(AtomView) -> Atom + Send + Sync + Clone, n_cores: usize)
-        -> Self;
+    fn map_terms(
+        &self,
+        f: impl Fn(AtomView) -> Atom + Send + Sync + Clone,
+        n_cores: usize,
+    ) -> Self::AtomContainer;
 
     fn to_pattern(&self) -> Self::ContainerData<Pattern>;
 
-    fn replace_map<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&self, m: &F) -> Self;
+    fn replace_map<F: Fn(AtomView, &Context, &mut Atom) -> bool>(
+        &self,
+        m: &F,
+    ) -> Self::AtomContainer;
 
     // fn replace_iter<'a>(
     //     &'a self,
@@ -786,6 +799,7 @@ impl<S: StorageTensor<Data = Atom> + Clone + PartialEq> ReplaceWithBuilder for S
 }
 
 impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
+    type AtomContainer = S;
     type ContainerData<T> = <S as StorageTensor>::ContainerData<T>;
     type Ref<'a>
         = &'a Self

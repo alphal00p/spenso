@@ -6,6 +6,8 @@ use super::{
     },
 };
 use crate::structure::dimension::Dimension;
+use bincode::{Decode, Encode};
+// #[cfg(feature = "shadowing")]
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
@@ -16,10 +18,16 @@ use symbolica::{
 };
 
 #[cfg(feature = "shadowing")]
-use crate::tensor_library::ETS;
+use crate::network::tensor_library::symbolic::ETS;
 use thiserror::Error;
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(
+    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Encode, Decode,
+)]
+#[cfg_attr(
+    feature = "shadowing",
+    bincode(decode_context = "symbolica::state::StateMap")
+)]
 /// A [`Slot`] is an index, identified by a `usize` and a [`Representation`].
 ///
 /// A vector of slots thus identifies the shape and type of the tensor.
@@ -202,6 +210,8 @@ impl<T: BaseRepName> ConstructibleSlot<T> for Slot<T> {
 
 pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + Display {
     type R: RepName;
+
+    fn reindex(self, id: AbstractIndex) -> Self;
     fn dim(&self) -> Dimension;
     fn to_lib(&self) -> LibrarySlot {
         let rep: LibraryRep = self.rep_name().into();
@@ -253,6 +263,11 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
     // type Dual = GenSlot<T::Dual>;
     fn dim(&self) -> Dimension {
         self.rep.dim
+    }
+
+    fn reindex(mut self, id: AbstractIndex) -> Self {
+        self.aind = id;
+        self
     }
     fn aind(&self) -> AbstractIndex {
         self.aind

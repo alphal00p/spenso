@@ -5,7 +5,13 @@ use std::{
     io::Cursor,
 };
 
+use crate::structure::abstract_index::AbstractIndex;
+use crate::structure::dimension::Dimension;
+use crate::structure::representation::Representation;
+use crate::structure::slot::IsAbstractSlot;
+use crate::structure::StructureError;
 use ahash::HashMap;
+use delegate::delegate;
 
 use anyhow::anyhow;
 use anyhow::{Error, Result};
@@ -36,6 +42,7 @@ use crate::{
     symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
     upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade},
 };
+use bincode::{Decode, Encode};
 
 use symbolica::{
     atom::{representation::FunView, Atom, AtomCore, AtomView, FunctionBuilder, KeyLookup, Symbol},
@@ -49,7 +56,7 @@ use symbolica::{
         EvaluationFn, ExportedCode, Expression, ExpressionEvaluator, FunctionMap, InlineASM,
     },
     id::Pattern,
-    state::State,
+    state::{State, StateMap},
     symbol,
     utils::BorrowedOrOwned,
 };
@@ -271,8 +278,9 @@ impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<A
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ParamTensor<S: TensorStructure = VecStructure> {
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Encode, Decode)]
+#[bincode(decode_context = "symbolica::state::StateMap")]
+pub struct ParamTensor<S = VecStructure> {
     pub tensor: DataTensor<Atom, S>,
     pub param_type: ParamOrComposite,
     // Param(DataTensor<Atom, S>),
@@ -280,13 +288,40 @@ pub struct ParamTensor<S: TensorStructure = VecStructure> {
     // Composite(DataTensor<Atom, S>),
 }
 
+impl<S> TensorStructure for ParamTensor<S>
+where
+    S: TensorStructure,
+{
+    // type R = <T::Structure as TensorStructure>::R;
+    type Indexed = ParamTensor<S::Indexed>;
+    type Slot = S::Slot;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        self.map_structure_result(|s| s.reindex(indices))
+    }
+
+    fn dual(self) -> Self {
+        self.map_same_structure(|s| s.dual())
+    }
+
+    delegate! {
+        to self.structure() {
+            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn order(&self)-> usize;
+        }
+    }
+}
+
 impl<S: TensorStructure + Clone> StorageTensor for ParamTensor<S> {
     type Data = Atom;
     type ContainerData<Data> = DataTensor<Data, S>;
-    type ContainerStructure<Structure>
-        = ParamTensor<Structure>
-    where
-        Structure: TensorStructure;
 
     fn map_data<U>(self, f: impl Fn(Self::Data) -> U) -> Self::ContainerData<U> {
         self.tensor.map_data(f)
@@ -315,29 +350,6 @@ impl<S: TensorStructure + Clone> StorageTensor for ParamTensor<S> {
 
     fn map_data_ref<U>(&self, f: impl Fn(&Self::Data) -> U) -> Self::ContainerData<U> {
         self.tensor.map_data_ref(f)
-    }
-
-    fn map_structure<Ss>(self, f: impl Fn(Self::Structure) -> Ss) -> Self::ContainerStructure<Ss>
-    where
-        Ss: TensorStructure,
-    {
-        ParamTensor {
-            param_type: self.param_type,
-            tensor: self.tensor.map_structure(f),
-        }
-    }
-
-    fn map_structure_fallible<St, E>(
-        self,
-        f: impl Fn(Self::Structure) -> Result<St, E>,
-    ) -> Result<Self::ContainerStructure<St>, E>
-    where
-        St: TensorStructure,
-    {
-        Ok(ParamTensor {
-            param_type: self.param_type,
-            tensor: self.tensor.map_structure_fallible(f)?,
-        })
     }
 
     fn map_data_ref_mut<U>(
@@ -433,30 +445,30 @@ impl<S: TensorStructure + Clone> ScalarMul<SerializableAtom> for ParamTensor<S> 
 //     }
 // }
 
-impl<Structure: TensorStructure + Serialize + Clone> Serialize for ParamTensor<Structure> {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut state = serializer.serialize_struct("ParamTensor", 3)?;
+// impl<Structure: TensorStructure + Serialize + Clone> Serialize for ParamTensor<Structure> {
+//     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         let mut state = serializer.serialize_struct("ParamTensor", 3)?;
 
-        state.serialize_field("param_type", &self.param_type)?;
+//         state.serialize_field("param_type", &self.param_type)?;
 
-        let serialized_tensor = self.tensor.map_data_ref(|a| {
-            let mut v = Vec::new();
-            a.as_view().write(&mut v).unwrap();
-            v
-        });
-        state.serialize_field("tensor", &serialized_tensor)?;
+//         let serialized_tensor = self.tensor.map_data_ref(|a| {
+//             let mut v = Vec::new();
+//             a.as_view().write(&mut v).unwrap();
+//             v
+//         });
+//         state.serialize_field("tensor", &serialized_tensor)?;
 
-        let mut symbolica_state = Vec::new();
+//         let mut symbolica_state = Vec::new();
 
-        State::export(&mut symbolica_state).unwrap();
+//         State::export(&mut symbolica_state).unwrap();
 
-        state.serialize_field("state", &symbolica_state)?;
-        state.end()
-    }
-}
+//         state.serialize_field("state", &symbolica_state)?;
+//         state.end()
+//     }
+// }
 
 impl<'a, Structure: TensorStructure + Deserialize<'a> + Clone> Deserialize<'a>
     for ParamTensor<Structure>
@@ -602,7 +614,7 @@ impl<S: TensorStructure> ParamTensor<S> {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, Copy, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum ParamOrComposite {
     Param,
     Composite,
@@ -779,10 +791,67 @@ where
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum ParamOrConcrete<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> {
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Encode)]
+#[bincode(decode_context = "symbolica::state::StateMap")]
+pub enum ParamOrConcrete<C, S> {
     Concrete(C),
     Param(ParamTensor<S>),
+}
+
+impl<C, S> Decode<StateMap> for ParamOrConcrete<C, S>
+where
+    C: Decode<StateMap>,
+    S: Decode<StateMap>,
+{
+    fn decode<__D: ::bincode::de::Decoder<Context = StateMap>>(
+        decoder: &mut __D,
+    ) -> core::result::Result<Self, ::bincode::error::DecodeError> {
+        let variant_index = <u32 as ::bincode::Decode<__D::Context>>::decode(decoder)?;
+        match variant_index {
+            0u32 => core::result::Result::Ok(Self::Concrete {
+                0: ::bincode::Decode::<__D::Context>::decode(decoder)?,
+            }),
+            1u32 => core::result::Result::Ok(Self::Param {
+                0: ::bincode::Decode::<__D::Context>::decode(decoder)?,
+            }),
+            variant => {
+                core::result::Result::Err(::bincode::error::DecodeError::UnexpectedVariant {
+                    found: variant,
+                    type_name: "ParamOrConcrete",
+                    allowed: &::bincode::error::AllowedEnumVariants::Range { min: 0, max: 1 },
+                })
+            }
+        }
+    }
+}
+impl<'__de, C, S> ::bincode::BorrowDecode<'__de, symbolica::state::StateMap>
+    for ParamOrConcrete<C, S>
+where
+    C: ::bincode::de::BorrowDecode<'__de, symbolica::state::StateMap>,
+    S: ::bincode::de::BorrowDecode<'__de, symbolica::state::StateMap>,
+{
+    fn borrow_decode<
+        __D: ::bincode::de::BorrowDecoder<'__de, Context = symbolica::state::StateMap>,
+    >(
+        decoder: &mut __D,
+    ) -> core::result::Result<Self, ::bincode::error::DecodeError> {
+        let variant_index = <u32 as ::bincode::Decode<__D::Context>>::decode(decoder)?;
+        match variant_index {
+            0u32 => core::result::Result::Ok(Self::Concrete {
+                0: ::bincode::BorrowDecode::<__D::Context>::borrow_decode(decoder)?,
+            }),
+            1u32 => core::result::Result::Ok(Self::Param {
+                0: ::bincode::BorrowDecode::<__D::Context>::borrow_decode(decoder)?,
+            }),
+            variant => {
+                core::result::Result::Err(::bincode::error::DecodeError::UnexpectedVariant {
+                    found: variant,
+                    type_name: "ParamOrConcrete",
+                    allowed: &::bincode::error::AllowedEnumVariants::Range { min: 0, max: 1 },
+                })
+            }
+        }
+    }
 }
 
 impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> From<ParamTensor<S>>
@@ -1008,13 +1077,68 @@ where
         }
     }
 }
+
+impl<C, S> TensorStructure for ParamOrConcrete<C, S>
+where
+    C: HasStructure<Structure = S> + TensorStructure,
+    C::Indexed: HasStructure<Structure = S::Indexed>,
+    S: TensorStructure,
+{
+    // type R = <T::Structure as TensorStructure>::R;
+    type Indexed = ParamOrConcrete<C::Indexed, S::Indexed>;
+    type Slot = S::Slot;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        Ok(match self {
+            ParamOrConcrete::Concrete(c) => ParamOrConcrete::Concrete(c.reindex(indices)?),
+            ParamOrConcrete::Param(p) => ParamOrConcrete::Param(p.reindex(indices)?),
+        })
+    }
+
+    fn dual(self) -> Self {
+        self.map_same_structure(|s| s.dual())
+    }
+
+    delegate! {
+        to self.structure() {
+            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn order(&self)-> usize;
+        }
+    }
+}
+
 impl<C, S> HasStructure for ParamOrConcrete<C, S>
 where
-    C: HasStructure<Structure = S> + Clone,
-    S: TensorStructure + Clone,
+    C: HasStructure<Structure = S>,
+    S: TensorStructure,
 {
     type Scalar = ConcreteOrParam<C::Scalar>;
     type Structure = S;
+    type Store<U>
+        = ParamOrConcrete<C::Store<U>, U>
+    where
+        U: TensorStructure;
+
+    fn map_structure<O: TensorStructure>(self, f: impl Fn(Self::Structure) -> O) -> Self::Store<O> {
+        match self {
+            ParamOrConcrete::Concrete(c) => ParamOrConcrete::Concrete(c.map_structure(f)),
+            ParamOrConcrete::Param(p) => ParamOrConcrete::Param(p.map_structure(f)),
+        }
+    }
+
+    fn map_structure_result<O: TensorStructure, Er>(
+        self,
+        f: impl Fn(Self::Structure) -> Result<O, Er>,
+    ) -> std::result::Result<Self::Store<O>, Er> {
+        todo!()
+    }
 
     fn structure(&self) -> &Self::Structure {
         match self {
@@ -1179,7 +1303,8 @@ impl<T: Into<Coefficient>> From<RealOrComplex<T>> for Atom {
 
 impl<C, S> ScalarTensor for ParamOrConcrete<C, S>
 where
-    C: HasStructure<Structure = S> + Clone + ScalarTensor,
+    C: HasStructure<Structure = S> + Clone + ScalarTensor + TensorStructure,
+    C::Indexed: HasStructure + TensorStructure,
     S: TensorStructure + ScalarStructure + Clone,
 {
     fn new_scalar(scalar: Self::Scalar) -> Self {
@@ -1236,7 +1361,9 @@ where
 impl<C: IteratableTensor + Clone, S: TensorStructure + Clone> IteratableTensor
     for ParamOrConcrete<C, S>
 where
-    C: HasStructure<Structure = S>,
+    C: HasStructure<Structure = S> + TensorStructure,
+    C::Indexed: HasStructure<Structure = S::Indexed>,
+    S: TensorStructure,
 {
     type Data<'a>
         = AtomViewOrConcrete<'a, C::Data<'a>>
@@ -1271,56 +1398,6 @@ where
 
 pub type MixedTensor<T = f64, S = NamedStructure<Symbol, Vec<Atom>>> =
     ParamOrConcrete<RealOrComplexTensor<T, S>, S>;
-
-impl<T: Clone, S: TensorStructure + Clone> MixedTensor<T, S> {
-    pub fn map_structure<S2: TensorStructure + Clone>(
-        self,
-        f: impl Fn(S) -> S2,
-    ) -> MixedTensor<T, S2> {
-        match self {
-            ParamOrConcrete::Concrete(x) => ParamOrConcrete::Concrete(x.map_structure(f)),
-            ParamOrConcrete::Param(x) => ParamOrConcrete::Param(x.map_structure(f)),
-        }
-    }
-
-    pub fn map_structure_fallible<S2: TensorStructure + Clone, E>(
-        self,
-        f: impl Fn(S) -> Result<S2, E>,
-    ) -> Result<MixedTensor<T, S2>, E> {
-        Ok(match self {
-            ParamOrConcrete::Concrete(x) => ParamOrConcrete::Concrete(x.map_structure_fallible(f)?),
-            ParamOrConcrete::Param(x) => ParamOrConcrete::Param(x.map_structure_fallible(f)?),
-        })
-    }
-}
-
-// #[derive(Clone, Debug, EnumTryAsInner)]
-// #[derive_err(Debug)]
-// pub enum MixedTensor<T: TensorStructure = VecStructure> {
-//     Float(DataTensor<f64, T>),
-//     Complex(DataTensor<Complex<f64>, T>),
-//     Symbolic(DataTensor<Atom, T>),
-// }
-
-// impl<'a> TryFrom<FunView<'a>> for MixedTensor {
-//     type Error = anyhow::Error;
-
-//     fn try_from(f: FunView<'a>) -> Result<Self> {
-//         let mut structure: Vec<PhysicalSlots> = vec![];
-//         let f_id = f.get_symbol();
-//         let mut args = vec![];
-
-//         for arg in f.iter() {
-//             if let Ok(arg) = arg.try_into() {
-//                 structure.push(arg);
-//             } else {
-//                 args.push(arg.to_owned());
-//             }
-//         }
-//         let s = NamedStructure::from_iter(structure, f_id, Some(args));
-//         s.to_shell().to_explicit().ok_or(anyhow!("Cannot shadow"))
-//     }
-// }
 
 impl<T: Clone, S: TensorStructure + Clone> PartialEq<MixedTensor<T, S>> for MixedTensor<T, S> {
     fn eq(&self, other: &MixedTensor<T, S>) -> bool {
@@ -1453,6 +1530,31 @@ where
 {
     type Structure = S;
     type Scalar = Atom;
+    type Store<U>
+        = ParamTensor<U>
+    where
+        U: TensorStructure;
+
+    fn map_structure<Ss>(self, f: impl Fn(Self::Structure) -> Ss) -> Self::Store<Ss>
+    where
+        Ss: TensorStructure,
+    {
+        ParamTensor {
+            param_type: self.param_type,
+            tensor: self.tensor.map_structure(f),
+        }
+    }
+
+    fn map_structure_result<O: TensorStructure, Er>(
+        self,
+        f: impl Fn(Self::Structure) -> Result<O, Er>,
+    ) -> std::result::Result<Self::Store<O>, Er> {
+        Ok(ParamTensor {
+            param_type: self.param_type,
+            tensor: self.tensor.map_structure_result(f)?,
+        })
+    }
+
     fn structure(&self) -> &Self::Structure {
         self.tensor.structure()
     }
@@ -2084,9 +2186,63 @@ impl<S: TensorStructure, T> EvalTensorSet<T, S> {
     }
 }
 
+impl<T, S> TensorStructure for EvalTensor<T, S>
+where
+    S: TensorStructure,
+{
+    // type R = <T::Structure as TensorStructure>::R;
+    type Indexed = EvalTensor<T, S::Indexed>;
+    type Slot = S::Slot;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        self.map_structure_result(|s| s.reindex(indices))
+    }
+
+    fn dual(self) -> Self {
+        self.map_same_structure(|s| s.dual())
+    }
+
+    delegate! {
+        to self.structure() {
+            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn order(&self)-> usize;
+        }
+    }
+}
+
 impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
     type Scalar = T;
     type Structure = S;
+    type Store<U>
+        = EvalTensor<T, U>
+    where
+        U: TensorStructure;
+
+    fn map_structure<O: TensorStructure>(self, f: impl Fn(Self::Structure) -> O) -> Self::Store<O> {
+        EvalTensor {
+            structure: f(self.structure),
+            indexmap: self.indexmap,
+            eval: self.eval,
+        }
+    }
+
+    fn map_structure_result<O: TensorStructure, Er>(
+        self,
+        f: impl Fn(Self::Structure) -> Result<O, Er>,
+    ) -> std::result::Result<Self::Store<O>, Er> {
+        Ok(EvalTensor {
+            structure: f(self.structure)?,
+            indexmap: self.indexmap,
+            eval: self.eval,
+        })
+    }
 
     fn structure(&self) -> &Self::Structure {
         &self.structure

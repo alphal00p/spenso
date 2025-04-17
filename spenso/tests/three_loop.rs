@@ -6,7 +6,7 @@ use approx::{assert_relative_eq, RelativeEq};
 use common::WEYLIB;
 use spenso::{
     complex::Complex,
-    network::{Levels, TensorNetwork},
+    network::Network,
     parametric::{atomcore::TensorAtomOps, MixedTensor},
     structure::{HasStructure, SmartShadowStructure},
     symbolic::SymbolicTensor,
@@ -142,7 +142,7 @@ fn main() {
         epsilon = 0.1
     );
 
-    let mut counting_network: TensorNetwork<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
+    let mut counting_network: Network<MixedTensor<_, SmartShadowStructure<_, _>>, Atom> =
         network.clone().cast();
 
     // (&replacements);

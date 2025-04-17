@@ -17,13 +17,13 @@ use symbolica::parse;
 
 #[test]
 fn other_network() {
-    let mut net: TensorNetwork<
+    let mut net: Network<
         DataTensor<
             Complex<Rational>,
             SmartShadowStructure<SerializableSymbol, Vec<SerializableAtom>>,
         >,
         SerializableAtom,
-    > = TensorNetwork::new();
+    > = Network::new();
 
     net.contract().unwrap();
 }

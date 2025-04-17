@@ -17,6 +17,6 @@ lto = "fat"
 
 [patch.crates-io]
 symbolica = { git = "https://github.com/benruijl/symbolica", rev = "57f25f34928ca667bd5889d94ed616d15e2ad94f" }
-# linnet = {path = "../linnet"}
+linnet = {path = "../../linnet"}
 # symbolica = { path = "../symbolica" }
 # symbolica={git="https://github.com/alphal00p/symbolica",rev="d1e34cbadce9c7b196063d92602c7a15ca2305b2"}

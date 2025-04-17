@@ -1,4 +1,5 @@
 use crate::{parametric::atomcore::PatternReplacement, structure::concrete_index::ConcreteIndex};
+use bincode::{Decode, Encode};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use symbolica::{
@@ -19,9 +20,20 @@ use anyhow::Result;
 // use anyhow::Ok;
 use serde::ser::SerializeStruct;
 
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Display)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Display, Encode, Decode)]
+#[bincode(decode_context = "symbolica::state::StateMap")]
 pub struct SerializableSymbol {
     symbol: Symbol,
+}
+
+impl SerializableSymbol {
+    pub fn get_id(&self) -> u32 {
+        self.symbol.get_id()
+    }
+
+    pub fn get_name(&self) -> &str {
+        self.symbol.get_name()
+    }
 }
 
 impl Serialize for SerializableSymbol {
@@ -29,7 +41,7 @@ impl Serialize for SerializableSymbol {
     where
         S: serde::Serializer,
     {
-        self.symbol.to_string().serialize(serializer)
+        self.symbol.get_name().serialize(serializer)
     }
 }
 

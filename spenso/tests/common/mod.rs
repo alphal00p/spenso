@@ -7,12 +7,12 @@ use once_cell::sync::Lazy;
 use spenso::{
     complex::Complex,
     data::{SetTensorData, SparseTensor},
+    network::tensor_library::symbolic::{ExplicitKey, TensorLibrary},
     parametric::MixedTensor,
     structure::{
         representation::{LibraryRep, Minkowski, RepName},
         TensorStructure,
     },
-    tensor_library::{ExplicitKey, TensorLibrary},
 };
 use spenso_macros::SimpleRepresentation;
 use symbolica::{atom::Symbol, symbol};

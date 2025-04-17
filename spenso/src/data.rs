@@ -10,6 +10,13 @@ use crate::{
     upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
 };
 
+use crate::structure::abstract_index::AbstractIndex;
+use crate::structure::dimension::Dimension;
+use crate::structure::representation::Representation;
+use crate::structure::slot::IsAbstractSlot;
+use crate::structure::StructureError;
+use delegate::delegate;
+
 #[cfg(feature = "shadowing")]
 use crate::{
     parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
@@ -17,11 +24,12 @@ use crate::{
     symbolica_utils::{atomic_expanded_label_id, IntoArgs, IntoSymbol},
 };
 
-use ahash::AHashMap;
+use bincode::{Decode, Encode};
 use derive_more::From;
 use enum_try_as_inner::EnumTryAsInner;
 use indexmap::IndexMap;
 use num::Zero;
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -31,8 +39,6 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-#[cfg(feature = "shadowing")]
-use std::collections::HashMap;
 #[cfg(feature = "shadowing")]
 use symbolica::{atom::Atom, atom::Symbol};
 pub trait DataIterator<T> {
@@ -81,7 +87,7 @@ impl<T> Settable for Vec<T> {
     }
 }
 
-impl<T> Settable for AHashMap<usize, T> {
+impl<T> Settable for HashMap<usize, T> {
     type SetData = T;
     fn set(&mut self, index: usize, data: T) {
         self.insert(index, data);
@@ -153,10 +159,42 @@ pub trait GetTensorData {
 ///
 /// Stores data in a hashmap of usize, using ahash's hashmap.
 /// The usize key is the flattened index of the corresponding position in the dense tensor
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Encode, Decode)]
 pub struct SparseTensor<T, I = VecStructure> {
-    pub elements: AHashMap<FlatIndex, T>,
+    // #[bincode(with_serde)]
+    pub elements: std::collections::HashMap<FlatIndex, T>,
     pub structure: I,
+}
+
+impl<T, S> TensorStructure for SparseTensor<T, S>
+where
+    S: TensorStructure,
+{
+    // type R = <T::Structure as TensorStructure>::R;
+    type Indexed = SparseTensor<T, S::Indexed>;
+    type Slot = S::Slot;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        self.map_structure_result(|s| s.reindex(indices))
+    }
+
+    fn dual(self) -> Self {
+        self.map_same_structure(|s| s.dual())
+    }
+
+    delegate! {
+        to self.structure() {
+            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn order(&self)-> usize;
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -167,7 +205,7 @@ pub struct Tensor<Store, Structure> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SparseStore<T> {
-    pub elements: AHashMap<FlatIndex, T>,
+    pub elements: HashMap<FlatIndex, T>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -397,7 +435,7 @@ impl<T, S: TensorStructure> SparseTensor<T, S> {
         // U: Clone,
         S: Clone,
     {
-        let elements: Result<AHashMap<FlatIndex, _>, E> = self
+        let elements: Result<HashMap<FlatIndex, _>, E> = self
             .flat_iter()
             .map(|(k, v)| f(v).map(|v| (k, v)))
             .collect();
@@ -551,7 +589,7 @@ where
     I: TensorStructure + ScalarStructure,
 {
     fn new_scalar(scalar: Self::Scalar) -> Self {
-        let mut elements = AHashMap::new();
+        let mut elements = HashMap::new();
         elements.insert(0.into(), scalar);
         SparseTensor {
             elements,
@@ -566,6 +604,30 @@ where
 {
     type Scalar = T;
     type Structure = I;
+    type Store<S>
+        = SparseTensor<T, S>
+    where
+        S: TensorStructure;
+
+    fn map_structure<O: TensorStructure>(
+        self,
+        f: impl FnOnce(Self::Structure) -> O,
+    ) -> Self::Store<O> {
+        SparseTensor {
+            structure: f(self.structure),
+            elements: self.elements,
+        }
+    }
+
+    fn map_structure_result<O: TensorStructure, Er>(
+        self,
+        f: impl FnOnce(Self::Structure) -> Result<O, Er>,
+    ) -> std::result::Result<Self::Store<O>, Er> {
+        Ok(SparseTensor {
+            structure: f(self.structure)?,
+            elements: self.elements,
+        })
+    }
     fn structure(&self) -> &Self::Structure {
         &self.structure
     }
@@ -609,7 +671,7 @@ where
         U::LCM: Clone,
     {
         let structure = self.structure.clone();
-        let elements: Option<AHashMap<FlatIndex, U::LCM>> = self
+        let elements: Option<HashMap<FlatIndex, U::LCM>> = self
             .elements
             .iter()
             .map(|(k, v)| match v.try_upgrade() {
@@ -632,7 +694,7 @@ where
     /// Create a new empty sparse tensor with the given structure
     pub fn empty(structure: I) -> Self {
         SparseTensor {
-            elements: AHashMap::default(),
+            elements: HashMap::default(),
             structure,
         }
     }
@@ -694,7 +756,7 @@ where
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, T)>,
         structure: I,
     ) -> Result<Self> {
-        let mut elements = AHashMap::default();
+        let mut elements = HashMap::default();
         for (index, value) in data {
             if index.len() != structure.order() {
                 return Err(anyhow!("Mismatched order"));
@@ -725,10 +787,41 @@ where
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash, Eq)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash, Eq, Encode, Decode)]
 pub struct DenseTensor<T, S = VecStructure> {
     pub data: Vec<T>,
     pub structure: S,
+}
+
+impl<T, S> TensorStructure for DenseTensor<T, S>
+where
+    S: TensorStructure,
+{
+    // type R = <T::Structure as TensorStructure>::R;
+    type Indexed = DenseTensor<T, S::Indexed>;
+    type Slot = S::Slot;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        self.map_structure_result(|s| s.reindex(indices))
+    }
+
+    fn dual(self) -> Self {
+        self.map_same_structure(|s| s.dual())
+    }
+
+    delegate! {
+        to self.structure() {
+            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn order(&self)-> usize;
+        }
+    }
 }
 
 impl<T, U: From<T> + Clone, I: TensorStructure + Clone> CastData<DenseTensor<U, I>>
@@ -850,6 +943,31 @@ where
 {
     type Scalar = T;
     type Structure = I;
+    type Store<S>
+        = DenseTensor<T, S>
+    where
+        S: TensorStructure;
+
+    fn map_structure<O: TensorStructure>(
+        self,
+        f: impl FnOnce(Self::Structure) -> O,
+    ) -> Self::Store<O> {
+        DenseTensor {
+            structure: f(self.structure),
+            data: self.data,
+        }
+    }
+
+    fn map_structure_result<O: TensorStructure, Er>(
+        self,
+        f: impl FnOnce(Self::Structure) -> Result<O, Er>,
+    ) -> std::result::Result<Self::Store<O>, Er> {
+        Ok(DenseTensor {
+            structure: f(self.structure)?,
+            data: self.data,
+        })
+    }
+
     fn structure(&self) -> &Self::Structure {
         &self.structure
     }
@@ -1225,9 +1343,11 @@ where
 }
 
 /// Enum for storing either a dense or a sparse tensor, with the same structure
-#[derive(Debug, Clone, EnumTryAsInner, Serialize, Deserialize, From, Hash, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, EnumTryAsInner, Serialize, Deserialize, From, Hash, PartialEq, Eq, Encode, Decode,
+)]
 #[derive_err(Debug)]
-pub enum DataTensor<T, I: TensorStructure = VecStructure> {
+pub enum DataTensor<T, I = VecStructure> {
     Dense(DenseTensor<T, I>),
     Sparse(SparseTensor<T, I>),
 }
@@ -1385,12 +1505,72 @@ where
     }
 }
 
+impl<T, S> TensorStructure for DataTensor<T, S>
+where
+    S: TensorStructure,
+{
+    // type R = <T::Structure as TensorStructure>::R;
+    type Indexed = DataTensor<T, S::Indexed>;
+    type Slot = S::Slot;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        self.map_structure_result(|s| s.reindex(indices))
+    }
+
+    fn dual(self) -> Self {
+        self.map_same_structure(|s| s.dual())
+    }
+
+    delegate! {
+        to self.structure() {
+            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn order(&self)-> usize;
+        }
+    }
+}
+
 impl<T, I> HasStructure for DataTensor<T, I>
 where
     I: TensorStructure,
 {
     type Scalar = T;
     type Structure = I;
+
+    type Store<S>
+        = DataTensor<T, S>
+    where
+        S: TensorStructure;
+
+    fn map_structure<O: TensorStructure>(self, f: impl Fn(Self::Structure) -> O) -> Self::Store<O> {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.map_structure(f)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_structure(f)),
+        }
+    }
+
+    fn map_structure_result<O: TensorStructure, Er>(
+        self,
+        f: impl Fn(Self::Structure) -> Result<O, Er>,
+    ) -> std::result::Result<Self::Store<O>, Er> {
+        Ok(match self {
+            DataTensor::Dense(d) => match d.map_structure_result(f) {
+                Ok(d) => DataTensor::Dense(d),
+                Err(e) => return Err(e),
+            },
+            DataTensor::Sparse(s) => match s.map_structure_result(f) {
+                Ok(s) => DataTensor::Sparse(s),
+                Err(e) => return Err(e),
+            },
+        })
+    }
+
     fn structure(&self) -> &Self::Structure {
         match self {
             DataTensor::Dense(d) => d.structure(),
@@ -1588,12 +1768,71 @@ pub enum NumTensor<T: TensorStructure = VecStructure> {
     Complex(DataTensor<Complex<f64>, T>),
 }
 
+impl<S> TensorStructure for NumTensor<S>
+where
+    S: TensorStructure,
+{
+    // type R = <T::Structure as TensorStructure>::R;
+    type Indexed = NumTensor<S::Indexed>;
+    type Slot = S::Slot;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        self.map_structure_result(|s| s.reindex(indices))
+    }
+
+    fn dual(self) -> Self {
+        self.map_same_structure(|s| s.dual())
+    }
+
+    delegate! {
+        to self.structure() {
+            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn order(&self)-> usize;
+        }
+    }
+}
+
 impl<T> HasStructure for NumTensor<T>
 where
     T: TensorStructure,
 {
     type Scalar = Complex<f64>;
     type Structure = T;
+    type Store<S>
+        = NumTensor<S>
+    where
+        S: TensorStructure;
+
+    fn map_structure<O: TensorStructure>(self, f: impl Fn(Self::Structure) -> O) -> Self::Store<O> {
+        match self {
+            NumTensor::Float(fl) => NumTensor::Float(fl.map_structure(f)),
+            NumTensor::Complex(c) => NumTensor::Complex(c.map_structure(f)),
+        }
+    }
+
+    fn map_structure_result<O: TensorStructure, Er>(
+        self,
+        f: impl Fn(Self::Structure) -> Result<O, Er>,
+    ) -> std::result::Result<Self::Store<O>, Er> {
+        Ok(match self {
+            NumTensor::Float(fl) => match fl.map_structure_result(f) {
+                Ok(fl) => NumTensor::Float(fl),
+                Err(er) => return Err(er),
+            },
+            NumTensor::Complex(c) => match c.map_structure_result(f) {
+                Ok(c) => NumTensor::Complex(c),
+                Err(er) => return Err(er),
+            },
+        })
+    }
+
     fn structure(&self) -> &Self::Structure {
         match self {
             NumTensor::Float(f) => f.structure(),
@@ -1734,20 +1973,13 @@ impl<T: Clone, S: TensorStructure + StructureContract + Clone> DataTensor<DataTe
 }
 
 pub trait StorageTensor: Sized + HasStructure<Structure: Clone> {
-    type ContainerStructure<S: TensorStructure>: HasStructure<Structure = S>;
+    // type ContainerStructure<S: TensorStructure>: HasStructure<Structure = S>;
     type ContainerData<Data>: HasStructure<Structure = Self::Structure>;
     type Data;
 
-    fn map_structure<S>(self, f: impl Fn(Self::Structure) -> S) -> Self::ContainerStructure<S>
-    where
-        S: TensorStructure;
-
-    fn map_structure_fallible<S, E>(
-        self,
-        f: impl Fn(Self::Structure) -> Result<S, E>,
-    ) -> Result<Self::ContainerStructure<S>, E>
-    where
-        S: TensorStructure;
+    // fn map_structure<S>(self, f: impl Fn(Self::Structure) -> S) -> Self::ContainerStructure<S>
+    // where
+    //     S: TensorStructure;
 
     fn map_data_ref<U>(&self, f: impl Fn(&Self::Data) -> U) -> Self::ContainerData<U>;
 
@@ -1785,10 +2017,6 @@ pub trait StorageTensor: Sized + HasStructure<Structure: Clone> {
 impl<S: TensorStructure + Clone, T> StorageTensor for DataTensor<T, S> {
     type Data = T;
     type ContainerData<Data> = DataTensor<Data, S>;
-    type ContainerStructure<Sts>
-        = DataTensor<T, Sts>
-    where
-        Sts: TensorStructure;
 
     fn map_data_self(self, f: impl Fn(Self::Data) -> Self::Data) -> Self {
         self.map_data(f)
@@ -1819,22 +2047,13 @@ impl<S: TensorStructure + Clone, T> StorageTensor for DataTensor<T, S> {
         self.map_data_ref_result(f)
     }
 
-    fn map_structure<S2: TensorStructure>(self, f: impl Fn(S) -> S2) -> DataTensor<T, S2> {
-        match self {
-            DataTensor::Dense(d) => DataTensor::Dense(d.map_structure(f)),
-            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_structure(f)),
-        }
-    }
+    // fn map_structure<S2: TensorStructure>(self, f: impl Fn(S) -> S2) -> DataTensor<T, S2> {
+    //     match self {
+    //         DataTensor::Dense(d) => DataTensor::Dense(d.map_structure(f)),
+    //         DataTensor::Sparse(s) => DataTensor::Sparse(s.map_structure(f)),
+    //     }
+    // }
 
-    fn map_structure_fallible<S2: TensorStructure, E>(
-        self,
-        f: impl Fn(S) -> Result<S2, E>,
-    ) -> Result<DataTensor<T, S2>, E> {
-        Ok(match self {
-            DataTensor::Dense(d) => DataTensor::Dense(d.map_structure_fallible(f)?),
-            DataTensor::Sparse(s) => DataTensor::Sparse(s.map_structure_fallible(f)?),
-        })
-    }
     fn map_data_ref_result<U, E>(
         &self,
         f: impl Fn(&T) -> Result<U, E>,
@@ -1877,7 +2096,6 @@ impl<S: TensorStructure + Clone, T> StorageTensor for DataTensor<T, S> {
 impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
     type Data = T;
     type ContainerData<Data> = SparseTensor<Data, S>;
-    type ContainerStructure<St: TensorStructure> = SparseTensor<T, St>;
 
     fn map_data_self(self, f: impl Fn(Self::Data) -> Self::Data) -> Self {
         self.map_data(f)
@@ -1887,7 +2105,7 @@ impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
         &mut self,
         mut f: impl FnMut(&mut Self::Data) -> Result<U, E>,
     ) -> Result<Self::ContainerData<U>, E> {
-        let elements: Result<AHashMap<FlatIndex, _>, E> = self
+        let elements: Result<HashMap<FlatIndex, _>, E> = self
             .elements
             .iter_mut()
             .map(|(k, v)| f(v).map(|v| (*k, v)))
@@ -1913,29 +2131,6 @@ impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
         self.map_data_ref_result(f)
     }
 
-    fn map_structure<S2>(self, f: impl Fn(S) -> S2) -> SparseTensor<T, S2>
-    where
-        S2: TensorStructure,
-    {
-        SparseTensor {
-            elements: self.elements,
-            structure: f(self.structure),
-        }
-    }
-
-    fn map_structure_fallible<S2, E>(
-        self,
-        f: impl Fn(S) -> Result<S2, E>,
-    ) -> Result<SparseTensor<T, S2>, E>
-    where
-        S2: TensorStructure,
-    {
-        Ok(SparseTensor {
-            elements: self.elements,
-            structure: f(self.structure)?,
-        })
-    }
-
     fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> SparseTensor<U, S> {
         let elements = self.flat_iter().map(|(k, v)| (k, f(v))).collect();
         SparseTensor {
@@ -1948,7 +2143,7 @@ impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
         &self,
         f: impl Fn(&T) -> Result<U, E>,
     ) -> Result<SparseTensor<U, S>, E> {
-        let elements: Result<AHashMap<FlatIndex, _>, E> = self
+        let elements: Result<HashMap<FlatIndex, _>, E> = self
             .flat_iter()
             .map(|(k, v)| f(v).map(|v| (k, v)))
             .collect();
@@ -1979,10 +2174,6 @@ impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
     }
 }
 impl<S: TensorStructure + Clone, D> StorageTensor for DenseTensor<D, S> {
-    type ContainerStructure<Structure>
-        = DenseTensor<D, Structure>
-    where
-        Structure: TensorStructure;
     type ContainerData<Data> = DenseTensor<Data, S>;
 
     type Data = D;
@@ -2004,29 +2195,6 @@ impl<S: TensorStructure + Clone, D> StorageTensor for DenseTensor<D, S> {
         f: impl Fn(&Self::Data) -> Result<Self::Data, E>,
     ) -> Result<Self, E> {
         self.map_data_ref_result(f)
-    }
-
-    fn map_structure<S2>(self, f: impl Fn(S) -> S2) -> DenseTensor<D, S2>
-    where
-        S2: TensorStructure,
-    {
-        DenseTensor {
-            data: self.data,
-            structure: f(self.structure),
-        }
-    }
-
-    fn map_structure_fallible<S2, E>(
-        self,
-        f: impl Fn(S) -> Result<S2, E>,
-    ) -> Result<DenseTensor<D, S2>, E>
-    where
-        S2: TensorStructure,
-    {
-        Ok(DenseTensor {
-            data: self.data,
-            structure: f(self.structure)?,
-        })
     }
 
     fn map_data_ref<U>(&self, f: impl Fn(&D) -> U) -> DenseTensor<U, S> {

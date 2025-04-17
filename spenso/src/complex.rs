@@ -21,6 +21,13 @@ use symbolica::{
     evaluate::{CompiledEvaluatorFloat, FunctionMap},
 };
 
+use crate::structure::abstract_index::AbstractIndex;
+use crate::structure::dimension::Dimension;
+use crate::structure::representation::Representation;
+use crate::structure::slot::IsAbstractSlot;
+use crate::structure::StructureError;
+use delegate::delegate;
+
 #[cfg(feature = "shadowing")]
 use crate::{
     data::{DataIterator, DenseTensor},
@@ -35,7 +42,7 @@ use rand::Rng;
 
 use crate::{
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefOne, RefZero, Trace},
-    data::{DataTensor, GetTensorData, HasTensorData, SetTensorData, SparseOrDense, StorageTensor},
+    data::{DataTensor, GetTensorData, HasTensorData, SetTensorData, SparseOrDense},
     iterators::{IteratableTensor, IteratorEnum},
     structure::{
         concrete_index::{ExpandedIndex, FlatIndex},
@@ -1571,30 +1578,6 @@ impl<T: Clone, S: TensorStructure + Clone> HasTensorData for RealOrComplexTensor
 
 // use crate::data::StorageTensor;
 
-impl<T, S: TensorStructure + Clone> RealOrComplexTensor<T, S> {
-    pub fn map_structure<S2: TensorStructure>(
-        self,
-        f: impl Fn(S) -> S2,
-    ) -> RealOrComplexTensor<T, S2> {
-        match self {
-            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.map_structure(f)),
-            RealOrComplexTensor::Complex(d) => RealOrComplexTensor::Complex(d.map_structure(f)),
-        }
-    }
-
-    pub fn map_structure_fallible<S2: TensorStructure, E>(
-        self,
-        f: impl Fn(S) -> Result<S2, E>,
-    ) -> Result<RealOrComplexTensor<T, S2>, E> {
-        Ok(match self {
-            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.map_structure_fallible(f)?),
-            RealOrComplexTensor::Complex(d) => {
-                RealOrComplexTensor::Complex(d.map_structure_fallible(f)?)
-            }
-        })
-    }
-}
-
 impl<T: Display, S: TensorStructure> Display for RealOrComplexTensor<T, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1737,9 +1720,64 @@ impl<T: Display> Display for RealOrComplex<T> {
     }
 }
 
+impl<T: Clone, S> TensorStructure for RealOrComplexTensor<T, S>
+where
+    S: TensorStructure,
+{
+    // type R = <T::Structure as TensorStructure>::R;
+    type Indexed = RealOrComplexTensor<T, S::Indexed>;
+    type Slot = S::Slot;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        self.map_structure_result(|s| s.reindex(indices))
+    }
+
+    fn dual(self) -> Self {
+        self.map_same_structure(|s| s.dual())
+    }
+
+    delegate! {
+        to self.structure() {
+            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn order(&self)-> usize;
+        }
+    }
+}
+
 impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
     type Scalar = RealOrComplex<T>;
     type Structure = S;
+    type Store<U>
+        = RealOrComplexTensor<T, U>
+    where
+        U: TensorStructure;
+
+    fn map_structure<S2: TensorStructure>(self, f: impl Fn(S) -> S2) -> RealOrComplexTensor<T, S2> {
+        match self {
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.map_structure(f)),
+            RealOrComplexTensor::Complex(d) => RealOrComplexTensor::Complex(d.map_structure(f)),
+        }
+    }
+
+    fn map_structure_result<S2: TensorStructure, E>(
+        self,
+        f: impl Fn(S) -> Result<S2, E>,
+    ) -> Result<RealOrComplexTensor<T, S2>, E> {
+        Ok(match self {
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.map_structure_result(f)?),
+            RealOrComplexTensor::Complex(d) => {
+                RealOrComplexTensor::Complex(d.map_structure_result(f)?)
+            }
+        })
+    }
+
     fn structure(&self) -> &Self::Structure {
         match self {
             RealOrComplexTensor::Real(r) => r.structure(),

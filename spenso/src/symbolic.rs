@@ -1,14 +1,24 @@
 use crate::{
     contraction::{Contract, ContractionError},
-    network::{TensorNetwork, TensorNetworkError},
+    network::{
+        store::NetworkStore,
+        tensor_library::symbolic::{ExplicitKey, ShadowedStructure, TensorLibrary},
+        Network, TensorNetworkError,
+    },
     parametric::MixedTensor,
     structure::{
         abstract_index::AIND_SYMBOLS, representation::LibrarySlot, HasName, HasStructure,
-        NamedStructure, StructureContract, TensorStructure, ToSymbolic, VecStructure,
+        NamedStructure, StructureContract, TensorShell, TensorStructure, ToSymbolic, VecStructure,
     },
     symbolica_utils::{IntoArgs, IntoSymbol},
-    tensor_library::{ExplicitKey, ShadowedStructure, TensorLibrary},
 };
+
+use crate::structure::abstract_index::AbstractIndex;
+use crate::structure::dimension::Dimension;
+use crate::structure::representation::Representation;
+use crate::structure::slot::IsAbstractSlot;
+use crate::structure::StructureError;
+use delegate::delegate;
 
 use symbolica::atom::{Atom, AtomView, Symbol};
 
@@ -24,9 +34,62 @@ pub struct SymbolicTensor {
     expression: symbolica::atom::Atom,
 }
 
+impl TensorStructure for SymbolicTensor {
+    // type R = <T::Structure as TensorStructure>::R;
+    type Indexed = SymbolicTensor;
+    type Slot = LibrarySlot;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        Ok(Self {
+            structure: self.structure.reindex(indices)?,
+            expression: self.expression,
+        })
+    }
+
+    fn dual(self) -> Self {
+        self.map_same_structure(|s| s.dual())
+    }
+
+    delegate! {
+        to self.structure() {
+            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn order(&self)-> usize;
+        }
+    }
+}
+
 impl HasStructure for SymbolicTensor {
     type Structure = VecStructure;
     type Scalar = Atom;
+    type Store<S>
+        = TensorShell<S>
+    where
+        S: TensorStructure;
+
+    fn map_structure<O: TensorStructure>(
+        self,
+        f: impl FnOnce(Self::Structure) -> O,
+    ) -> Self::Store<O> {
+        TensorShell {
+            structure: f(self.structure),
+        }
+    }
+
+    fn map_structure_result<O: TensorStructure, Er>(
+        self,
+        f: impl FnOnce(Self::Structure) -> anyhow::Result<O, Er>,
+    ) -> std::result::Result<Self::Store<O>, Er> {
+        Ok(TensorShell {
+            structure: f(self.structure)?,
+        })
+    }
 
     fn structure(&self) -> &Self::Structure {
         &self.structure
@@ -126,8 +189,11 @@ impl SymbolicTensor {
     pub fn to_network(
         &self,
         library: &TensorLibrary<MixedTensor<f64, ExplicitKey>>,
-    ) -> Result<TensorNetwork<MixedTensor<f64, ShadowedStructure>, Atom>, TensorNetworkError> {
-        TensorNetwork::<MixedTensor<f64, ShadowedStructure>, Atom>::try_from_view(
+    ) -> Result<
+        Network<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, ExplicitKey>,
+        TensorNetworkError<ExplicitKey>,
+    > {
+        Network::<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>,ExplicitKey>::try_from_view(
             self.expression.as_view(),
             library,
         )

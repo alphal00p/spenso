@@ -76,12 +76,11 @@ pub mod scalar;
 #[cfg(feature = "shadowing")]
 pub mod shadowing;
 
-#[cfg(feature = "shadowing")]
+// #[cfg(feature = "shadowing")]
 // pub mod polynomial;
-#[cfg(feature = "shadowing")]
-pub mod tensor_library;
+pub mod algebraic_traits;
 
 #[cfg(feature = "shadowing")]
 pub mod api;
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;

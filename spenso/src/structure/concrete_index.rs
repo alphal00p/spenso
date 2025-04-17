@@ -1,5 +1,7 @@
 use std::ops::Deref;
 
+use bincode::Decode;
+use bincode::Encode;
 use derive_more::Add;
 use derive_more::AddAssign;
 use derive_more::Display;
@@ -106,6 +108,8 @@ impl From<DualConciousExpandedIndex> for Atom {
     Into,
     Display,
     IntoIterator,
+    Encode,
+    Decode,
 )]
 #[display(fmt = "{:?}", indices)]
 
@@ -182,6 +186,8 @@ impl FromIterator<ConcreteIndex> for ExpandedIndex {
     AddAssign,
     Sub,
     SubAssign,
+    Encode,
+    Decode,
 )]
 #[display(fmt = "{}", index)]
 pub struct FlatIndex {

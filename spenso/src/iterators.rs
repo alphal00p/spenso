@@ -2220,7 +2220,7 @@ where
     }
 }
 
-pub trait IteratableTensor: HasStructure + Sized {
+pub trait IteratableTensor: HasStructure + Sized + TensorStructure {
     type Data<'a>
     where
         Self: 'a;

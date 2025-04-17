@@ -1,12 +1,11 @@
 use crate::{
     data::DenseTensor,
+    network::tensor_library::{Library, LibraryTensor},
     parametric::{ParamTensor, TensorCoefficient},
     structure::{
-        concrete_index::FlatIndex, representation::LibraryRep, slot::IsAbstractSlot, HasName,
-        HasStructure, TensorShell, TensorStructure, ToSymbolic,
+        concrete_index::FlatIndex, HasName, HasStructure, TensorShell, TensorStructure, ToSymbolic,
     },
     symbolica_utils::{IntoArgs, IntoSymbol},
-    tensor_library::{ExplicitKey, LibraryTensor, TensorLibrary},
 };
 use anyhow::Result;
 use symbolica::{atom::Atom, evaluate::FunctionMap};
@@ -36,21 +35,6 @@ pub trait Shadowable:
         T: TensorCoefficient,
     {
         self.structure().clone().to_dense_labeled(index_to_atom)
-    }
-
-    fn to_explicit<'a, 'b, T: LibraryTensor + Clone>(
-        &'a self,
-        library: &'b TensorLibrary<T>,
-    ) -> Option<T::WithIndices>
-    where
-        LibraryRep: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::R>,
-        'a: 'b,
-    {
-        let key = ExplicitKey::from_structure(self.structure().clone())?;
-        library
-            .get(&key)
-            .ok()
-            .map(|t| t.with_indices(&self.external_indices()).unwrap())
     }
 }
 
@@ -591,9 +575,10 @@ pub mod test {
 
     use once_cell::sync::Lazy;
     use symbolica::atom::Symbol;
-    use symbolica::{atom::Atom, parse};
 
-    use crate::tensor_library::{TensorLibrary, ETS};
+    use crate::network::tensor_library::{
+        symbolic::ExplicitKey, symbolic::TensorLibrary, symbolic::ETS,
+    };
 
     pub static EXPLICIT_TENSOR_MAP: Lazy<RwLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>>> =
         Lazy::new(|| {
@@ -604,17 +589,12 @@ pub mod test {
 
     use crate::{
         contraction::Contract,
-        data::StorageTensor,
-        network::TensorNetwork,
         parametric::MixedTensor,
         structure::{
             representation::{LibraryRep, RepName, REPS},
-            HasStructure, IndexlessNamedStructure, TensorStructure, VecStructure,
+            HasStructure, IndexlessNamedStructure, TensorStructure,
         },
-        tensor_library::ShadowedStructure,
     };
-
-    use super::ExplicitKey;
 
     #[test]
     fn test_identity() {

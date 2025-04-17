@@ -49,13 +49,27 @@ pub mod dimension;
 pub mod representation;
 pub mod slot;
 
+#[cfg(not(feature = "shadowing"))]
+pub mod bincode;
+#[cfg(feature = "shadowing")]
+pub mod bincode_statemap;
+
 pub trait ScalarTensor: HasStructure<Structure: ScalarStructure> {
     fn new_scalar(scalar: Self::Scalar) -> Self;
 }
 pub trait HasStructure {
+    type Store<S>: HasStructure<Structure = S>
+    where
+        S: TensorStructure;
     type Structure: TensorStructure;
     type Scalar;
 
+    fn map_structure<O: TensorStructure>(self, f: impl Fn(Self::Structure) -> O) -> Self::Store<O>;
+
+    fn map_structure_result<O: TensorStructure, Er>(
+        self,
+        f: impl Fn(Self::Structure) -> Result<O, Er>,
+    ) -> std::result::Result<Self::Store<O>, Er>;
     fn structure(&self) -> &Self::Structure;
     fn mut_structure(&mut self) -> &mut Self::Structure;
     fn scalar(self) -> Option<Self::Scalar>;
@@ -107,30 +121,36 @@ impl<Store, Structure> Tensor<Store, Structure> {
     }
 }
 
-impl<T> TensorStructure for T
-where
-    T: HasStructure,
-{
-    // type R = <T::Structure as TensorStructure>::R;
-    type Slot = <T::Structure as TensorStructure>::Slot;
-    fn dual(self) -> Self {
-        self.map_same_structure(|s| s.dual())
-    }
+// impl<T> TensorStructure for T
+// where
+//     T: HasStructure,
+// {
+//     // type R = <T::Structure as TensorStructure>::R;
+//     type Indexed = T::Store<<T::Structure as TensorStructure>::Indexed>;
+//     type Slot = <T::Structure as TensorStructure>::Slot;
 
-    delegate! {
-        to self.structure() {
-            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
-            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
-            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
-            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
-            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn get_dim(&self, i: usize)-> Option<Dimension>;
-            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
-            fn order(&self)-> usize;
-        }
-    }
-}
+//     fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+//         self.map_structure_result(|s| s.reindex(indices))
+//     }
+
+//     fn dual(self) -> Self {
+//         self.map_same_structure(|s| s.dual())
+//     }
+
+//     delegate! {
+//         to self.structure() {
+//             fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+//             fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+//             fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+//             fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+//             fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+//             fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+//             fn get_dim(&self, i: usize)-> Option<Dimension>;
+//             fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+//             fn order(&self)-> usize;
+//         }
+//     }
+// }
 
 #[cfg(feature = "shadowing")]
 impl<T: HasName> ToSymbolic for T
@@ -262,8 +282,11 @@ pub trait ScalarStructure {
 }
 pub trait TensorStructure {
     type Slot: IsAbstractSlot + DualSlotTo<Dual = Self::Slot>;
+    type Indexed: TensorStructure<Indexed = Self::Indexed>;
     // type R: Rep;
     //
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError>;
     fn dual(self) -> Self;
 
     fn string_rep(&self) -> String {
@@ -646,6 +669,22 @@ impl<S: IsAbstractSlot<R: RepName> + DualSlotTo<Dual = S>> TensorStructure for V
     type Slot = S;
     // type R = S::R;
 
+    type Indexed = Vec<S>;
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        if self.len() != indices.len() {
+            return Err(StructureError::WrongNumberOfArguments(
+                self.len(),
+                indices.len(),
+            ));
+        }
+
+        Ok(self
+            .into_iter()
+            .zip(indices)
+            .map(|(s, index)| s.reindex(*index))
+            .collect())
+    }
+
     fn dual(self) -> Self {
         self.into_iter().map(|s| s.dual()).collect()
     }
@@ -812,10 +851,12 @@ impl<S: DualSlotTo<Dual = S, R: RepName>> StructureContract for Vec<S> {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Hash)]
+#[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 pub struct IndexLess<T: RepName = LibraryRep> {
     pub structure: Vec<Representation<T>>,
 }
+
 impl<R: RepName> std::fmt::Display for IndexLess<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (index, item) in self.structure.iter().enumerate() {
@@ -916,7 +957,23 @@ impl<T: RepName<Dual = T>> ScalarStructure for IndexLess<T> {
 impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T> {
     type Slot = Slot<T>;
     // type R = T;
-    //
+    type Indexed = Vec<Slot<T>>;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Vec<Slot<T>>, StructureError> {
+        if self.structure.len() != indices.len() {
+            return Err(StructureError::WrongNumberOfArguments(
+                indices.len(),
+                self.structure.len(),
+            ));
+        }
+
+        Ok(indices
+            .iter()
+            .cloned()
+            .zip(self.structure.iter().cloned())
+            .map(|(i, r)| Representation::slot(&r, i))
+            .collect())
+    }
     fn dual(self) -> Self {
         self.structure.into_iter().map(|r| r.dual()).collect()
     }
@@ -1009,7 +1066,8 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T> {
 #[cfg(feature = "shadowing")]
 impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {}
 
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 pub struct VecStructure<R: RepName = LibraryRep> {
     pub structure: Vec<Slot<R>>,
 }
@@ -1206,8 +1264,14 @@ impl<R: RepName> ScalarStructure for VecStructure<R> {
 
 impl<R: RepName<Dual = R>> TensorStructure for VecStructure<R> {
     type Slot = Slot<R>;
+    type Indexed = Self;
     // type R = PhysicalReps;
-    //
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        Ok(Self {
+            structure: self.structure.reindex(indices)?,
+        })
+    }
     fn dual(self) -> Self {
         self.structure.dual().into()
     }
@@ -1254,7 +1318,8 @@ impl<R: RepName<Dual = R>> StructureContract for VecStructure<R> {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Hash)]
+#[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 pub struct IndexlessNamedStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
     pub structure: IndexLess<R>,
     pub global_name: Option<Name>,
@@ -1262,6 +1327,18 @@ pub struct IndexlessNamedStructure<Name = String, Args = usize, R: RepName = Lib
 }
 impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructure<Name, Args, R> {
     type Slot = Slot<R>;
+    type Indexed = NamedStructure<Name, Args, R>;
+
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<NamedStructure<Name, Args, R>, StructureError> {
+        Ok(NamedStructure {
+            structure: VecStructure::from_iter(self.structure.to_indexed(indices)?),
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+        })
+    }
 
     fn dual(self) -> Self {
         Self {
@@ -1363,7 +1440,8 @@ impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for IndexlessNamedStructure
 /// A named structure is a structure with a global name, and a list of slots
 ///
 /// It is useful when you want to shadow tensors, to nest tensor network contraction operations.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Hash)]
+#[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 pub struct NamedStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
     pub structure: VecStructure<R>,
     pub global_name: Option<Name>,
@@ -1564,6 +1642,15 @@ impl<N, A, R: RepName> ScalarStructure for NamedStructure<N, A, R> {
 impl<N, A, R: RepName<Dual = R>> TensorStructure for NamedStructure<N, A, R> {
     type Slot = Slot<R>;
     // type R = PhysicalReps;
+    type Indexed = Self;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        Ok(Self {
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+            structure: self.structure.reindex(indices)?,
+        })
+    }
 
     fn dual(self) -> Self {
         NamedStructure {
@@ -1634,7 +1721,8 @@ impl<N, A, R: RepName<Dual = R>> StructureContract for NamedStructure<N, A, R> {
 /// A contraction count structure
 ///
 /// Useful for tensor network contraction algorithm.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 pub struct ContractionCountStructure<R: RepName> {
     pub structure: VecStructure<R>,
     pub contractions: usize,
@@ -1674,8 +1762,15 @@ impl<R: RepName> ScalarStructure for ContractionCountStructure<R> {
 
 impl<R: RepName<Dual = R>> TensorStructure for ContractionCountStructure<R> {
     type Slot = Slot<R>;
-    // type R = PhysicalReps;
-    //
+    type Indexed = Self;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        Ok(Self {
+            contractions: self.contractions,
+            structure: self.structure.reindex(indices)?,
+        })
+    }
+
     fn dual(self) -> Self {
         ContractionCountStructure {
             structure: self.structure.dual(),
@@ -1726,7 +1821,8 @@ impl<R: RepName<Dual = R>> StructureContract for ContractionCountStructure<R> {
 }
 
 /// A structure to enable smart shadowing of tensors in a tensor network contraction algorithm.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 pub struct SmartShadowStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
     pub structure: VecStructure<R>,
     pub contractions: usize,
@@ -1801,6 +1897,16 @@ impl<N, A, R: RepName> ScalarStructure for SmartShadowStructure<N, A, R> {
 
 impl<N, A, R: RepName<Dual = R>> TensorStructure for SmartShadowStructure<N, A, R> {
     type Slot = Slot<R>;
+    type Indexed = Self;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        Ok(Self {
+            contractions: self.contractions,
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+            structure: self.structure.reindex(indices)?,
+        })
+    }
     // type R = PhysicalReps;
     //
     fn dual(self) -> Self {
@@ -1876,7 +1982,8 @@ impl<N, A, R: RepName<Dual = R>> From<NamedStructure<N, A, R>> for SmartShadowSt
 ///
 /// It enables keeping track of the contraction history of the tensor, mostly for debugging and display purposes.
 /// A [`SymbolicTensor`] can also be used in this way, however it needs a symbolica state and workspace during contraction.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 pub struct HistoryStructure<Name, Args = (), R: RepName = LibraryRep> {
     internal: VecStructure<R>,
     pub names: AHashMap<Range<usize>, Name>, //ideally this is a named partion.. maybe a btreemap<usize, N>, and the range is from previous to next
@@ -1962,8 +2069,16 @@ impl<N, A, R: RepName> ScalarStructure for HistoryStructure<N, A, R> {
 
 impl<N, A, R: RepName<Dual = R>> TensorStructure for HistoryStructure<N, A, R> {
     type Slot = Slot<R>;
-    // type R = PhysicalReps;
-    //
+    type Indexed = Self;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        Ok(Self {
+            external: self.external.reindex(indices)?,
+            internal: self.internal,
+            names: self.names,
+        })
+    }
+
     fn dual(self) -> Self {
         Self {
             internal: self.internal,
@@ -2083,7 +2198,7 @@ where
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct TensorShell<S: TensorStructure> {
-    structure: S,
+    pub(crate) structure: S,
 }
 
 impl<S: TensorStructure + ScalarStructure> ScalarTensor for TensorShell<S> {
@@ -2094,9 +2209,63 @@ impl<S: TensorStructure + ScalarStructure> ScalarTensor for TensorShell<S> {
     }
 }
 
+impl<T> TensorStructure for TensorShell<T>
+where
+    T: TensorStructure,
+{
+    // type R = <T::Structure as TensorStructure>::R;
+    type Indexed = TensorShell<T::Indexed>;
+    type Slot = T::Slot;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        self.map_structure_result(|s| s.reindex(indices))
+    }
+
+    fn dual(self) -> Self {
+        self.map_same_structure(|s| s.dual())
+    }
+
+    delegate! {
+        to self.structure() {
+            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
+            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
+            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
+            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_dim(&self, i: usize)-> Option<Dimension>;
+            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn order(&self)-> usize;
+        }
+    }
+}
+
 impl<S: TensorStructure> HasStructure for TensorShell<S> {
     type Structure = S;
     type Scalar = ();
+    type Store<U>
+        = TensorShell<U>
+    where
+        U: TensorStructure;
+
+    fn map_structure<O: TensorStructure>(
+        self,
+        f: impl FnOnce(Self::Structure) -> O,
+    ) -> Self::Store<O> {
+        TensorShell {
+            structure: f(self.structure),
+        }
+    }
+
+    fn map_structure_result<O: TensorStructure, Er>(
+        self,
+        f: impl FnOnce(Self::Structure) -> Result<O, Er>,
+    ) -> std::result::Result<Self::Store<O>, Er> {
+        Ok(TensorShell {
+            structure: f(self.structure)?,
+        })
+    }
+
     fn structure(&self) -> &S {
         &self.structure
     }
@@ -2212,7 +2381,7 @@ where
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
-    use crate::tensor_library::ShadowedStructure;
+    use crate::network::tensor_library::symbolic::ShadowedStructure;
 
     use super::representation::Lorentz;
     use super::*;
@@ -2232,7 +2401,7 @@ mod shadowing_tests {
         }
 
         if let AtomView::Fun(f) = parse!("gamma(1,mink(1,2),mink(1,2))").unwrap().as_view() {
-            let a = ShadowedStructure::try_from(f).unwrap();
+            let _ = ShadowedStructure::try_from(f).unwrap();
         }
     }
 }

@@ -296,6 +296,11 @@ pub fn derive_simple_representation(input: TokenStream) -> TokenStream {
                 type Base = #base_type_ident;
                 type Dual = #base_type_ident;
 
+                #[inline]
+                fn orientation(self) -> ::linnet::half_edge::involution::Orientation {
+                    ::linnet::half_edge::involution::Orientation::Undirected
+                }
+
                 #base_repname_common_impl
                 #[inline]
                 fn is_dual(self) -> bool { false }
@@ -366,6 +371,12 @@ pub fn derive_simple_representation(input: TokenStream) -> TokenStream {
                 type Base = #base_type_ident;
                 type Dual = #dual_type_ident;
 
+
+                #[inline]
+                fn orientation(self) -> ::linnet::half_edge::involution::Orientation {
+                    ::linnet::half_edge::involution::Orientation::Default
+                }
+
                 #base_repname_common_impl
                 #[inline]
                 fn is_dual(self) -> bool { false }
@@ -418,6 +429,10 @@ pub fn derive_simple_representation(input: TokenStream) -> TokenStream {
                 type Base = #base_type_ident;
                 type Dual = #base_type_ident;
 
+                #[inline]
+                fn orientation(self) -> ::linnet::half_edge::involution::Orientation {
+                    ::linnet::half_edge::involution::Orientation::Reversed
+                }
                 #base_repname_common_impl
                 #[inline]
                 fn dual(self) -> Self::Dual where Self::Dual: Default { #base_type_ident::default() }

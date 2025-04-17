@@ -6,6 +6,7 @@ use super::{
 };
 use ahash::AHashMap;
 use append_only_vec::AppendOnlyVec;
+use linnet::half_edge::involution::Orientation;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use spenso_macros::SimpleRepresentation;
@@ -16,8 +17,10 @@ use std::{
 };
 use std::{hash::Hash, ops::Index};
 
+use bincode::{Decode, Encode};
+
 #[cfg(feature = "shadowing")]
-use crate::{structure::slot::SlotError, tensor_library::ETS};
+use crate::{network::tensor_library::symbolic::ETS, structure::slot::SlotError};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -116,6 +119,7 @@ pub trait RepName:
 
     fn from_library_rep(rep: LibraryRep) -> Result<Self, RepresentationError>;
 
+    fn orientation(self) -> Orientation;
     fn dual(self) -> Self::Dual;
     fn is_dual(self) -> bool;
     fn base(&self) -> Self::Base;
@@ -225,6 +229,10 @@ impl RepName for Minkowski {
         rep.try_into()
     }
 
+    fn orientation(self) -> ::linnet::half_edge::involution::Orientation {
+        ::linnet::half_edge::involution::Orientation::Undirected
+    }
+
     fn base(&self) -> Self::Base {
         Minkowski::selfless_base()
     }
@@ -283,13 +291,24 @@ impl BaseRepName for Minkowski {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Encode, Decode,
+)]
+#[cfg_attr(
+    feature = "shadowing",
+    bincode(decode_context = "symbolica::state::StateMap")
+)]
 pub struct Representation<T: RepName> {
     pub dim: Dimension,
     pub rep: T,
 }
 
 impl<T: RepName> Representation<T> {
+    pub fn to_lib(self) -> Representation<LibraryRep> {
+        let rep: LibraryRep = self.rep.into();
+        Representation { dim: self.dim, rep }
+    }
+
     #[cfg(feature = "shadowing")]
     pub fn pattern<A: AtomCore>(&self, aind: A) -> Atom {
         let mut atom = Atom::new();
@@ -306,7 +325,9 @@ impl<T: RepName> Representation<T> {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize, Encode, Decode,
+)]
 pub enum LibraryRep {
     SelfDual(u16),
     InlineMetric(u16),
@@ -547,6 +568,14 @@ impl RepName for LibraryRep {
 
     fn from_library_rep(rep: LibraryRep) -> Result<Self, RepresentationError> {
         Ok(rep)
+    }
+
+    fn orientation(self) -> Orientation {
+        match self {
+            Self::SelfDual(_) => Orientation::Undirected,
+            Self::InlineMetric(_) => Orientation::Undirected,
+            Self::Dualizable(l) => (l > 0).into(),
+        }
     }
 
     #[inline]

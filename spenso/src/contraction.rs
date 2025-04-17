@@ -1,6 +1,6 @@
-use ahash::AHashMap;
 use duplicate::duplicate;
 use log::trace;
+use std::collections::HashMap;
 // use num::Zero;
 #[cfg(feature = "shadowing")]
 use crate::symbolica_utils::SerializableAtom;
@@ -778,7 +778,7 @@ where
         trace!("single contract sparse sparse");
 
         let final_structure = self.structure.merge_at(&other.structure, (i, j));
-        let mut result_data = AHashMap::default();
+        let mut result_data = HashMap::default();
         if let Some((_, s)) = self.flat_iter().next() {
             let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
             let mut result_index = 0;
@@ -864,7 +864,7 @@ where
 
         let mut final_structure = self.structure.clone();
         let _ = final_structure.merge(&other.structure);
-        let mut result_data = AHashMap::default();
+        let mut result_data = HashMap::default();
 
         if let Some((_, s)) = self.flat_iter().next() {
             let zero = s.try_upgrade().unwrap().as_ref().ref_zero();

@@ -63,6 +63,9 @@ pub trait HasStructure {
         S: TensorStructure;
     type Structure: TensorStructure;
     type Scalar;
+    type ScalarRef<'a>
+    where
+        Self: 'a;
 
     fn map_structure<O: TensorStructure>(self, f: impl Fn(Self::Structure) -> O) -> Self::Store<O>;
 
@@ -73,6 +76,7 @@ pub trait HasStructure {
     fn structure(&self) -> &Self::Structure;
     fn mut_structure(&mut self) -> &mut Self::Structure;
     fn scalar(self) -> Option<Self::Scalar>;
+    fn scalar_ref(&self) -> Option<Self::ScalarRef<'_>>;
     fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self;
 
     fn set_structure_name<N>(&mut self, name: N)
@@ -2243,6 +2247,10 @@ where
 impl<S: TensorStructure> HasStructure for TensorShell<S> {
     type Structure = S;
     type Scalar = ();
+    type ScalarRef<'a>
+    where
+        Self: 'a,
+    = &'a ();
     type Store<U>
         = TensorShell<U>
     where
@@ -2281,6 +2289,10 @@ impl<S: TensorStructure> HasStructure for TensorShell<S> {
         } else {
             None
         }
+    }
+
+    fn scalar_ref(&self) -> Option<&Self::Scalar> {
+        None
     }
     fn mut_structure(&mut self) -> &mut S {
         &mut self.structure

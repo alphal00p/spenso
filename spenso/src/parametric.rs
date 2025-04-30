@@ -996,6 +996,13 @@ pub enum ConcreteOrParam<C> {
     Param(Atom),
 }
 
+#[derive(Clone, Debug, EnumTryAsInner)]
+#[derive_err(Debug)]
+pub enum ConcreteOrParamRef<'a, C> {
+    Concrete(C),
+    Param(AtomView<'a>),
+}
+
 impl<C: Default> Default for ConcreteOrParam<C> {
     fn default() -> Self {
         ConcreteOrParam::Concrete(C::default())
@@ -1120,6 +1127,10 @@ where
     S: TensorStructure,
 {
     type Scalar = ConcreteOrParam<C::Scalar>;
+    type ScalarRef<'a>
+    where
+        Self: 'a,
+    = ConcreteOrParamRef<'a, C::ScalarRef<'a>>;
     type Structure = S;
     type Store<U>
         = ParamOrConcrete<C::Store<U>, U>
@@ -1165,6 +1176,13 @@ where
         match self {
             ParamOrConcrete::Concrete(x) => x.scalar().map(ConcreteOrParam::Concrete),
             ParamOrConcrete::Param(x) => x.scalar().map(ConcreteOrParam::Param),
+        }
+    }
+
+    fn scalar_ref(&self) -> Option<Self::ScalarRef<'_>> {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.scalar_ref().map(ConcreteOrParamRef::Concrete),
+            ParamOrConcrete::Param(x) => x.scalar_ref().map(ConcreteOrParamRef::Param),
         }
     }
 }
@@ -1530,6 +1548,10 @@ where
 {
     type Structure = S;
     type Scalar = Atom;
+    type ScalarRef<'a>
+    where
+        Self: 'a,
+    = AtomView<'a>;
     type Store<U>
         = ParamTensor<U>
     where
@@ -1572,6 +1594,10 @@ where
 
     fn scalar(self) -> Option<Self::Scalar> {
         self.tensor.scalar()
+    }
+
+    fn scalar_ref(&self) -> Option<Self::ScalarRef<'_>> {
+        self.tensor.scalar_ref().map(|a| a.as_view())
     }
 }
 
@@ -2219,6 +2245,10 @@ where
 
 impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
     type Scalar = T;
+    type ScalarRef<'a>
+    where
+        Self: 'a,
+    = &'a T;
     type Structure = S;
     type Store<U>
         = EvalTensor<T, U>
@@ -2263,6 +2293,14 @@ impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
     fn scalar(self) -> Option<Self::Scalar> {
         if self.is_scalar() {
             Some(self.eval)
+        } else {
+            None
+        }
+    }
+
+    fn scalar_ref(&self) -> Option<Self::ScalarRef<'_>> {
+        if self.is_scalar() {
+            Some(&self.eval)
         } else {
             None
         }

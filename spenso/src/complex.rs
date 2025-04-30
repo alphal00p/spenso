@@ -76,6 +76,15 @@ pub struct Complex<T> {
     pub im: T,
 }
 
+impl<T> Complex<T> {
+    pub fn as_ref(&self) -> Complex<&T> {
+        Complex {
+            re: &self.re,
+            im: &self.im,
+        }
+    }
+}
+
 #[cfg(feature = "shadowing")]
 impl<T: SingleFloat> SingleFloat for Complex<T>
 where
@@ -1753,6 +1762,10 @@ where
 
 impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
     type Scalar = RealOrComplex<T>;
+    type ScalarRef<'a>
+    where
+        Self: 'a,
+    = RealOrComplexRef<'a, T>;
     type Structure = S;
     type Store<U>
         = RealOrComplexTensor<T, U>
@@ -1805,6 +1818,13 @@ impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
         match self {
             RealOrComplexTensor::Real(r) => r.scalar().map(|x| RealOrComplex::Real(x)),
             RealOrComplexTensor::Complex(r) => r.scalar().map(|x| RealOrComplex::Complex(x)),
+        }
+    }
+
+    fn scalar_ref(&self) -> Option<Self::ScalarRef<'_>> {
+        match self {
+            RealOrComplexTensor::Real(r) => r.scalar_ref().map(|x| RealOrComplexRef::Real(x)),
+            RealOrComplexTensor::Complex(r) => r.scalar_ref().map(|x| RealOrComplexRef::Complex(x)),
         }
     }
 }

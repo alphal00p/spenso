@@ -44,7 +44,7 @@ pub struct NetworkGraph<K> {
     bincode(decode_context = "symbolica::state::StateMap")
 )]
 pub enum NetworkEdge {
-    Port,
+    // Port,
     Head,
     Slot(LibrarySlot),
 }
@@ -53,7 +53,7 @@ pub enum NetworkEdge {
 pub enum NetworkNode<LibKey> {
     Leaf(NetworkLeaf<LibKey>),
     Op(NetworkOp),
-    Port,
+    // Port,
 }
 
 #[derive(Debug, Clone, Copy, Encode, Decode, Serialize, Deserialize)]
@@ -191,31 +191,13 @@ impl<K> NetworkGraph<K> {
                     match &self.graph[child] {
                         NetworkNode::Leaf(a) => {
                             let mut slots = vec![];
-                            for i in tt.iter_preorder_tree_nodes(&self.graph, child) {
-                                match &self.graph[i] {
-                                    NetworkNode::Port => {
-                                        let mut slot: Vec<_> = self
-                                            .graph
-                                            .iter_crown(i)
-                                            .filter_map(|h| {
-                                                if let NetworkEdge::Slot(s) = self.graph[[&h]] {
-                                                    Some(s.aind)
-                                                } else {
-                                                    None
-                                                }
-                                            })
-                                            .collect();
 
-                                        match slot.len() {
-                                            0 => panic!("Port should have slot"),
-                                            1 => slots.extend(slot.drain(..)),
-                                            _ => panic!("Port cannot have more than one slot"),
-                                        }
-                                    }
-                                    NetworkNode::Leaf(_) => {}
-                                    NetworkNode::Op(_) => {}
+                            for h in self.graph.iter_crown(child) {
+                                if let NetworkEdge::Slot(s) = self.graph[[&h]] {
+                                    slots.push(s.aind)
                                 }
                             }
+
                             match a {
                                 NetworkLeaf::LibraryKey(l) => {
                                     leaves.push(NetworkLeafWithInds::LibraryKey {
@@ -343,9 +325,6 @@ impl<K> NetworkGraph<K> {
         }
 
         for s in slots {
-            let port = graph.add_node(NetworkNode::Port);
-            graph.add_edge(head, port, NetworkEdge::Port, true);
-            head = port;
             let orientation = s.rep_name().orientation();
             graph.add_external_edge(
                 head,
@@ -384,16 +363,11 @@ impl<K> NetworkGraph<K> {
             .map(|a| a.to_lib())
             .collect::<Vec<_>>();
 
-        let (mut graph, mut head) =
-            Self::head_builder(NetworkNode::Leaf(NetworkLeaf::LibraryKey(key)));
+        let (mut graph, head) = Self::head_builder(NetworkNode::Leaf(NetworkLeaf::LibraryKey(key)));
 
         for lib in slots {
-            let port = graph.add_node(NetworkNode::Port);
-            graph.add_edge(head, port, NetworkEdge::Port, true);
             let orientation = lib.rep_name().orientation();
-            graph.add_external_edge(port, NetworkEdge::Slot(lib), orientation, Flow::Source);
-
-            head = port;
+            graph.add_external_edge(head, NetworkEdge::Slot(lib), orientation, Flow::Source);
         }
         graph.into()
     }
@@ -403,12 +377,9 @@ impl<K> NetworkGraph<K> {
 
         for s in tensor.external_structure_iter() {
             let lib = s.to_lib();
-            let port = graph.add_node(NetworkNode::Port);
-            graph.add_edge(head, port, NetworkEdge::Port, true);
-            let orientation = lib.rep_name().orientation();
-            graph.add_external_edge(port, NetworkEdge::Slot(lib), orientation, Flow::Source);
 
-            head = port;
+            let orientation = lib.rep_name().orientation();
+            graph.add_external_edge(head, NetworkEdge::Slot(lib), orientation, Flow::Source);
         }
         graph.into()
     }
@@ -508,7 +479,7 @@ impl<K> NetworkGraph<K> {
                 n_heads += 1;
                 true
             }
-            NetworkEdge::Port => true,
+            // NetworkEdge::Port => true,
             _ => false,
         });
 
@@ -517,40 +488,11 @@ impl<K> NetworkGraph<K> {
             1 => {
                 let head = self.head();
                 let root_node = self.graph.node_id(head);
-                let tree: SimpleTraversalTree<ParentChildStore<()>> =
-                    SimpleTraversalTree::depth_first_traverse(
-                        &self.graph,
-                        &headgraph,
-                        &root_node,
-                        Some(head),
-                    )
-                    .unwrap()
-                    .cast();
 
                 let mut slots = vec![];
-                for i in tree.iter_preorder_tree_nodes(&self.graph, root_node) {
-                    match &self.graph[i] {
-                        NetworkNode::Port => {
-                            let mut slot: Vec<_> = self
-                                .graph
-                                .iter_crown(i)
-                                .filter_map(|h| {
-                                    if let NetworkEdge::Slot(s) = self.graph[[&h]] {
-                                        Some(s)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect();
-
-                            match slot.len() {
-                                0 => panic!("Port should have slot"),
-                                1 => slots.extend(slot.drain(..)),
-                                _ => panic!("Port cannot have more than one slot"),
-                            }
-                        }
-                        NetworkNode::Leaf(_) => {}
-                        NetworkNode::Op(_) => {}
+                for h in self.graph.iter_crown(root_node) {
+                    if let NetworkEdge::Slot(s) = self.graph[[&h]] {
+                        slots.push(s);
                     }
                 }
 

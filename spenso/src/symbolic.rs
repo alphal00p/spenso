@@ -68,6 +68,10 @@ impl TensorStructure for SymbolicTensor {
 impl HasStructure for SymbolicTensor {
     type Structure = VecStructure;
     type Scalar = Atom;
+    type ScalarRef<'a>
+    where
+        Self: 'a,
+    = &'a Atom;
     type Store<S>
         = TensorShell<S>
     where
@@ -109,6 +113,14 @@ impl HasStructure for SymbolicTensor {
     fn scalar(self) -> Option<Self::Scalar> {
         if self.is_scalar() {
             Some(self.expression)
+        } else {
+            None
+        }
+    }
+
+    fn scalar_ref(&self) -> Option<&Self::Scalar> {
+        if self.is_scalar() {
+            Some(&self.expression)
         } else {
             None
         }

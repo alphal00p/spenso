@@ -603,6 +603,10 @@ where
     I: TensorStructure,
 {
     type Scalar = T;
+    type ScalarRef<'a>
+    where
+        Self: 'a,
+    = &'a T;
     type Structure = I;
     type Store<S>
         = SparseTensor<T, S>
@@ -646,6 +650,14 @@ where
     fn scalar(mut self) -> Option<Self::Scalar> {
         if self.structure.is_scalar() {
             self.elements.drain().next().map(|(_, v)| v)
+        } else {
+            None
+        }
+    }
+
+    fn scalar_ref(&self) -> Option<Self::ScalarRef<'_>> {
+        if self.structure.is_scalar() {
+            self.elements.values().next()
         } else {
             None
         }
@@ -942,6 +954,10 @@ where
     I: TensorStructure,
 {
     type Scalar = T;
+    type ScalarRef<'a>
+    where
+        Self: 'a,
+    = &'a T;
     type Structure = I;
     type Store<S>
         = DenseTensor<T, S>
@@ -984,6 +1000,14 @@ where
     fn scalar(mut self) -> Option<Self::Scalar> {
         if self.is_scalar() {
             self.data.drain(0..).next()
+        } else {
+            None
+        }
+    }
+
+    fn scalar_ref(&self) -> Option<Self::ScalarRef<'_>> {
+        if self.is_scalar() {
+            self.data.first()
         } else {
             None
         }
@@ -1541,6 +1565,10 @@ where
     I: TensorStructure,
 {
     type Scalar = T;
+    type ScalarRef<'a>
+    where
+        Self: 'a,
+    = &'a T;
     type Structure = I;
 
     type Store<S>
@@ -1588,6 +1616,13 @@ where
         match self {
             DataTensor::Dense(d) => d.scalar(),
             DataTensor::Sparse(s) => s.scalar(),
+        }
+    }
+
+    fn scalar_ref(&self) -> Option<Self::ScalarRef<'_>> {
+        match self {
+            DataTensor::Dense(d) => d.scalar_ref(),
+            DataTensor::Sparse(s) => s.scalar_ref(),
         }
     }
 
@@ -1804,6 +1839,10 @@ where
     T: TensorStructure,
 {
     type Scalar = Complex<f64>;
+    type ScalarRef<'a>
+    where
+        Self: 'a,
+    = Complex<&'a f64>;
     type Structure = T;
     type Store<S>
         = NumTensor<S>
@@ -1858,6 +1897,13 @@ where
         match self {
             NumTensor::Float(f) => f.scalar().map(|x| Complex { re: x, im: 0. }),
             NumTensor::Complex(c) => c.scalar(),
+        }
+    }
+
+    fn scalar_ref(&self) -> Option<Self::ScalarRef<'_>> {
+        match self {
+            NumTensor::Float(f) => f.scalar_ref().map(|x| Complex { re: x, im: &0. }),
+            NumTensor::Complex(c) => c.scalar_ref().map(|a| a.as_ref()),
         }
     }
 }

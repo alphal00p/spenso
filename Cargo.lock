@@ -895,6 +895,7 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 [[package]]
 name = "linnet"
 version = "0.4.0"
+source = "git+https://github.com/alphal00p/linnet?rev=8b1d8b8afaca52de6d8820362de130aa23e87018#8b1d8b8afaca52de6d8820362de130aa23e87018"
 dependencies = [
  "ahash",
  "bincode",

@@ -153,17 +153,17 @@ pub trait RepName:
         librep.to_symbolic(args)
     }
 
-    fn slot<D: Into<Dimension>, A: Into<AbstractIndex>>(self, dim: D, aind: A) -> Slot<Self>
+    fn new_slot<D: Into<Dimension>, A: Into<AbstractIndex>>(self, dim: D, aind: A) -> Slot<Self>
     where
         Self: Sized,
     {
         Slot {
-            rep: self.rep(dim),
+            rep: self.new_rep(dim),
             aind: aind.into(),
         }
     }
 
-    fn rep<D: Into<Dimension>>(&self, dim: D) -> Representation<Self>
+    fn new_rep<D: Into<Dimension>>(&self, dim: D) -> Representation<Self>
     where
         Self: Sized,
     {
@@ -616,6 +616,7 @@ impl RepName for LibraryRep {
         match (self, other) {
             (Self::SelfDual(s), Self::SelfDual(o)) => s == o,
             (Self::Dualizable(s), Self::Dualizable(o)) => *s == -o,
+            (Self::InlineMetric(s), Self::InlineMetric(o)) => s == o,
             _ => false,
         }
     }
@@ -843,7 +844,7 @@ impl<T: RepName> Representation<T> {
 
 #[test]
 fn test_negative() {
-    let spin: Representation<Euclidean> = Euclidean {}.rep(5);
+    let spin: Representation<Euclidean> = Euclidean {}.new_rep(5);
 
     let metric_diag: Vec<bool> = spin.negative().unwrap();
 

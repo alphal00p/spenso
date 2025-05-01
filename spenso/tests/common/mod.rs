@@ -54,9 +54,9 @@ pub static WEYLIB: Lazy<RwLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>>> = 
 
     let gamma = ExplicitKey::from_iter(
         [
-            LibraryRep::from(Minkowski {}).rep(4),
-            Bispinor {}.rep(4).cast(),
-            Bispinor {}.rep(4).cast(),
+            LibraryRep::from(Minkowski {}).new_rep(4),
+            Bispinor {}.new_rep(4).cast(),
+            Bispinor {}.new_rep(4).cast(),
         ],
         WEYL.gamma,
         None,
@@ -64,16 +64,25 @@ pub static WEYLIB: Lazy<RwLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>>> = 
 
     library.insert_explicit(gamma_data_weyl(gamma, 1., 0.).into());
 
-    let gamma5 =
-        ExplicitKey::from_iter([Bispinor {}.rep(4), Bispinor {}.rep(4)], WEYL.gamma5, None);
+    let gamma5 = ExplicitKey::from_iter(
+        [Bispinor {}.new_rep(4), Bispinor {}.new_rep(4)],
+        WEYL.gamma5,
+        None,
+    );
     library.insert_explicit(gamma5_weyl_data(gamma5, 1., 0.).into());
 
-    let projm_key =
-        ExplicitKey::from_iter([Bispinor {}.rep(4), Bispinor {}.rep(4)], WEYL.projm, None);
+    let projm_key = ExplicitKey::from_iter(
+        [Bispinor {}.new_rep(4), Bispinor {}.new_rep(4)],
+        WEYL.projm,
+        None,
+    );
     library.insert_explicit(proj_m_data_weyl(projm_key, 1., 0.).into());
 
-    let projp_key =
-        ExplicitKey::from_iter([Bispinor {}.rep(4), Bispinor {}.rep(4)], WEYL.projp, None);
+    let projp_key = ExplicitKey::from_iter(
+        [Bispinor {}.new_rep(4), Bispinor {}.new_rep(4)],
+        WEYL.projp,
+        None,
+    );
     library.insert_explicit(proj_p_data_weyl(projp_key, 1., 0.).into());
 
     RwLock::new(library)

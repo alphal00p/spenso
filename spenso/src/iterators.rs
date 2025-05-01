@@ -1198,19 +1198,19 @@ mod iteratortests {
         let rep = Euclidean {};
 
         let structura: VecStructure<Euclidean> = VecStructure::new(vec![
-            rep.slot(4, 0),
-            rep.slot(4, 4),
-            rep.slot(5, 1),
-            rep.slot(7, 3),
-            rep.slot(8, 2),
+            rep.new_slot(4, 0),
+            rep.new_slot(4, 4),
+            rep.new_slot(5, 1),
+            rep.new_slot(7, 3),
+            rep.new_slot(8, 2),
         ]);
 
         let structurb = VecStructure::new(vec![
-            rep.slot(8, 2),
-            rep.slot(7, 3),
-            rep.slot(4, 0),
-            rep.slot(5, 1),
-            rep.slot(4, 5),
+            rep.new_slot(8, 2),
+            rep.new_slot(7, 3),
+            rep.new_slot(4, 0),
+            rep.new_slot(5, 1),
+            rep.new_slot(4, 5),
         ]);
 
         let fibera = Fiber::from(
@@ -1246,11 +1246,11 @@ mod iteratortests {
     fn mutiter() {
         let rep = Euclidean {};
         let structa: VecStructure = VecStructure::new(vec![
-            LibraryRep::from(rep).slot(2, 0),
-            LibraryRep::from(rep).slot(4, 4),
-            LibraryRep::from(rep).slot(5, 1),
-            LibraryRep::from(rep).slot(7, 3),
-            LibraryRep::from(rep).slot(8, 3),
+            LibraryRep::from(rep).new_slot(2, 0),
+            LibraryRep::from(rep).new_slot(4, 4),
+            LibraryRep::from(rep).new_slot(5, 1),
+            LibraryRep::from(rep).new_slot(7, 3),
+            LibraryRep::from(rep).new_slot(8, 3),
         ]);
 
         let mut a: DenseTensor<f64> = DenseTensor::zero(structa);

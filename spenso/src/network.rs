@@ -13,8 +13,9 @@ use crate::algebraic_traits::{One, Zero};
 use crate::arithmetic::ScalarMul;
 use crate::contraction::Contract;
 use crate::network::tensor_library::LibraryTensor;
+// use crate::shadowing::Concretize;
 use crate::structure::representation::LibrarySlot;
-use crate::structure::StructureError;
+use crate::structure::{StructureError, TensorShell};
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg};
@@ -32,7 +33,7 @@ use crate::{
 #[cfg(feature = "shadowing")]
 use crate::{
     parametric::ParamTensor,
-    shadowing::Shadowable,
+    shadowing::Concretize,
     structure::representation::LibraryRep,
     structure::slot::IsAbstractSlot,
     structure::HasName,
@@ -228,6 +229,38 @@ impl<S: TensorScalarStore, K> NMul for Network<S, K> {
     }
 }
 
+impl<S: TensorScalarStore, K> Mul for Network<S, K> {
+    type Output = Self;
+    fn mul(self, mut other: Self) -> Self::Output {
+        let mut store = self.store;
+
+        other.graph.shift_scalars(store.n_scalars());
+        other.graph.shift_tensors(store.n_tensors());
+        store.extend(other.store);
+
+        Network {
+            graph: self.graph * other.graph,
+            store,
+        }
+    }
+}
+
+impl<S: TensorScalarStore, K> Add for Network<S, K> {
+    type Output = Self;
+    fn add(self, mut other: Self) -> Self::Output {
+        let mut store = self.store;
+
+        other.graph.shift_scalars(store.n_scalars());
+        other.graph.shift_tensors(store.n_tensors());
+        store.extend(other.store);
+
+        Network {
+            graph: self.graph + other.graph,
+            store,
+        }
+    }
+}
+
 impl<S: TensorScalarStore, K> NAdd for Network<S, K> {
     type Output = Self;
     fn n_add<I: IntoIterator<Item = Self>>(self, iter: I) -> Self::Output {
@@ -257,7 +290,7 @@ impl<S: TensorScalarStore, K> Network<S, K> {
         }
     }
 
-    pub fn tensor(tensor: S::Tensor) -> Self
+    pub fn local_tensor(tensor: S::Tensor) -> Self
     where
         S::Tensor: TensorStructure,
     {
@@ -266,6 +299,16 @@ impl<S: TensorScalarStore, K> Network<S, K> {
         Network {
             graph: NetworkGraph::tensor(store.get_tensor(id), NetworkLeaf::LocalTensor(id)),
             store,
+        }
+    }
+
+    pub fn library_tensor<T>(tensor: &T, key: K) -> Self
+    where
+        T: TensorStructure,
+    {
+        Network {
+            graph: NetworkGraph::tensor(tensor, NetworkLeaf::LibraryKey(key)),
+            store: S::default(),
         }
     }
 
@@ -445,7 +488,7 @@ impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scala
     }
 }
 
-impl<S, K> Network<S, K> {
+impl<S, K: Display> Network<S, K> {
     pub fn dot(&self) -> std::string::String {
         self.graph.dot()
     }
@@ -459,17 +502,17 @@ impl<
         Sc,
         S,
         T: HasStructure<Structure = S> + TensorStructure,
-        K: Clone + Display,
+        K: Clone + Display + Debug,
         Str: TensorScalarStore<Tensor = T, Scalar = Sc> + Clone,
     > Network<Str, K>
 where
     Sc: for<'r> TryFrom<AtomView<'r>> + Clone,
     TensorNetworkError<K>: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
     S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
-    S::Name: IntoSymbol + Clone,
-    S::Args: IntoArgs,
-    LibraryRep: From<<S::Slot as IsAbstractSlot>::R>,
-    T: Clone + From<ParamTensor<S>>,
+    TensorShell<S>: Concretize<T>, // S::Name: IntoSymbol + Clone,
+                                   // S::Args: IntoArgs,
+                                   // LibraryRep: From<<S::Slot as IsAbstractSlot>::R>,
+                                   // T: Clone + From<ParamTensor<S>>,
 {
     pub fn try_from_view<Lib: Library<S, Key = K, Value: LibraryTensor<WithIndices = T>>>(
         value: AtomView<'a>,
@@ -504,21 +547,14 @@ where
         let s: Result<S, _> = value.try_into();
 
         if let Ok(s) = s {
-            let shell = s.clone().to_shell();
-
-            let inds = s.external_indices();
-            let key = library.key_for_structure(s.into());
-            let explicit = if let Some(k) = key {
-                library.get(&k).ok().map(|t| t.with_indices(&inds).unwrap())
-            } else {
-                None
-            };
-
-            Ok(Self::tensor(if let Some(e) = explicit {
-                e
-            } else {
-                ParamTensor::param(shell.expanded_shadow()?.into()).into()
-            }))
+            let s = s.clone();
+            match library.key_for_structure(s) {
+                Ok(key) => {
+                    let t = library.get(&key).unwrap();
+                    Ok(Self::library_tensor(t.as_ref(), key))
+                }
+                Err(shell) => Ok(Self::local_tensor(shell.to_shell().concretize())),
+            }
         } else {
             Ok(Self::scalar(
                 value.as_view().try_into().map_err(Into::into)?,
@@ -1003,7 +1039,7 @@ impl SmallestDegree {
                     NetworkNode::Op(NetworkOp::Product),
                     NetworkNode::Leaf(NetworkLeaf::LocalTensor(l)),
                 ) => {
-                    graph.graph.identify_nodes(
+                    graph.identify_nodes_without_self_edges(
                         &[nid1, nid2],
                         NetworkNode::Leaf(NetworkLeaf::LocalTensor(*l)),
                     );
@@ -1018,7 +1054,7 @@ impl SmallestDegree {
                     NetworkNode::Op(NetworkOp::Product),
                     NetworkNode::Leaf(NetworkLeaf::LibraryKey(k)),
                 ) => {
-                    graph.graph.identify_nodes(
+                    graph.identify_nodes_without_self_edges(
                         &[nid1, nid2],
                         NetworkNode::Leaf(NetworkLeaf::LibraryKey(k.clone())),
                     );
@@ -1034,7 +1070,7 @@ impl SmallestDegree {
                         let pos = executor.tensors.len();
                         executor.tensors.push(contracted);
 
-                        graph.graph.identify_nodes(
+                        graph.identify_nodes_without_self_edges(
                             &[nid1, nid2],
                             NetworkNode::Leaf(NetworkLeaf::LocalTensor(pos)),
                         );
@@ -1055,7 +1091,7 @@ impl SmallestDegree {
                         let pos = executor.tensors.len();
                         executor.tensors.push(contracted);
 
-                        graph.graph.identify_nodes(
+                        graph.identify_nodes_without_self_edges(
                             &[nid1, nid2],
                             NetworkNode::Leaf(NetworkLeaf::LocalTensor(pos)),
                         );
@@ -1077,7 +1113,7 @@ impl SmallestDegree {
                         let pos = executor.tensors.len();
                         executor.tensors.push(contracted);
 
-                        graph.graph.identify_nodes(
+                        graph.identify_nodes_without_self_edges(
                             &[nid1, nid2],
                             NetworkNode::Leaf(NetworkLeaf::LocalTensor(pos)),
                         );
@@ -1110,7 +1146,7 @@ impl SmallestDegree {
                         let pos = executor.tensors.len();
                         executor.tensors.push(contracted);
 
-                        graph.graph.identify_nodes(
+                        graph.identify_nodes_without_self_edges(
                             &[nid1, nid2],
                             NetworkNode::Leaf(NetworkLeaf::LocalTensor(pos)),
                         );

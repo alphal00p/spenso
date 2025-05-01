@@ -1,10 +1,12 @@
 use crate::{
-    data::DenseTensor,
-    network::tensor_library::{Library, LibraryTensor},
-    parametric::{ParamTensor, TensorCoefficient},
+    data::{DataTensor, DenseTensor},
+    network::tensor_library::{symbolic::ShadowedStructure, Library, LibraryTensor},
+    parametric::{MixedTensor, ParamTensor, TensorCoefficient},
     structure::{
-        concrete_index::FlatIndex, HasName, HasStructure, TensorShell, TensorStructure, ToSymbolic,
+        concrete_index::FlatIndex, AtomStructure, HasName, HasStructure, TensorShell,
+        TensorStructure, ToSymbolic,
     },
+    symbolic::SymbolicTensor,
     symbolica_utils::{IntoArgs, IntoSymbol},
 };
 use anyhow::Result;
@@ -35,6 +37,53 @@ pub trait Shadowable:
         T: TensorCoefficient,
     {
         self.structure().clone().to_dense_labeled(index_to_atom)
+    }
+}
+
+pub trait Concretize<T> {
+    fn concretize(self) -> T;
+}
+
+impl Concretize<SymbolicTensor> for ShadowedStructure {
+    fn concretize(self) -> SymbolicTensor {
+        SymbolicTensor {
+            expression: self.to_symbolic().unwrap(),
+            structure: self.structure,
+        }
+    }
+}
+
+impl<S: Shadowable> Concretize<DenseTensor<Atom, S::Structure>> for S {
+    fn concretize(self) -> DenseTensor<Atom, S::Structure> {
+        // self.flat_s
+        // todo!()
+        self.expanded_shadow().unwrap()
+    }
+}
+
+impl<S: Shadowable> Concretize<DataTensor<Atom, S::Structure>> for S {
+    fn concretize(self) -> DataTensor<Atom, S::Structure> {
+        // self.flat_s
+        // todo!()
+        <S as Concretize<DenseTensor<Atom, S::Structure>>>::concretize(self).into()
+    }
+}
+
+impl<S: Shadowable> Concretize<ParamTensor<S::Structure>> for S {
+    fn concretize(self) -> ParamTensor<S::Structure> {
+        // self.flat_s
+        // todo!()
+        ParamTensor::param(<S as Concretize<DataTensor<Atom, S::Structure>>>::concretize(self))
+    }
+}
+
+impl<T: Clone, S: Shadowable> Concretize<MixedTensor<T, S::Structure>> for S {
+    fn concretize(self) -> MixedTensor<T, S::Structure> {
+        // self.flat_s
+        // todo!()
+        MixedTensor::<T, S::Structure>::param(
+            <S as Concretize<DataTensor<Atom, S::Structure>>>::concretize(self),
+        )
     }
 }
 
@@ -603,16 +652,16 @@ pub mod test {
         tensor_library.update_ids();
 
         for rep in REPS.read().unwrap().reps() {
-            let structure = [rep.rep(4), rep.rep(4).dual()];
+            let structure = [rep.new_rep(4), rep.new_rep(4).dual()];
 
             let idstructure: IndexlessNamedStructure<Symbol, (), LibraryRep> =
                 IndexlessNamedStructure::from_iter(structure, ETS.id, None);
 
-            let idkey = ExplicitKey::from_structure(idstructure).unwrap();
+            let idkey = ExplicitKey::from_structure(&idstructure).unwrap();
 
             let id = tensor_library.get(&idkey).unwrap().into_owned();
 
-            let trace_structure = vec![rep.rep(4).slot(3), rep.rep(4).dual().slot(4)];
+            let trace_structure = vec![rep.new_rep(4).slot(3), rep.new_rep(4).dual().slot(4)];
             let id1 = id.map_structure(|_| trace_structure.clone());
             let id2 = id1
                 .clone()

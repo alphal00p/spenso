@@ -215,7 +215,7 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + D
     fn dim(&self) -> Dimension;
     fn to_lib(&self) -> LibrarySlot {
         let rep: LibraryRep = self.rep_name().into();
-        rep.slot(self.dim(), self.aind())
+        rep.new_slot(self.dim(), self.aind())
     }
     fn aind(&self) -> AbstractIndex;
     fn set_aind(&mut self, aind: AbstractIndex);
@@ -336,7 +336,7 @@ mod shadowing_tests {
 
     #[test]
     fn doc_slot() {
-        let mink: Representation<Lorentz> = Lorentz {}.rep(4);
+        let mink: Representation<Lorentz> = Lorentz {}.new_rep(4);
 
         let mud: Slot<Lorentz> = mink.slot(0);
         let muu: Slot<DualLorentz> = mink.slot(0).dual();
@@ -346,7 +346,7 @@ mod shadowing_tests {
 
         let custom_mink = LibraryRep::new_dual("custom_lor").unwrap();
 
-        let nud: Slot<LibraryRep> = custom_mink.slot(4, 0);
+        let nud: Slot<LibraryRep> = custom_mink.new_slot(4, 0);
         let nuu: Slot<LibraryRep> = nud.dual();
 
         assert!(nuu.matches(&nud));
@@ -355,13 +355,13 @@ mod shadowing_tests {
 
     #[test]
     fn to_symbolic() {
-        let mink = Lorentz {}.rep(4);
+        let mink = Lorentz {}.new_rep(4);
         let mu = mink.slot(0);
         println!("{}", mu.to_atom());
         assert_eq!("spenso::lor(4,0)", mu.to_atom().to_string());
         assert_eq!("lor🠑4|₀", mu.to_string());
 
-        let mink = Lorentz {}.rep(4);
+        let mink = Lorentz {}.new_rep(4);
         let mu = mink.slot(0);
         let atom = mu.to_atom();
         let slot = Slot::try_from(atom.as_view()).unwrap();
@@ -370,7 +370,7 @@ mod shadowing_tests {
 
     #[test]
     fn slot_from_atom_view() {
-        let mink = Lorentz {}.rep(4);
+        let mink = Lorentz {}.new_rep(4);
         let mu = mink.slot(0);
         let atom = mu.to_atom();
         assert_eq!(Slot::try_from(atom.as_view()).unwrap(), mu);

@@ -30,11 +30,13 @@ pub trait Library<S> {
     type Value: Clone;
     // type Structure: TensorStructure;
 
-    fn key_for_structure(&self, structure: S) -> Option<Self::Key>;
+    fn key_for_structure(&self, structure: S) -> Result<Self::Key, S>
+    where
+        S: TensorStructure;
     fn get<'a>(&'a self, key: &Self::Key) -> Result<Cow<'a, Self::Value>, LibraryError<Self::Key>>;
 }
 
-pub trait LibraryTensor: SetTensorData + HasStructure + Sized {
+pub trait LibraryTensor: SetTensorData + HasStructure + Sized + TensorStructure {
     type WithIndices: HasStructure;
     fn empty(key: Self::Structure) -> Self;
 
@@ -147,7 +149,7 @@ pub mod symbolic {
 
     impl ExplicitKey {
         pub fn from_structure<S: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs>>(
-            structure: S,
+            structure: &S,
         ) -> Option<Self> {
             Some(IndexlessNamedStructure::from_iter(
                 structure.reps().into_iter().map(|r| r.to_lib()),
@@ -410,8 +412,20 @@ pub mod symbolic {
             }
         }
 
-        fn key_for_structure(&self, structure: S) -> Option<Self::Key> {
-            ExplicitKey::from_structure(structure)
+        fn key_for_structure(&self, structure: S) -> Result<Self::Key, S>
+        where
+            S: TensorStructure,
+        {
+            let a = ExplicitKey::from_structure(&structure);
+            if let Some(key) = a {
+                if <TensorLibrary<T> as Library<S>>::get(&self, &key).is_ok() {
+                    Ok(key)
+                } else {
+                    Err(structure)
+                }
+            } else {
+                Err(structure)
+            }
         }
     }
 
@@ -419,7 +433,11 @@ pub mod symbolic {
         TensorLibrary<T>
     {
         pub fn metric_key(rep: LibraryRep) -> ExplicitKey {
-            ExplicitKey::from_iter([rep.rep(4), rep.rep(4)], symbol!(Self::METRIC_NAME), None)
+            ExplicitKey::from_iter(
+                [rep.new_rep(4), rep.new_rep(4)],
+                symbol!(Self::METRIC_NAME),
+                None,
+            )
         }
 
         pub fn generic_mink_metric(key: ExplicitKey) -> T

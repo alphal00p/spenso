@@ -30,8 +30,8 @@ use symbolica::atom::{Atom, AtomView, Symbol};
 /// Additionally, this can also be used as a tensor structure, that tracks the history, much like [`HistoryStructure`].
 #[derive(Debug, Clone)]
 pub struct SymbolicTensor {
-    structure: VecStructure,
-    expression: symbolica::atom::Atom,
+    pub structure: VecStructure,
+    pub expression: symbolica::atom::Atom,
 }
 
 impl TensorStructure for SymbolicTensor {

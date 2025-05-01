@@ -1,6 +1,9 @@
 use bincode::{Decode, Encode};
 
-use graph::{NAdd, NMul, NetworkGraph, NetworkLeaf, NetworkLeafWithInds, NetworkNode, NetworkOp};
+use graph::{
+    NAdd, NMul, NetworkEdge, NetworkGraph, NetworkLeaf, NetworkLeafWithInds, NetworkNode, NetworkOp,
+};
+use linnet::half_edge::NodeIndex;
 use ref_ops::{RefAdd, RefMul, RefNeg};
 use serde::{Deserialize, Serialize};
 
@@ -283,6 +286,10 @@ impl<S: TensorScalarStore, K> Network<S, K> {
 
 #[derive(Error, Debug)]
 pub enum TensorNetworkError<K: Display> {
+    #[error("Contraction Error:{0}")]
+    ContractionError(#[from] ContractionError),
+    #[error("Scalar connected by a slot edge")]
+    ScalarSlotEdge,
     #[error("Structure Error:{0}")]
     StructErr(#[from] StructureError),
     #[error("LibraryError:{0}")]
@@ -293,8 +300,10 @@ pub enum TensorNetworkError<K: Display> {
     InvalidResultNode(NetworkNode<()>),
     #[error("internal edge still present, contract it first")]
     InternalEdgePresent,
-    #[error("Cannot contract edge")]
-    CannotContractEdge,
+    #[error("uncontracted scalar")]
+    UncontractedScalar,
+    #[error("Cannot contract edge between {0} and {1}")]
+    CannotContractEdgeBetween(NetworkNode<K>, NetworkNode<K>),
     #[error("no nodes in the graph")]
     NoNodes,
     #[error("no scalar present")]
@@ -683,8 +692,14 @@ where
 }
 
 impl<
-        T: HasStructure + TensorStructure + Neg<Output = T> + Clone + for<'a> AddAssign<&'a T>,
-        L: Library<T::Structure, Key = K, Value: LibraryTensor<WithIndices = T>>,
+        T: HasStructure
+            + TensorStructure
+            + Neg<Output = T>
+            + Clone
+            + for<'a> AddAssign<&'a T>
+            + for<'a> AddAssign<<L::Value as LibraryTensor>::WithIndices>
+            + From<<L::Value as LibraryTensor>::WithIndices>,
+        L: Library<T::Structure, Key = K, Value: LibraryTensor>,
         Sc: Neg<Output = Sc>
             + for<'a> AddAssign<&'a Sc>
             + Clone
@@ -713,7 +728,7 @@ impl<
                         Ok(NetworkGraph::scalar(pos))
                     }
                     NetworkLeafWithInds::LibraryKey { key, inds } => {
-                        let t = lib.get(key).unwrap().with_indices(inds).unwrap().neg();
+                        let t = T::from(lib.get(key).unwrap().with_indices(inds).unwrap()).neg();
                         let pos = self.tensors.len();
                         let node = NetworkLeaf::LocalTensor(pos);
                         self.tensors.push(t);
@@ -805,7 +820,7 @@ impl<
                                     }
                                     NetworkLeafWithInds::LibraryKey { key, inds } => {
                                         let with_index = lib.get(key)?.with_indices(inds)?;
-                                        accumulator += &with_index;
+                                        accumulator += with_index;
                                     }
                                 }
                             }
@@ -820,7 +835,7 @@ impl<
                         }
                     }
                     NetworkLeafWithInds::LibraryKey { key, inds } => {
-                        let mut accumulator = lib.get(key)?.with_indices(inds)?;
+                        let mut accumulator = T::from(lib.get(key)?.with_indices(inds)?);
                         for t in &targets[1..] {
                             match t {
                                 NetworkLeafWithInds::Scalar(_) => {
@@ -831,7 +846,7 @@ impl<
                                 }
                                 NetworkLeafWithInds::LibraryKey { key, inds } => {
                                     let with_index = lib.get(key)?.with_indices(inds)?;
-                                    accumulator += &with_index;
+                                    accumulator += with_index;
                                 }
                             }
                         }
@@ -853,21 +868,264 @@ impl<
 pub struct SmallestDegree;
 
 impl<
-        T: HasStructure + TensorStructure + Clone + Contract<LCM = T> + ScalarMul<Sc, Output = T>,
-        L: Library<T::Structure, Key = K, Value: LibraryTensor<WithIndices = T>>,
+        T: HasStructure
+            + TensorStructure
+            + Clone
+            + Contract<LCM = T>
+            + ScalarMul<Sc, Output = T>
+            + Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T>
+            + From<<L::Value as LibraryTensor>::WithIndices>,
+        L: Library<T::Structure, Key = K, Value: LibraryTensor>,
         Sc: for<'a> MulAssign<&'a Sc> + Clone + for<'a> MulAssign<T::ScalarRef<'a>> + From<T::Scalar>,
-        K: Display + Debug,
+        K: Display + Debug + Clone,
     > ContractionStrategy<NetworkStore<T, Sc>, L, K> for SmallestDegree
+where
+    <L::Value as LibraryTensor>::WithIndices:
+        Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T>,
 {
     fn contract(
         executor: &mut NetworkStore<T, Sc>,
-        graph: NetworkGraph<K>,
+        mut graph: NetworkGraph<K>,
         lib: &L,
     ) -> Result<NetworkGraph<K>, TensorNetworkError<K>>
     where
         K: Display,
     {
-        Ok(graph)
+        // First do all scalar products and then store the outcome of it in the head
+        //
+        //
+        let head = graph.graph.node_id(graph.head());
+
+        let (mut scalars, mut scalar_nodes): (Vec<_>, Vec<_>) = graph
+            .graph
+            .iter_nodes()
+            .filter_map(|(_, nid, c)| {
+                if let NetworkNode::Leaf(NetworkLeaf::Scalar(i)) = c {
+                    Some((*i, nid))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        scalar_nodes.push(head);
+
+        if let Some(f) = scalars.pop() {
+            let mut acc = executor.scalar[f].clone();
+
+            for si in scalars {
+                acc *= &executor.scalar[si];
+            }
+
+            let pos = executor.scalar.len();
+            executor.scalar.push(acc);
+
+            graph
+                .graph
+                .identify_nodes(&scalar_nodes, NetworkNode::Leaf(NetworkLeaf::Scalar(pos)));
+        }
+
+        SmallestDegree::contract_impl(executor, graph, lib, head)
+    }
+}
+
+impl SmallestDegree {
+    fn contract_impl<
+        T: HasStructure
+            + TensorStructure
+            + Clone
+            + Contract<LCM = T>
+            + ScalarMul<Sc, Output = T>
+            + Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T>
+            + From<<L::Value as LibraryTensor>::WithIndices>,
+        L: Library<T::Structure, Key = K, Value: LibraryTensor>,
+        Sc: for<'a> MulAssign<&'a Sc> + Clone + for<'a> MulAssign<T::ScalarRef<'a>> + From<T::Scalar>,
+        K: Display + Debug + Clone,
+    >(
+        executor: &mut NetworkStore<T, Sc>,
+        mut graph: NetworkGraph<K>,
+        lib: &L,
+        head: NodeIndex,
+    ) -> Result<NetworkGraph<K>, TensorNetworkError<K>>
+    where
+        K: Display,
+        <L::Value as LibraryTensor>::WithIndices:
+            Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T>,
+    {
+        // First do all scalar products and then store the outcome of it in the head
+        //
+        //
+
+        let edge_to_contract = graph
+            .graph
+            .iter_nodes()
+            .filter(|(_, nid, _)| *nid != head)
+            .filter_map(|(a, nid1, n1)| {
+                let mut degree = 0;
+                let mut first = None;
+                for h in a {
+                    if first.is_none() {
+                        first = Some(h);
+                    }
+                    if graph.graph[[&h]].is_slot() && graph.graph.inv(h) != h {
+                        first = Some(h); //override contracting hedge if it is a slot hedge
+                    }
+                    degree += 1
+                }
+
+                // let n1 = &graph.graph[graph.graph.node_id(first?)];
+                let nid2 = graph.graph.involved_node_id(first?)?;
+                let n2 = &graph.graph[nid2];
+
+                Some((degree, nid1, n1, nid2, n2))
+            })
+            .min_by_key(|(degree, _, _, _, _)| *degree);
+
+        if let Some((_, nid1, n1, nid2, n2)) = edge_to_contract {
+            match (n1, n2) {
+                (
+                    NetworkNode::Leaf(NetworkLeaf::Scalar(_)),
+                    NetworkNode::Op(NetworkOp::Product),
+                )
+                | (
+                    NetworkNode::Op(NetworkOp::Product),
+                    NetworkNode::Leaf(NetworkLeaf::Scalar(_)),
+                ) => {
+                    // This should have already been handled
+                    return Err(TensorNetworkError::UncontractedScalar);
+                }
+
+                (
+                    NetworkNode::Leaf(NetworkLeaf::LocalTensor(l)),
+                    NetworkNode::Op(NetworkOp::Product),
+                )
+                | (
+                    NetworkNode::Op(NetworkOp::Product),
+                    NetworkNode::Leaf(NetworkLeaf::LocalTensor(l)),
+                ) => {
+                    graph.graph.identify_nodes(
+                        &[nid1, nid2],
+                        NetworkNode::Leaf(NetworkLeaf::LocalTensor(*l)),
+                    );
+                    Self::contract_impl(executor, graph, lib, head)
+                }
+
+                (
+                    NetworkNode::Leaf(NetworkLeaf::LibraryKey(k)),
+                    NetworkNode::Op(NetworkOp::Product),
+                )
+                | (
+                    NetworkNode::Op(NetworkOp::Product),
+                    NetworkNode::Leaf(NetworkLeaf::LibraryKey(k)),
+                ) => {
+                    graph.graph.identify_nodes(
+                        &[nid1, nid2],
+                        NetworkNode::Leaf(NetworkLeaf::LibraryKey(k.clone())),
+                    );
+                    Self::contract_impl(executor, graph, lib, head)
+                }
+
+                (NetworkNode::Leaf(l1), NetworkNode::Leaf(l2)) => match (l1, l2) {
+                    (NetworkLeaf::Scalar(_), _) | (_, NetworkLeaf::Scalar(_)) => {
+                        return Err(TensorNetworkError::ScalarSlotEdge);
+                    }
+                    (NetworkLeaf::LocalTensor(l1), NetworkLeaf::LocalTensor(l2)) => {
+                        let contracted = executor.tensors[*l1].contract(&executor.tensors[*l2])?;
+                        let pos = executor.tensors.len();
+                        executor.tensors.push(contracted);
+
+                        graph.graph.identify_nodes(
+                            &[nid1, nid2],
+                            NetworkNode::Leaf(NetworkLeaf::LocalTensor(pos)),
+                        );
+
+                        Self::contract_impl(executor, graph, lib, head)
+                    }
+                    (NetworkLeaf::LibraryKey(l1), NetworkLeaf::LocalTensor(l2)) => {
+                        let l1_inds: Vec<_> = graph
+                            .graph
+                            .iter_crown(nid1)
+                            .filter_map(|i| match graph.graph[[&i]] {
+                                NetworkEdge::Head => None,
+                                NetworkEdge::Slot(s) => Some(s.aind),
+                            })
+                            .collect();
+                        let contracted = executor.tensors[*l2]
+                            .contract(&lib.get(l1)?.with_indices(&l1_inds)?)?;
+                        let pos = executor.tensors.len();
+                        executor.tensors.push(contracted);
+
+                        graph.graph.identify_nodes(
+                            &[nid1, nid2],
+                            NetworkNode::Leaf(NetworkLeaf::LocalTensor(pos)),
+                        );
+
+                        Self::contract_impl(executor, graph, lib, head)
+                    }
+
+                    (NetworkLeaf::LocalTensor(l2), NetworkLeaf::LibraryKey(l1)) => {
+                        let l1_inds: Vec<_> = graph
+                            .graph
+                            .iter_crown(nid1)
+                            .filter_map(|i| match graph.graph[[&i]] {
+                                NetworkEdge::Head => None,
+                                NetworkEdge::Slot(s) => Some(s.aind),
+                            })
+                            .collect();
+                        let contracted = executor.tensors[*l2]
+                            .contract(&lib.get(l1)?.with_indices(&l1_inds)?)?;
+                        let pos = executor.tensors.len();
+                        executor.tensors.push(contracted);
+
+                        graph.graph.identify_nodes(
+                            &[nid1, nid2],
+                            NetworkNode::Leaf(NetworkLeaf::LocalTensor(pos)),
+                        );
+
+                        Self::contract_impl(executor, graph, lib, head)
+                    }
+                    (NetworkLeaf::LibraryKey(l1), NetworkLeaf::LibraryKey(l2)) => {
+                        let l1_inds: Vec<_> = graph
+                            .graph
+                            .iter_crown(nid1)
+                            .filter_map(|i| match graph.graph[[&i]] {
+                                NetworkEdge::Head => None,
+                                NetworkEdge::Slot(s) => Some(s.aind),
+                            })
+                            .collect();
+
+                        let l2_inds: Vec<_> = graph
+                            .graph
+                            .iter_crown(nid2)
+                            .filter_map(|i| match graph.graph[[&i]] {
+                                NetworkEdge::Head => None,
+                                NetworkEdge::Slot(s) => Some(s.aind),
+                            })
+                            .collect();
+
+                        let contracted = lib
+                            .get(l1)?
+                            .with_indices(&l1_inds)?
+                            .contract(&lib.get(l2)?.with_indices(&l2_inds)?)?;
+                        let pos = executor.tensors.len();
+                        executor.tensors.push(contracted);
+
+                        graph.graph.identify_nodes(
+                            &[nid1, nid2],
+                            NetworkNode::Leaf(NetworkLeaf::LocalTensor(pos)),
+                        );
+
+                        Self::contract_impl(executor, graph, lib, head)
+                    }
+                },
+                (a, b) => Err(TensorNetworkError::CannotContractEdgeBetween(
+                    a.clone(),
+                    b.clone(),
+                )),
+            }
+        } else {
+            Ok(graph)
+        }
     }
 }
 

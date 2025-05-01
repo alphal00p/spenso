@@ -33,7 +33,7 @@ use super::TensorNetworkError;
     bincode(decode_context = "symbolica::state::StateMap")
 )]
 pub struct NetworkGraph<K> {
-    graph: HedgeGraph<NetworkEdge, NetworkNode<K>, Forest<NetworkNode<K>, ChildVecStore<()>>>,
+    pub graph: HedgeGraph<NetworkEdge, NetworkNode<K>, Forest<NetworkNode<K>, ChildVecStore<()>>>,
     #[bincode(with_serde)]
     uncontracted: BitVec,
 }
@@ -47,6 +47,16 @@ pub enum NetworkEdge {
     // Port,
     Head,
     Slot(LibrarySlot),
+}
+
+impl NetworkEdge {
+    pub fn is_head(&self) -> bool {
+        matches!(self, NetworkEdge::Head)
+    }
+
+    pub fn is_slot(&self) -> bool {
+        matches!(self, NetworkEdge::Slot(_))
+    }
 }
 
 #[derive(Debug, Clone, Copy, Encode, Decode, Serialize, Deserialize)]

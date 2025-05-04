@@ -1,4 +1,7 @@
+use std::ops::AddAssign;
+
 use crate::{
+    arithmetic::ScalarMul,
     contraction::{Contract, ContractionError},
     network::{
         store::NetworkStore,
@@ -272,6 +275,42 @@ impl Contract<SymbolicTensor> for SymbolicTensor {
         Ok(SymbolicTensor {
             expression,
             structure: new_structure,
+        })
+    }
+}
+
+impl std::ops::Neg for SymbolicTensor {
+    type Output = SymbolicTensor;
+
+    fn neg(self) -> Self::Output {
+        Self {
+            expression: -self.expression,
+            structure: self.structure,
+        }
+    }
+}
+
+impl AddAssign<SymbolicTensor> for SymbolicTensor {
+    fn add_assign(&mut self, rhs: SymbolicTensor) {
+        debug_assert_eq!(self.structure, rhs.structure);
+        self.expression += rhs.expression;
+    }
+}
+
+impl AddAssign<&SymbolicTensor> for SymbolicTensor {
+    fn add_assign(&mut self, rhs: &SymbolicTensor) {
+        debug_assert_eq!(self.structure, rhs.structure);
+        self.expression += &rhs.expression;
+    }
+}
+
+impl ScalarMul<Atom> for SymbolicTensor {
+    type Output = SymbolicTensor;
+
+    fn scalar_mul(&self, rhs: &Atom) -> Option<Self::Output> {
+        Some(Self {
+            expression: rhs * &self.expression,
+            structure: self.structure.clone(),
         })
     }
 }

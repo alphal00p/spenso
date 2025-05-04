@@ -163,6 +163,12 @@ pub enum AbstractIndex {
     Symbol(SerializableSymbol),
 }
 
+#[cfg(feature = "shadowing")]
+impl From<Symbol> for AbstractIndex {
+    fn from(value: Symbol) -> Self {
+        AbstractIndex::Symbol(value.into())
+    }
+}
 impl PartialEq for AbstractIndex {
     fn eq(&self, other: &Self) -> bool {
         usize::from(*self) == usize::from(*other)

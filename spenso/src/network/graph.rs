@@ -9,6 +9,7 @@ use linnet::{
     half_edge::{
         builder::HedgeGraphBuilder,
         involution::{EdgeData, Flow, Hedge},
+        nodestore::NodeStorageOps,
         subgraph::{ModifySubgraph, SubGraph, SubGraphOps},
         tree::SimpleTraversalTree,
         HedgeGraph, HedgeGraphError, NodeIndex,
@@ -115,7 +116,7 @@ pub enum NetworkGraphError {
 }
 
 impl<K> NetworkGraph<K> {
-    pub fn splice_descendents_of(&mut self, replacement: Self)
+    pub fn splice_descendents_of(&mut self, mut replacement: Self)
     where
         K: Clone,
     {
@@ -132,6 +133,12 @@ impl<K> NetworkGraph<K> {
         // );
 
         // replacement.shift_scalars(self.);
+        println!(
+            "//Joining: \n{}\n//with\n{}",
+            self.dot_impl(|a| a.to_string(), |_| "".to_string(), |a| a.to_string()),
+            replacement.dot_impl(|a| a.to_string(), |_| "".to_string(), |a| a.to_string()),
+        );
+        // replacement.graph.node_store.check_and_set_nodes().unwrap();
 
         self.graph
             .join_mut(
@@ -375,6 +382,38 @@ impl<K> NetworkGraph<K> {
         )
     }
 
+    pub fn dot_impl(
+        &self,
+        scalar_disp: impl Fn(usize) -> String,
+        library_disp: impl Fn(&K) -> String,
+        tensor_disp: impl Fn(usize) -> String,
+    ) -> String
+// where
+        // K: Display,
+    {
+        self.graph.dot_impl(
+            &self.graph.full_filter(),
+            "",
+            &|e| {
+                if let NetworkEdge::Slot(s) = e {
+                    Some(format!("label=\"{s}\""))
+                } else {
+                    None
+                }
+            },
+            &|n| match n {
+                NetworkNode::Leaf(l) => match l {
+                    NetworkLeaf::LibraryKey(l) => Some(format!("label= \"L:{}\"", library_disp(l))),
+                    NetworkLeaf::LocalTensor(l) => {
+                        Some(format!("label = \"T:{}\"", tensor_disp(*l)))
+                    }
+                    NetworkLeaf::Scalar(s) => Some(format!("label = \"S:{}\"", scalar_disp(*s))),
+                },
+                NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
+            },
+        )
+    }
+
     pub fn zero() -> Self {
         Self::add(0, &[])
     }
@@ -411,6 +450,7 @@ impl<K> NetworkGraph<K> {
 
         for s in slots {
             let orientation = s.rep_name().orientation();
+            println!("{}{:?}", s, orientation);
             graph.add_external_edge(
                 head,
                 NetworkEdge::Slot(s.clone()),
@@ -434,7 +474,7 @@ impl<K> NetworkGraph<K> {
         let mut graph = HedgeGraphBuilder::new();
 
         let head = graph.add_node(NetworkNode::Leaf(NetworkLeaf::Scalar(pos)));
-        graph.add_external_edge(head, NetworkEdge::Head, false, Flow::Source);
+        graph.add_external_edge(head, NetworkEdge::Head, true, Flow::Source);
 
         graph.into()
     }
@@ -859,7 +899,11 @@ impl<K> NAdd for NetworkGraph<K> {
             )
             .unwrap();
         }
-        debug_assert!(slots.len() == add.n_dangling());
+        debug_assert!(
+            slots.len() == add.n_dangling(),
+            "addition with non matching dangling: \n{}",
+            add.dot_impl(|a| "".to_string(), |a| "".to_string(), |a| "".to_string())
+        );
 
         add
     }

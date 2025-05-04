@@ -327,7 +327,7 @@ impl<T: RepName> DualSlotTo for Slot<T> {
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
-    use symbolica::{parse, symbol};
+    use symbolica::{atom::AtomCore, parse, symbol};
 
     use crate::structure::{
         representation::{DualLorentz, LibraryRep, Lorentz, RepName, Representation},
@@ -358,7 +358,7 @@ mod shadowing_tests {
         let mink = Lorentz {}.new_rep(4);
         let mu = mink.slot(0);
         println!("{}", mu.to_atom());
-        assert_eq!("spenso::lor(4,0)", mu.to_atom().to_string());
+        assert_eq!("spenso::lor(4,0)", mu.to_atom().to_canonical_string());
         assert_eq!("lor🠑4|₀", mu.to_string());
 
         let mink = Lorentz {}.new_rep(4);

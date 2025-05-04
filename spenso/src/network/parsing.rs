@@ -131,7 +131,7 @@ where
             let net = Self::try_from_view(base, library)?;
             let cloned_net = net.clone();
 
-            Ok(net.n_mul((0..n).map(|_| cloned_net.clone())))
+            Ok(net.n_mul((1..n).map(|_| cloned_net.clone())))
         } else {
             Ok(Self::scalar(value.as_view().try_into()?))
         }
@@ -157,17 +157,163 @@ where
 
 #[cfg(test)]
 pub mod test {
-    use crate::{data::DenseTensor, symbolic::SymbolicTensor};
+    use core::panic;
+
+    use crate::{
+        data::DenseTensor,
+        structure::{
+            representation::{Euclidean, Lorentz, Minkowski, RepName},
+            NamedStructure, ToSymbolic,
+        },
+        symbolic::SymbolicTensor,
+    };
 
     use super::*;
-    use symbolica::parse;
-    use tensor_library::{DummyKey, DummyLibrary, DummyLibraryTensor};
+    use symbolica::{parse, symbol};
+    use tensor_library::{symbolic::ShadowedStructure, DummyKey, DummyLibrary, DummyLibraryTensor};
 
     #[test]
-    fn parse() {
-        let expr = parse!("1").unwrap();
+    fn parse_scalar() {
+        let mut expr = parse!("1").unwrap();
+
         let lib = DummyLibrary::<_>::new();
-        let net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib);
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+
+        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+
+        if let TensorOrScalarOrKey::Scalar(a) = net.result().unwrap() {
+            println!("YaY:{a}")
+        } else {
+            panic!("Not scalar")
+        }
+    }
+
+    #[test]
+    fn parse_scalar_expr() {
+        let mut expr = parse!("(y+x(mink(4,1))*y(mink(4,1))) *(1+1+2*x*(3*sin(r))/t)").unwrap();
+
+        let lib = DummyLibrary::<_>::new();
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+
+        println!("{}", expr);
+        println!(
+            "{}",
+            net.dot_display_impl::<_, ()>(
+                &lib,
+                |a| a.to_string(),
+                |a| "".to_string(),
+                |a| a.to_string()
+            )
+        );
+
+        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl::<_, ()>(
+                &lib,
+                |a| a.to_string(),
+                |a| "".to_string(),
+                |a| a.to_string()
+            )
+        );
+        if let TensorOrScalarOrKey::Scalar(a) = net.result().unwrap() {
+            // println!("YaY:{a}");
+            assert_eq!(&expr, a);
+        } else {
+            panic!("Not scalar")
+        }
+    }
+
+    #[test]
+    fn parse_tensor_expr() {
+        let tensor1 = ShadowedStructure::from_iter(
+            [
+                Minkowski {}.new_slot(4, 1).to_lib(),
+                Euclidean {}.new_slot(4, 2).to_lib(),
+                Minkowski {}.new_slot(symbol!("d"), symbol!("mu")).to_lib(),
+            ],
+            symbol!("T"),
+            None,
+        )
+        .to_symbolic()
+        .unwrap();
+
+        let tensor2 = ShadowedStructure::from_iter(
+            [
+                Minkowski {}.new_slot(4, 1).to_lib(),
+                Lorentz {}.new_slot(7, 1).to_lib(),
+                Lorentz {}.new_slot(3, 2).to_lib(),
+            ],
+            symbol!("TT"),
+            None,
+        )
+        .to_symbolic()
+        .unwrap();
+
+        let tensor3 = ShadowedStructure::from_iter(
+            [
+                Lorentz {}.dual().new_slot(7, 1).to_lib(),
+                Euclidean {}.new_slot(4, 2).to_lib(),
+                Minkowski {}.new_slot(symbol!("d"), symbol!("mu")).to_lib(),
+            ],
+            symbol!("TTT"),
+            None,
+        )
+        .to_symbolic()
+        .unwrap();
+
+        let tensor4 =
+            ShadowedStructure::from_iter([Lorentz {}.new_slot(3, 2).to_lib()], symbol!("L"), None)
+                .to_symbolic()
+                .unwrap();
+
+        let tensor5 = ShadowedStructure::from_iter(
+            [Lorentz {}.dual().new_slot(3, 2).to_lib()],
+            symbol!("P"),
+            None,
+        )
+        .to_symbolic()
+        .unwrap();
+
+        let expr =
+            (parse!("a*sin(x/2)").unwrap() * tensor1 * tensor2 * tensor3 + tensor4) * tensor5;
+
+        let lib = DummyLibrary::<_>::new();
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+
+        println!("{}", expr);
+        println!(
+            "{}",
+            net.dot_display_impl::<_, ()>(
+                &lib,
+                |a| a.to_string(),
+                |a| "".to_string(),
+                |a| a.to_string()
+            )
+        );
+
+        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl::<_, ()>(
+                &lib,
+                |a| a.to_string(),
+                |a| "".to_string(),
+                |a| a.to_string()
+            )
+        );
+
+        if let TensorOrScalarOrKey::Tensor { tensor, .. } = net.result().unwrap() {
+            // println!("YaY:{a}");
+            assert_eq!(expr, tensor.expression);
+        } else {
+            panic!("Not tensor")
+        }
     }
 }

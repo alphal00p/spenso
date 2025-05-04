@@ -574,7 +574,7 @@ impl RepName for LibraryRep {
         match self {
             Self::SelfDual(_) => Orientation::Undirected,
             Self::InlineMetric(_) => Orientation::Undirected,
-            Self::Dualizable(l) => (l > 0).into(),
+            Self::Dualizable(l) => Orientation::Default,
         }
     }
 

@@ -53,6 +53,15 @@ impl Concretize<SymbolicTensor> for ShadowedStructure {
     }
 }
 
+impl Concretize<SymbolicTensor> for TensorShell<ShadowedStructure> {
+    fn concretize(self) -> SymbolicTensor {
+        SymbolicTensor {
+            expression: self.to_symbolic().unwrap(),
+            structure: self.structure.structure,
+        }
+    }
+}
+
 impl<S: Shadowable> Concretize<DenseTensor<Atom, S::Structure>> for S {
     fn concretize(self) -> DenseTensor<Atom, S::Structure> {
         // self.flat_s

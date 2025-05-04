@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Display, ops::Neg, sync::LazyLock};
+use std::{borrow::Cow, fmt::Display, marker::PhantomData, ops::Neg, sync::LazyLock};
 
 use crate::{
     complex::{Complex, RealOrComplex, RealOrComplexTensor},
@@ -6,7 +6,8 @@ use crate::{
     structure::{
         abstract_index::AbstractIndex,
         concrete_index::ConcreteIndex,
-        representation::{LibraryRep, RepName, REPS},
+        dimension::Dimension,
+        representation::{LibraryRep, RepName, Representation, REPS},
         slot::{IsAbstractSlot, Slot, SlotError},
         HasName, HasStructure, IndexlessNamedStructure, NamedStructure, StructureError,
         TensorShell, TensorStructure, VecStructure,
@@ -36,15 +37,199 @@ pub trait Library<S> {
     fn get<'a>(&'a self, key: &Self::Key) -> Result<Cow<'a, Self::Value>, LibraryError<Self::Key>>;
 }
 
-pub trait LibraryTensor: SetTensorData + HasStructure + Sized + TensorStructure {
-    type WithIndices: HasStructure;
-    fn empty(key: Self::Structure) -> Self;
+#[derive(Default, Clone)]
+pub struct DummyLibrary<V, K = DummyKey> {
+    key: PhantomData<K>,
+    value: PhantomData<V>,
+}
 
-    fn from_dense(key: Self::Structure, data: Vec<Self::SetData>) -> Result<Self>;
+impl<V, K> DummyLibrary<V, K> {
+    pub fn new() -> Self {
+        DummyLibrary {
+            key: PhantomData,
+            value: PhantomData,
+        }
+    }
+}
+
+#[derive(Default, Clone, Copy, Debug)]
+pub struct DummyKey {}
+
+impl Display for DummyKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DUMMY")
+    }
+}
+
+impl<K: Display + Clone, V: Clone, S> Library<S> for DummyLibrary<V, K> {
+    type Key = K;
+    type Value = DummyLibraryTensor<V>;
+    fn get<'a>(&'a self, key: &Self::Key) -> Result<Cow<'a, Self::Value>, LibraryError<Self::Key>> {
+        Err(LibraryError::NotFound(key.clone()))
+    }
+
+    fn key_for_structure(&self, structure: S) -> Result<Self::Key, S>
+    where
+        S: TensorStructure,
+    {
+        Err(structure)
+    }
+}
+
+#[derive(Default, Clone, Copy, Debug)]
+pub struct DummyLibraryTensor<T> {
+    with_indices: PhantomData<T>,
+}
+
+pub enum DummyIter<T> {
+    None,
+    Some(T),
+}
+
+impl<T> Iterator for DummyIter<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<Self::Item> {
+        None
+    }
+}
+
+impl<T: TensorStructure> TensorStructure for DummyLibraryTensor<T> {
+    type Slot = T::Slot;
+    type Indexed = T::Indexed;
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        unimplemented!()
+    }
+    fn dual(self) -> Self {
+        unimplemented!()
+    }
+
+    fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot> {
+        DummyIter::<T::Slot>::None
+    }
+    fn external_dims_iter(&self) -> impl Iterator<Item = Dimension> {
+        DummyIter::<Dimension>::None
+    }
+    fn external_reps_iter(
+        &self,
+    ) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>> {
+        DummyIter::<Representation<<T::Slot as IsAbstractSlot>::R>>::None
+    }
+
+    fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex> {
+        DummyIter::<AbstractIndex>::None
+    }
+    fn get_aind(&self, i: usize) -> Option<AbstractIndex> {
+        unimplemented!()
+    }
+    fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>> {
+        unimplemented!()
+    }
+    fn get_dim(&self, i: usize) -> Option<Dimension> {
+        unimplemented!()
+    }
+    fn get_slot(&self, i: usize) -> Option<Self::Slot> {
+        unimplemented!()
+    }
+    fn order(&self) -> usize {
+        unimplemented!()
+    }
+}
+
+impl<T: HasStructure + TensorStructure> HasStructure for DummyLibraryTensor<T> {
+    type Store<S>
+        = T::Store<S>
+    where
+        S: TensorStructure;
+
+    type Scalar = T::Scalar;
+    type ScalarRef<'a>
+    where
+        Self: 'a,
+    = T::ScalarRef<'a>;
+    type Structure = T::Structure;
+
+    fn map_structure<O: TensorStructure>(self, f: impl Fn(Self::Structure) -> O) -> Self::Store<O> {
+        unimplemented!()
+    }
+
+    fn map_structure_result<O: TensorStructure, Er>(
+        self,
+        f: impl Fn(Self::Structure) -> Result<O, Er>,
+    ) -> std::result::Result<Self::Store<O>, Er> {
+        unimplemented!()
+    }
+
+    fn structure(&self) -> &Self::Structure {
+        unimplemented!()
+    }
+
+    fn mut_structure(&mut self) -> &mut Self::Structure {
+        unimplemented!()
+    }
+
+    fn scalar(self) -> Option<Self::Scalar> {
+        unimplemented!()
+    }
+
+    fn scalar_ref(&self) -> Option<Self::ScalarRef<'_>> {
+        unimplemented!()
+    }
+
+    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
+        unimplemented!()
+    }
+}
+
+impl<T: SetTensorData> SetTensorData for DummyLibraryTensor<T> {
+    type SetData = T::SetData;
+
+    fn set(&mut self, indices: &[ConcreteIndex], value: Self::SetData) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn set_flat(
+        &mut self,
+        index: crate::structure::concrete_index::FlatIndex,
+        value: Self::SetData,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+}
+
+impl<T: HasStructure + TensorStructure> LibraryTensor for DummyLibraryTensor<T> {
+    type WithIndices = T;
+    type Data = ();
+
+    fn empty(key: Self::Structure) -> Self {
+        unimplemented!()
+    }
+
+    fn from_dense(key: Self::Structure, data: Vec<Self::Data>) -> Result<Self> {
+        unimplemented!()
+    }
 
     fn from_sparse(
         key: Self::Structure,
-        data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::SetData)>,
+        data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
+    ) -> Result<Self> {
+        unimplemented!()
+    }
+
+    fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError> {
+        unimplemented!()
+    }
+}
+
+pub trait LibraryTensor: HasStructure + Sized + TensorStructure {
+    type WithIndices: HasStructure;
+    type Data;
+    fn empty(key: Self::Structure) -> Self;
+
+    fn from_dense(key: Self::Structure, data: Vec<Self::Data>) -> Result<Self>;
+
+    fn from_sparse(
+        key: Self::Structure,
+        data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
     ) -> Result<Self>;
 
     fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError>;
@@ -52,18 +237,19 @@ pub trait LibraryTensor: SetTensorData + HasStructure + Sized + TensorStructure 
 
 impl<D: Clone, S: TensorStructure + Clone> LibraryTensor for DataTensor<D, S> {
     type WithIndices = DataTensor<D, S::Indexed>;
+    type Data = D;
 
     fn empty(key: S) -> Self {
         DataTensor::Sparse(SparseTensor::empty(key))
     }
 
-    fn from_dense(key: S, data: Vec<Self::SetData>) -> Result<Self> {
+    fn from_dense(key: S, data: Vec<Self::Data>) -> Result<Self> {
         Ok(DataTensor::Dense(DenseTensor::from_data(data, key)?))
     }
 
     fn from_sparse(
         key: S,
-        data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::SetData)>,
+        data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
     ) -> Result<Self> {
         Ok(DataTensor::Sparse(SparseTensor::from_data(data, key)?))
     }
@@ -86,12 +272,13 @@ impl<D: Clone, S: TensorStructure + Clone> LibraryTensor for DataTensor<D, S> {
 
 impl<D: Clone + Default, S: TensorStructure + Clone> LibraryTensor for RealOrComplexTensor<D, S> {
     type WithIndices = RealOrComplexTensor<D, S::Indexed>;
+    type Data = RealOrComplex<D>;
 
     fn empty(key: S) -> Self {
         RealOrComplexTensor::Real(DataTensor::Sparse(SparseTensor::empty(key)))
     }
 
-    fn from_dense(key: S, data: Vec<Self::SetData>) -> Result<Self> {
+    fn from_dense(key: S, data: Vec<Self::Data>) -> Result<Self> {
         let complex_data = data.into_iter().map(|a| a.to_complex()).collect();
         let complex_tensor =
             <DataTensor<Complex<D>, S> as LibraryTensor>::from_dense(key, complex_data)?;
@@ -101,7 +288,7 @@ impl<D: Clone + Default, S: TensorStructure + Clone> LibraryTensor for RealOrCom
 
     fn from_sparse(
         key: S,
-        data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::SetData)>,
+        data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
     ) -> Result<Self> {
         let complex_tensor = <DataTensor<Complex<D>, S> as LibraryTensor>::from_sparse(
             key,
@@ -227,11 +414,12 @@ pub mod symbolic {
 
     impl<S: TensorStructure + Clone> LibraryTensor for ParamTensor<S> {
         type WithIndices = ParamTensor<S::Indexed>;
+        type Data = Atom;
         fn empty(key: S) -> Self {
             ParamTensor::composite(<DataTensor<Atom, S> as LibraryTensor>::empty(key))
         }
 
-        fn from_dense(key: S, data: Vec<Self::SetData>) -> Result<Self> {
+        fn from_dense(key: S, data: Vec<Self::Data>) -> Result<Self> {
             Ok(ParamTensor::composite(
                 <DataTensor<Atom, S> as LibraryTensor>::from_dense(key, data)?,
             ))
@@ -239,7 +427,7 @@ pub mod symbolic {
 
         fn from_sparse(
             key: S,
-            data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::SetData)>,
+            data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
         ) -> Result<Self> {
             Ok(ParamTensor::composite(
                 <DataTensor<Atom, S> as LibraryTensor>::from_sparse(key, data)?,
@@ -261,12 +449,13 @@ pub mod symbolic {
 
     impl<D: Default + Clone, S: TensorStructure + Clone> LibraryTensor for MixedTensor<D, S> {
         type WithIndices = MixedTensor<D, S::Indexed>;
+        type Data = ConcreteOrParam<RealOrComplex<D>>;
 
         fn empty(key: S) -> Self {
             MixedTensor::Concrete(<RealOrComplexTensor<D, S> as LibraryTensor>::empty(key))
         }
 
-        fn from_dense(key: S, data: Vec<Self::SetData>) -> Result<Self> {
+        fn from_dense(key: S, data: Vec<Self::Data>) -> Result<Self> {
             let data: Result<Vec<_>> = data
                 .into_iter()
                 .map(|v| match v {
@@ -284,7 +473,7 @@ pub mod symbolic {
 
         fn from_sparse(
             key: S,
-            data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::SetData)>,
+            data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
         ) -> Result<Self> {
             let data: Result<Vec<_>> = data
                 .into_iter()
@@ -508,7 +697,7 @@ pub mod symbolic {
         pub fn insert_explicit_dense(
             &mut self,
             key: ExplicitKey,
-            data: Vec<T::SetData>,
+            data: Vec<T::Data>,
         ) -> Result<()> {
             let tensor = T::from_dense(key.clone(), data)?;
             self.explicit_dimension.insert(key, tensor);
@@ -518,7 +707,7 @@ pub mod symbolic {
         pub fn insert_explicit_sparse(
             &mut self,
             key: ExplicitKey,
-            data: impl IntoIterator<Item = (Vec<ConcreteIndex>, T::SetData)>,
+            data: impl IntoIterator<Item = (Vec<ConcreteIndex>, T::Data)>,
         ) -> Result<()> {
             let tensor = T::from_sparse(key.clone(), data)?;
             self.explicit_dimension.insert(key, tensor);

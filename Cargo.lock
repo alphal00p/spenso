@@ -1614,6 +1614,7 @@ dependencies = [
 name = "spenso-macros"
 version = "0.1.0"
 dependencies = [
+ "linnet",
  "proc-macro2",
  "quote",
  "serde",

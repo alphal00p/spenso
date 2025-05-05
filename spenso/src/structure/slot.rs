@@ -18,7 +18,7 @@ use symbolica::{
 };
 
 #[cfg(feature = "shadowing")]
-use crate::network::tensor_library::symbolic::ETS;
+use crate::network::library::symbolic::ETS;
 use thiserror::Error;
 
 #[derive(

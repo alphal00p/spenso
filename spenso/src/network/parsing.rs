@@ -1,41 +1,85 @@
-use bincode::{Decode, Encode};
+use symbolica::atom::Symbol;
 
 use super::*;
-use linnet::half_edge::NodeIndex;
-use ref_ops::{RefAdd, RefMul, RefNeg};
-use serde::{Deserialize, Serialize};
 
-use tensor_library::{Library, LibraryError};
+use library::Library;
 
-use crate::algebraic_traits::{One, Zero};
-use crate::arithmetic::ScalarMul;
-use crate::contraction::Contract;
-use crate::network::tensor_library::LibraryTensor;
+use crate::network::library::LibraryTensor;
+use crate::structure::abstract_index::AIND_SYMBOLS;
 // use crate::shadowing::Concretize;
-use crate::structure::representation::LibrarySlot;
-use crate::structure::{StructureError, TensorShell};
-use std::borrow::Cow;
+use crate::structure::slot::{Slot, SlotError};
+use crate::structure::{NamedStructure, StructureError, TensorShell, VecStructure};
+
 use std::fmt::Display;
-use std::ops::{Add, AddAssign, Mul, MulAssign, Neg};
-use store::{NetworkStore, TensorScalarStore, TensorScalarStoreMapping};
-use thiserror::Error;
+
+use store::TensorScalarStore;
 // use log::trace;
 
 use symbolica::atom::{representation::FunView, AddView, Atom, AtomView, MulView, PowView};
 
-use crate::{
-    contraction::ContractionError,
-    structure::{CastStructure, HasStructure, ScalarTensor, TensorStructure},
-};
+use crate::structure::{HasStructure, TensorStructure};
 
-use crate::{
-    parametric::ParamTensor,
-    shadowing::Concretize,
-    structure::representation::LibraryRep,
-    structure::slot::IsAbstractSlot,
-    structure::HasName,
-    symbolica_utils::{IntoArgs, IntoSymbol},
-};
+use crate::{shadowing::Concretize, structure::representation::LibraryRep, structure::HasName};
+
+pub type ShadowedStructure = NamedStructure<Symbol, Vec<Atom>, LibraryRep>;
+
+impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
+    type Error = StructureError;
+    fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
+        match value.get_symbol() {
+            s if s == AIND_SYMBOLS.aind => {
+                let mut structure: Vec<Slot<LibraryRep>> = vec![];
+
+                for arg in value.iter() {
+                    structure.push(arg.try_into()?);
+                }
+
+                Ok(VecStructure::from(structure).into())
+            }
+            name => {
+                let mut structure: ShadowedStructure = VecStructure::default().into();
+                structure.set_name(name.into());
+                let mut args = vec![];
+                let mut is_structure = Some(SlotError::EmptyStructure);
+
+                for arg in value.iter() {
+                    let slot: Result<Slot<LibraryRep>, _> = arg.try_into();
+
+                    match slot {
+                        Ok(slot) => {
+                            is_structure = None;
+                            structure.structure.push(slot);
+                        }
+                        Err(e) => {
+                            if let AtomView::Fun(f) = arg {
+                                if f.get_symbol() == AIND_SYMBOLS.aind {
+                                    let internal_s = Self::try_from(f);
+
+                                    if let Ok(s) = internal_s {
+                                        structure.extend(s);
+                                        is_structure = None;
+                                        continue;
+                                    }
+                                }
+                            }
+                            is_structure = Some(e);
+                            args.push(arg.to_owned().into());
+                        }
+                    }
+                }
+
+                if !args.is_empty() {
+                    structure.additional_args = Some(args);
+                }
+                if let Some(e) = is_structure {
+                    Err(StructureError::EmptyStructure(e))
+                } else {
+                    Ok(structure)
+                }
+            }
+        }
+    }
+}
 
 impl<
         'a,
@@ -160,17 +204,17 @@ pub mod test {
     use core::panic;
 
     use crate::{
-        data::DenseTensor,
         structure::{
             representation::{Euclidean, Lorentz, Minkowski, RepName},
-            NamedStructure, ToSymbolic,
+            slot::IsAbstractSlot,
+            ToSymbolic,
         },
         symbolic::SymbolicTensor,
     };
 
     use super::*;
+    use library::DummyLibrary;
     use symbolica::{parse, symbol};
-    use tensor_library::{symbolic::ShadowedStructure, DummyKey, DummyLibrary, DummyLibraryTensor};
 
     #[test]
     fn parse_scalar() {

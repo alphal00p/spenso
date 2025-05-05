@@ -28,7 +28,7 @@ use symbolica::{
 
 use crate::{
     complex::{Complex, RealOrComplexTensor},
-    data::{DataTensor, StorageTensor},
+    data::DataTensor,
     iterators::IteratableTensor,
     parametric::{
         atomcore::{PatternReplacement, ReplaceBuilderGeneric, TensorAtomMaps, TensorAtomOps},

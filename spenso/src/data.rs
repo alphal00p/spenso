@@ -604,9 +604,9 @@ where
 {
     type Scalar = T;
     type ScalarRef<'a>
+        = &'a T
     where
-        Self: 'a,
-    = &'a T;
+        Self: 'a;
     type Structure = I;
     type Store<S>
         = SparseTensor<T, S>
@@ -955,9 +955,9 @@ where
 {
     type Scalar = T;
     type ScalarRef<'a>
+        = &'a T
     where
-        Self: 'a,
-    = &'a T;
+        Self: 'a;
     type Structure = I;
     type Store<S>
         = DenseTensor<T, S>
@@ -1566,9 +1566,9 @@ where
 {
     type Scalar = T;
     type ScalarRef<'a>
+        = &'a T
     where
-        Self: 'a,
-    = &'a T;
+        Self: 'a;
     type Structure = I;
 
     type Store<S>
@@ -1840,9 +1840,9 @@ where
 {
     type Scalar = Complex<f64>;
     type ScalarRef<'a>
+        = Complex<&'a f64>
     where
-        Self: 'a,
-    = Complex<&'a f64>;
+        Self: 'a;
     type Structure = T;
     type Store<S>
         = NumTensor<S>

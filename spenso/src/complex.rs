@@ -1763,9 +1763,9 @@ where
 impl<T: Clone, S: TensorStructure> HasStructure for RealOrComplexTensor<T, S> {
     type Scalar = RealOrComplex<T>;
     type ScalarRef<'a>
+        = RealOrComplexRef<'a, T>
     where
-        Self: 'a,
-    = RealOrComplexRef<'a, T>;
+        Self: 'a;
     type Structure = S;
     type Store<U>
         = RealOrComplexTensor<T, U>

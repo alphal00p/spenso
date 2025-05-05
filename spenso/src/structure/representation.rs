@@ -20,7 +20,7 @@ use std::{hash::Hash, ops::Index};
 use bincode::{Decode, Encode};
 
 #[cfg(feature = "shadowing")]
-use crate::{network::tensor_library::symbolic::ETS, structure::slot::SlotError};
+use crate::{network::library::symbolic::ETS, structure::slot::SlotError};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -574,7 +574,15 @@ impl RepName for LibraryRep {
         match self {
             Self::SelfDual(_) => Orientation::Undirected,
             Self::InlineMetric(_) => Orientation::Undirected,
-            Self::Dualizable(l) => Orientation::Default,
+            Self::Dualizable(l) => {
+                if l > 0 {
+                    Orientation::Default
+                } else if l < 0 {
+                    Orientation::Reversed
+                } else {
+                    panic!("dualizable with 0")
+                }
+            }
         }
     }
 

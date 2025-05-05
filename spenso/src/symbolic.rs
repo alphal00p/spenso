@@ -4,8 +4,9 @@ use crate::{
     arithmetic::ScalarMul,
     contraction::{Contract, ContractionError},
     network::{
+        library::symbolic::{ExplicitKey, TensorLibrary},
+        parsing::ShadowedStructure,
         store::NetworkStore,
-        tensor_library::symbolic::{ExplicitKey, ShadowedStructure, TensorLibrary},
         Network, TensorNetworkError,
     },
     parametric::MixedTensor,
@@ -72,9 +73,9 @@ impl HasStructure for SymbolicTensor {
     type Structure = VecStructure;
     type Scalar = Atom;
     type ScalarRef<'a>
+        = &'a Atom
     where
-        Self: 'a,
-    = &'a Atom;
+        Self: 'a;
     type Store<S>
         = TensorShell<S>
     where

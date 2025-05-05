@@ -1,3 +1,4 @@
+#[cfg(feature = "shadowing")]
 use anyhow::anyhow;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
@@ -24,12 +25,15 @@ use crate::{
     parametric::ParamTensor,
 };
 
+#[cfg(feature = "shadowing")]
+use super::store::TensorScalarStoreMapping;
+
 use crate::{
     data::DataTensor,
     structure::{CastStructure, HasStructure, ScalarTensor, TensorStructure},
 };
 
-use super::store::{NetworkStore, TensorScalarStore, TensorScalarStoreMapping};
+use super::store::{NetworkStore, TensorScalarStore};
 use super::{Library, Network, TensorNetworkError, TensorOrScalarOrKey};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
@@ -166,7 +170,7 @@ impl<
             }
 
             let tensors = net.map_ref(
-                |a| {
+                |_| {
                     let oldid = scalar_id;
                     scalar_id += 1;
                     oldid

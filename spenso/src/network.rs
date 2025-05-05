@@ -6,12 +6,12 @@ use graph::{
 use linnet::half_edge::NodeIndex;
 use serde::{Deserialize, Serialize};
 
-use tensor_library::{Library, LibraryError};
+use library::{Library, LibraryError};
 
 use crate::algebraic_traits::{One, Zero};
 use crate::arithmetic::ScalarMul;
 use crate::contraction::Contract;
-use crate::network::tensor_library::LibraryTensor;
+use crate::network::library::LibraryTensor;
 // use crate::shadowing::Concretize;
 use crate::structure::representation::LibrarySlot;
 use crate::structure::StructureError;
@@ -53,9 +53,9 @@ pub struct Network<S, LibKey> {
 // }
 
 pub mod graph;
+pub mod library;
 pub mod set;
 pub mod store;
-pub mod tensor_library;
 
 impl<S: TensorScalarStoreMapping, K: Clone> TensorScalarStoreMapping for Network<S, K> {
     type Store<U, V> = Network<S::Store<U, V>, K>;
@@ -893,7 +893,7 @@ where
             );
         }
 
-        println!("//Contracted Scalars:\n{}", graph.dot());
+        // println!("//Contracted Scalars:\n{}", graph.dot());
 
         SmallestDegree::contract_impl(executor, graph, lib, head)
     }
@@ -928,7 +928,6 @@ impl SmallestDegree {
             .iter_nodes()
             .filter(|(_, nid, _)| *nid != head)
             .filter_map(|(a, nid1, n1)| {
-                println!("looking at{:?}", nid1);
                 let mut degree = 0;
                 let mut first = None;
                 for h in a {
@@ -941,11 +940,8 @@ impl SmallestDegree {
                     degree += 1
                 }
 
-                println!("first{:?}", first);
-
                 // let n1 = &graph.graph[graph.graph.node_id(first?)];
                 let nid2 = graph.graph.involved_node_id(first?)?;
-                println!("{}", nid2);
                 let n2 = &graph.graph[nid2];
 
                 Some((degree, nid1, n1, nid2, n2))
@@ -953,7 +949,6 @@ impl SmallestDegree {
             .min_by_key(|(degree, _, _, _, _)| *degree);
 
         if let Some((_, nid1, n1, nid2, n2)) = edge_to_contract {
-            println!("{nid1:?},{nid1:?}");
             match (n1, n2) {
                 (
                     NetworkNode::Leaf(NetworkLeaf::Scalar(_)),
@@ -1059,18 +1054,8 @@ impl SmallestDegree {
                         Self::contract_impl(executor, graph, lib, head)
                     }
 
-                    (NetworkLeaf::Scalar(s), NetworkLeaf::Scalar(l))
-                    | (NetworkLeaf::Scalar(s), NetworkLeaf::Scalar(l)) => {
-                        let a = executor.tensors[*l]
-                            .scalar_mul(&executor.scalar[*s])
-                            .unwrap();
-                        let pos = executor.tensors.len();
-                        executor.tensors.push(a);
-                        graph.identify_nodes_without_self_edges(
-                            &[nid1, nid2],
-                            NetworkNode::Leaf(NetworkLeaf::LocalTensor(pos)),
-                        );
-                        Self::contract_impl(executor, graph, lib, head)
+                    (NetworkLeaf::Scalar(_), NetworkLeaf::Scalar(_)) => {
+                        Err(TensorNetworkError::UncontractedScalar)
                     }
                     (NetworkLeaf::LocalTensor(l1), NetworkLeaf::LocalTensor(l2)) => {
                         let contracted = executor.tensors[*l1].contract(&executor.tensors[*l2])?;

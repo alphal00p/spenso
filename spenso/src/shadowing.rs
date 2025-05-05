@@ -1,10 +1,9 @@
 use crate::{
     data::{DataTensor, DenseTensor},
-    network::tensor_library::{symbolic::ShadowedStructure, Library, LibraryTensor},
+    network::parsing::ShadowedStructure,
     parametric::{MixedTensor, ParamTensor, TensorCoefficient},
     structure::{
-        concrete_index::FlatIndex, AtomStructure, HasName, HasStructure, TensorShell,
-        TensorStructure, ToSymbolic,
+        concrete_index::FlatIndex, HasName, HasStructure, TensorShell, TensorStructure, ToSymbolic,
     },
     symbolic::SymbolicTensor,
     symbolica_utils::{IntoArgs, IntoSymbol},
@@ -634,9 +633,7 @@ pub mod test {
     use once_cell::sync::Lazy;
     use symbolica::atom::Symbol;
 
-    use crate::network::tensor_library::{
-        symbolic::ExplicitKey, symbolic::TensorLibrary, symbolic::ETS,
-    };
+    use crate::network::library::{symbolic::ExplicitKey, symbolic::TensorLibrary, symbolic::ETS};
 
     pub static EXPLICIT_TENSOR_MAP: Lazy<RwLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>>> =
         Lazy::new(|| {

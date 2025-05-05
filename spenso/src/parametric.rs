@@ -1128,9 +1128,9 @@ where
 {
     type Scalar = ConcreteOrParam<C::Scalar>;
     type ScalarRef<'a>
+        = ConcreteOrParamRef<'a, C::ScalarRef<'a>>
     where
-        Self: 'a,
-    = ConcreteOrParamRef<'a, C::ScalarRef<'a>>;
+        Self: 'a;
     type Structure = S;
     type Store<U>
         = ParamOrConcrete<C::Store<U>, U>
@@ -1549,9 +1549,9 @@ where
     type Structure = S;
     type Scalar = Atom;
     type ScalarRef<'a>
+        = AtomView<'a>
     where
-        Self: 'a,
-    = AtomView<'a>;
+        Self: 'a;
     type Store<U>
         = ParamTensor<U>
     where
@@ -2246,9 +2246,9 @@ where
 impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
     type Scalar = T;
     type ScalarRef<'a>
+        = &'a T
     where
-        Self: 'a,
-    = &'a T;
+        Self: 'a;
     type Structure = S;
     type Store<U>
         = EvalTensor<T, U>

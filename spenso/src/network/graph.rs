@@ -9,18 +9,16 @@ use linnet::{
     half_edge::{
         builder::HedgeGraphBuilder,
         involution::{EdgeData, Flow, Hedge},
-        nodestore::NodeStorageOps,
         subgraph::{ModifySubgraph, SubGraph, SubGraphOps},
         tree::SimpleTraversalTree,
         HedgeGraph, HedgeGraphError, NodeIndex,
     },
-    tree::{child_pointer::ParentChildStore, child_vec::ChildVecStore, Forest},
+    tree::child_pointer::ParentChildStore,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::structure::{
-    self,
     abstract_index::AbstractIndex,
     representation::{LibrarySlot, RepName},
     slot::{DualSlotTo, IsAbstractSlot},
@@ -116,30 +114,10 @@ pub enum NetworkGraphError {
 }
 
 impl<K> NetworkGraph<K> {
-    pub fn splice_descendents_of(&mut self, mut replacement: Self)
+    pub fn splice_descendents_of(&mut self, replacement: Self)
     where
         K: Clone,
     {
-        // let tt: SimpleTraversalTree<ParentChildStore<()>> = self.expr_tree().cast();
-
-        // let descendent_subgraph = tt.iter_preorder_tree_nodes(&self.graph, node_id).fold(
-        //     self.graph.empty_subgraph::<BitVec>(),
-        //     |mut a, b| {
-        //         for h in self.graph.hairs_from_id(b).hairs.included_iter() {
-        //             a.add(h);
-        //         }
-        //         a
-        //     },
-        // );
-
-        // replacement.shift_scalars(self.);
-        println!(
-            "//Joining: \n{}\n//with\n{}",
-            self.dot_impl(|a| a.to_string(), |_| "".to_string(), |a| a.to_string()),
-            replacement.dot_impl(|a| a.to_string(), |_| "".to_string(), |a| a.to_string()),
-        );
-        // replacement.graph.node_store.check_and_set_nodes().unwrap();
-
         self.graph
             .join_mut(
                 replacement.graph,
@@ -147,8 +125,6 @@ impl<K> NetworkGraph<K> {
                 |sf, sd, _, _| (sf, sd),
             )
             .unwrap();
-
-        // self
     }
 
     pub fn find_all_ready_ops(&mut self) -> Vec<(Self, NetworkOp, Vec<NetworkLeaf<K>>)>
@@ -211,7 +187,6 @@ impl<K> NetworkGraph<K> {
 
         // look for the first op node whose children are all leaves
         for nid in tt.iter_preorder_tree_nodes(&self.graph, root_node) {
-            println!("hii");
             if let NetworkNode::Op(op) = &self.graph[nid] {
                 let mut subgraph: BitVec = self.graph.empty_subgraph();
                 let mut leaves = Vec::new();
@@ -261,27 +236,6 @@ impl<K> NetworkGraph<K> {
                 if all_leaves && has_children {
                     let op = *op;
 
-                    let tree = self.graph.dot_impl(
-                        &subgraph,
-                        "",
-                        &|e| {
-                            if let NetworkEdge::Slot(s) = e {
-                                Some(format!("label=\"{s}\""))
-                            } else {
-                                None
-                            }
-                        },
-                        &|n| match n {
-                            NetworkNode::Leaf(l) => match l {
-                                NetworkLeaf::LibraryKey(l) => Some(format!("label= \"L\"")),
-                                NetworkLeaf::LocalTensor(l) => Some(format!("label = \"T{l}\"")),
-                                NetworkLeaf::Scalar(s) => Some(format!("label = \"S{s}\"")),
-                            },
-                            NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
-                        },
-                    );
-
-                    println!("extracting: {tree}");
                     let extracted = self.graph.extract(
                         &subgraph,
                         |a| a.map(Clone::clone),
@@ -450,7 +404,6 @@ impl<K> NetworkGraph<K> {
 
         for s in slots {
             let orientation = s.rep_name().orientation();
-            println!("{}{:?}", s, orientation);
             graph.add_external_edge(
                 head,
                 NetworkEdge::Slot(s.clone()),
@@ -498,7 +451,7 @@ impl<K> NetworkGraph<K> {
     }
 
     pub fn tensor<T: TensorStructure>(tensor: &T, node: NetworkLeaf<K>) -> NetworkGraph<K> {
-        let (mut graph, mut head) = Self::head_builder(NetworkNode::Leaf(node));
+        let (mut graph, head) = Self::head_builder(NetworkNode::Leaf(node));
 
         for s in tensor.external_structure_iter() {
             let lib = s.to_lib();
@@ -522,18 +475,18 @@ impl<K> NetworkGraph<K> {
         }
     }
 
-    fn match_indices(
-        _sf: Flow,
-        self_data: EdgeData<&NetworkEdge>,
-        _of: Flow,
-        other_data: EdgeData<&NetworkEdge>,
-    ) -> bool {
-        if let (NetworkEdge::Slot(s), NetworkEdge::Slot(o)) = (self_data.data, other_data.data) {
-            s.matches(o)
-        } else {
-            false
-        }
-    }
+    // fn match_indices(
+    //     _sf: Flow,
+    //     self_data: EdgeData<&NetworkEdge>,
+    //     _of: Flow,
+    //     other_data: EdgeData<&NetworkEdge>,
+    // ) -> bool {
+    //     if let (NetworkEdge::Slot(s), NetworkEdge::Slot(o)) = (self_data.data, other_data.data) {
+    //         s.matches(o)
+    //     } else {
+    //         false
+    //     }
+    // }
 
     fn prod_match(
         self_flow: Flow,
@@ -543,11 +496,7 @@ impl<K> NetworkGraph<K> {
     ) -> bool {
         match (self_data.data, other_data.data) {
             (NetworkEdge::Head, NetworkEdge::Head) => self_flow == -other_flow,
-            (NetworkEdge::Slot(s), NetworkEdge::Slot(o)) => {
-                let matches = s.rep.rep.matches(&o.rep.rep);
-                println!("{s}vs{o} matches?{matches}");
-                s.matches(o)
-            }
+            (NetworkEdge::Slot(s), NetworkEdge::Slot(o)) => s.matches(o),
             _ => false,
         }
     }
@@ -603,7 +552,7 @@ impl<K> NetworkGraph<K> {
         K: Display,
     {
         let mut n_heads = 0;
-        let headgraph: BitVec = self.graph.from_filter(|a| match a {
+        let _headgraph: BitVec = self.graph.from_filter(|a| match a {
             NetworkEdge::Head => {
                 n_heads += 1;
                 true
@@ -688,62 +637,15 @@ impl<K> NetworkGraph<K> {
 
         let mut to_del: BitVec = self.graph.empty_subgraph();
 
-        let sums_dot = self.graph.dot_impl(
-            &sums,
-            "",
-            &|e| {
-                if let NetworkEdge::Slot(s) = e {
-                    Some(format!("label=\"{s}\""))
-                } else {
-                    None
-                }
-            },
-            &|n| match n {
-                NetworkNode::Leaf(l) => match l {
-                    NetworkLeaf::LibraryKey(l) => Some(format!("label= \"L\"")),
-                    NetworkLeaf::LocalTensor(l) => Some(format!("label = \"T{l}\"")),
-                    NetworkLeaf::Scalar(s) => Some(format!("label = \"S{s}\"")),
-                },
-                NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
-            },
-        );
-
-        println!("//Sums\n{sums_dot}");
-
-        let prod_dot = self.graph.dot_impl(
-            &prods,
-            "",
-            &|e| {
-                if let NetworkEdge::Slot(s) = e {
-                    Some(format!("label=\"{s}\""))
-                } else {
-                    None
-                }
-            },
-            &|n| match n {
-                NetworkNode::Leaf(l) => match l {
-                    NetworkLeaf::LibraryKey(l) => Some(format!("label= \"L\"")),
-                    NetworkLeaf::LocalTensor(l) => Some(format!("label = \"T{l}\"")),
-                    NetworkLeaf::Scalar(s) => Some(format!("label = \"S{s}\"")),
-                },
-                NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
-            },
-        );
-
-        println!("//Prods\n{prod_dot}");
-
         for sum in self.graph.connected_components(&sums) {
             let nodes: Vec<_> = self.graph.iter_node_data(&sum).map(|(a, _, _)| a).collect();
 
             if nodes.len() > 1 {
-                let (n, sub) = self.graph.identify_nodes_without_self_edges::<BitVec>(
+                let (_, sub) = self.graph.identify_nodes_without_self_edges::<BitVec>(
                     &nodes,
                     NetworkNode::Op(NetworkOp::Sum),
                 );
                 to_del.union_with(&sub);
-                // self.graph.delete_hedges(&to_del);
-
-                // self.merge_ops();
             }
         }
         for prod in self.graph.connected_components(&prods) {
@@ -753,61 +655,15 @@ impl<K> NetworkGraph<K> {
                 .map(|(a, _, _)| a)
                 .collect();
             if nodes.len() > 1 {
-                let (n, sub) = self.graph.identify_nodes_without_self_edges::<BitVec>(
+                let (_, sub) = self.graph.identify_nodes_without_self_edges::<BitVec>(
                     &nodes,
                     NetworkNode::Op(NetworkOp::Product),
                 );
                 to_del.union_with(&sub);
-                // self.graph.delete_hedges(&to_del);
-
-                // self.merge_ops();
             };
         }
-        let tree = self.graph.dot_impl(
-            &to_del,
-            "",
-            &|e| {
-                if let NetworkEdge::Slot(s) = e {
-                    Some(format!("label=\"{s}\""))
-                } else {
-                    None
-                }
-            },
-            &|n| match n {
-                NetworkNode::Leaf(l) => match l {
-                    NetworkLeaf::LibraryKey(l) => Some(format!("label= \"L\"")),
-                    NetworkLeaf::LocalTensor(l) => Some(format!("label = \"T{l}\"")),
-                    NetworkLeaf::Scalar(s) => Some(format!("label = \"S{s}\"")),
-                },
-                NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
-            },
-        );
 
-        println!("{tree}");
         self.graph.delete_hedges(&to_del);
-        println!(
-            "{}",
-            self.graph.dot_impl(
-                &self.graph.full_filter(),
-                "",
-                &|e| {
-                    if let NetworkEdge::Slot(s) = e {
-                        Some(format!("label=\"{s}\""))
-                    } else {
-                        None
-                    }
-                },
-                &|n| match n {
-                    NetworkNode::Leaf(l) => match l {
-                        NetworkLeaf::LibraryKey(l) => Some(format!("label= \"L\"")),
-                        NetworkLeaf::LocalTensor(l) => Some(format!("label = \"T{l}\"")),
-                        NetworkLeaf::Scalar(s) => Some(format!("label = \"S{s}\"")),
-                    },
-                    NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
-                },
-            )
-        );
-        // self.graph.delete_hedges(&to_del);
     }
     pub fn simplify_identity_ops(&mut self) {}
 
@@ -902,7 +758,7 @@ impl<K> NAdd for NetworkGraph<K> {
         debug_assert!(
             slots.len() == add.n_dangling(),
             "addition with non matching dangling: \n{}",
-            add.dot_impl(|a| "".to_string(), |a| "".to_string(), |a| "".to_string())
+            add.dot_impl(|_| "".to_string(), |_| "".to_string(), |_| "".to_string())
         );
 
         add
@@ -1096,14 +952,9 @@ impl<'a, K: Clone> Sub<NetworkGraph<K>> for &'a NetworkGraph<K> {
 
 #[cfg(test)]
 pub mod test {
-    use bitvec::vec::BitVec;
-    use linnet::{
-        half_edge::{subgraph::ModifySubgraph, tree::SimpleTraversalTree, NodeIndex},
-        tree::child_pointer::ParentChildStore,
-    };
 
     use crate::{
-        network::graph::{NetworkEdge, NetworkLeaf, NetworkNode},
+        network::graph::NetworkLeaf,
         structure::{
             representation::{Euclidean, Lorentz, Minkowski, RepName},
             slot::IsAbstractSlot,
@@ -1146,65 +997,8 @@ pub mod test {
         );
         let s2 = NetworkGraph::scalar(3);
 
-        let mut expr =
-            ((t3b * (&t + &t2) * s2 * (&s + &zero)) * (t3 * (t + t2) * s * (one + zero)));
+        let mut expr = t3b * (&t + &t2) * s2 * (&s + &zero) * (t3 * (t + t2) * s * (one + zero));
 
-        println!("{}", expr.dot());
-
-        let tt: SimpleTraversalTree<ParentChildStore<()>> = expr.expr_tree().cast();
-
-        // let tree = expr.graph.dot_impl(
-        //     &tt.tree_subgraph,
-        //     "",
-        //     &|e| {
-        //         if let NetworkEdge::Slot(s) = e {
-        //             Some(format!("label=\"{s}\""))
-        //         } else {
-        //             None
-        //         }
-        //     },
-        //     &|n| match n {
-        //         NetworkNode::Leaf(l) => match l {
-        //             NetworkLeaf::LibraryKey(l) => Some(format!("label= \"L{l}\"")),
-        //             NetworkLeaf::LocalTensor(l) => Some(format!("label = \"T{l}\"")),
-        //             NetworkLeaf::Scalar(s) => Some(format!("label = \"S{s}\"")),
-        //         },
-        //         NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
-        //     },
-        // );
-
-        // println!("{tree}");
-        let mut node_20: BitVec = expr.graph.empty_subgraph();
-
-        for h in expr.graph.iter_crown(NodeIndex(20)) {
-            node_20.add(h);
-        }
-
-        let tree = expr.graph.dot_impl(
-            &node_20,
-            "",
-            &|e| {
-                if let NetworkEdge::Slot(s) = e {
-                    Some(format!("label=\"{s}\""))
-                } else {
-                    None
-                }
-            },
-            &|n| match n {
-                NetworkNode::Leaf(l) => match l {
-                    NetworkLeaf::LibraryKey(l) => Some(format!("label= \"L{l}\"")),
-                    NetworkLeaf::LocalTensor(l) => Some(format!("label = \"T{l}\"")),
-                    NetworkLeaf::Scalar(s) => Some(format!("label = \"S{s}\"")),
-                },
-                NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
-            },
-        );
-
-        println!("{tree}");
-
-        for t in tt.iter_preorder_tree_nodes(&expr.graph, NodeIndex(1)) {
-            println!(":ESTE")
-        }
         println!("{}", expr.dot());
         expr.merge_ops();
         println!("{}", expr.dot());

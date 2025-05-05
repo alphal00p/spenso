@@ -2248,9 +2248,9 @@ impl<S: TensorStructure> HasStructure for TensorShell<S> {
     type Structure = S;
     type Scalar = ();
     type ScalarRef<'a>
+        = &'a ()
     where
-        Self: 'a,
-    = &'a ();
+        Self: 'a;
     type Store<U>
         = TensorShell<U>
     where
@@ -2393,7 +2393,7 @@ where
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
-    use crate::network::tensor_library::symbolic::ShadowedStructure;
+    use crate::network::parsing::ShadowedStructure;
 
     use super::representation::Lorentz;
     use super::*;

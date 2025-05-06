@@ -1005,6 +1005,18 @@ pub enum ConcreteOrParam<C> {
     Param(Atom),
 }
 
+impl<C> crate::algebraic_traits::One for ConcreteOrParam<C> {
+    fn one() -> Self {
+        ConcreteOrParam::Param(Atom::new_num(1))
+    }
+}
+
+impl<C> crate::algebraic_traits::Zero for ConcreteOrParam<C> {
+    fn zero() -> Self {
+        ConcreteOrParam::Param(Atom::Zero)
+    }
+}
+
 pub mod to_param;
 
 impl<C> ConcreteOrParam<C> {

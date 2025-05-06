@@ -344,6 +344,8 @@ impl<T: HasStructure<Structure = ExplicitKey> + SetTensorData + Clone + LibraryT
 
 #[cfg(test)]
 mod test {
+    use symbolica::parse;
+
     use crate::{
         complex::RealOrComplexRef,
         network::{
@@ -472,6 +474,46 @@ mod test {
             // println!("YaY:{a}");
 
             assert_eq!(tensor, &indexed.to_shell().concretize());
+        } else {
+            panic!("Not Key")
+        }
+    }
+
+    #[test]
+    fn dot() {
+        let lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+
+        let expr = parse!("p(1,mink(4,2))*q(2,mink(4,2))").unwrap();
+        let mut net = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            _,
+        >::try_from_view(expr.as_view(), &lib)
+        .unwrap();
+
+        println!(
+            "{}",
+            net.dot_display_impl::<_, ExplicitKey>(
+                &lib,
+                |a| a.to_string(),
+                |_| "".to_string(),
+                |a| a.name().unwrap().to_string()
+            )
+        );
+
+        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl::<_, ExplicitKey>(
+                &lib,
+                |a| a.to_string(),
+                |_| "".to_string(),
+                |a| a.name().map(|a| a.to_string()).unwrap_or("".to_owned())
+            )
+        );
+
+        if let ConcreteOrParam::Param(a) = net.result_scalar().unwrap().as_ref() {
+            let res= parse!("p(1,cind(0))*q(2,cind(0))-p(1,cind(1))*q(2,cind(1))-p(1,cind(2))*q(2,cind(2))-p(1,cind(3))*q(2,cind(3))").unwrap();
+            assert_eq!(a, &res);
         } else {
             panic!("Not Key")
         }

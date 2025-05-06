@@ -215,19 +215,19 @@ impl<
         }
     }
 
-    fn key_for_structure(&self, structure: S) -> Result<Self::Key, S>
+    fn key_for_structure(&self, structure: &S) -> Result<Self::Key, LibraryError<Self::Key>>
     where
         S: TensorStructure,
     {
-        let a = ExplicitKey::from_structure(&structure);
+        let a = ExplicitKey::from_structure(structure);
         if let Some(key) = a {
             if <TensorLibrary<T> as Library<S>>::get(&self, &key).is_ok() {
                 Ok(key)
             } else {
-                Err(structure)
+                Err(LibraryError::InvalidKey)
             }
         } else {
-            Err(structure)
+            Err(LibraryError::InvalidKey)
         }
     }
 }
@@ -351,6 +351,7 @@ mod test {
             TensorOrScalarOrKey,
         },
         parametric::ConcreteOrParamRef,
+        shadowing::Concretize,
         structure::{
             representation::{Euclidean, Minkowski},
             ToSymbolic,
@@ -377,8 +378,11 @@ mod test {
             .unwrap();
 
         lib.get(&key).unwrap();
-
-        let mut expr = key.to_symbolic().unwrap();
+        let indexed = key
+            .clone()
+            .to_indexed(&[0.into(), 1.into(), 2.into()])
+            .unwrap();
+        let expr = indexed.to_symbolic().unwrap();
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -406,13 +410,70 @@ mod test {
             )
         );
 
-        if let TensorOrScalarOrKey::Key { key: res_key, .. } = net.result().unwrap() {
+        if let TensorOrScalarOrKey::Key {
+            key: res_key,
+            graph_slots,
+        } = net.result().unwrap()
+        {
             // println!("YaY:{a}");
+            assert_eq!(graph_slots, indexed.structure.structure);
             assert_eq!(&key, res_key);
         } else {
-            panic!("Not scalar")
+            panic!("Not Key")
         }
-        let mut a = RealOrComplex::Real(1.);
-        a *= &RealOrComplex::Complex(Complex::new_re(1.));
+    }
+
+    #[test]
+    fn not_in_lib() {
+        let lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let key = ExplicitKey::from_iter(
+            [
+                LibraryRep::from(Minkowski {}).new_rep(4),
+                Euclidean {}.new_rep(4).cast(),
+                Euclidean {}.new_rep(4).cast(),
+            ],
+            symbol!("gamma"),
+            None,
+        );
+
+        let indexed = key
+            .clone()
+            .to_indexed(&[0.into(), 1.into(), 2.into()])
+            .unwrap();
+        let expr = indexed.to_symbolic().unwrap();
+        let mut net = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            _,
+        >::try_from_view(expr.as_view(), &lib)
+        .unwrap();
+
+        println!(
+            "{}",
+            net.dot_display_impl::<_, ExplicitKey>(
+                &lib,
+                |a| a.to_string(),
+                |_| "".to_string(),
+                |a| a.name().unwrap().to_string()
+            )
+        );
+
+        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl::<_, ExplicitKey>(
+                &lib,
+                |a| a.to_string(),
+                |_| "".to_string(),
+                |a| a.name().unwrap().to_string()
+            )
+        );
+
+        if let TensorOrScalarOrKey::Tensor { tensor, .. } = net.result().unwrap() {
+            // println!("YaY:{a}");
+
+            assert_eq!(tensor, &indexed.to_shell().concretize());
+        } else {
+            panic!("Not Key")
+        }
     }
 }

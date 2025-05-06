@@ -885,7 +885,9 @@ checksum = "a25169bd5913a4b437588a7e3d127cd6e90127b60e0ffbd834a38f1599e016b8"
 
 [[package]]
 name = "linnet"
-version = "0.5.0"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "862dee2762b5ee8db0b63c974ec7391a5dcadfe2f685ae682aca62035d202896"
 dependencies = [
  "ahash",
  "bincode",
@@ -1640,6 +1642,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "symbolica"
 version = "0.16.0"
+source = "git+https://github.com/alphal00p/symbolica?rev=2f306d814359de6397817060ba2deae046351828#2f306d814359de6397817060ba2deae046351828"
 dependencies = [
  "ahash",
  "append-only-vec",

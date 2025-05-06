@@ -65,7 +65,7 @@ slotmap = { version = "1.0.7", features = ["serde"] }
 # smartstring = { version = "1.0.1", features = ["serde"] }
 symbolica = { version = "0.16.0", optional = true,features = ["serde","bincode"] }
 thiserror = "1.0.60"
-linnet = {version = "0.5.0",features = ["serde" ,"bincode"]}
+linnet = {version = "0.5.1",features = ["serde" ,"bincode"]}
 spenso-macros = { path = "../spenso-macros" }
 features = "0.10.0"
 rayon = "1.10.0"

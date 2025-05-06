@@ -137,13 +137,13 @@ where
         let s: Result<S, _> = value.try_into();
 
         if let Ok(s) = s {
-            let s = s.clone();
-            match library.key_for_structure(s) {
+            // let s = s;
+            match library.key_for_structure(&s) {
                 Ok(key) => {
-                    let t = library.get(&key).unwrap();
-                    Ok(Self::library_tensor(t.as_ref(), key))
+                    // let t = library.get(&key).unwrap();
+                    Ok(Self::library_tensor(&s, key))
                 }
-                Err(shell) => Ok(Self::local_tensor(shell.to_shell().concretize())),
+                Err(_) => Ok(Self::local_tensor(s.to_shell().concretize())),
             }
         } else {
             Ok(Self::scalar(

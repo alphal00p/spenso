@@ -7,7 +7,7 @@ use crate::{
         library::symbolic::{ExplicitKey, TensorLibrary},
         parsing::ShadowedStructure,
         store::NetworkStore,
-        Network, TensorNetworkError,
+        Network, Ref, TensorNetworkError,
     },
     parametric::MixedTensor,
     structure::{
@@ -36,6 +36,17 @@ use symbolica::atom::{Atom, AtomView, Symbol};
 pub struct SymbolicTensor {
     pub structure: VecStructure,
     pub expression: symbolica::atom::Atom,
+}
+
+impl Ref for SymbolicTensor {
+    type Ref<'a>
+        = &'a SymbolicTensor
+    where
+        Self: 'a;
+
+    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+        self
+    }
 }
 
 impl TensorStructure for SymbolicTensor {

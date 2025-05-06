@@ -341,3 +341,78 @@ impl<T: HasStructure<Structure = ExplicitKey> + SetTensorData + Clone + LibraryT
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        complex::RealOrComplexRef,
+        network::{
+            parsing::ShadowedStructure, store::NetworkStore, Network, Sequential, SmallestDegree,
+            TensorOrScalarOrKey,
+        },
+        parametric::ConcreteOrParamRef,
+        structure::{
+            representation::{Euclidean, Minkowski},
+            ToSymbolic,
+        },
+    };
+
+    use super::*;
+
+    #[test]
+    fn add_to_lib() {
+        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let key = ExplicitKey::from_iter(
+            [
+                LibraryRep::from(Minkowski {}).new_rep(4),
+                Euclidean {}.new_rep(4).cast(),
+                Euclidean {}.new_rep(4).cast(),
+            ],
+            symbol!("gamma"),
+            None,
+        );
+
+        let one = ConcreteOrParam::Concrete(RealOrComplex::Real(1.));
+        lib.insert_explicit_sparse(key.clone(), [(vec![0, 0, 1], one)])
+            .unwrap();
+
+        lib.get(&key).unwrap();
+
+        let mut expr = key.to_symbolic().unwrap();
+        let mut net = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            _,
+        >::try_from_view(expr.as_view(), &lib)
+        .unwrap();
+
+        println!(
+            "{}",
+            net.dot_display_impl::<_, ExplicitKey>(
+                &lib,
+                |a| a.to_string(),
+                |_| "".to_string(),
+                |a| a.to_string()
+            )
+        );
+
+        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl::<_, ExplicitKey>(
+                &lib,
+                |a| a.to_string(),
+                |_| "".to_string(),
+                |a| a.to_string()
+            )
+        );
+
+        if let TensorOrScalarOrKey::Key { key: res_key, .. } = net.result().unwrap() {
+            // println!("YaY:{a}");
+            assert_eq!(&key, res_key);
+        } else {
+            panic!("Not scalar")
+        }
+        let mut a = RealOrComplex::Real(1.);
+        a *= &RealOrComplex::Complex(Complex::new_re(1.));
+    }
+}

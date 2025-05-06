@@ -663,15 +663,17 @@ impl<
             + TensorStructure
             + Neg<Output = T>
             + Clone
-            + for<'a> AddAssign<&'a T>
+            + Ref
+            + for<'a> AddAssign<T::Ref<'a>>
             + for<'a> AddAssign<<L::Value as LibraryTensor>::WithIndices>
             + From<<L::Value as LibraryTensor>::WithIndices>,
         L: Library<T::Structure, Key = K, Value: LibraryTensor>,
         Sc: Neg<Output = Sc>
-            + for<'a> AddAssign<&'a Sc>
+            + for<'a> AddAssign<Sc::Ref<'a>>
             + Clone
             + for<'a> AddAssign<T::ScalarRef<'a>>
-            + From<T::Scalar>,
+            + From<T::Scalar>
+            + Ref,
         K: Display + Debug,
     > ExecuteOp<L, K> for NetworkStore<T, Sc>
 {
@@ -721,7 +723,7 @@ impl<
                         for t in &targets[1..] {
                             match t {
                                 NetworkLeafWithInds::Scalar(s) => {
-                                    accumulator += &self.scalar[*s];
+                                    accumulator += self.scalar[*s].refer();
                                 }
                                 NetworkLeafWithInds::LocalTensor(t) => {
                                     if let Some(s) = self.tensors[*t].scalar_ref() {
@@ -751,7 +753,7 @@ impl<
                             for t in &targets[1..] {
                                 match t {
                                     NetworkLeafWithInds::Scalar(s) => {
-                                        accumulator += &self.scalar[*s];
+                                        accumulator += self.scalar[*s].refer();
                                     }
                                     NetworkLeafWithInds::LocalTensor(t) => {
                                         if let Some(s) = self.tensors[*t].scalar_ref() {
@@ -783,7 +785,7 @@ impl<
                                         ))
                                     }
                                     NetworkLeafWithInds::LocalTensor(t) => {
-                                        accumulator += &self.tensors[*t];
+                                        accumulator += self.tensors[*t].refer();
                                     }
                                     NetworkLeafWithInds::LibraryKey { key, inds } => {
                                         let with_index = lib.get(key)?.with_indices(inds)?;
@@ -809,7 +811,7 @@ impl<
                                     return Err(TensorNetworkError::SumScalarTensor("".to_string()))
                                 }
                                 NetworkLeafWithInds::LocalTensor(t) => {
-                                    accumulator += &self.tensors[*t];
+                                    accumulator += self.tensors[*t].refer();
                                 }
                                 NetworkLeafWithInds::LibraryKey { key, inds } => {
                                     let with_index = lib.get(key)?.with_indices(inds)?;
@@ -834,6 +836,24 @@ impl<
 
 pub struct SmallestDegree;
 
+pub trait Ref {
+    type Ref<'a>
+    where
+        Self: 'a;
+    fn refer<'a>(&'a self) -> Self::Ref<'a>;
+}
+
+impl Ref for f64 {
+    type Ref<'a>
+        = &'a f64
+    where
+        Self: 'a;
+
+    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+        self
+    }
+}
+
 impl<
         T: HasStructure
             + TensorStructure
@@ -843,7 +863,11 @@ impl<
             + Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T>
             + From<<L::Value as LibraryTensor>::WithIndices>,
         L: Library<T::Structure, Key = K, Value: LibraryTensor>,
-        Sc: for<'a> MulAssign<&'a Sc> + Clone + for<'a> MulAssign<T::ScalarRef<'a>> + From<T::Scalar>,
+        Sc: for<'a> MulAssign<Sc::Ref<'a>>
+            + Clone
+            + for<'a> MulAssign<T::ScalarRef<'a>>
+            + From<T::Scalar>
+            + Ref,
         K: Display + Debug + Clone,
     > ContractionStrategy<NetworkStore<T, Sc>, L, K> for SmallestDegree
 where
@@ -881,7 +905,7 @@ where
             let mut acc = executor.scalar[f].clone();
 
             for si in scalars {
-                acc *= &executor.scalar[si];
+                acc *= executor.scalar[si].refer();
             }
 
             let pos = executor.scalar.len();
@@ -909,7 +933,11 @@ impl SmallestDegree {
             + Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T>
             + From<<L::Value as LibraryTensor>::WithIndices>,
         L: Library<T::Structure, Key = K, Value: LibraryTensor>,
-        Sc: for<'a> MulAssign<&'a Sc> + Clone + for<'a> MulAssign<T::ScalarRef<'a>> + From<T::Scalar>,
+        Sc: for<'a> MulAssign<Sc::Ref<'a>>
+            + Clone
+            + for<'a> MulAssign<T::ScalarRef<'a>>
+            + From<T::Scalar>
+            + Ref,
         K: Display + Debug + Clone,
     >(
         executor: &mut NetworkStore<T, Sc>,

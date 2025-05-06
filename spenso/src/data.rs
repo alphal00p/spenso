@@ -166,6 +166,17 @@ pub struct SparseTensor<T, I = VecStructure> {
     pub structure: I,
 }
 
+impl<T, S> crate::network::Ref for SparseTensor<T, S> {
+    type Ref<'a>
+        = &'a SparseTensor<T, S>
+    where
+        Self: 'a;
+
+    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+        self
+    }
+}
+
 impl<T, S> TensorStructure for SparseTensor<T, S>
 where
     S: TensorStructure,
@@ -805,6 +816,17 @@ pub struct DenseTensor<T, S = VecStructure> {
     pub structure: S,
 }
 
+impl<T, S> crate::network::Ref for DenseTensor<T, S> {
+    type Ref<'a>
+        = &'a DenseTensor<T, S>
+    where
+        Self: 'a;
+
+    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+        self
+    }
+}
+
 impl<T, S> TensorStructure for DenseTensor<T, S>
 where
     S: TensorStructure,
@@ -1374,6 +1396,17 @@ where
 pub enum DataTensor<T, I = VecStructure> {
     Dense(DenseTensor<T, I>),
     Sparse(SparseTensor<T, I>),
+}
+
+impl<T, S> crate::network::Ref for DataTensor<T, S> {
+    type Ref<'a>
+        = &'a DataTensor<T, S>
+    where
+        Self: 'a;
+
+    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+        self
+    }
 }
 
 pub trait SparseOrDense {

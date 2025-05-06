@@ -218,7 +218,7 @@ pub mod test {
 
     #[test]
     fn parse_scalar() {
-        let mut expr = parse!("1").unwrap();
+        let expr = parse!("1").unwrap();
 
         let lib = DummyLibrary::<_>::new();
         let mut net =
@@ -236,7 +236,7 @@ pub mod test {
 
     #[test]
     fn parse_scalar_expr() {
-        let mut expr = parse!("(y+x(mink(4,1))*y(mink(4,1))) *(1+1+2*x*(3*sin(r))/t)").unwrap();
+        let expr = parse!("(y+x(mink(4,1))*y(mink(4,1))) *(1+1+2*x*(3*sin(r))/t)").unwrap();
 
         let lib = DummyLibrary::<_>::new();
         let mut net =
@@ -249,7 +249,7 @@ pub mod test {
             net.dot_display_impl::<_, ()>(
                 &lib,
                 |a| a.to_string(),
-                |a| "".to_string(),
+                |_| "".to_string(),
                 |a| a.to_string()
             )
         );
@@ -260,7 +260,7 @@ pub mod test {
             net.dot_display_impl::<_, ()>(
                 &lib,
                 |a| a.to_string(),
-                |a| "".to_string(),
+                |_| "".to_string(),
                 |a| a.to_string()
             )
         );
@@ -337,7 +337,7 @@ pub mod test {
             net.dot_display_impl::<_, ()>(
                 &lib,
                 |a| a.to_string(),
-                |a| "".to_string(),
+                |_| "".to_string(),
                 |a| a.to_string()
             )
         );
@@ -348,7 +348,7 @@ pub mod test {
             net.dot_display_impl::<_, ()>(
                 &lib,
                 |a| a.to_string(),
-                |a| "".to_string(),
+                |_| "".to_string(),
                 |a| a.to_string()
             )
         );

@@ -1,15 +1,17 @@
 extern crate derive_more;
 
 use std::{
+    convert::Infallible,
     fmt::{Debug, Display},
     io::Cursor,
+    ops::{AddAssign, MulAssign},
 };
 
-use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
 use crate::structure::representation::Representation;
 use crate::structure::slot::IsAbstractSlot;
 use crate::structure::StructureError;
+use crate::{complex::RealOrComplexRef, structure::abstract_index::AbstractIndex};
 use ahash::HashMap;
 use delegate::delegate;
 
@@ -21,6 +23,7 @@ use atomcore::{ReplaceBuilderGeneric, TensorAtomMaps};
 use enum_try_as_inner::EnumTryAsInner;
 use log::trace;
 use serde::{de, ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use to_param::ToAtom;
 
 use crate::{
     arithmetic::ScalarMul,
@@ -288,6 +291,11 @@ pub struct ParamTensor<S = VecStructure> {
     // Composite(DataTensor<Atom, S>),
 }
 
+pub mod add_assign;
+pub mod mul_assign;
+pub mod neg;
+pub mod scalar_mul;
+
 impl<S> TensorStructure for ParamTensor<S>
 where
     S: TensorStructure,
@@ -421,16 +429,6 @@ where
             tensor: tensor.into(),
             param_type: ParamOrComposite::Composite,
         }
-    }
-}
-
-impl<S: TensorStructure + Clone> ScalarMul<SerializableAtom> for ParamTensor<S> {
-    type Output = ParamTensor<S>;
-    fn scalar_mul(&self, rhs: &SerializableAtom) -> Option<Self::Output> {
-        Some(ParamTensor {
-            tensor: self.tensor.scalar_mul(&rhs.0)?,
-            param_type: ParamOrComposite::Composite,
-        })
     }
 }
 
@@ -798,6 +796,17 @@ pub enum ParamOrConcrete<C, S> {
     Param(ParamTensor<S>),
 }
 
+impl<C, S> crate::network::Ref for ParamOrConcrete<C, S> {
+    type Ref<'a>
+        = &'a ParamOrConcrete<C, S>
+    where
+        Self: 'a;
+
+    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+        self
+    }
+}
+
 impl<C, S> Decode<StateMap> for ParamOrConcrete<C, S>
 where
     C: Decode<StateMap>,
@@ -996,11 +1005,59 @@ pub enum ConcreteOrParam<C> {
     Param(Atom),
 }
 
+pub mod to_param;
+
+impl<C> ConcreteOrParam<C> {
+    pub fn to_param(&mut self)
+    where
+        C: ToAtom,
+    {
+        if self.is_concrete() {
+            let old = std::mem::replace(self, ConcreteOrParam::Param(Atom::Zero));
+
+            if let ConcreteOrParam::Concrete(r) = old {
+                *self = ConcreteOrParam::Param(r.to_atom());
+            }
+        }
+    }
+}
+
+impl<C> From<AtomView<'_>> for ConcreteOrParam<C> {
+    fn from(value: AtomView<'_>) -> Self {
+        ConcreteOrParam::Param(value.into())
+    }
+}
+
 #[derive(Clone, Debug, EnumTryAsInner)]
 #[derive_err(Debug)]
 pub enum ConcreteOrParamRef<'a, C> {
     Concrete(C),
     Param(AtomView<'a>),
+}
+
+impl crate::network::Ref for Atom {
+    type Ref<'a>
+        = AtomView<'a>
+    where
+        Self: 'a;
+
+    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+        self.as_view()
+    }
+}
+
+impl<C: crate::network::Ref> crate::network::Ref for ConcreteOrParam<C> {
+    type Ref<'a>
+        = ConcreteOrParamRef<'a, C::Ref<'a>>
+    where
+        Self: 'a;
+
+    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+        match self {
+            ConcreteOrParam::Concrete(c) => ConcreteOrParamRef::Concrete(c.refer()),
+            ConcreteOrParam::Param(p) => ConcreteOrParamRef::Param(p.refer()),
+        }
+    }
 }
 
 impl<C: Default> Default for ConcreteOrParam<C> {
@@ -1016,6 +1073,17 @@ impl<C: std::ops::Neg<Output = C>> std::ops::Neg for ConcreteOrParam<C> {
         match self {
             ConcreteOrParam::Concrete(c) => ConcreteOrParam::Concrete(-c),
             ConcreteOrParam::Param(p) => ConcreteOrParam::Param(-p),
+        }
+    }
+}
+
+impl<'a, C: std::ops::Neg<Output = C>> std::ops::Neg for ConcreteOrParamRef<'a, C> {
+    type Output = ConcreteOrParam<C>;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            ConcreteOrParamRef::Concrete(c) => ConcreteOrParam::Concrete(-c),
+            ConcreteOrParamRef::Param(p) => ConcreteOrParam::Param(-p),
         }
     }
 }
@@ -1146,7 +1214,7 @@ where
 
     fn map_structure_result<O: TensorStructure, Er>(
         self,
-        f: impl Fn(Self::Structure) -> Result<O, Er>,
+        _f: impl Fn(Self::Structure) -> Result<O, Er>,
     ) -> std::result::Result<Self::Store<O>, Er> {
         todo!()
     }

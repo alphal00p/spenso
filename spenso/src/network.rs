@@ -17,7 +17,7 @@ use crate::structure::representation::LibrarySlot;
 use crate::structure::StructureError;
 use std::borrow::Cow;
 use std::fmt::Display;
-use std::ops::{Add, AddAssign, Mul, MulAssign, Neg};
+use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use store::{NetworkStore, TensorScalarStore, TensorScalarStoreMapping};
 use thiserror::Error;
 // use log::trace;
@@ -232,6 +232,40 @@ impl<S: TensorScalarStore, K> Mul for Network<S, K> {
     }
 }
 
+impl<S: TensorScalarStore, K> MulAssign for Network<S, K> {
+    fn mul_assign(&mut self, mut rhs: Self) {
+        rhs.graph.shift_scalars(self.store.n_scalars());
+        rhs.graph.shift_tensors(self.store.n_tensors());
+        self.store.extend(rhs.store);
+
+        self.graph *= rhs.graph;
+    }
+}
+
+impl<T: TensorStructure, S, K> MulAssign<T> for Network<NetworkStore<T, S>, K> {
+    fn mul_assign(&mut self, rhs: T) {
+        *self *= Network::local_tensor(rhs);
+    }
+}
+
+impl<T: TensorStructure, S, K> Mul<T> for Network<NetworkStore<T, S>, K> {
+    type Output = Self;
+    fn mul(self, other: T) -> Self::Output {
+        let mut store = self.store;
+
+        let mut other = Network::local_tensor(other);
+
+        other.graph.shift_scalars(store.n_scalars());
+        other.graph.shift_tensors(store.n_tensors());
+        store.extend(other.store);
+
+        Network {
+            graph: self.graph * other.graph,
+            store,
+        }
+    }
+}
+
 impl<S: TensorScalarStore, K> Add for Network<S, K> {
     type Output = Self;
     fn add(self, mut other: Self) -> Self::Output {
@@ -245,6 +279,30 @@ impl<S: TensorScalarStore, K> Add for Network<S, K> {
             graph: self.graph + other.graph,
             store,
         }
+    }
+}
+
+impl<S: TensorScalarStore, K> AddAssign for Network<S, K> {
+    fn add_assign(&mut self, mut rhs: Self) {
+        rhs.graph.shift_scalars(self.store.n_scalars());
+        rhs.graph.shift_tensors(self.store.n_tensors());
+        self.store.extend(rhs.store);
+
+        self.graph += rhs.graph;
+    }
+}
+
+impl<T: TensorStructure, S, K> AddAssign<T> for Network<NetworkStore<T, S>, K> {
+    fn add_assign(&mut self, rhs: T) {
+        *self += Network::local_tensor(rhs);
+    }
+}
+
+impl<T: TensorStructure, S, K> Add<T> for Network<NetworkStore<T, S>, K> {
+    type Output = Self;
+    fn add(mut self, other: T) -> Self::Output {
+        self += other;
+        self
     }
 }
 
@@ -264,6 +322,48 @@ impl<S: TensorScalarStore, K> NAdd for Network<S, K> {
             graph: self.graph.n_add(items),
             store,
         }
+    }
+}
+
+impl<S: TensorScalarStore, K> Neg for Network<S, K> {
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        Self {
+            store: self.store,
+            graph: self.graph.neg(),
+        }
+    }
+}
+
+impl<S: TensorScalarStore, K> Sub for Network<S, K> {
+    type Output = Self;
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl<S: TensorScalarStore, K> SubAssign for Network<S, K> {
+    fn sub_assign(&mut self, mut rhs: Self) {
+        rhs.graph.shift_scalars(self.store.n_scalars());
+        rhs.graph.shift_tensors(self.store.n_tensors());
+        self.store.extend(rhs.store);
+
+        self.graph -= rhs.graph
+    }
+}
+
+impl<T: TensorStructure, S, K> SubAssign<T> for Network<NetworkStore<T, S>, K> {
+    fn sub_assign(&mut self, rhs: T) {
+        *self -= Network::local_tensor(rhs)
+    }
+}
+
+impl<T: TensorStructure, S, K> Sub<T> for Network<NetworkStore<T, S>, K> {
+    type Output = Self;
+    fn sub(mut self, other: T) -> Self::Output {
+        self -= other;
+        self
     }
 }
 

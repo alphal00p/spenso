@@ -1,6 +1,6 @@
 use std::{
     fmt::Display,
-    ops::{Add, Mul, Neg, Sub},
+    ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
 use bincode::{Decode, Encode};
@@ -765,6 +765,46 @@ impl<K> NAdd for NetworkGraph<K> {
     }
 }
 
+impl<K> MulAssign for NetworkGraph<K> {
+    fn mul_assign(&mut self, rhs: Self) {
+        let mul = Self::mul(2);
+
+        self.join_mut(
+            mul,
+            NetworkGraph::<K>::match_heads,
+            NetworkGraph::<K>::join_heads,
+        )
+        .unwrap();
+
+        self.join_mut(
+            rhs,
+            NetworkGraph::<K>::prod_match,
+            NetworkGraph::<K>::join_heads,
+        )
+        .unwrap();
+    }
+}
+
+impl<K: Clone> MulAssign<&NetworkGraph<K>> for NetworkGraph<K> {
+    fn mul_assign(&mut self, rhs: &Self) {
+        let mul = NetworkGraph::mul(2);
+
+        self.join_mut(
+            mul,
+            NetworkGraph::<K>::match_heads,
+            NetworkGraph::<K>::join_heads,
+        )
+        .unwrap();
+
+        self.join_mut(
+            rhs.clone(),
+            NetworkGraph::<K>::prod_match,
+            NetworkGraph::<K>::join_heads,
+        )
+        .unwrap();
+    }
+}
+
 impl<K> Mul for NetworkGraph<K> {
     type Output = NetworkGraph<K>;
     fn mul(self, rhs: Self) -> Self::Output {
@@ -805,6 +845,52 @@ impl<'a, K: Clone> Mul<NetworkGraph<K>> for &'a NetworkGraph<K> {
     type Output = NetworkGraph<K>;
     fn mul(self, rhs: NetworkGraph<K>) -> Self::Output {
         rhs * self
+    }
+}
+
+impl<K> AddAssign for NetworkGraph<K> {
+    fn add_assign(&mut self, rhs: Self) {
+        let slots = self.dangling_indices();
+        debug_assert!(slots.len() == rhs.n_dangling());
+
+        let add = Self::add(2, &slots);
+
+        self.join_mut(
+            add,
+            NetworkGraph::<K>::add_match,
+            NetworkGraph::<K>::join_heads,
+        )
+        .unwrap();
+
+        self.join_mut(
+            rhs,
+            NetworkGraph::<K>::add_match,
+            NetworkGraph::<K>::join_heads,
+        )
+        .unwrap();
+    }
+}
+
+impl<K: Clone> AddAssign<&NetworkGraph<K>> for NetworkGraph<K> {
+    fn add_assign(&mut self, rhs: &Self) {
+        let slots = self.dangling_indices();
+        debug_assert!(slots.len() == rhs.n_dangling());
+
+        let add = Self::add(2, &slots);
+
+        self.join_mut(
+            add,
+            NetworkGraph::<K>::add_match,
+            NetworkGraph::<K>::join_heads,
+        )
+        .unwrap();
+
+        self.join_mut(
+            rhs.clone(),
+            NetworkGraph::<K>::add_match,
+            NetworkGraph::<K>::join_heads,
+        )
+        .unwrap();
     }
 }
 
@@ -886,6 +972,18 @@ impl<K: Clone> Neg for &NetworkGraph<K> {
         .unwrap();
 
         neg
+    }
+}
+
+impl<K> SubAssign for NetworkGraph<K> {
+    fn sub_assign(&mut self, rhs: NetworkGraph<K>) {
+        *self += -rhs;
+    }
+}
+
+impl<K: Clone> SubAssign<&NetworkGraph<K>> for NetworkGraph<K> {
+    fn sub_assign(&mut self, rhs: &NetworkGraph<K>) {
+        *self += -rhs;
     }
 }
 

@@ -20,4 +20,4 @@ lto = "fat"
 # linnet = {path = "../../linnet"}
 # linnet = {git ="https://github.com/alphal00p/linnet", rev = "8b1d8b8afaca52de6d8820362de130aa23e87018"}
 # symbolica = { path = "../../../../work/LU/symbolica" }
-symbolica={git="https://github.com/alphal00p/symbolica",rev="2f306d814359de6397817060ba2deae046351828"}
+symbolica={git="https://github.com/alphal00p/symbolica",rev="a714571c8c8ee1a292237eb3ef1bc8123a4d7db4"}

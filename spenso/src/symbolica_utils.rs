@@ -20,8 +20,21 @@ use anyhow::Result;
 // use anyhow::Ok;
 use serde::ser::SerializeStruct;
 
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Display, Encode, Decode)]
-#[bincode(decode_context = "symbolica::state::StateMap")]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Hash,
+    Display,
+    Encode,
+    bincode_trait_derive::TraitDecode,
+    bincode_trait_derive::BorrowDecodeFromTraitDecode,
+)]
+#[trait_decode(trait = symbolica::state::HasStateMap)]
 pub struct SerializableSymbol {
     symbol: Symbol,
 }

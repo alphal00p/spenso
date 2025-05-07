@@ -151,11 +151,14 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
     });
 
 /// A type that represents the name of an index in a tensor.
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, Serialize, Deserialize, Encode)]
 #[cfg_attr(
     feature = "shadowing",
-    bincode(decode_context = "symbolica::state::StateMap")
+    derive(bincode_trait_derive::TraitDecode),
+    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
+    trait_decode(trait = symbolica::state::HasStateMap),
 )]
+#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 pub enum AbstractIndex {
     Normal(usize),
     Dualize(usize),

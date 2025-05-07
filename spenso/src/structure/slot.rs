@@ -22,12 +22,15 @@ use crate::network::library::symbolic::ETS;
 use thiserror::Error;
 
 #[derive(
-    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Encode, Decode,
+    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Encode,
 )]
 #[cfg_attr(
     feature = "shadowing",
-    bincode(decode_context = "symbolica::state::StateMap")
+    derive(bincode_trait_derive::TraitDecode),
+    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
+    trait_decode(trait = symbolica::state::HasStateMap),
 )]
+#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 /// A [`Slot`] is an index, identified by a `usize` and a [`Representation`].
 ///
 /// A vector of slots thus identifies the shape and type of the tensor.
@@ -227,8 +230,6 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + D
         }
     }
 
-    fn dot(&self) -> String;
-
     #[cfg(feature = "shadowing")]
     /// using the function builder of the representation add the abstract index as an argument, and finish it to an Atom.
     /// # Example
@@ -265,14 +266,6 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
     // type Dual = GenSlot<T::Dual>;
     fn dim(&self) -> Dimension {
         self.rep.dim
-    }
-
-    fn dot(&self) -> String {
-        format!(
-            "<<TABLE><TR><TD>{}</TD><TD>{}</TD></TR></TABLE>>",
-            self.rep.dot(),
-            self.aind
-        )
     }
 
     fn reindex(mut self, id: AbstractIndex) -> Self {

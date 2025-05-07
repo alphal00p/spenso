@@ -27,22 +27,28 @@ use crate::structure::{
 
 use super::TensorNetworkError;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode)]
 #[cfg_attr(
     feature = "shadowing",
-    bincode(decode_context = "symbolica::state::StateMap")
+    derive(bincode_trait_derive::TraitDecode),
+    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
+    trait_decode(trait = symbolica::state::HasStateMap),
 )]
+#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 pub struct NetworkGraph<K> {
     pub graph: HedgeGraph<NetworkEdge, NetworkNode<K>>, //, Forest<NetworkNode<K>, ChildVecStore<()>>>,
-    #[bincode(with_serde)]
-    uncontracted: BitVec,
+                                                        // #[bincode(with_serde)]
+                                                        // uncontracted: BitVec,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Encode)]
 #[cfg_attr(
     feature = "shadowing",
-    bincode(decode_context = "symbolica::state::StateMap")
+    derive(bincode_trait_derive::TraitDecode),
+    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
+    trait_decode(trait = symbolica::state::HasStateMap),
 )]
+#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 pub enum NetworkEdge {
     // Port,
     Head,
@@ -119,10 +125,10 @@ pub enum NetworkLeafWithInds<K> {
 impl<K> From<HedgeGraphBuilder<NetworkEdge, NetworkNode<K>>> for NetworkGraph<K> {
     fn from(builder: HedgeGraphBuilder<NetworkEdge, NetworkNode<K>>) -> Self {
         let graph = builder.build();
-        let uncontracted = graph.empty_subgraph();
+        // let uncontracted = graph.empty_subgraph();
         Self {
             graph,
-            uncontracted,
+            // uncontracted,
         }
     }
 }
@@ -182,7 +188,7 @@ impl<K> NetworkGraph<K> {
                     );
                     out.push((
                         Self {
-                            uncontracted: extracted.empty_subgraph(),
+                            // uncontracted: extracted.empty_subgraph(),
                             graph: extracted,
                         },
                         op,
@@ -265,7 +271,7 @@ impl<K> NetworkGraph<K> {
 
                     return Some((
                         Self {
-                            uncontracted: extracted.empty_subgraph(),
+                            // uncontracted: extracted.empty_subgraph(),
                             graph: extracted,
                         },
                         op,
@@ -698,7 +704,7 @@ impl<K> NetworkGraph<K> {
         ) -> (Flow, EdgeData<NetworkEdge>),
     ) -> Result<(), HedgeGraphError> {
         self.graph.join_mut(other.graph, matching_fn, merge_fn)?;
-        self.uncontracted.join_mut(other.uncontracted);
+        // self.uncontracted.join_mut(other.uncontracted);
         Ok(())
     }
 }

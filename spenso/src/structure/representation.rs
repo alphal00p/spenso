@@ -292,12 +292,15 @@ impl BaseRepName for Minkowski {
 }
 
 #[derive(
-    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Encode, Decode,
+    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Encode,
 )]
 #[cfg_attr(
     feature = "shadowing",
-    bincode(decode_context = "symbolica::state::StateMap")
+    derive(bincode_trait_derive::TraitDecode),
+    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
+    trait_decode(trait = symbolica::state::HasStateMap),
 )]
+#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 pub struct Representation<T: RepName> {
     pub dim: Dimension,
     pub rep: T,

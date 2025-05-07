@@ -36,11 +36,14 @@ use crate::{
 use super::store::{NetworkStore, TensorScalarStore};
 use super::{Library, Network, TensorNetworkError, TensorOrScalarOrKey};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode)]
 #[cfg_attr(
     feature = "shadowing",
-    bincode(decode_context = "symbolica::state::StateMap")
+    derive(bincode_trait_derive::TraitDecode),
+    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
+    trait_decode(trait = symbolica::state::HasStateMap),
 )]
+#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 pub struct TensorNetworkSet<S, K> {
     pub networks: Vec<Network<S, K>>,
 }

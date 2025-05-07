@@ -186,6 +186,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode-trait-derive"
+version = "0.1.0"
+source = "git+https://github.com/alphal00p/bincode-trait-derive#6c767f1122071e6d51321ded8066af1ffc5ef10e"
+dependencies = [
+ "bincode",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "bincode_derive"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1591,6 +1602,7 @@ dependencies = [
  "append-only-vec",
  "approx",
  "bincode",
+ "bincode-trait-derive",
  "bitvec",
  "constcat",
  "criterion",
@@ -1642,11 +1654,12 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "symbolica"
 version = "0.16.0"
-source = "git+https://github.com/alphal00p/symbolica?rev=2f306d814359de6397817060ba2deae046351828#2f306d814359de6397817060ba2deae046351828"
+source = "git+https://github.com/alphal00p/symbolica?rev=a714571c8c8ee1a292237eb3ef1bc8123a4d7db4#a714571c8c8ee1a292237eb3ef1bc8123a4d7db4"
 dependencies = [
  "ahash",
  "append-only-vec",
  "bincode",
+ "bincode-trait-derive",
  "brotli",
  "byteorder",
  "bytes",

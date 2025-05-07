@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use symbolica::{atom::AtomView, coefficient::CoefficientView};
 use thiserror::Error;
 
-use bincode::{Decode, Encode};
+use bincode::Encode;
 
 #[cfg(feature = "shadowing")]
 use symbolica::atom::{Atom, Symbol};
@@ -27,12 +27,14 @@ use crate::symbolica_utils::SerializableSymbol;
     Serialize,
     Deserialize,
     Encode,
-    Decode,
 )]
 #[cfg_attr(
     feature = "shadowing",
-    bincode(decode_context = "symbolica::state::StateMap")
+    derive(bincode_trait_derive::TraitDecode),
+    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
+    trait_decode(trait = symbolica::state::HasStateMap),
 )]
+#[cfg_attr(not(feature = "shadowing"), derive(bincode::Decode))]
 pub enum Dimension {
     Concrete(usize),
     #[cfg(feature = "shadowing")]

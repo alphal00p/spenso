@@ -66,6 +66,15 @@ pub enum NetworkNode<LibKey> {
     // Port,
 }
 
+impl<K: Display> Display for NetworkNode<K> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NetworkNode::Leaf(l) => write!(f, "{}", l),
+            NetworkNode::Op(o) => write!(f, "{o}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Serialize, Deserialize)]
 pub enum NetworkOp {
     Sum,
@@ -88,6 +97,16 @@ pub enum NetworkLeaf<K> {
     LocalTensor(usize),
     LibraryKey(K),
     Scalar(usize),
+}
+
+impl<K: Display> Display for NetworkLeaf<K> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NetworkLeaf::LibraryKey(k) => write!(f, "Key:{k}"),
+            NetworkLeaf::LocalTensor(l) => write!(f, "Tensor:{l}"),
+            NetworkLeaf::Scalar(s) => write!(f, "Scalar:{s}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

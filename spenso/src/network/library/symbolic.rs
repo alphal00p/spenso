@@ -488,6 +488,7 @@ mod test {
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
         >::try_from_view(expr.as_view(), &lib)
+        .map_err(|a| a.to_string())
         .unwrap();
 
         println!(

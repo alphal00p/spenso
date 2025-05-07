@@ -2998,3 +2998,30 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
 //         Some(SerializableAtom(&self.0 + &rhs.0))
 //     }
 // }
+
+#[cfg(test)]
+pub mod test {
+    use crate::{
+        data::{DataTensor, SparseTensor},
+        structure::{
+            representation::{LibraryRep, Minkowski, RepName},
+            TensorStructure, VecStructure,
+        },
+    };
+
+    use super::MixedTensor;
+
+    #[test]
+    fn tensor_structure() {
+        let a: MixedTensor<f64, VecStructure> =
+            MixedTensor::param(DataTensor::Sparse(SparseTensor::empty(VecStructure::<
+                LibraryRep,
+            >::from_iter(
+                [
+                Minkowski {}.new_slot(2, 1),
+            ]
+            ))));
+
+        assert_eq!(a.size().unwrap(), 2);
+    }
+}

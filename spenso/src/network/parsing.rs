@@ -105,7 +105,7 @@ where
             AtomView::Fun(f) => Self::try_from_fun(f, library),
             AtomView::Add(a) => Self::try_from_add(a, library),
             AtomView::Pow(p) => Self::try_from_pow(p, library),
-            a => Ok(Network::scalar(a.try_into()?)),
+            a => Ok(Network::from_scalar(a.try_into()?)),
         }
     }
 
@@ -143,10 +143,10 @@ where
                     // let t = library.get(&key).unwrap();
                     Ok(Self::library_tensor(&s, key))
                 }
-                Err(_) => Ok(Self::local_tensor(s.to_shell().concretize())),
+                Err(_) => Ok(Self::from_tensor(s.to_shell().concretize())),
             }
         } else {
-            Ok(Self::scalar(
+            Ok(Self::from_scalar(
                 value.as_view().try_into().map_err(Into::into)?,
             ))
         }
@@ -164,11 +164,11 @@ where
 
         if let Ok(n) = i64::try_from(exp) {
             if n < 0 {
-                return Ok(Self::scalar(value.as_view().try_into()?));
+                return Ok(Self::from_scalar(value.as_view().try_into()?));
             }
             if n == 0 {
                 let one = Atom::new_num(1);
-                return Ok(Self::scalar(one.as_view().try_into()?));
+                return Ok(Self::from_scalar(one.as_view().try_into()?));
             } else if n == 1 {
                 return Self::try_from_view(base, library);
             }
@@ -177,7 +177,7 @@ where
 
             Ok(net.n_mul((1..n).map(|_| cloned_net.clone())))
         } else {
-            Ok(Self::scalar(value.as_view().try_into()?))
+            Ok(Self::from_scalar(value.as_view().try_into()?))
         }
     }
 
@@ -246,23 +246,13 @@ pub mod test {
         println!("{}", expr);
         println!(
             "{}",
-            net.dot_display_impl::<_, ()>(
-                &lib,
-                |a| a.to_string(),
-                |_| "".to_string(),
-                |a| a.to_string()
-            )
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
         net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
         println!(
             "{}",
-            net.dot_display_impl::<_, ()>(
-                &lib,
-                |a| a.to_string(),
-                |_| "".to_string(),
-                |a| a.to_string()
-            )
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
         if let TensorOrScalarOrKey::Scalar(a) = net.result().unwrap() {
             // println!("YaY:{a}");
@@ -334,23 +324,13 @@ pub mod test {
         println!("{}", expr);
         println!(
             "{}",
-            net.dot_display_impl::<_, ()>(
-                &lib,
-                |a| a.to_string(),
-                |_| "".to_string(),
-                |a| a.to_string()
-            )
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
         net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
         println!(
             "{}",
-            net.dot_display_impl::<_, ()>(
-                &lib,
-                |a| a.to_string(),
-                |_| "".to_string(),
-                |a| a.to_string()
-            )
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
         if let TensorOrScalarOrKey::Tensor { tensor, .. } = net.result().unwrap() {

@@ -227,6 +227,8 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + D
         }
     }
 
+    fn dot(&self) -> String;
+
     #[cfg(feature = "shadowing")]
     /// using the function builder of the representation add the abstract index as an argument, and finish it to an Atom.
     /// # Example
@@ -263,6 +265,14 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
     // type Dual = GenSlot<T::Dual>;
     fn dim(&self) -> Dimension {
         self.rep.dim
+    }
+
+    fn dot(&self) -> String {
+        format!(
+            "<<TABLE><TR><TD>{}</TD><TD>{}</TD></TR></TABLE>>",
+            self.rep.dot(),
+            self.aind
+        )
     }
 
     fn reindex(mut self, id: AbstractIndex) -> Self {

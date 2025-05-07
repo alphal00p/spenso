@@ -1,7 +1,4 @@
-use std::{
-    iter::Sum,
-    ops::{AddAssign, Neg, SubAssign},
-};
+use std::{iter::Sum, ops::AddAssign};
 
 use gat_lending_iterator::LendingIterator;
 

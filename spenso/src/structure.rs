@@ -337,6 +337,8 @@ pub trait TensorStructure {
         self.external_indices_iter().collect()
     }
 
+    // fn dot_label(&self) -> String;
+
     // fn iter_index_along_fiber(&self,fiber_position: &[bool]  )-> TensorStructureMultiFiberIterator where Self: Sized{
     //     TensorStructureMultiFiberIterator::new(self, fiber_position)
     // }

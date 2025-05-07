@@ -1,4 +1,4 @@
-use symbolica::{atom::Atom, coefficient::Coefficient};
+use symbolica::atom::Atom;
 
 use crate::{
     complex::{Complex, RealOrComplex, RealOrComplexTensor},

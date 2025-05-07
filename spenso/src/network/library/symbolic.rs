@@ -347,12 +347,10 @@ mod test {
     use symbolica::parse;
 
     use crate::{
-        complex::RealOrComplexRef,
         network::{
             parsing::ShadowedStructure, store::NetworkStore, Network, Sequential, SmallestDegree,
             TensorOrScalarOrKey,
         },
-        parametric::ConcreteOrParamRef,
         shadowing::Concretize,
         structure::{
             representation::{Euclidean, Minkowski},
@@ -393,22 +391,20 @@ mod test {
 
         println!(
             "{}",
-            net.dot_display_impl::<_, ExplicitKey>(
-                &lib,
+            net.dot_display_impl(
                 |a| a.to_string(),
-                |_| "".to_string(),
-                |a| a.to_string()
+                |_| None,
+                |a| a.name().map(|a| a.to_string()).unwrap_or("".to_owned())
             )
         );
 
         net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
         println!(
             "{}",
-            net.dot_display_impl::<_, ExplicitKey>(
-                &lib,
+            net.dot_display_impl(
                 |a| a.to_string(),
-                |_| "".to_string(),
-                |a| a.to_string()
+                |_| None,
+                |a| a.name().map(|a| a.to_string()).unwrap_or("".to_owned())
             )
         );
 
@@ -451,22 +447,20 @@ mod test {
 
         println!(
             "{}",
-            net.dot_display_impl::<_, ExplicitKey>(
-                &lib,
+            net.dot_display_impl(
                 |a| a.to_string(),
-                |_| "".to_string(),
-                |a| a.name().unwrap().to_string()
+                |_| None,
+                |a| a.name().map(|a| a.to_string()).unwrap_or("".to_owned())
             )
         );
 
         net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
         println!(
             "{}",
-            net.dot_display_impl::<_, ExplicitKey>(
-                &lib,
+            net.dot_display_impl(
                 |a| a.to_string(),
-                |_| "".to_string(),
-                |a| a.name().unwrap().to_string()
+                |_| None,
+                |a| a.name().map(|a| a.to_string()).unwrap_or("".to_owned())
             )
         );
 
@@ -493,21 +487,19 @@ mod test {
 
         println!(
             "{}",
-            net.dot_display_impl::<_, ExplicitKey>(
-                &lib,
+            net.dot_display_impl(
                 |a| a.to_string(),
-                |_| "".to_string(),
-                |a| a.name().unwrap().to_string()
+                |_| None,
+                |a| a.name().map(|a| a.to_string()).unwrap_or("".to_owned())
             )
         );
 
         net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
         println!(
             "{}",
-            net.dot_display_impl::<_, ExplicitKey>(
-                &lib,
+            net.dot_display_impl(
                 |a| a.to_string(),
-                |_| "".to_string(),
+                |_| None,
                 |a| a.name().map(|a| a.to_string()).unwrap_or("".to_owned())
             )
         );

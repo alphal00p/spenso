@@ -244,7 +244,7 @@ impl<S: TensorScalarStore, K> MulAssign for Network<S, K> {
 
 impl<T: TensorStructure, S, K> MulAssign<T> for Network<NetworkStore<T, S>, K> {
     fn mul_assign(&mut self, rhs: T) {
-        *self *= Network::local_tensor(rhs);
+        *self *= Network::from_tensor(rhs);
     }
 }
 
@@ -253,7 +253,7 @@ impl<T: TensorStructure, S, K> Mul<T> for Network<NetworkStore<T, S>, K> {
     fn mul(self, other: T) -> Self::Output {
         let mut store = self.store;
 
-        let mut other = Network::local_tensor(other);
+        let mut other = Network::from_tensor(other);
 
         other.graph.shift_scalars(store.n_scalars());
         other.graph.shift_tensors(store.n_tensors());
@@ -294,7 +294,7 @@ impl<S: TensorScalarStore, K> AddAssign for Network<S, K> {
 
 impl<T: TensorStructure, S, K> AddAssign<T> for Network<NetworkStore<T, S>, K> {
     fn add_assign(&mut self, rhs: T) {
-        *self += Network::local_tensor(rhs);
+        *self += Network::from_tensor(rhs);
     }
 }
 
@@ -303,6 +303,21 @@ impl<T: TensorStructure, S, K> Add<T> for Network<NetworkStore<T, S>, K> {
     fn add(mut self, other: T) -> Self::Output {
         self += other;
         self
+    }
+}
+
+impl<T: TensorStructure, K> Add<i8> for Network<NetworkStore<T, i8>, K> {
+    type Output = Self;
+    fn add(mut self, other: i8) -> Self::Output {
+        let mut other = Network::from_scalar(other);
+        other.graph.shift_tensors(self.store.n_tensors());
+        other.graph.shift_tensors(self.store.n_tensors());
+
+        self.store.extend(other.store);
+        Network {
+            graph: self.graph + other.graph,
+            store: self.store,
+        }
     }
 }
 
@@ -355,7 +370,7 @@ impl<S: TensorScalarStore, K> SubAssign for Network<S, K> {
 
 impl<T: TensorStructure, S, K> SubAssign<T> for Network<NetworkStore<T, S>, K> {
     fn sub_assign(&mut self, rhs: T) {
-        *self -= Network::local_tensor(rhs)
+        *self -= Network::from_tensor(rhs)
     }
 }
 
@@ -368,7 +383,7 @@ impl<T: TensorStructure, S, K> Sub<T> for Network<NetworkStore<T, S>, K> {
 }
 
 impl<S: TensorScalarStore, K> Network<S, K> {
-    pub fn scalar(scalar: S::Scalar) -> Self {
+    pub fn from_scalar(scalar: S::Scalar) -> Self {
         let mut store = S::default();
         let id = store.add_scalar(scalar);
         Network {
@@ -377,7 +392,7 @@ impl<S: TensorScalarStore, K> Network<S, K> {
         }
     }
 
-    pub fn local_tensor(tensor: S::Tensor) -> Self
+    pub fn from_tensor(tensor: S::Tensor) -> Self
     where
         S::Tensor: TensorStructure,
     {
@@ -516,13 +531,13 @@ impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scala
         }
     }
 
-    pub fn result_tensor<'a, L: Library<S, Key = K>>(
+    pub fn result_tensor<'a, L: Library<T::Structure, Key = K>>(
         &'a self,
         lib: &L,
     ) -> Result<Cow<'a, T>, TensorNetworkError<K>>
     where
         S: 'a,
-        T: Clone + ScalarTensor,
+        T: Clone + ScalarTensor + HasStructure,
         T::Scalar: One + Zero,
         K: Display,
         L::Value: TensorStructure<Indexed = T> + Clone,
@@ -582,17 +597,12 @@ impl<S, K: Display> Network<S, K> {
 }
 
 impl<T, S, K> Network<NetworkStore<T, S>, K> {
-    pub fn dot_display_impl<L, St>(
+    pub fn dot_display_impl(
         &self,
-        lib: &L,
         scalar_disp: impl Fn(&S) -> String,
-        library_disp: impl Fn(&L::Value) -> String,
+        library_disp: impl Fn(&K) -> Option<String>,
         tensor_disp: impl Fn(&T) -> String,
-    ) -> std::string::String
-    where
-        L: Library<St, Key = K>,
-        K: Display,
-    {
+    ) -> std::string::String {
         self.graph.graph.dot_impl(
             &self.graph.graph.full_filter(),
             "",
@@ -606,11 +616,11 @@ impl<T, S, K> Network<NetworkStore<T, S>, K> {
             &|n| match n {
                 NetworkNode::Leaf(l) => match l {
                     NetworkLeaf::LibraryKey(l) => {
-                        if let Ok(v) = lib.get(l) {
-                            Some(format!("label = \"L:{}\"", library_disp(&v)))
-                        } else {
-                            None
-                        }
+                        // if let Ok(v) = lib.get(l) {
+                        Some(format!("label = \"L:{}\"", library_disp(&l)?))
+                        // } else {
+                        // None
+                        // }
                     }
                     NetworkLeaf::LocalTensor(l) => Some(format!(
                         "label = \"T:{}\"",

@@ -1,6 +1,6 @@
 use std::{
     fmt::{Debug, Display, LowerExp},
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+    ops::{Add, Neg, Sub},
 };
 
 use crate::{
@@ -19,10 +19,10 @@ use serde::{Deserialize, Serialize};
 use symbolica::{
     atom::Atom,
     domains::{
-        float::{Complex as SymComplex, ConstructibleFloat, NumericalFloatLike, Real, SingleFloat},
+        float::{Complex as SymComplex, ConstructibleFloat, NumericalFloatLike, Real},
         rational::Rational,
     },
-    evaluate::{CompiledEvaluatorFloat, FunctionMap},
+    evaluate::FunctionMap,
 };
 
 use crate::structure::abstract_index::AbstractIndex;

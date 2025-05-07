@@ -1,17 +1,15 @@
 extern crate derive_more;
 
 use std::{
-    convert::Infallible,
     fmt::{Debug, Display},
     io::Cursor,
-    ops::{AddAssign, MulAssign},
 };
 
+use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
 use crate::structure::representation::Representation;
 use crate::structure::slot::IsAbstractSlot;
 use crate::structure::StructureError;
-use crate::{complex::RealOrComplexRef, structure::abstract_index::AbstractIndex};
 use ahash::HashMap;
 use delegate::delegate;
 
@@ -26,7 +24,6 @@ use serde::{de, ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use to_param::ToAtom;
 
 use crate::{
-    arithmetic::ScalarMul,
     complex::{Complex, RealOrComplex, RealOrComplexTensor},
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefZero, Trace},
     data::{
@@ -1003,6 +1000,12 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> ParamOr
 pub enum ConcreteOrParam<C> {
     Concrete(C),
     Param(Atom),
+}
+
+impl<C> From<&Atom> for ConcreteOrParam<C> {
+    fn from(value: &Atom) -> Self {
+        ConcreteOrParam::Param(value.clone())
+    }
 }
 
 impl<C> crate::algebraic_traits::One for ConcreteOrParam<C> {

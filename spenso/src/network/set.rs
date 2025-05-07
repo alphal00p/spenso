@@ -102,13 +102,13 @@ impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scala
         self.networks.iter().map(|n| n.result()).collect()
     }
 
-    pub fn result_tensor<'a, L: Library<S, Key = K>>(
+    pub fn result_tensor<'a, L: Library<T::Structure, Key = K>>(
         &'a self,
         lib: &L,
     ) -> Result<Vec<Cow<'a, T>>, TensorNetworkError<K>>
     where
         S: 'a,
-        T: Clone + ScalarTensor,
+        T: Clone + ScalarTensor + HasStructure,
         T::Scalar: One + Zero,
         for<'b> &'b S: Into<T::Scalar>,
         L::Value: TensorStructure<Indexed = T> + Clone,

@@ -309,6 +309,13 @@ impl<T: RepName> Representation<T> {
         Representation { dim: self.dim, rep }
     }
 
+    pub fn dot(&self) -> String {
+        format!(
+            "<<TABLE><TR><TD>{}</TD><TD>{}</TD></TR></TABLE>>",
+            self.rep, self.dim
+        )
+    }
+
     #[cfg(feature = "shadowing")]
     pub fn pattern<A: AtomCore>(&self, aind: A) -> Atom {
         let mut atom = Atom::new();

@@ -98,6 +98,16 @@ impl<T> Complex<T> {
     }
 }
 
+impl<T> Ref for Complex<T> {
+    type Ref<'a>
+        = &'a Complex<T>
+    where
+        Self: 'a;
+    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+        self
+    }
+}
+
 pub mod add;
 pub mod add_assign;
 pub mod div;
@@ -800,6 +810,18 @@ where
 pub enum RealOrComplex<T> {
     Real(T),
     Complex(Complex<T>),
+}
+
+impl<T: RefZero> From<RealOrComplex<T>> for Complex<T> {
+    fn from(value: RealOrComplex<T>) -> Self {
+        match value {
+            RealOrComplex::Real(r) => {
+                let z = r.ref_zero();
+                Complex::new(r, z)
+            }
+            RealOrComplex::Complex(c) => c,
+        }
+    }
 }
 
 impl<T> Ref for RealOrComplex<T> {

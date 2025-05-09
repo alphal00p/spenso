@@ -94,3 +94,20 @@ where
         }
     }
 }
+
+impl<T, U> AddAssign<RealOrComplexRef<'_, T>> for Complex<U>
+where
+    U: for<'a> AddAssign<&'a T> + RefZero,
+    Complex<U>: for<'a> AddAssign<&'a Complex<T>> + for<'a> AddAssign<&'a T>,
+{
+    fn add_assign(&mut self, rhs: RealOrComplexRef<'_, T>) {
+        match rhs {
+            RealOrComplexRef::Complex(b) => {
+                *self += b;
+            }
+            RealOrComplexRef::Real(b) => {
+                self.re += b;
+            }
+        }
+    }
+}

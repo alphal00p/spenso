@@ -348,8 +348,8 @@ mod test {
 
     use crate::{
         network::{
-            parsing::ShadowedStructure, store::NetworkStore, Network, Sequential, SmallestDegree,
-            TensorOrScalarOrKey,
+            parsing::ShadowedStructure, store::NetworkStore, ExecutionResult, Network, Sequential,
+            SmallestDegree, TensorOrScalarOrKey,
         },
         shadowing::Concretize,
         structure::{
@@ -408,10 +408,10 @@ mod test {
             )
         );
 
-        if let TensorOrScalarOrKey::Key {
+        if let ExecutionResult::Val(TensorOrScalarOrKey::Key {
             key: res_key,
             graph_slots,
-        } = net.result().unwrap()
+        }) = net.result().unwrap()
         {
             // println!("YaY:{a}");
             assert_eq!(graph_slots, indexed.structure.structure);
@@ -464,7 +464,9 @@ mod test {
             )
         );
 
-        if let TensorOrScalarOrKey::Tensor { tensor, .. } = net.result().unwrap() {
+        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+            net.result().unwrap()
+        {
             // println!("YaY:{a}");
 
             assert_eq!(tensor, &indexed.to_shell().concretize());
@@ -504,9 +506,13 @@ mod test {
             )
         );
 
-        if let ConcreteOrParam::Param(a) = net.result_scalar().unwrap().as_ref() {
-            let res= parse!("p(1,cind(0))*q(2,cind(0))-p(1,cind(1))*q(2,cind(1))-p(1,cind(2))*q(2,cind(2))-p(1,cind(3))*q(2,cind(3))").unwrap();
-            assert_eq!(a, &res);
+        if let Ok(ExecutionResult::Val(a)) = net.result_scalar() {
+            if let ConcreteOrParam::Param(a) = a.as_ref() {
+                let res= parse!("p(1,cind(0))*q(2,cind(0))-p(1,cind(1))*q(2,cind(1))-p(1,cind(2))*q(2,cind(2))-p(1,cind(3))*q(2,cind(3))").unwrap();
+                assert_eq!(a, &res);
+            } else {
+                panic!("Not Key")
+            }
         } else {
             panic!("Not Key")
         }

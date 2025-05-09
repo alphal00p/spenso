@@ -227,7 +227,7 @@ pub mod test {
 
         net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
 
-        if let TensorOrScalarOrKey::Scalar(a) = net.result().unwrap() {
+        if let ExecutionResult::Val(TensorOrScalarOrKey::Scalar(a)) = net.result().unwrap() {
             println!("YaY:{a}")
         } else {
             panic!("Not scalar")
@@ -254,7 +254,7 @@ pub mod test {
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
-        if let TensorOrScalarOrKey::Scalar(a) = net.result().unwrap() {
+        if let ExecutionResult::Val(TensorOrScalarOrKey::Scalar(a)) = net.result().unwrap() {
             // println!("YaY:{a}");
             assert_eq!(&expr, a);
         } else {
@@ -333,7 +333,9 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        if let TensorOrScalarOrKey::Tensor { tensor, .. } = net.result().unwrap() {
+        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+            net.result().unwrap()
+        {
             // println!("YaY:{a}");
             assert_eq!(expr, tensor.expression);
         } else {

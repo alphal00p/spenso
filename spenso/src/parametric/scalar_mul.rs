@@ -1,12 +1,18 @@
-use symbolica::atom::Atom;
+use std::process::Output;
 
+use crate::contraction::RefZero;
 use crate::{
     arithmetic::ScalarMul,
     complex::{Complex, RealOrComplex, RealOrComplexTensor},
     data::DataTensor,
     structure::TensorStructure,
     symbolica_utils::SerializableAtom,
-    upgrading_arithmetic::FallibleMul,
+    upgrading_arithmetic::{FallibleMul, TrySmallestUpgrade},
+};
+use duplicate::duplicate;
+use symbolica::{
+    atom::Atom,
+    domains::{float::NumericalFloatLike, rational::Rational},
 };
 
 use super::{ConcreteOrParam, MixedTensor, ParamOrComposite, ParamOrConcrete, ParamTensor};
@@ -21,56 +27,156 @@ impl<S: TensorStructure + Clone> ScalarMul<SerializableAtom> for ParamTensor<S> 
     }
 }
 
-impl<S: TensorStructure + Clone> ScalarMul<f64> for ParamTensor<S> {
+impl<S: TensorStructure + Clone, T> ScalarMul<T> for ParamTensor<S>
+where
+    DataTensor<Atom, S>: ScalarMul<T, Output = DataTensor<Atom, S>>,
+{
     type Output = ParamTensor<S>;
-    fn scalar_mul(&self, rhs: &f64) -> Option<Self::Output> {
+    fn scalar_mul(&self, rhs: &T) -> Option<Self::Output> {
         Some(ParamTensor::composite(self.tensor.scalar_mul(rhs)?))
     }
 }
 
-impl<S: TensorStructure + Clone> ScalarMul<Complex<f64>> for ParamTensor<S> {
-    type Output = ParamTensor<S>;
-    fn scalar_mul(&self, rhs: &Complex<f64>) -> Option<Self::Output> {
-        Some(ParamTensor::composite(self.tensor.scalar_mul(rhs)?))
-    }
-}
-
-impl<S: TensorStructure + Clone, T> ScalarMul<RealOrComplex<T>> for ParamTensor<S>
+impl<T> TrySmallestUpgrade<Complex<T>> for Atom
 where
-    ParamTensor<S>:
-        ScalarMul<T, Output = ParamTensor<S>> + ScalarMul<Complex<T>, Output = ParamTensor<S>>,
+    Atom: TrySmallestUpgrade<T, LCM = Atom>,
 {
-    type Output = ParamTensor<S>;
-    fn scalar_mul(&self, rhs: &RealOrComplex<T>) -> Option<Self::Output> {
-        Some(match rhs {
-            RealOrComplex::Complex(c) => self.scalar_mul(c)?,
-            RealOrComplex::Real(c) => self.scalar_mul(c)?,
-        })
+    type LCM = Atom;
+
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+        Some(std::borrow::Cow::Borrowed(&self))
     }
 }
 
-impl<S: TensorStructure + Clone, T> ScalarMul<ConcreteOrParam<T>> for ParamTensor<S>
+impl<T> TrySmallestUpgrade<Atom> for Complex<T>
 where
-    ParamTensor<S>: ScalarMul<T, Output = ParamTensor<S>>,
+    T: TrySmallestUpgrade<Atom, LCM = Atom>,
 {
-    type Output = ParamTensor<S>;
-    fn scalar_mul(&self, rhs: &ConcreteOrParam<T>) -> Option<Self::Output> {
-        Some(match rhs {
-            ConcreteOrParam::Param(a) => ParamTensor::composite(self.tensor.scalar_mul(a)?),
-            ConcreteOrParam::Concrete(c) => self.scalar_mul(c)?,
-        })
+    type LCM = Atom;
+
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+        Some(std::borrow::Cow::Owned(
+            self.re.try_upgrade()?.as_ref()
+                + self.im.try_upgrade()?.as_ref() * Atom::new_var(Atom::I),
+        ))
     }
 }
 
-impl<S: TensorStructure + Clone> ScalarMul<Atom> for ParamTensor<S> {
-    type Output = ParamTensor<S>;
-    fn scalar_mul(&self, rhs: &Atom) -> Option<Self::Output> {
-        Some(ParamTensor {
-            tensor: self.tensor.scalar_mul(rhs)?,
-            param_type: ParamOrComposite::Composite,
-        })
+impl<T> TrySmallestUpgrade<RealOrComplex<T>> for Atom
+where
+    Atom: TrySmallestUpgrade<T, LCM = Atom>,
+{
+    type LCM = Atom;
+
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+        Some(std::borrow::Cow::Borrowed(&self))
     }
 }
+
+impl<T> TrySmallestUpgrade<Atom> for RealOrComplex<T>
+where
+    T: TrySmallestUpgrade<Atom, LCM = Atom>,
+{
+    type LCM = Atom;
+
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+        match self {
+            RealOrComplex::Real(r) => r.try_upgrade(),
+            RealOrComplex::Complex(c) => Some(std::borrow::Cow::Owned(
+                c.re.try_upgrade()?.as_ref()
+                    + c.im.try_upgrade()?.as_ref() * Atom::new_var(Atom::I),
+            )),
+        }
+    }
+}
+
+impl<T> TrySmallestUpgrade<ConcreteOrParam<T>> for Atom
+where
+    Atom: TrySmallestUpgrade<T>,
+{
+    type LCM = <Atom as TrySmallestUpgrade<T>>::LCM;
+
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+        <Atom as TrySmallestUpgrade<T>>::try_upgrade(&self)
+    }
+}
+
+impl<T> TrySmallestUpgrade<Atom> for ConcreteOrParam<T>
+where
+    T: TrySmallestUpgrade<Atom>,
+    Atom: TrySmallestUpgrade<T, LCM = T::LCM>,
+{
+    type LCM = <T as TrySmallestUpgrade<Atom>>::LCM;
+
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+        match self {
+            ConcreteOrParam::Param(a) => a.try_upgrade(),
+            ConcreteOrParam::Concrete(c) => c.try_upgrade(),
+        }
+    }
+}
+
+duplicate! {
+    [smaller larger;
+
+[Rational][Complex<Rational>]
+
+]
+
+impl TrySmallestUpgrade<smaller> for larger {
+    type LCM = larger;
+
+
+
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>>
+        where
+            Self::LCM: Clone {
+        Some(std::borrow::Cow::Borrowed(self))
+    }
+}
+
+impl TrySmallestUpgrade<larger> for smaller {
+    type LCM = larger;
+
+
+
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>>
+        where
+            Self::LCM: Clone {
+               let z = self.ref_zero();
+                Some(std::borrow::Cow::Owned(Complex::new(self.clone(), z)))
+    }
+}
+
+
+}
+
+// impl<S: TensorStructure + Clone, T> ScalarMul<RealOrComplex<T>> for ParamTensor<S>
+// where
+//     ParamTensor<S>:
+//         ScalarMul<T, Output = ParamTensor<S>> + ScalarMul<Complex<T>, Output = ParamTensor<S>>,
+// {
+//     type Output = ParamTensor<S>;
+//     fn scalar_mul(&self, rhs: &RealOrComplex<T>) -> Option<Self::Output> {
+//         Some(match rhs {
+//             RealOrComplex::Complex(c) => self.scalar_mul(c)?,
+//             RealOrComplex::Real(c) => self.scalar_mul(c)?,
+//         })
+//     }
+// }
+
+// impl<S: TensorStructure + Clone, T> ScalarMul<ConcreteOrParam<T>> for ParamTensor<S>
+// where
+//     ParamTensor<S>: ScalarMul<T, Output = ParamTensor<S>>,
+// {
+//     type Output = ParamTensor<S>;
+//     fn scalar_mul(&self, rhs: &ConcreteOrParam<T>) -> Option<Self::Output> {
+//         Some(match rhs {
+//             ConcreteOrParam::Param(a) => ParamTensor::composite(self.tensor.scalar_mul(a)?),
+//             ConcreteOrParam::Concrete(c) => self.scalar_mul(c)?,
+//         })
+//     }
+// }
 
 impl<T, I> ScalarMul<Atom> for MixedTensor<T, I>
 where

@@ -80,3 +80,35 @@ where
         })
     }
 }
+
+impl<U, S> ScalarMul<U> for RealOrComplexTensor<U, S>
+where
+    DataTensor<U, S>: ScalarMul<U, Output = DataTensor<U, S>>,
+    DataTensor<Complex<U>, S>: ScalarMul<U, Output = DataTensor<Complex<U>, S>>,
+    S: TensorStructure + Clone,
+{
+    type Output = RealOrComplexTensor<U, S>;
+
+    fn scalar_mul(&self, rhs: &U) -> Option<Self::Output> {
+        Some(match self {
+            RealOrComplexTensor::Real(rt) => RealOrComplexTensor::Real(rt.scalar_mul(rhs)?),
+            RealOrComplexTensor::Complex(rt) => RealOrComplexTensor::Complex(rt.scalar_mul(rhs)?),
+        })
+    }
+}
+
+impl<U, S> ScalarMul<Complex<U>> for RealOrComplexTensor<U, S>
+where
+    DataTensor<U, S>: ScalarMul<Complex<U>, Output = DataTensor<Complex<U>, S>>,
+    DataTensor<Complex<U>, S>: ScalarMul<Complex<U>, Output = DataTensor<Complex<U>, S>>,
+    S: TensorStructure + Clone,
+{
+    type Output = RealOrComplexTensor<U, S>;
+
+    fn scalar_mul(&self, rhs: &Complex<U>) -> Option<Self::Output> {
+        Some(match self {
+            RealOrComplexTensor::Real(rt) => RealOrComplexTensor::Complex(rt.scalar_mul(rhs)?),
+            RealOrComplexTensor::Complex(rt) => RealOrComplexTensor::Complex(rt.scalar_mul(rhs)?),
+        })
+    }
+}

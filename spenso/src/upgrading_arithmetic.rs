@@ -1037,17 +1037,17 @@ impl TrySmallestUpgrade<smaller> for larger {
 
 }
 
-impl<T> TrySmallestUpgrade<Complex<T>> for T
-where
-    T: RefZero + Clone,
-{
-    type LCM = Complex<T>;
+// impl<T> TrySmallestUpgrade<Complex<T>> for T
+// where
+//     T: RefZero + Clone,
+// {
+//     type LCM = Complex<T>;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
-        let new = Complex::new(self.clone(), self.ref_zero());
-        Some(Cow::Owned(new))
-    }
-}
+//     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
+//         let new = Complex::new(self.clone(), self.ref_zero());
+//         Some(Cow::Owned(new))
+//     }
+// }
 
 #[cfg(feature = "shadowing")]
 impl TrySmallestUpgrade<Atom> for f64 {
@@ -1092,20 +1092,6 @@ impl TrySmallestUpgrade<SerializableAtom> for i32 {
         let symnum = Atom::new_num(*self).into();
 
         Some(Cow::Owned(symnum))
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl TrySmallestUpgrade<Atom> for Complex<f64> {
-    type LCM = Atom;
-
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
-        let real: Cow<'_, Atom> = <f64 as TrySmallestUpgrade<Atom>>::try_upgrade(&self.re)?;
-        let imag: Cow<'_, Atom> = <f64 as TrySmallestUpgrade<Atom>>::try_upgrade(&self.im)?;
-        let i = Atom::new_var(Atom::I);
-        let symrat = (i * imag.as_ref()) + real.as_ref();
-
-        Some(Cow::Owned(symrat))
     }
 }
 
@@ -1260,7 +1246,7 @@ duplicate! {
 [f64] [SerializableAtom];
 [i32] [Atom];
 [i32] [SerializableAtom];
-[Complex<f64>] [Atom];
+// [Complex<f64>] [Atom];
 [Complex<f64>] [SerializableAtom];
 ]
 
@@ -1295,6 +1281,19 @@ impl TrySmallestUpgrade<smaller> for larger {
         where
             Self::LCM: Clone {
         Some(Cow::Borrowed(self))
+    }
+}
+
+impl TrySmallestUpgrade<larger> for smaller {
+    type LCM = larger;
+
+
+
+    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+        where
+            Self::LCM: Clone {
+               let z = self.ref_zero();
+                Some(Cow::Owned(Complex::new(self.clone(), z)))
     }
 }
 

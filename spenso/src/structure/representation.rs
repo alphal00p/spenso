@@ -188,6 +188,8 @@ pub trait RepName:
     Default,
     Serialize,
     Deserialize,
+    Encode,
+    Decode,
 )]
 #[representation(name = "euc", self_dual)] // Specify the dual name
 pub struct Euclidean {}
@@ -205,13 +207,15 @@ pub struct Euclidean {}
     Ord,
     Default,
     Serialize,
+    Encode,
+    Decode,
     Deserialize,
 )]
 #[representation(name = "lor")] // Specify the dual name
 pub struct Lorentz {}
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,Encode,Decode
 )]
 pub struct Minkowski {}
 
@@ -292,15 +296,24 @@ impl BaseRepName for Minkowski {
 }
 
 #[derive(
-    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Encode,
+    Debug,
+    Copy,
+    Clone,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Hash,
+    Serialize,
+    Deserialize,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+    // bincode_trait_derive::BorrowDecodeFromDecode,
 )]
 #[cfg_attr(
     feature = "shadowing",
-    derive(bincode_trait_derive::TraitDecode),
-    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 pub struct Representation<T: RepName> {
     pub dim: Dimension,
     pub rep: T,

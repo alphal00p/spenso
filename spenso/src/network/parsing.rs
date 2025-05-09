@@ -213,7 +213,7 @@ pub mod test {
     };
 
     use super::*;
-    use library::DummyLibrary;
+    use library::{symbolic::ETS, DummyLibrary};
     use symbolica::{parse, symbol};
 
     #[test]
@@ -339,5 +339,27 @@ pub mod test {
         } else {
             panic!("Not tensor")
         }
+    }
+
+    #[test]
+    fn parse_neg_tensors() {
+        let _ = ETS.id;
+        let expr = parse!("-g(mink(4,6))*Q(2,mink(4,7))+g(mink(4,6))*Q(3,mink(4,7))").unwrap();
+        let lib = DummyLibrary::<_>::new();
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+
+        println!("{}", expr);
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
     }
 }

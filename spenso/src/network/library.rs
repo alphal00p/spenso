@@ -33,11 +33,31 @@ pub trait Library<S> {
     fn get<'a>(&'a self, key: &Self::Key) -> Result<Cow<'a, Self::Value>, LibraryError<Self::Key>>;
 }
 
-#[derive(Default, Clone)]
+// #[derive(Default, Clone)]
 pub struct DummyLibrary<V, K = DummyKey> {
     key: PhantomData<K>,
     value: PhantomData<V>,
 }
+
+impl<V, K> Default for DummyLibrary<V, K> {
+    fn default() -> Self {
+        DummyLibrary {
+            key: PhantomData,
+            value: PhantomData,
+        }
+    }
+}
+
+impl<V, K> Clone for DummyLibrary<V, K> {
+    fn clone(&self) -> Self {
+        DummyLibrary {
+            key: PhantomData,
+            value: PhantomData,
+        }
+    }
+}
+
+impl<V, K> Copy for DummyLibrary<V, K> {}
 
 impl<V, K> DummyLibrary<V, K> {
     pub fn new() -> Self {

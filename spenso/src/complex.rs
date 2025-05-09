@@ -71,7 +71,19 @@ duplicate! {
     ]
     impl R for t {}
 }
-#[derive(Copy, Clone, PartialEq, Serialize, Deserialize, Hash, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    Hash,
+    Eq,
+    PartialOrd,
+    Ord,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+)]
 pub struct Complex<T> {
     pub re: T,
     pub im: T,
@@ -464,7 +476,13 @@ impl<T: LowerExp> std::fmt::LowerExp for Complex<T> {
     }
 }
 
-#[derive(Clone, Debug, EnumTryAsInner)]
+#[derive(
+    Clone, Debug, EnumTryAsInner, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+)]
+#[cfg_attr(
+feature = "shadowing",
+trait_decode(trait = symbolica::state::HasStateMap),
+)]
 #[derive_err(Debug)]
 pub enum RealOrComplexTensor<T, S: TensorStructure> {
     Real(DataTensor<T, S>),

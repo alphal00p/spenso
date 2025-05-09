@@ -188,7 +188,17 @@ dependencies = [
 [[package]]
 name = "bincode-trait-derive"
 version = "0.1.0"
-source = "git+https://github.com/alphal00p/bincode-trait-derive#6c767f1122071e6d51321ded8066af1ffc5ef10e"
+dependencies = [
+ "bincode",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "bincode-trait-derive"
+version = "0.1.0"
+source = "git+https://github.com/alphal00p/bincode-trait-derive.git?rev=c092cba7f80c867fd5646cf68312e1f4f9010658#c092cba7f80c867fd5646cf68312e1f4f9010658"
 dependencies = [
  "bincode",
  "proc-macro2",
@@ -897,8 +907,7 @@ checksum = "a25169bd5913a4b437588a7e3d127cd6e90127b60e0ffbd834a38f1599e016b8"
 [[package]]
 name = "linnet"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "862dee2762b5ee8db0b63c974ec7391a5dcadfe2f685ae682aca62035d202896"
+source = "git+https://github.com/alphal00p/linnet?rev=d8636fbfed7f924ea240fcb73783f1845a10ba91#d8636fbfed7f924ea240fcb73783f1845a10ba91"
 dependencies = [
  "ahash",
  "bincode",
@@ -1602,7 +1611,7 @@ dependencies = [
  "append-only-vec",
  "approx",
  "bincode",
- "bincode-trait-derive",
+ "bincode-trait-derive 0.1.0",
  "bitvec",
  "constcat",
  "criterion",
@@ -1654,12 +1663,12 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "symbolica"
 version = "0.16.0"
-source = "git+https://github.com/alphal00p/symbolica?rev=a714571c8c8ee1a292237eb3ef1bc8123a4d7db4#a714571c8c8ee1a292237eb3ef1bc8123a4d7db4"
+source = "git+https://github.com/alphal00p/symbolica?rev=8ec5f90129ef74809b48de85354f02347c522f5e#8ec5f90129ef74809b48de85354f02347c522f5e"
 dependencies = [
  "ahash",
  "append-only-vec",
  "bincode",
- "bincode-trait-derive",
+ "bincode-trait-derive 0.1.0 (git+https://github.com/alphal00p/bincode-trait-derive.git?rev=c092cba7f80c867fd5646cf68312e1f4f9010658)",
  "brotli",
  "byteorder",
  "bytes",

@@ -278,8 +278,10 @@ impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<A
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Encode, Decode)]
-#[bincode(decode_context = "symbolica::state::StateMap")]
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+)]
+#[trait_decode(trait = symbolica::state::HasStateMap)]
 pub struct ParamTensor<S = VecStructure> {
     pub tensor: DataTensor<Atom, S>,
     pub param_type: ParamOrComposite,
@@ -786,8 +788,10 @@ where
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Encode)]
-#[bincode(decode_context = "symbolica::state::StateMap")]
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+)]
+#[trait_decode(trait = symbolica::state::HasStateMap)]
 pub enum ParamOrConcrete<C, S> {
     Concrete(C),
     Param(ParamTensor<S>),
@@ -801,62 +805,6 @@ impl<C, S> crate::network::Ref for ParamOrConcrete<C, S> {
 
     fn refer<'a>(&'a self) -> Self::Ref<'a> {
         self
-    }
-}
-
-impl<C, S> Decode<StateMap> for ParamOrConcrete<C, S>
-where
-    C: Decode<StateMap>,
-    S: Decode<StateMap>,
-{
-    fn decode<__D: ::bincode::de::Decoder<Context = StateMap>>(
-        decoder: &mut __D,
-    ) -> core::result::Result<Self, ::bincode::error::DecodeError> {
-        let variant_index = <u32 as ::bincode::Decode<__D::Context>>::decode(decoder)?;
-        match variant_index {
-            0u32 => core::result::Result::Ok(Self::Concrete {
-                0: ::bincode::Decode::<__D::Context>::decode(decoder)?,
-            }),
-            1u32 => core::result::Result::Ok(Self::Param {
-                0: ::bincode::Decode::<__D::Context>::decode(decoder)?,
-            }),
-            variant => {
-                core::result::Result::Err(::bincode::error::DecodeError::UnexpectedVariant {
-                    found: variant,
-                    type_name: "ParamOrConcrete",
-                    allowed: &::bincode::error::AllowedEnumVariants::Range { min: 0, max: 1 },
-                })
-            }
-        }
-    }
-}
-impl<'__de, C, S> ::bincode::BorrowDecode<'__de, symbolica::state::StateMap>
-    for ParamOrConcrete<C, S>
-where
-    C: ::bincode::de::BorrowDecode<'__de, symbolica::state::StateMap>,
-    S: ::bincode::de::BorrowDecode<'__de, symbolica::state::StateMap>,
-{
-    fn borrow_decode<
-        __D: ::bincode::de::BorrowDecoder<'__de, Context = symbolica::state::StateMap>,
-    >(
-        decoder: &mut __D,
-    ) -> core::result::Result<Self, ::bincode::error::DecodeError> {
-        let variant_index = <u32 as ::bincode::Decode<__D::Context>>::decode(decoder)?;
-        match variant_index {
-            0u32 => core::result::Result::Ok(Self::Concrete {
-                0: ::bincode::BorrowDecode::<__D::Context>::borrow_decode(decoder)?,
-            }),
-            1u32 => core::result::Result::Ok(Self::Param {
-                0: ::bincode::BorrowDecode::<__D::Context>::borrow_decode(decoder)?,
-            }),
-            variant => {
-                core::result::Result::Err(::bincode::error::DecodeError::UnexpectedVariant {
-                    found: variant,
-                    type_name: "ParamOrConcrete",
-                    allowed: &::bincode::error::AllowedEnumVariants::Range { min: 0, max: 1 },
-                })
-            }
-        }
     }
 }
 
@@ -2212,7 +2160,7 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct EvalTensor<T, S> {
     eval: T,
     indexmap: Option<Vec<FlatIndex>>,
@@ -2235,7 +2183,7 @@ impl<T, S: TensorStructure + Clone> EvalTensor<T, S> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub enum TensorsOrScalars<T, S: TensorStructure> {
     Tensors(Vec<DataTensor<T, S>>),
     Scalars,
@@ -2272,7 +2220,7 @@ impl<T, S: TensorStructure> TensorsOrScalars<T, S> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct EvalTensorSet<T, S: TensorStructure> {
     pub tensors: TensorsOrScalars<usize, S>,
     eval: T,
@@ -2488,6 +2436,23 @@ pub struct SerializableCompiledEvaluator {
     evaluator: CompiledEvaluator,
     library_filename: String,
     function_name: String,
+}
+
+impl Encode for SerializableCompiledEvaluator {
+    fn encode<E: bincode::enc::Encoder>(
+        &self,
+        encoder: &mut E,
+    ) -> std::result::Result<(), bincode::error::EncodeError> {
+        todo!()
+    }
+}
+
+impl<C> Decode<C> for SerializableCompiledEvaluator {
+    fn decode<D: bincode::de::Decoder<Context = C>>(
+        decoder: &mut D,
+    ) -> std::result::Result<Self, bincode::error::DecodeError> {
+        todo!()
+    }
 }
 
 impl Serialize for SerializableCompiledEvaluator {

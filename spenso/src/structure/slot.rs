@@ -22,15 +22,24 @@ use crate::network::library::symbolic::ETS;
 use thiserror::Error;
 
 #[derive(
-    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Encode,
+    Debug,
+    Copy,
+    Clone,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encode,
+    bincode_trait_derive::Decode,
+    // bincode_trait_derive::BorrowDecodeFromDecode,
 )]
 #[cfg_attr(
     feature = "shadowing",
-    derive(bincode_trait_derive::TraitDecode),
-    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 /// A [`Slot`] is an index, identified by a `usize` and a [`Representation`].
 ///
 /// A vector of slots thus identifies the shape and type of the tensor.

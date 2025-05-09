@@ -27,28 +27,42 @@ use crate::structure::{
 
 use super::TensorNetworkError;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode)]
+#[derive(
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+    // bincode_trait_derive::BorrowDecodeFromDecode,
+)]
 #[cfg_attr(
     feature = "shadowing",
-    derive(bincode_trait_derive::TraitDecode),
-    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 pub struct NetworkGraph<K> {
     pub graph: HedgeGraph<NetworkEdge, NetworkNode<K>>, //, Forest<NetworkNode<K>, ChildVecStore<()>>>,
                                                         // #[bincode(with_serde)]
                                                         // uncontracted: BitVec,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Encode)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Encode,
+    bincode_trait_derive::Decode,
+    // bincode_trait_derive::BorrowDecodeFromDecode,
+)]
 #[cfg_attr(
     feature = "shadowing",
-    derive(bincode_trait_derive::TraitDecode),
-    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 pub enum NetworkEdge {
     // Port,
     Head,
@@ -260,6 +274,20 @@ impl<K> NetworkGraph<K> {
                 }
                 if all_leaves && has_children {
                     let op = *op;
+
+                    println!(
+                        "Extracting: {}",
+                        self.graph.dot_impl(
+                            &subgraph,
+                            "",
+                            &|a| if let NetworkEdge::Slot(s) = a {
+                                Some(format!("label=\"{s}\""))
+                            } else {
+                                None
+                            },
+                            &|a| None
+                        )
+                    );
 
                     let extracted = self.graph.extract(
                         &subgraph,

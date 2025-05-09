@@ -11,6 +11,8 @@ use delegate::delegate;
 use dimension::Dimension;
 use indexmap::IndexMap;
 
+use linnet::permutation::PermutationInvIter;
+use linnet::permutation::PermutationInvIterMut;
 use thiserror::Error;
 
 #[cfg(feature = "shadowing")]
@@ -49,10 +51,10 @@ pub mod dimension;
 pub mod representation;
 pub mod slot;
 
-#[cfg(not(feature = "shadowing"))]
-pub mod bincode;
-#[cfg(feature = "shadowing")]
-pub mod bincode_statemap;
+// #[cfg(not(feature = "shadowing"))]
+// pub mod bincode;
+// #[cfg(feature = "shadowing")]
+// pub mod bincode_statemap;
 
 pub trait ScalarTensor: HasStructure<Structure: ScalarStructure> {
     fn new_scalar(scalar: Self::Scalar) -> Self;
@@ -336,8 +338,6 @@ pub trait TensorStructure {
     fn external_indices(&self) -> Vec<AbstractIndex> {
         self.external_indices_iter().collect()
     }
-
-    // fn dot_label(&self) -> String;
 
     // fn iter_index_along_fiber(&self,fiber_position: &[bool]  )-> TensorStructureMultiFiberIterator where Self: Sized{
     //     TensorStructureMultiFiberIterator::new(self, fiber_position)
@@ -857,8 +857,22 @@ impl<S: DualSlotTo<Dual = S, R: RepName>> StructureContract for Vec<S> {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Default, Hash)]
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    Debug,
+    Default,
+    Hash,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+)]
 #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    feature = "shadowing",
+    trait_decode(trait = symbolica::state::HasStateMap),
+)]
+// #[cfg_attr(not(feature = "shadowing"), derive(bincode::Decode))]
 pub struct IndexLess<T: RepName = LibraryRep> {
     pub structure: Vec<Representation<T>>,
 }
@@ -1073,7 +1087,106 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T> {
 impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {}
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
+// #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
+pub struct OrderedStructure<R: RepName = LibraryRep> {
+    pub structure: Vec<Slot<R>>,
+    pub permutation: Permutation,
+}
+
+impl<R: RepName> Default for OrderedStructure<R> {
+    fn default() -> Self {
+        Self {
+            structure: vec![],
+            permutation: Permutation::id(0),
+        }
+    }
+}
+
+impl<S: RepName, R: From<S> + RepName> FromIterator<Slot<S>> for OrderedStructure<R> {
+    fn from_iter<T: IntoIterator<Item = Slot<S>>>(iter: T) -> Self {
+        let mut structure = iter.into_iter().map(|a| a.cast()).collect();
+        let permutation = Permutation::sort(&structure);
+        permutation.apply_slice_in_place(&mut structure);
+
+        Self {
+            structure,
+            permutation,
+        }
+    }
+}
+
+impl<R: RepName> From<Vec<Slot<R>>> for OrderedStructure<R> {
+    fn from(mut structure: Vec<Slot<R>>) -> Self {
+        let permutation = Permutation::sort(&structure);
+        permutation.apply_slice_in_place(&mut structure);
+
+        Self {
+            structure,
+            permutation,
+        }
+    }
+}
+
+impl<R: RepName> IntoIterator for OrderedStructure<R> {
+    type Item = Slot<R>;
+    type IntoIter = std::vec::IntoIter<Slot<R>>;
+    fn into_iter(mut self) -> std::vec::IntoIter<Slot<R>> {
+        self.permutation
+            .apply_slice_in_place_inv(&mut self.structure);
+        self.structure.into_iter()
+    }
+}
+
+impl<'a, R: RepName> IntoIterator for &'a OrderedStructure<R> {
+    type Item = &'a Slot<R>;
+    type IntoIter = PermutationInvIter<'a, Slot<R>>;
+    fn into_iter(self) -> PermutationInvIter<'a, Slot<R>> {
+        self.permutation.iter_slice_inv(&self.structure)
+    }
+}
+
+impl<'a, R: RepName> IntoIterator for &'a mut OrderedStructure<R> {
+    type Item = &'a mut Slot<R>;
+    type IntoIter = PermutationInvIterMut<'a, Slot<R>>;
+    fn into_iter(self) -> PermutationInvIterMut<'a, Slot<R>> {
+        self.permutation.iter_slice_inv_mut(&mut self.structure)
+    }
+}
+
+impl<R: RepName> OrderedStructure<R> {
+    pub fn new(structure: Vec<Slot<R>>) -> Self {
+        structure.into()
+    }
+
+    fn extend(&mut self, mut other: Self) {
+        self.permutation.iter_slice_inv(&mut self.structure);
+        other.permutation.iter_slice_inv(&mut other.structure);
+
+        self.structure.extend(other.structure);
+
+        let new_perm = Permutation::sort(&self.structure);
+
+        new_perm.apply_slice_in_place(&mut self.structure);
+        self.permutation = new_perm;
+    }
+
+    pub fn to_named<N, A>(self, name: N, args: Option<A>) -> NamedStructure<N, A, R> {
+        NamedStructure::from_iter(self, name, args)
+    }
+
+    pub fn empty() -> Self {
+        Self::default()
+    }
+}
+
+#[derive(
+    Clone, PartialEq, Eq, Debug, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+)]
 #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    feature = "shadowing",
+    trait_decode(trait = symbolica::state::HasStateMap),
+)]
 pub struct VecStructure<R: RepName = LibraryRep> {
     pub structure: Vec<Slot<R>>,
 }
@@ -1324,8 +1437,21 @@ impl<R: RepName<Dual = R>> StructureContract for VecStructure<R> {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Default, Hash)]
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    Debug,
+    Default,
+    Hash,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+)]
 #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    feature = "shadowing",
+    trait_decode(trait = symbolica::state::HasStateMap),
+)]
 pub struct IndexlessNamedStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
     pub structure: IndexLess<R>,
     pub global_name: Option<Name>,
@@ -1446,8 +1572,21 @@ impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for IndexlessNamedStructure
 /// A named structure is a structure with a global name, and a list of slots
 ///
 /// It is useful when you want to shadow tensors, to nest tensor network contraction operations.
-#[derive(Clone, PartialEq, Eq, Debug, Default, Hash)]
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    Debug,
+    Default,
+    Hash,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+)]
 #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    feature = "shadowing",
+    trait_decode(trait = symbolica::state::HasStateMap),
+)]
 pub struct NamedStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
     pub structure: VecStructure<R>,
     pub global_name: Option<Name>,
@@ -1727,8 +1866,15 @@ impl<N, A, R: RepName<Dual = R>> StructureContract for NamedStructure<N, A, R> {
 /// A contraction count structure
 ///
 /// Useful for tensor network contraction algorithm.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(
+    Clone, PartialEq, Eq, Debug, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+)]
 #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+feature = "shadowing",
+trait_decode(trait = symbolica::state::HasStateMap),
+)]
+
 pub struct ContractionCountStructure<R: RepName> {
     pub structure: VecStructure<R>,
     pub contractions: usize,
@@ -1827,8 +1973,15 @@ impl<R: RepName<Dual = R>> StructureContract for ContractionCountStructure<R> {
 }
 
 /// A structure to enable smart shadowing of tensors in a tensor network contraction algorithm.
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(
+    Clone, PartialEq, Eq, Debug, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+)]
 #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+feature = "shadowing",
+trait_decode(trait = symbolica::state::HasStateMap),
+)]
+
 pub struct SmartShadowStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
     pub structure: VecStructure<R>,
     pub contractions: usize,
@@ -2202,7 +2355,16 @@ where
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    Debug,
+    Serialize,
+    Deserialize,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+)]
 pub struct TensorShell<S: TensorStructure> {
     pub(crate) structure: S,
 }

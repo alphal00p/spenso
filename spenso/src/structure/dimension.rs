@@ -26,15 +26,14 @@ use crate::symbolica_utils::SerializableSymbol;
     Display,
     Serialize,
     Deserialize,
-    Encode,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+    // bincode_trait_derive::BorrowDecodeFromDecode,
 )]
 #[cfg_attr(
     feature = "shadowing",
-    derive(bincode_trait_derive::TraitDecode),
-    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-#[cfg_attr(not(feature = "shadowing"), derive(bincode::Decode))]
 pub enum Dimension {
     Concrete(usize),
     #[cfg(feature = "shadowing")]

@@ -31,14 +31,13 @@ use crate::{
 
 use std::{convert::Infallible, fmt::Debug};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+)]
 #[cfg_attr(
     feature = "shadowing",
-    derive(bincode_trait_derive::TraitDecode),
-    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 pub struct Network<S, LibKey> {
     pub graph: NetworkGraph<LibKey>,
     pub store: S,
@@ -500,36 +499,44 @@ pub enum TensorOrScalarOrKey<T, S, K> {
         key: K,
         graph_slots: Vec<LibrarySlot>,
     },
+}
+
+pub enum ExecutionResult<T> {
     One,
     Zero,
+    Val(T),
 }
 
 impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scalar = S>>
     Network<Str, K>
 {
-    pub fn result(&self) -> Result<TensorOrScalarOrKey<&T, &S, &K>, TensorNetworkError<K>> {
+    pub fn result(
+        &self,
+    ) -> Result<ExecutionResult<TensorOrScalarOrKey<&T, &S, &K>>, TensorNetworkError<K>> {
         let (node, graph_slots) = self.graph.result()?;
 
         match node {
             NetworkNode::Leaf(l) => match l {
-                NetworkLeaf::LibraryKey(k) => Ok(TensorOrScalarOrKey::Key {
+                NetworkLeaf::LibraryKey(k) => Ok(ExecutionResult::Val(TensorOrScalarOrKey::Key {
                     key: k,
                     graph_slots,
-                }),
-                NetworkLeaf::LocalTensor(t) => Ok(TensorOrScalarOrKey::Tensor {
-                    tensor: self.store.get_tensor(*t),
-                    graph_slots,
-                }),
-                NetworkLeaf::Scalar(t) => {
-                    Ok(TensorOrScalarOrKey::Scalar(self.store.get_scalar(*t)))
+                })),
+                NetworkLeaf::LocalTensor(t) => {
+                    Ok(ExecutionResult::Val(TensorOrScalarOrKey::Tensor {
+                        tensor: self.store.get_tensor(*t),
+                        graph_slots,
+                    }))
                 }
+                NetworkLeaf::Scalar(t) => Ok(ExecutionResult::Val(TensorOrScalarOrKey::Scalar(
+                    self.store.get_scalar(*t),
+                ))),
             },
             NetworkNode::Op(o) => match o {
                 NetworkOp::Neg => Err(TensorNetworkError::InvalidResultNode(NetworkNode::Op(
                     NetworkOp::Neg,
                 ))),
-                NetworkOp::Product => Ok(TensorOrScalarOrKey::One),
-                NetworkOp::Sum => Ok(TensorOrScalarOrKey::Zero),
+                NetworkOp::Product => Ok(ExecutionResult::One),
+                NetworkOp::Sum => Ok(ExecutionResult::Zero),
             },
         }
     }
@@ -537,30 +544,31 @@ impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scala
     pub fn result_tensor<'a, L: Library<T::Structure, Key = K>>(
         &'a self,
         lib: &L,
-    ) -> Result<Cow<'a, T>, TensorNetworkError<K>>
+    ) -> Result<ExecutionResult<Cow<'a, T>>, TensorNetworkError<K>>
     where
         S: 'a,
         T: Clone + ScalarTensor + HasStructure,
-        T::Scalar: One + Zero,
         K: Display,
         L::Value: TensorStructure<Indexed = T> + Clone,
         for<'b> &'b S: Into<T::Scalar>,
     {
         Ok(match self.result()? {
-            TensorOrScalarOrKey::One => Cow::Owned(T::new_scalar(T::Scalar::one())),
-            TensorOrScalarOrKey::Zero => Cow::Owned(T::new_scalar(T::Scalar::zero())),
-            TensorOrScalarOrKey::Tensor { tensor, .. } => Cow::Borrowed(tensor),
-            TensorOrScalarOrKey::Scalar(s) => Cow::Owned(T::new_scalar(s.into())),
-            TensorOrScalarOrKey::Key { key, graph_slots } => {
-                let inds: Vec<_> = graph_slots.iter().map(|a| a.aind).collect();
-                let less = lib.get(key)?.into_owned().reindex(&inds)?;
+            ExecutionResult::One => ExecutionResult::One,
+            ExecutionResult::Zero => ExecutionResult::Zero,
+            ExecutionResult::Val(v) => ExecutionResult::Val(match v {
+                TensorOrScalarOrKey::Tensor { tensor, .. } => Cow::Borrowed(tensor),
+                TensorOrScalarOrKey::Scalar(s) => Cow::Owned(T::new_scalar(s.into())),
+                TensorOrScalarOrKey::Key { key, graph_slots } => {
+                    let inds: Vec<_> = graph_slots.iter().map(|a| a.aind).collect();
+                    let less = lib.get(key)?.into_owned().reindex(&inds)?;
 
-                Cow::Owned(less)
-            }
+                    Cow::Owned(less)
+                }
+            }),
         })
     }
 
-    pub fn result_scalar<'a>(&'a self) -> Result<Cow<'a, S>, TensorNetworkError<K>>
+    pub fn result_scalar<'a>(&'a self) -> Result<ExecutionResult<Cow<'a, S>>, TensorNetworkError<K>>
     where
         T: Clone + ScalarTensor + 'a,
         T::Scalar: Into<S>,
@@ -568,16 +576,18 @@ impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scala
         S: One + Zero + Clone,
     {
         Ok(match self.result()? {
-            TensorOrScalarOrKey::One => Cow::Owned(S::one()),
-            TensorOrScalarOrKey::Zero => Cow::Owned(S::zero()),
-            TensorOrScalarOrKey::Tensor { tensor: t, .. } => Cow::Owned(
-                t.clone()
-                    .scalar()
-                    .ok_or(TensorNetworkError::NoScalar)?
-                    .into(),
-            ),
-            TensorOrScalarOrKey::Scalar(s) => Cow::Borrowed(s),
-            TensorOrScalarOrKey::Key { .. } => return Err(TensorNetworkError::NoScalar),
+            ExecutionResult::One => ExecutionResult::One,
+            ExecutionResult::Zero => ExecutionResult::Zero,
+            ExecutionResult::Val(v) => ExecutionResult::Val(match v {
+                TensorOrScalarOrKey::Tensor { tensor: t, .. } => Cow::Owned(
+                    t.clone()
+                        .scalar()
+                        .ok_or(TensorNetworkError::NoScalar)?
+                        .into(),
+                ),
+                TensorOrScalarOrKey::Scalar(s) => Cow::Borrowed(s),
+                TensorOrScalarOrKey::Key { .. } => return Err(TensorNetworkError::NoScalar),
+            }),
         })
     }
 

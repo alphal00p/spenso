@@ -33,17 +33,25 @@ use crate::{
     structure::{CastStructure, HasStructure, ScalarTensor, TensorStructure},
 };
 
-use super::store::{NetworkStore, TensorScalarStore};
+use super::{
+    store::{NetworkStore, TensorScalarStore},
+    ExecutionResult,
+};
 use super::{Library, Network, TensorNetworkError, TensorOrScalarOrKey};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encode)]
+#[derive(
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+    // bincode_trait_derive::BorrowDecodeFromDecode,
+)]
 #[cfg_attr(
     feature = "shadowing",
-    derive(bincode_trait_derive::TraitDecode),
-    derive(bincode_trait_derive::BorrowDecodeFromTraitDecode),
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-#[cfg_attr(not(feature = "shadowing"), derive(Decode))]
 pub struct TensorNetworkSet<S, K> {
     pub networks: Vec<Network<S, K>>,
 }
@@ -101,14 +109,16 @@ pub struct SharedTensorNetworkSet<
 impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scalar = S>>
     TensorNetworkSet<Str, K>
 {
-    pub fn result(&self) -> Result<Vec<TensorOrScalarOrKey<&T, &S, &K>>, TensorNetworkError<K>> {
+    pub fn result(
+        &self,
+    ) -> Result<Vec<ExecutionResult<TensorOrScalarOrKey<&T, &S, &K>>>, TensorNetworkError<K>> {
         self.networks.iter().map(|n| n.result()).collect()
     }
 
     pub fn result_tensor<'a, L: Library<T::Structure, Key = K>>(
         &'a self,
         lib: &L,
-    ) -> Result<Vec<Cow<'a, T>>, TensorNetworkError<K>>
+    ) -> Result<Vec<ExecutionResult<Cow<'a, T>>>, TensorNetworkError<K>>
     where
         S: 'a,
         T: Clone + ScalarTensor + HasStructure,
@@ -119,7 +129,9 @@ impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scala
         self.networks.iter().map(|n| n.result_tensor(lib)).collect()
     }
 
-    pub fn result_scalar<'a>(&'a self) -> Result<Vec<Cow<'a, S>>, TensorNetworkError<K>>
+    pub fn result_scalar<'a>(
+        &'a self,
+    ) -> Result<Vec<ExecutionResult<Cow<'a, S>>>, TensorNetworkError<K>>
     where
         T: Clone + ScalarTensor + 'a,
         T::Scalar: Into<S>,

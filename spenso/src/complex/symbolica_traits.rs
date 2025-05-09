@@ -124,7 +124,7 @@ where
         self.re.fixed_precision() || self.im.fixed_precision()
     }
 
-    fn sample_unit<R: Rng>(&self, rng: &mut R) -> Self {
+    fn sample_unit<R: Rng + ?Sized>(&self, rng: &mut R) -> Self {
         Complex {
             re: self.re.sample_unit(rng),
             im: self.im.zero(),

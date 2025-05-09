@@ -31,8 +31,8 @@ use serde::ser::SerializeStruct;
     Hash,
     Display,
     Encode,
-    bincode_trait_derive::TraitDecode,
-    bincode_trait_derive::BorrowDecodeFromTraitDecode,
+    bincode_trait_derive::Decode,
+    bincode_trait_derive::BorrowDecodeFromDecode,
 )]
 #[trait_decode(trait = symbolica::state::HasStateMap)]
 pub struct SerializableSymbol {

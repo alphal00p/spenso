@@ -573,7 +573,7 @@ impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scala
         T: Clone + ScalarTensor + 'a,
         T::Scalar: Into<S>,
         K: Display,
-        S: One + Zero + Clone,
+        S: Clone,
     {
         Ok(match self.result()? {
             ExecutionResult::One => ExecutionResult::One,

@@ -5,6 +5,7 @@ use std::{
 
 use crate::{
     data::{SparseTensor, StorageTensor},
+    iterators::IteratorEnum,
     network::Ref,
     structure::concrete_index::ConcreteIndex,
 };
@@ -44,7 +45,7 @@ use crate::{
 use crate::{
     contraction::{Contract, ContractableWith, ContractionError, IsZero, RefOne, RefZero, Trace},
     data::{DataTensor, GetTensorData, HasTensorData, SetTensorData, SparseOrDense},
-    iterators::{IteratableTensor, IteratorEnum},
+    iterators::IteratableTensor,
     structure::{
         concrete_index::{ExpandedIndex, FlatIndex},
         CastStructure, HasName, HasStructure, ScalarStructure, ScalarTensor, StructureContract,
@@ -95,6 +96,12 @@ impl<T> Complex<T> {
             re: &self.re,
             im: &self.im,
         }
+    }
+}
+
+impl<T: Clone> From<&Complex<T>> for Complex<T> {
+    fn from(value: &Complex<T>) -> Self {
+        value.clone()
     }
 }
 

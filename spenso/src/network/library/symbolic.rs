@@ -266,7 +266,7 @@ impl<T: HasStructure<Structure = ExplicitKey> + SetTensorData + Clone + LibraryT
     {
         for rep in REPS.read().unwrap().reps() {
             self.insert_generic(Self::id(*rep), Self::checked_identity);
-            if rep.dual() != *rep {
+            if rep.dual() == *rep {
                 let id_metric = GenericKey::new(ETS.metric, None, vec![*rep, rep.dual()]);
                 self.insert_generic(id_metric, Self::checked_identity);
                 self.insert_generic(Self::id(rep.dual()), Self::checked_identity);
@@ -541,6 +541,10 @@ mod test {
         );
 
         net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+
+        if let Ok(ExecutionResult::Val(v)) = net.result_scalar() {
+            println!("Hi{}", v)
+        }
         println!(
             "{}",
             net.dot_display_impl(
@@ -554,9 +558,12 @@ mod test {
     #[test]
     fn small_expr() {
         let _ = ETS.id;
-        let lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        lib.update_ids();
 
-        let expr = parse!("-g(mink(4,6))*Q(2,mink(4,7))+g(mink(4,6))*Q(3,mink(4,7))").unwrap();
+        let expr =
+            parse!("(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*g(mink(4,4),mink(4,7))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))")
+                .unwrap();
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -574,6 +581,10 @@ mod test {
         );
 
         net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+
+        if let Ok(ExecutionResult::Val(v)) = net.result_tensor(&lib) {
+            println!("Hi{}", v)
+        }
         println!(
             "{}",
             net.dot_display_impl(
@@ -582,5 +593,22 @@ mod test {
                 |a| a.name().map(|a| a.to_string()).unwrap_or("".to_owned())
             )
         );
+    }
+
+    #[test]
+    fn one_times_x() {
+        let mut a: Network<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, DummyKey> =
+            Network::one() * Network::from_scalar(Atom::new_var(symbol!("x")));
+
+        // a.merge_ops();
+        a.execute::<Sequential, SmallestDegree, _>(&DummyLibrary::default())
+            .unwrap();
+
+        let res = a.result_scalar();
+        if let Ok(ExecutionResult::Val(v)) = res {
+            println!("Hi{}", v)
+        } else {
+            // panic!("AAAAA{}", a.dot())
+        }
     }
 }

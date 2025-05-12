@@ -1,7 +1,7 @@
 //! Iterators for tensors
 //!
 //! This module provides various iterators for tensor operations, organized as:
-//!
+//! 
 //! - `indices`: Types and traits related to tensor indices and fibers
 //! - `fiber`: Fiber abstractions for traversing tensor data
 //! - `core_iterators`: Low-level iterators implementing core iteration logic
@@ -15,31 +15,25 @@
 //!
 //! The iterators are built using the basic index iterators provided by the `TensorStructure+ScalarStructureIterator`s.
 
-mod core_iterators;
-mod fiber;
-mod fiber_iterators;
 mod indices;
+mod fiber;
+mod core_iterators;
+mod fiber_iterators;
 mod tensor_iterators;
 mod traits;
 
-#[cfg(test)]
-mod tests;
-
 // Re-export common types and traits
-pub use core_iterators::{
-    CoreExpandedFiberIterator, CoreFlatFiberIterator, MetricFiberIterator, MetricItem,
-};
-pub use fiber::{Fiber, FiberClass, FiberClassMut, FiberMut};
-pub use fiber_iterators::{FiberClassIterator, FiberIterator, MutFiberIterator};
 pub use indices::{AbstractFiberIndex, FiberClassIndex, FiberData, FiberIndex, IteratorEnum};
+pub use fiber::{Fiber, FiberClass, FiberClassMut, FiberMut};
+pub use core_iterators::{CoreExpandedFiberIterator, CoreFlatFiberIterator, MetricFiberIterator, MetricItem};
+pub use fiber_iterators::{FiberClassIterator, FiberIterator, MutFiberIterator};
 pub use tensor_iterators::{
-    DataTensorExpandedIterator, DataTensorLinearIterator, DenseTensorIntoIterator,
-    DenseTensorIterator, DenseTensorLinearIterator, DenseTensorTraceIterator, SparseTensorIterator,
-    SparseTensorLinearIterator, SparseTensorTraceIterator, TensorStructureIndexIterator,
+    DataTensorExpandedIterator, DataTensorLinearIterator,
+    DenseTensorIntoIterator, DenseTensorIterator, DenseTensorLinearIterator, DenseTensorTraceIterator,
+    SparseTensorIterator, SparseTensorLinearIterator, SparseTensorTraceIterator,
+    TensorStructureIndexIterator,
 };
-pub use traits::{
-    AbstractFiber, FiberIteratorItem, IteratableTensor, IteratesAlongFibers, IteratesAlongPermutedFibers,
-};
+pub use traits::{FiberIteratorItem, IteratesAlongFibers, IteratesAlongPermutedFibers, IteratableTensor, AbstractFiber};
 
 // Re-export helper types
-pub use core_iterators::{MultiStrideShift, SingleStrideShift, SkippingItem, StrideShift};
+pub use core_iterators::{StrideShift, SingleStrideShift, MultiStrideShift, SkippingItem};

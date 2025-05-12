@@ -1093,6 +1093,35 @@ pub struct OrderedStructure<R: RepName = LibraryRep> {
     pub permutation: Permutation,
 }
 
+// impl<R: RepName<Dual = R>> TensorStructure for OrderedStructure<R> {
+//     type Slot = Slot<R>;
+//     type Indexed = Self;
+
+//     fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+//         Ok(Self {
+//             structure: self.structure.reindex(indices)?,
+//         })
+//     }
+//     fn dual(self) -> Self {
+//         self.structure.dual().into()
+//     }
+
+//     delegate! {
+//         to self.structure{
+//             fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+
+//             fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+//             fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
+//             fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
+//             fn order(&self) -> usize;
+//             fn get_slot(&self, i: usize) -> Option<Self::Slot>;
+//             fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+//             fn get_aind(&self,i:usize)->Option<AbstractIndex>;
+//             fn get_dim(&self, i: usize) -> Option<Dimension>;
+//         }
+//     }
+// }
+
 impl<R: RepName> Default for OrderedStructure<R> {
     fn default() -> Self {
         Self {

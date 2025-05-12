@@ -11,6 +11,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use spenso_macros::SimpleRepresentation;
 use std::{
+    cmp::Ordering,
     convert::Infallible,
     fmt::{Debug, Display},
     sync::RwLock,
@@ -215,7 +216,19 @@ pub struct Euclidean {}
 pub struct Lorentz {}
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,Encode,Decode
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Default,
+    Encode,
+    Decode,
 )]
 pub struct Minkowski {}
 
@@ -348,13 +361,30 @@ impl<T: RepName> Representation<T> {
     }
 }
 
-#[derive(
-    PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize, Encode, Decode,
-)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, Ord, Serialize, Deserialize, Encode, Decode)]
 pub enum LibraryRep {
     SelfDual(u16),
     InlineMetric(u16),
     Dualizable(i16),
+}
+
+impl PartialOrd for LibraryRep {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (LibraryRep::SelfDual(a), LibraryRep::SelfDual(b)) => a.partial_cmp(b),
+            (LibraryRep::InlineMetric(a), LibraryRep::InlineMetric(b)) => a.partial_cmp(b),
+            (LibraryRep::Dualizable(a), LibraryRep::Dualizable(b)) => match a.cmp(&b.abs()) {
+                Ordering::Equal => a.partial_cmp(b),
+                a => Some(a),
+            },
+            (LibraryRep::SelfDual(_), LibraryRep::Dualizable(_))
+            | (LibraryRep::SelfDual(_), LibraryRep::InlineMetric(_))
+            | (LibraryRep::InlineMetric(_), LibraryRep::Dualizable(_)) => Some(Ordering::Greater),
+            (LibraryRep::Dualizable(_), LibraryRep::SelfDual(_))
+            | (LibraryRep::InlineMetric(_), LibraryRep::SelfDual(_))
+            | (LibraryRep::Dualizable(_), LibraryRep::InlineMetric(_)) => Some(Ordering::Less),
+        }
+    }
 }
 
 pub type LibrarySlot = Slot<LibraryRep>;

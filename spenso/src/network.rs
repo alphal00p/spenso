@@ -394,6 +394,13 @@ impl<S: TensorScalarStore, K> Network<S, K> {
         }
     }
 
+    pub fn merge_ops(&mut self)
+    where
+        K: Clone,
+    {
+        self.graph.merge_ops();
+    }
+
     pub fn from_tensor(tensor: S::Tensor) -> Self
     where
         S::Tensor: TensorStructure,
@@ -773,10 +780,11 @@ where
         lib: &L,
     ) -> Result<(), TensorNetworkError<K>>
     where
-        K: Display,
+        K: Display + Clone,
         L: Library<S, Key = K, Value: LibraryTensor<WithIndices = Store::Tensor>> + Sync,
         Store: ExecuteOp<L, K>,
     {
+        self.merge_ops();
         Strat::execute_all::<C>(&mut self.store, &mut self.graph, lib)
     }
 }
@@ -1229,6 +1237,7 @@ impl SmallestDegree {
                                 NetworkEdge::Slot(s) => Some(s.aind),
                             })
                             .collect();
+
                         let contracted = executor.tensors[*l2]
                             .contract(&lib.get(l1)?.with_indices(&l1_inds)?)?;
                         let pos = executor.tensors.len();
@@ -1245,12 +1254,13 @@ impl SmallestDegree {
                     (NetworkLeaf::LocalTensor(l2), NetworkLeaf::LibraryKey(l1)) => {
                         let l1_inds: Vec<_> = graph
                             .graph
-                            .iter_crown(nid1)
+                            .iter_crown(nid2)
                             .filter_map(|i| match graph.graph[[&i]] {
                                 NetworkEdge::Head => None,
                                 NetworkEdge::Slot(s) => Some(s.aind),
                             })
                             .collect();
+
                         let contracted = executor.tensors[*l2]
                             .contract(&lib.get(l1)?.with_indices(&l1_inds)?)?;
                         let pos = executor.tensors.len();

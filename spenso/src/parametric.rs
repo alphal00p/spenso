@@ -950,6 +950,12 @@ pub enum ConcreteOrParam<C> {
     Param(Atom),
 }
 
+impl<T: Clone> From<&ConcreteOrParam<T>> for ConcreteOrParam<T> {
+    fn from(value: &ConcreteOrParam<T>) -> Self {
+        value.clone()
+    }
+}
+
 impl<C> From<&Atom> for ConcreteOrParam<C> {
     fn from(value: &Atom) -> Self {
         ConcreteOrParam::Param(value.clone())

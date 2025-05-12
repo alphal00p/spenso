@@ -114,7 +114,7 @@ impl From<DualConciousExpandedIndex> for Atom {
 #[display(fmt = "{:?}", indices)]
 
 pub struct ExpandedIndex {
-    indices: Vec<ConcreteIndex>,
+    pub indices: Vec<ConcreteIndex>,
 }
 
 impl ExpandedIndex {

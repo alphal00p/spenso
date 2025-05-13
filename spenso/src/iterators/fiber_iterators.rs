@@ -8,13 +8,13 @@ use linnet::permutation::Permutation;
 use std::fmt::Debug;
 
 use crate::{
-    data::{DenseTensor, GetTensorData, SparseTensor},
     structure::{
         concrete_index::FlatIndex,
         representation::{LibraryRep, RepName},
         slot::IsAbstractSlot,
         TensorStructure,
     },
+    tensors::data::{DenseTensor, GetTensorData, SparseTensor},
 };
 
 use super::{
@@ -108,7 +108,7 @@ impl<'a, S: TensorStructure, I: IteratesAlongPermutedFibers<<S::Slot as IsAbstra
 }
 
 impl<'a, I: IteratesAlongFibers<LibraryRep>> Iterator
-    for FiberIterator<'a, crate::structure::VecStructure, I>
+    for FiberIterator<'a, crate::structure::OrderedStructure, I>
 {
     type Item = I::Item;
     fn next(&mut self) -> Option<Self::Item> {

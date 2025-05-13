@@ -18,7 +18,7 @@ use symbolica::{
 use symbolica::coefficient::CoefficientView;
 
 #[cfg(feature = "shadowing")]
-use crate::symbolica_utils::SerializableSymbol;
+use crate::shadowing::symbolica_utils::SerializableSymbol;
 use crate::utils::{to_subscript, to_superscript};
 
 use thiserror::Error;

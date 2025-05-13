@@ -5,13 +5,13 @@
 use crate::iterators::{AbstractFiber, AbstractFiberIndex, Fiber, FiberClass, FiberIndex};
 use crate::structure::representation::RepName;
 use crate::structure::TensorStructure;
-use crate::structure::{dimension::Dimension, representation::Euclidean, VecStructure};
+use crate::structure::{dimension::Dimension, representation::Euclidean, OrderedStructure};
 use bitvec::vec::BitVec;
 
 #[test]
 fn test_fiber_creation() {
     let rep = Euclidean {};
-    let structure = VecStructure::new(vec![
+    let structure = OrderedStructure::new(vec![
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),
@@ -49,7 +49,7 @@ fn test_fiber_creation() {
 #[test]
 fn test_fiber_modification() {
     let rep = Euclidean {};
-    let structure = VecStructure::new(vec![
+    let structure = OrderedStructure::new(vec![
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),
@@ -89,7 +89,7 @@ fn test_fiber_modification() {
 #[test]
 fn test_fiber_class_conversion() {
     let rep = Euclidean {};
-    let structure = VecStructure::new(vec![
+    let structure = OrderedStructure::new(vec![
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),
@@ -122,7 +122,7 @@ fn test_fiber_class_conversion() {
 #[test]
 fn test_fiber_display() {
     let rep = Euclidean {};
-    let structure = VecStructure::new(vec![rep.new_slot(3, 0), rep.new_slot(4, 0)]);
+    let structure = OrderedStructure::new(vec![rep.new_slot(3, 0), rep.new_slot(4, 0)]);
 
     // Create a fiber with specific pattern
     let mut fiber = Fiber::zeros(&structure);
@@ -137,7 +137,7 @@ fn test_fiber_display() {
 #[test]
 fn test_single_fiber_detection() {
     let rep = Euclidean {};
-    let structure = VecStructure::new(vec![
+    let structure = OrderedStructure::new(vec![
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),

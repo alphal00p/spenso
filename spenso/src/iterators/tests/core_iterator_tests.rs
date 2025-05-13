@@ -7,13 +7,13 @@ use crate::iterators::{
     IteratesAlongPermutedFibers, MetricFiberIterator, MetricItem,
 };
 use crate::structure::representation::RepName;
-use crate::structure::{concrete_index::FlatIndex, representation::Euclidean, VecStructure};
+use crate::structure::{concrete_index::FlatIndex, representation::Euclidean, OrderedStructure};
 use linnet::permutation::Permutation;
 
 #[test]
 fn test_core_flat_iterator() {
     let rep = Euclidean {};
-    let structure = VecStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
+    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
 
     // Create a fiber with one free index
     let mut fiber = Fiber::zeros(&structure);
@@ -41,21 +41,22 @@ fn test_core_flat_iterator() {
 #[test]
 fn test_core_expanded_iterator() {
     let rep = Euclidean {};
-    let structure = VecStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
+    let structure: OrderedStructure =
+        OrderedStructure::from_iter([rep.new_slot(3, 0), rep.new_slot(5, 0), rep.new_slot(2, 1)]);
 
-    // Create a fiber with all indices free
     let mut fiber = Fiber::zeros(&structure);
-    fiber.free(0);
     fiber.free(1);
+    fiber.fix(2, 1);
+    fiber.fix(0, 2);
 
     // Create an expanded iterator
     let mut iter = CoreExpandedFiberIterator::new(&fiber, false);
 
     // Collect all indices
-    let indices: Vec<FlatIndex> = std::iter::from_fn(|| iter.next()).collect();
+    let indices: Vec<usize> = std::iter::from_fn(|| iter.next().map(|a| a.into())).collect();
 
     // Should iterate through all elements (2*3 = 6)
-    assert_eq!(indices.len(), 6);
+    assert_eq!(indices, vec![0, 2, 4, 6, 8]);
 
     // Test reset functionality
     iter.reset();
@@ -72,10 +73,7 @@ fn test_core_expanded_iterator() {
 #[test]
 fn test_metric_iterator() {
     let rep = Euclidean {};
-    let structure = VecStructure::new(vec![
-        rep.new_slot(2, 0), // Euclidean, no sign changes
-        rep.new_slot(2, 1), // Pseudo-Euclidean, has sign changes
-    ]);
+    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(2, 1)]);
 
     // Create a fiber with all indices free
     let mut fiber = Fiber::zeros(&structure);
@@ -102,7 +100,7 @@ fn test_metric_iterator() {
 #[test]
 fn test_permuted_iterator() {
     let rep = Euclidean {};
-    let structure = VecStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
+    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
 
     // Create a fiber with all indices free
     let mut fiber = Fiber::zeros(&structure);
@@ -129,7 +127,7 @@ fn test_permuted_iterator() {
 #[test]
 fn test_paired_conjugates() {
     let rep = Euclidean {};
-    let structure = VecStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
+    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
 
     // Create a fiber with specific pattern
     let mut fiber = Fiber::zeros(&structure);

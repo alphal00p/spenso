@@ -10,12 +10,12 @@ use symbolica::{
 use anyhow::anyhow;
 
 use crate::{
-    parametric::{ConcreteOrParam, MixedTensor, ParamOrConcrete, ParamTensor},
+    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         representation::{LibraryRep, RepName, REPS},
         HasName, IndexlessNamedStructure, TensorShell,
     },
-    symbolica_utils::{IntoArgs, IntoSymbol},
+    tensors::parametric::{ConcreteOrParam, MixedTensor, ParamOrConcrete, ParamTensor},
 };
 
 pub type ExplicitKey = IndexlessNamedStructure<Symbol, Vec<Atom>, LibraryRep>;

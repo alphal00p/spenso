@@ -3,7 +3,7 @@ use anyhow::anyhow;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use crate::algebraic_traits::{One, Zero};
+use crate::algebra::algebraic_traits::{One, Zero};
 use std::{borrow::Cow, fmt::Display};
 
 #[cfg(feature = "shadowing")]
@@ -21,16 +21,16 @@ use symbolica::{
 
 #[cfg(feature = "shadowing")]
 use crate::{
-    data::{DataIterator, DenseTensor, SetTensorData, SparseTensor},
-    parametric::ParamTensor,
+    tensors::data::{DataIterator, DenseTensor, SetTensorData, SparseTensor},
+    tensors::parametric::ParamTensor,
 };
 
 #[cfg(feature = "shadowing")]
 use super::store::TensorScalarStoreMapping;
 
 use crate::{
-    data::DataTensor,
     structure::{CastStructure, HasStructure, ScalarTensor, TensorStructure},
+    tensors::data::DataTensor,
 };
 
 use super::{

@@ -3,24 +3,22 @@
 //! This module provides iterators specific to different tensor implementations,
 //! including dense, sparse, and data tensors.
 
-use std::{
-    collections::hash_map,
-    marker::PhantomData,
-};
+use std::{collections::hash_map, marker::PhantomData};
 
 use crate::{
-    contraction::{ContractableWith, RefZero},
-    data::{DataTensor, DenseTensor, GetTensorData, SparseTensor},
+    algebra::algebraic_traits::RefZero,
+    algebra::upgrading_arithmetic::{FallibleAddAssign, FallibleSubAssign},
+    contraction::ContractableWith,
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
         HasStructure, TensorStructure,
     },
-    upgrading_arithmetic::{FallibleAddAssign, FallibleSubAssign},
+    tensors::data::{DataTensor, DenseTensor, GetTensorData, SparseTensor},
 };
 
 use super::{
-    indices::FiberData,
     fiber::{Fiber, FiberClass, FiberClassMut, FiberMut},
+    indices::FiberData,
     traits::IteratableTensor,
 };
 

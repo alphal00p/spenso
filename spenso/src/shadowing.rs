@@ -1,15 +1,17 @@
 use crate::{
-    data::{DataTensor, DenseTensor},
     network::parsing::ShadowedStructure,
-    parametric::{MixedTensor, ParamTensor, TensorCoefficient},
+    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         concrete_index::FlatIndex, HasName, HasStructure, TensorShell, TensorStructure, ToSymbolic,
     },
-    symbolic::SymbolicTensor,
-    symbolica_utils::{IntoArgs, IntoSymbol},
+    tensors::data::{DataTensor, DenseTensor},
+    tensors::parametric::{MixedTensor, ParamTensor, TensorCoefficient},
+    tensors::symbolic::SymbolicTensor,
 };
 use anyhow::Result;
 use symbolica::{atom::Atom, evaluate::FunctionMap};
+
+pub mod symbolica_utils;
 
 /// Trait that enables shadowing of a tensor
 ///
@@ -642,13 +644,14 @@ pub mod test {
             RwLock::new(lib)
         });
 
+    use crate::structure::OrderedStructure;
     use crate::{
         contraction::Contract,
-        parametric::MixedTensor,
         structure::{
             representation::{LibraryRep, RepName, REPS},
             HasStructure, IndexlessNamedStructure, TensorStructure,
         },
+        tensors::parametric::MixedTensor,
     };
 
     #[test]
@@ -667,7 +670,10 @@ pub mod test {
 
             let id = tensor_library.get(&idkey).unwrap().into_owned();
 
-            let trace_structure = vec![rep.new_rep(4).slot(3), rep.new_rep(4).dual().slot(4)];
+            let trace_structure: OrderedStructure = OrderedStructure::from_iter([
+                rep.new_rep(4).slot(3),
+                rep.new_rep(4).dual().slot(4),
+            ]);
             let id1 = id.map_structure(|_| trace_structure.clone());
             let id2 = id1
                 .clone()

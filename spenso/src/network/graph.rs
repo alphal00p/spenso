@@ -1107,8 +1107,9 @@ pub mod test {
     use crate::{
         network::graph::NetworkLeaf,
         structure::{
-            representation::{Euclidean, Lorentz, Minkowski, RepName},
+            representation::{Euclidean, LibraryRep, Lorentz, Minkowski, RepName},
             slot::IsAbstractSlot,
+            OrderedStructure,
         },
     };
 
@@ -1122,28 +1123,34 @@ pub mod test {
         let s = NetworkGraph::scalar(2);
 
         let t = NetworkGraph::<i8>::tensor(
-            &vec![Minkowski {}.new_slot(1, 2), Minkowski {}.new_slot(2, 2)],
+            &OrderedStructure::<LibraryRep>::from_iter([
+                Minkowski {}.new_slot(1, 2),
+                Minkowski {}.new_slot(2, 2),
+            ]),
             NetworkLeaf::LocalTensor(1),
         );
 
         let t2 = NetworkGraph::<i8>::tensor(
-            &vec![Minkowski {}.new_slot(1, 2), Minkowski {}.new_slot(2, 2)],
+            &OrderedStructure::<LibraryRep>::from_iter([
+                Minkowski {}.new_slot(1, 2),
+                Minkowski {}.new_slot(2, 2),
+            ]),
             NetworkLeaf::LocalTensor(2),
         );
 
         let t3 = NetworkGraph::<i8>::tensor(
-            &vec![
+            &OrderedStructure::<LibraryRep>::from_iter([
                 Lorentz {}.new_slot(1, 2).to_lib(),
                 Euclidean {}.new_slot(2, 2).to_lib(),
-            ],
+            ]),
             NetworkLeaf::LocalTensor(2),
         );
 
         let t3b = NetworkGraph::<i8>::tensor(
-            &vec![
+            &OrderedStructure::<LibraryRep>::from_iter([
                 Lorentz {}.dual().new_slot(1, 2).to_lib(),
                 Euclidean {}.new_slot(2, 1).to_lib(),
-            ],
+            ]),
             NetworkLeaf::LocalTensor(2),
         );
         let s2 = NetworkGraph::scalar(3);

@@ -1,0 +1,343 @@
+use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
+use symbolica::{
+    domains::{
+        float::{Complex as SymComplex, NumericalFloatLike, Real, SingleFloat},
+        rational::Rational,
+    },
+    evaluate::CompiledEvaluatorFloat,
+};
+
+use crate::algebra::algebraic_traits::{RefOne, RefZero};
+use rand::Rng;
+
+use super::Complex;
+
+#[cfg(feature = "shadowing")]
+impl<T: SingleFloat> SingleFloat for Complex<T>
+where
+    T: for<'a> RefMul<&'a T, Output = T>
+        + for<'a> RefAdd<&'a T, Output = T>
+        + for<'a> RefSub<&'a T, Output = T>
+        + for<'a> RefDiv<&'a T, Output = T>,
+{
+    fn is_finite(&self) -> bool {
+        self.re.is_finite() && self.im.is_finite()
+    }
+
+    fn is_one(&self) -> bool {
+        self.re.is_one() && self.im.is_zero()
+    }
+
+    fn is_zero(&self) -> bool {
+        self.re.is_zero() && self.im.is_zero()
+    }
+
+    fn from_rational(&self, rat: &Rational) -> Self {
+        Complex {
+            re: self.re.from_rational(rat),
+            im: self.im.zero(),
+        }
+    }
+}
+
+impl<T: NumericalFloatLike> NumericalFloatLike for Complex<T>
+where
+    T: for<'a> RefMul<&'a T, Output = T>
+        + for<'a> RefAdd<&'a T, Output = T>
+        + for<'a> RefSub<&'a T, Output = T>
+        + for<'a> RefDiv<&'a T, Output = T>,
+{
+    #[inline]
+    fn mul_add(&self, a: &Self, b: &Self) -> Self {
+        self.clone() * a + b.clone()
+    }
+
+    #[inline]
+    fn neg(&self) -> Self {
+        Complex {
+            re: -self.re.clone(),
+            im: -self.im.clone(),
+        }
+    }
+
+    #[inline]
+    fn zero(&self) -> Self {
+        Complex {
+            re: self.re.zero(),
+            im: self.im.zero(),
+        }
+    }
+
+    fn new_zero() -> Self {
+        Complex {
+            re: T::new_zero(),
+            im: T::new_zero(),
+        }
+    }
+
+    fn one(&self) -> Self {
+        Complex {
+            re: self.re.one(),
+            im: self.im.zero(),
+        }
+    }
+
+    fn pow(&self, e: u64) -> Self {
+        // TODO: use binary exponentiation
+        let mut r = self.one();
+        for _ in 0..e {
+            r *= self;
+        }
+        r
+    }
+
+    fn inv(&self) -> Self {
+        self.inv()
+    }
+
+    fn from_usize(&self, a: usize) -> Self {
+        Complex {
+            re: self.re.from_usize(a),
+            im: self.im.zero(),
+        }
+    }
+
+    fn from_i64(&self, a: i64) -> Self {
+        Complex {
+            re: self.re.from_i64(a),
+            im: self.im.zero(),
+        }
+    }
+
+    #[inline(always)]
+    fn get_precision(&self) -> u32 {
+        self.re.get_precision().min(self.im.get_precision())
+    }
+
+    #[inline(always)]
+    fn get_epsilon(&self) -> f64 {
+        (2.0f64).powi(-(self.get_precision() as i32))
+    }
+
+    #[inline(always)]
+    fn fixed_precision(&self) -> bool {
+        self.re.fixed_precision() || self.im.fixed_precision()
+    }
+
+    fn sample_unit<R: Rng + ?Sized>(&self, rng: &mut R) -> Self {
+        Complex {
+            re: self.re.sample_unit(rng),
+            im: self.im.zero(),
+        }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<T: Real> Real for Complex<T>
+where
+    T: for<'a> RefMul<&'a T, Output = T>
+        + for<'a> RefAdd<&'a T, Output = T>
+        + for<'a> RefSub<&'a T, Output = T>
+        + for<'a> RefDiv<&'a T, Output = T>
+        + RefOne
+        + RefZero,
+{
+    fn i(&self) -> Option<Self> {
+        Some(Complex {
+            re: self.re.zero(),
+            im: self.re.one(),
+        })
+    }
+    fn e(&self) -> Self {
+        Complex {
+            re: self.re.e(),
+            im: self.im.zero(),
+        }
+    }
+
+    fn pi(&self) -> Self {
+        Complex {
+            re: self.re.pi(),
+            im: self.im.zero(),
+        }
+    }
+
+    fn phi(&self) -> Self {
+        Complex {
+            re: self.re.phi(),
+            im: self.im.zero(),
+        }
+    }
+
+    fn euler(&self) -> Self {
+        Complex {
+            re: self.re.euler(),
+            im: self.im.zero(),
+        }
+    }
+
+    #[inline]
+    fn norm(&self) -> Self {
+        Complex::new(self.norm_squared().sqrt(), self.im.zero())
+    }
+
+    #[inline]
+    fn sqrt(&self) -> Self {
+        let (r, phi) = (self.norm_squared().sqrt(), self.im.atan2(&self.re));
+        let phi = phi.ref_div(&self.re.from_usize(2));
+        let r = r.sqrt();
+        Complex::new(r.ref_mul(&phi.cos()), r.ref_mul(&phi.sin()))
+    }
+
+    #[inline]
+    fn log(&self) -> Self {
+        Complex::new(self.norm_squared().sqrt().log(), self.im.atan2(&self.re))
+    }
+
+    #[inline]
+    fn exp(&self) -> Self {
+        let r = self.re.exp();
+        Complex::new(r.clone() * self.im.cos(), r * self.im.sin())
+    }
+
+    #[inline]
+    fn sin(&self) -> Self {
+        Complex::new(
+            self.re.sin() * self.im.cosh(),
+            self.re.cos() * self.im.sinh(),
+        )
+    }
+
+    #[inline]
+    fn cos(&self) -> Self {
+        Complex::new(
+            self.re.cos() * self.im.cosh(),
+            -self.re.sin() * self.im.sinh(),
+        )
+    }
+
+    #[inline]
+    fn tan(&self) -> Self {
+        let (r, i) = (self.re.clone() + &self.re, self.im.clone() + &self.im);
+        let m = r.cos() + i.cosh();
+        Self::new(r.sin() / &m, i.sinh() / m)
+    }
+
+    #[inline]
+    fn asin(&self) -> Self {
+        let i = self.ref_i();
+        -i.clone() * ((self.one() - self.clone() * self).sqrt() + i * self).log()
+    }
+
+    #[inline]
+    fn acos(&self) -> Self {
+        let i = self.ref_i();
+        -i.clone() * (i * (self.one() - self.clone() * self).sqrt() + self).log()
+    }
+
+    #[inline]
+    fn atan2(&self, x: &Self) -> Self {
+        // TODO: pick proper branch
+        let r = self.clone() / x;
+        let i = self.ref_i();
+        let one = self.one();
+        let two = one.clone() + &one;
+        // TODO: add edge cases
+        ((&one + &i * &r).log() - (&one - &i * r).log()) / (two * i)
+    }
+
+    #[inline]
+    fn sinh(&self) -> Self {
+        Complex::new(
+            self.re.sinh() * self.im.cos(),
+            self.re.cosh() * self.im.sin(),
+        )
+    }
+
+    #[inline]
+    fn cosh(&self) -> Self {
+        Complex::new(
+            self.re.cosh() * self.im.cos(),
+            self.re.sinh() * self.im.sin(),
+        )
+    }
+
+    #[inline]
+    fn tanh(&self) -> Self {
+        let (two_re, two_im) = (self.re.clone() + &self.re, self.im.clone() + &self.im);
+        let m = two_re.cosh() + two_im.cos();
+        Self::new(two_re.sinh() / &m, two_im.sin() / m)
+    }
+
+    #[inline]
+    fn asinh(&self) -> Self {
+        let one = self.one();
+        (self.clone() + (one + self.clone() * self).sqrt()).log()
+    }
+
+    #[inline]
+    fn acosh(&self) -> Self {
+        let one = self.one();
+        let two = one.clone() + &one;
+        &two * (((self.clone() + &one) / &two).sqrt() + ((self.clone() - one) / &two).sqrt()).log()
+    }
+
+    #[inline]
+    fn atanh(&self) -> Self {
+        let one = self.one();
+        let two = one.clone() + &one;
+        // TODO: add edge cases
+        ((&one + self).log() - (one - self).log()) / two
+    }
+
+    #[inline]
+    fn powf(&self, e: &Self) -> Self {
+        if e.re == self.re.zero() && e.im == self.im.zero() {
+            self.one()
+        } else if e.im == self.im.zero() {
+            let (r, phi) = (self.norm_squared().sqrt(), self.im.atan2(&self.re));
+            let r = r.powf(&e.re);
+            let phi = phi * &e.re;
+            Complex::new(r.ref_mul(&phi.cos()), r.ref_mul(&phi.sin()))
+        } else {
+            (e * self.log()).exp()
+        }
+    }
+}
+
+impl<T> CompiledEvaluatorFloat for Complex<T>
+where
+    f64: From<T>,
+    T: From<f64> + Copy,
+{
+    #[allow(clippy::useless_conversion)]
+    fn evaluate(
+        eval: &mut symbolica::evaluate::CompiledEvaluator,
+        args: &[Self],
+        out: &mut [Self],
+    ) {
+        let args: Vec<SymComplex<f64>> = args
+            .iter()
+            .map(|&c| SymComplex {
+                re: c.re.into(),
+                im: c.im.into(),
+            })
+            .collect();
+        let mut castout: Vec<SymComplex<f64>> = out
+            .iter()
+            .map(|&c| SymComplex {
+                re: c.re.into(),
+                im: c.im.into(),
+            })
+            .collect();
+
+        eval.evaluate_complex(&args, &mut castout);
+
+        for (o, &c) in out.iter_mut().zip(castout.iter()) {
+            *o = Complex {
+                re: c.re.into(),
+                im: c.im.into(),
+            };
+        }
+    }
+}

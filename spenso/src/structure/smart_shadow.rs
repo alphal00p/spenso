@@ -1,0 +1,194 @@
+use std::fmt::Display;
+
+use indexmap::IndexMap;
+use linnet::permutation::Permutation;
+
+use delegate::delegate;
+
+use super::{
+    abstract_index::AbstractIndex,
+    dimension::Dimension,
+    representation::{LibraryRep, RepName, Representation},
+    slot::{ConstructibleSlot, DualSlotTo, IsAbstractSlot, Slot},
+    HasName, IndexlessNamedStructure, MergeInfo, NamedStructure, OrderedStructure, ScalarStructure,
+    StructureContract, StructureError, TensorStructure, TracksCount,
+};
+
+use anyhow::{anyhow, Result};
+
+#[cfg(feature = "shadowing")]
+use crate::{
+    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
+    structure::ToSymbolic,
+};
+
+#[cfg(not(feature = "shadowing"))]
+use serde::{Deserialize, Serialize};
+
+/// A structure to enable smart shadowing of tensors in a tensor network contraction algorithm.
+#[derive(
+    Clone, PartialEq, Eq, Debug, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+)]
+#[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+feature = "shadowing",
+trait_decode(trait = symbolica::state::HasStateMap),
+)]
+
+pub struct SmartShadowStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
+    pub structure: OrderedStructure<R>,
+    pub contractions: usize,
+    pub global_name: Option<Name>,
+    additional_args: Option<Args>,
+}
+
+impl<Name, Args, R: RepName> SmartShadowStructure<Name, Args, R> {
+    /// Constructs a new [`SmartShadow`] from a list of tuples of indices and dimension (assumes they are all euclidean), along with a name
+    #[must_use]
+    pub fn from_iter<I, T>(iter: T, name: Option<Name>, args: Option<Args>) -> Self
+    where
+        I: Into<Slot<R>>,
+        T: IntoIterator<Item = I>,
+    {
+        Self {
+            structure: iter.into_iter().map(I::into).collect(),
+            global_name: name,
+            additional_args: args,
+            contractions: 0,
+        }
+    }
+}
+
+impl<N, A, R: RepName> HasName for SmartShadowStructure<N, A, R>
+where
+    N: Clone,
+    A: Clone,
+{
+    type Name = N;
+    type Args = A;
+
+    fn name(&self) -> Option<Self::Name> {
+        self.global_name.clone()
+    }
+    fn set_name(&mut self, name: Self::Name) {
+        self.global_name = Some(name);
+    }
+    fn args(&self) -> Option<Self::Args> {
+        self.additional_args.clone()
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for SmartShadowStructure<N, A, R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(ref name) = self.global_name {
+            write!(f, "{}", name.ref_into_symbol())?
+        }
+        write!(f, "(")?;
+        if let Some(ref args) = self.additional_args {
+            let args: Vec<std::string::String> =
+                args.ref_into_args().map(|s| s.to_string()).collect();
+            write!(f, "{},", args.join(","))?
+        }
+
+        write!(f, "{})", self.structure)?;
+        Result::Ok(())
+    }
+}
+
+impl<N, A, R: RepName> ScalarStructure for SmartShadowStructure<N, A, R> {
+    fn scalar_structure() -> Self {
+        SmartShadowStructure {
+            structure: OrderedStructure::default(),
+            contractions: 0,
+            global_name: None,
+            additional_args: None,
+        }
+    }
+}
+
+impl<N, A, R: RepName<Dual = R>> TensorStructure for SmartShadowStructure<N, A, R> {
+    type Slot = Slot<R>;
+    type Indexed = Self;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+        Ok(Self {
+            contractions: self.contractions,
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+            structure: self.structure.reindex(indices)?,
+        })
+    }
+    // type R = PhysicalReps;
+    //
+    fn dual(self) -> Self {
+        SmartShadowStructure {
+            structure: self.structure.dual(),
+            contractions: self.contractions,
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+        }
+    }
+
+    delegate! {
+        to self.structure{
+           fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
+            fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
+            fn order(&self) -> usize;
+            fn get_slot(&self, i: usize) -> Option<Self::Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_aind(&self,i:usize)->Option<AbstractIndex>;
+            fn get_dim(&self, i: usize) -> Option<Dimension>;
+        }
+    }
+}
+
+impl<N, A, R: RepName> TracksCount for SmartShadowStructure<N, A, R> {
+    fn contractions_num(&self) -> usize {
+        self.contractions
+    }
+}
+
+impl<N, A, R: RepName<Dual = R>> StructureContract for SmartShadowStructure<N, A, R> {
+    fn concat(&mut self, other: Self) {
+        self.structure.concat(other.structure)
+    }
+    fn merge(
+        &self,
+        other: &Self,
+    ) -> Result<(Self, Vec<usize>, Vec<usize>, MergeInfo), StructureError> {
+        let contractions = self.contractions + other.contractions;
+        let (structure, pos_self, pos_other, mergeinfo) = self.structure.merge(&other.structure)?;
+        Ok((
+            Self {
+                contractions,
+                structure,
+                global_name: None,
+                additional_args: None,
+            },
+            pos_self,
+            pos_other,
+            mergeinfo,
+        ))
+    }
+
+    delegate! {
+        to self.structure{
+            fn trace_out(&mut self);
+            fn trace(&mut self, i: usize, j: usize);
+        }
+    }
+}
+
+impl<N, A, R: RepName<Dual = R>> From<NamedStructure<N, A, R>> for SmartShadowStructure<N, A, R> {
+    fn from(value: NamedStructure<N, A, R>) -> Self {
+        Self {
+            structure: value.structure,
+            contractions: 0,
+            global_name: value.global_name,
+            additional_args: value.additional_args,
+        }
+    }
+}

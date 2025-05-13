@@ -27,19 +27,20 @@ use symbolica::{
 };
 
 use crate::{
-    complex::{Complex, RealOrComplexTensor},
-    data::DataTensor,
+    algebra::complex::Complex,
+    algebra::upgrading_arithmetic::TrySmallestUpgrade,
     iterators::IteratableTensor,
-    parametric::{
+    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
+    shadowing::{ShadowMapping, Shadowable},
+    structure::{HasName, TensorStructure, ToSymbolic},
+    tensors::complex::RealOrComplexTensor,
+    tensors::data::DataTensor,
+    tensors::parametric::{
         atomcore::{PatternReplacement, ReplaceBuilderGeneric, TensorAtomMaps, TensorAtomOps},
         AtomViewOrConcrete, CompiledEvalTensor, EvalTensor, EvalTreeTensor, MixedTensor,
         ParamTensor, SerializableCompiledCode, SerializableCompiledEvaluator,
         SerializableExportedCode,
     },
-    shadowing::{ShadowMapping, Shadowable},
-    structure::{HasName, TensorStructure, ToSymbolic},
-    symbolica_utils::{IntoArgs, IntoSymbol},
-    upgrading_arithmetic::TrySmallestUpgrade,
 };
 
 use super::{
@@ -197,7 +198,7 @@ where
     fn replace<'b, Pat: Into<symbolica::utils::BorrowedOrOwned<'b, Pattern>>>(
         &self,
         pattern: Pat,
-    ) -> crate::parametric::atomcore::ReplaceBuilderGeneric<'b, Self::Ref<'_>, Self>
+    ) -> crate::tensors::parametric::atomcore::ReplaceBuilderGeneric<'b, Self::Ref<'_>, Self>
     where
         Self: Sized,
     {

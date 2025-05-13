@@ -1,13 +1,14 @@
 use std::{borrow::Cow, fmt::Display, marker::PhantomData, ops::Neg};
 
 use crate::{
-    complex::{Complex, RealOrComplex, RealOrComplexTensor},
-    data::{DataTensor, DenseTensor, SetTensorData, SparseTensor},
+    algebra::complex::{Complex, RealOrComplex},
     structure::{
         abstract_index::AbstractIndex, concrete_index::ConcreteIndex, dimension::Dimension,
         representation::Representation, slot::IsAbstractSlot, HasStructure, StructureError,
         TensorStructure,
     },
+    tensors::complex::RealOrComplexTensor,
+    tensors::data::{DataTensor, DenseTensor, SetTensorData, SparseTensor},
 };
 
 use anyhow::Result;

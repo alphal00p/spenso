@@ -5,17 +5,16 @@
 
 use std::fmt::Debug;
 
-use bitvec::vec::BitVec;
-use crate::structure::{
-    concrete_index::ConcreteIndex,
-    concrete_index::FlatIndex,
-    dimension::Dimension,
-    representation::RepName,
-    representation::Representation,
-};
-use linnet::permutation::Permutation;
 use super::indices::AbstractFiberIndex;
-use super::traits::{AbstractFiber, FiberIteratorItem, IteratesAlongFibers, IteratesAlongPermutedFibers};
+use super::traits::{
+    AbstractFiber, FiberIteratorItem, IteratesAlongFibers, IteratesAlongPermutedFibers,
+};
+use crate::structure::{
+    concrete_index::ConcreteIndex, concrete_index::FlatIndex, dimension::Dimension,
+    representation::RepName, representation::Representation,
+};
+use bitvec::vec::BitVec;
+use linnet::permutation::Permutation;
 
 /// Represents a single stride and shift for fiber iteration
 ///
@@ -432,6 +431,7 @@ pub struct CoreExpandedFiberIterator<R: RepName> {
 
 impl<R: RepName> CoreExpandedFiberIterator<R> {
     /// Initializes a new expanded fiber iterator
+    /// The fixed indices of the fiber are not taken into account
     fn init_iter<I, J>(fiber: &I, conj: bool, permutation: Option<Permutation>) -> Self
     where
         I: AbstractFiber<J, Repr = R>,

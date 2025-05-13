@@ -8,7 +8,7 @@ use crate::network::library::LibraryTensor;
 use crate::structure::abstract_index::AIND_SYMBOLS;
 // use crate::shadowing::Concretize;
 use crate::structure::slot::{Slot, SlotError};
-use crate::structure::{NamedStructure, StructureError, TensorShell, VecStructure};
+use crate::structure::{NamedStructure, OrderedStructure, StructureError, TensorShell};
 
 use std::fmt::Display;
 
@@ -34,10 +34,10 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
                     structure.push(arg.try_into()?);
                 }
 
-                Ok(VecStructure::from(structure).into())
+                Ok(OrderedStructure::from(structure).into())
             }
             name => {
-                let mut structure: ShadowedStructure = VecStructure::default().into();
+                let mut structure: ShadowedStructure = OrderedStructure::default().into();
                 structure.set_name(name.into());
                 let mut args = vec![];
                 let mut is_structure = Some(SlotError::EmptyStructure);
@@ -209,7 +209,7 @@ pub mod test {
             slot::IsAbstractSlot,
             ToSymbolic,
         },
-        symbolic::SymbolicTensor,
+        tensors::symbolic::SymbolicTensor,
     };
 
     use super::*;

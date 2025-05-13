@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use library::{Library, LibraryError};
 
-use crate::algebraic_traits::{One, Zero};
-use crate::arithmetic::ScalarMul;
+use crate::algebra::algebraic_traits::{One, Zero};
+use crate::algebra::ScalarMul;
 use crate::contraction::Contract;
 use crate::network::library::LibraryTensor;
 // use crate::shadowing::Concretize;

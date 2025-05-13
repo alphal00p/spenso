@@ -1,0 +1,375 @@
+use std::fmt::Display;
+
+use indexmap::IndexMap;
+use linnet::permutation::Permutation;
+
+use super::{
+    abstract_index::AbstractIndex,
+    dimension::Dimension,
+    representation::{LibraryRep, RepName, Representation},
+    slot::{ConstructibleSlot, DualSlotTo, IsAbstractSlot, Slot},
+    HasName, NamedStructure, OrderedStructure, ScalarStructure, SmartShadowStructure,
+    StructureContract, StructureError, TensorStructure,
+};
+
+use anyhow::{anyhow, Result};
+use delegate::delegate;
+
+#[cfg(feature = "shadowing")]
+use crate::{
+    shadowing::symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom, SerializableSymbol},
+    structure::abstract_index::AIND_SYMBOLS,
+    structure::ToSymbolic,
+    tensors::parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
+};
+#[cfg(not(feature = "shadowing"))]
+use serde::{Deserialize, Serialize};
+
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    Debug,
+    Default,
+    Hash,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+)]
+#[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    feature = "shadowing",
+    trait_decode(trait = symbolica::state::HasStateMap),
+)]
+// #[cfg_attr(not(feature = "shadowing"), derive(bincode::Decode))]
+pub struct IndexLess<T: RepName = LibraryRep> {
+    pub structure: Vec<Representation<T>>,
+}
+
+impl<R: RepName> std::fmt::Display for IndexLess<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (index, item) in self.structure.iter().enumerate() {
+            if index != 0 {
+                // To avoid a newline at the start
+                writeln!(f)?;
+            }
+            write!(
+                f,
+                "({})",
+                // IDPRINTER
+                //     .encode_string(usize::from(item.index) as u64)
+                //     .unwrap(),
+                item
+            )?;
+        }
+        Ok(())
+    }
+}
+impl<R: RepName> FromIterator<Representation<R>> for IndexLess<R> {
+    fn from_iter<I: IntoIterator<Item = Representation<R>>>(iter: I) -> Self {
+        IndexLess {
+            structure: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl<R: RepName> From<OrderedStructure<R>> for IndexLess<R> {
+    fn from(structure: OrderedStructure<R>) -> Self {
+        IndexLess {
+            structure: structure.into_iter().map(|a| a.rep).collect(),
+        }
+    }
+}
+
+impl<N, A, R: RepName> From<NamedStructure<N, A, R>> for IndexLess<R> {
+    fn from(structure: NamedStructure<N, A, R>) -> Self {
+        structure.structure.into()
+    }
+}
+
+impl<N, A, R: RepName> From<IndexlessNamedStructure<N, A, R>> for IndexLess<R> {
+    fn from(structure: IndexlessNamedStructure<N, A, R>) -> Self {
+        structure.structure
+    }
+}
+
+impl<N, A, R: RepName> From<SmartShadowStructure<N, A, R>> for IndexLess<R> {
+    fn from(structure: SmartShadowStructure<N, A, R>) -> Self {
+        structure.structure.into()
+    }
+}
+
+impl<T: RepName> IndexLess<T> {
+    pub fn new(structure: Vec<Representation<T>>) -> Self {
+        Self { structure }
+    }
+
+    pub fn empty() -> Self {
+        Self { structure: vec![] }
+    }
+
+    pub fn to_indexed(self, indices: &[AbstractIndex]) -> Result<Vec<Slot<T>>, StructureError> {
+        if self.structure.len() != indices.len() {
+            return Err(StructureError::WrongNumberOfArguments(
+                indices.len(),
+                self.structure.len(),
+            ));
+        }
+
+        Ok(indices
+            .iter()
+            .cloned()
+            .zip(self.structure.iter().cloned())
+            .map(|(i, r)| Representation::slot(&r, i))
+            .collect())
+    }
+}
+
+impl<T: RepName<Dual = T>> ScalarStructure for IndexLess<T> {
+    fn scalar_structure() -> Self {
+        Self::empty()
+    }
+}
+
+impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T> {
+    type Slot = Slot<T>;
+    // type R = T;
+    type Indexed = OrderedStructure<T>;
+
+    fn reindex(self, indices: &[AbstractIndex]) -> Result<OrderedStructure<T>, StructureError> {
+        if self.structure.len() != indices.len() {
+            return Err(StructureError::WrongNumberOfArguments(
+                indices.len(),
+                self.structure.len(),
+            ));
+        }
+
+        Ok(indices
+            .iter()
+            .cloned()
+            .zip(self.structure.iter().cloned())
+            .map(|(i, r)| Representation::slot(&r, i))
+            .collect())
+    }
+    fn dual(self) -> Self {
+        self.structure.into_iter().map(|r| r.dual()).collect()
+    }
+
+    fn external_reps_iter(
+        &self,
+    ) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>> {
+        self.structure.iter().copied()
+    }
+
+    fn external_dims_iter(&self) -> impl Iterator<Item = Dimension> {
+        self.structure.iter().map(|s| s.dim)
+    }
+
+    fn get_aind(&self, _: usize) -> Option<AbstractIndex> {
+        None
+    }
+
+    fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex> {
+        [].iter().cloned()
+    }
+
+    fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot> {
+        [].iter().cloned()
+    }
+
+    fn order(&self) -> usize {
+        self.structure.len()
+    }
+
+    fn get_slot(&self, _: usize) -> Option<Self::Slot> {
+        None
+    }
+
+    fn find_permutation(&self, other: &Self) -> Result<Permutation> {
+        if self.order() != other.order() {
+            return Err(anyhow!(
+                "Mismatched order: {} vs {}",
+                self.order(),
+                other.order()
+            ));
+        }
+        let other_structure = &other.structure;
+        let self_structure = &self.structure;
+
+        let other_sort = Permutation::sort(other_structure);
+        let self_sort = Permutation::sort(self_structure);
+
+        if other_sort.apply_slice(other_structure) == self_sort.apply_slice(self_structure) {
+            Ok(other_sort.compose(&self_sort.inverse()))
+        } else {
+            Err(anyhow!("Mismatched structure"))
+        }
+
+        // let mut index_map = HashMap::new();
+        // for (i, item) in other.structure.iter().enumerate() {
+        //     index_map.entry(item).or_insert_with(Vec::new).push(i);
+        // }
+
+        // let mut permutation = Vec::with_capacity(self.order());
+        // let mut used_indices = HashSet::new();
+        // for item in self.structure.iter() {
+        //     if let Some(indices) = index_map.get_mut(&item) {
+        //         // Find an index that hasn't been used yet
+        //         if let Some(&index) = indices.iter().find(|&&i| !used_indices.contains(&i)) {
+        //             permutation.push(index);
+        //             used_indices.insert(index);
+        //         } else {
+        //             // No available index for this item
+        //             return Err(anyhow!("No available index for {:?}", item));
+        //         }
+        //     } else {
+        //         // Item not found in other
+        //         return Err(anyhow!("Item {:?} not found in other", item));
+        //     }
+        // }
+
+        // Ok(permutation)
+    }
+
+    fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>> {
+        self.structure.get(i).copied()
+    }
+
+    fn get_dim(&self, i: usize) -> Option<Dimension> {
+        self.structure.get(i).map(|&r| r.into())
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {}
+
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    Debug,
+    Default,
+    Hash,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+)]
+#[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    feature = "shadowing",
+    trait_decode(trait = symbolica::state::HasStateMap),
+)]
+pub struct IndexlessNamedStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
+    pub structure: IndexLess<R>,
+    pub global_name: Option<Name>,
+    pub additional_args: Option<Args>,
+}
+impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructure<Name, Args, R> {
+    type Slot = Slot<R>;
+    type Indexed = NamedStructure<Name, Args, R>;
+
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<NamedStructure<Name, Args, R>, StructureError> {
+        Ok(NamedStructure {
+            structure: OrderedStructure::from_iter(self.structure.to_indexed(indices)?),
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+        })
+    }
+
+    fn dual(self) -> Self {
+        Self {
+            structure: self.structure.dual(),
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+        }
+    }
+
+    delegate! {
+        to self.structure{
+            fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+            fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
+            fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
+            fn order(&self) -> usize;
+            fn get_slot(&self, i: usize) -> Option<Self::Slot>;
+            fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
+            fn get_aind(&self,i:usize)->Option<AbstractIndex>;
+            fn get_dim(&self, i: usize) -> Option<Dimension>;
+        }
+    }
+}
+
+impl<Name, Args, R: RepName> IndexlessNamedStructure<Name, Args, R> {
+    #[must_use]
+    pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> Self
+    where
+        I: RepName,
+        R: From<I>,
+        T: IntoIterator<Item = Representation<I>>,
+    {
+        Self {
+            structure: iter.into_iter().map(|a| a.cast()).collect(),
+            global_name: Some(name),
+            additional_args: args,
+        }
+    }
+
+    pub fn to_indexed(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<NamedStructure<Name, Args, R>, StructureError> {
+        Ok(NamedStructure {
+            structure: OrderedStructure::from_iter(self.structure.to_indexed(indices)?),
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+        })
+    }
+}
+
+impl<N, A, R: RepName> HasName for IndexlessNamedStructure<N, A, R>
+where
+    N: Clone,
+    A: Clone,
+{
+    type Name = N;
+    type Args = A;
+
+    fn name(&self) -> Option<Self::Name> {
+        self.global_name.clone()
+    }
+    fn set_name(&mut self, name: Self::Name) {
+        self.global_name = Some(name);
+    }
+    fn args(&self) -> Option<Self::Args> {
+        self.additional_args.clone()
+    }
+}
+
+impl<N, A, R: RepName> From<IndexLess<R>> for IndexlessNamedStructure<N, A, R> {
+    fn from(value: IndexLess<R>) -> Self {
+        IndexlessNamedStructure {
+            structure: value,
+            global_name: None,
+            additional_args: None,
+        }
+    }
+}
+
+#[cfg(feature = "shadowing")]
+impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for IndexlessNamedStructure<N, A, R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(ref name) = self.global_name {
+            write!(f, "{}", name.ref_into_symbol())?;
+        }
+        write!(f, "(")?;
+        if let Some(ref args) = self.additional_args {
+            let args: Vec<std::string::String> =
+                args.ref_into_args().map(|s| s.to_string()).collect();
+            write!(f, "{},", args.join(","))?
+        }
+
+        write!(f, "{})", self.structure)?;
+        Result::Ok(())
+    }
+}

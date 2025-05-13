@@ -11,7 +11,7 @@ use bincode::Encode;
 use symbolica::atom::{Atom, Symbol};
 
 #[cfg(feature = "shadowing")]
-use crate::symbolica_utils::SerializableSymbol;
+use crate::shadowing::symbolica_utils::SerializableSymbol;
 
 /// A Dimension
 #[derive(

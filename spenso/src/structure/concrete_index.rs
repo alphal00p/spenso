@@ -108,15 +108,20 @@ impl From<DualConciousExpandedIndex> for Atom {
     Into,
     Display,
     IntoIterator,
+    Default,
     Encode,
     Decode,
 )]
 #[display(fmt = "{:?}", indices)]
-
 pub struct ExpandedIndex {
     pub indices: Vec<ConcreteIndex>,
 }
 
+impl Extend<ConcreteIndex> for ExpandedIndex {
+    fn extend<T: IntoIterator<Item = ConcreteIndex>>(&mut self, iter: T) {
+        self.indices.extend(iter);
+    }
+}
 impl ExpandedIndex {
     pub fn apply_permutation(&self, permutation: &Permutation) -> Self {
         ExpandedIndex {

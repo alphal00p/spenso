@@ -21,6 +21,7 @@ use super::{
     core_iterators::{CoreExpandedFiberIterator, CoreFlatFiberIterator},
     fiber::{Fiber, FiberClass, FiberClassMut, FiberMut},
     indices::AbstractFiberIndex,
+    traits::ResetableIterator,
     FiberIteratorItem, IteratesAlongFibers, IteratesAlongPermutedFibers,
 };
 
@@ -335,7 +336,7 @@ impl<'b, N: TensorStructure, I: IteratesAlongFibers<<N::Slot as IsAbstractSlot>:
 {
     /// Resets the iterator to its initial state
     pub fn reset(&mut self) {
-        IteratesAlongFibers::<<N::Slot as IsAbstractSlot>::R>::reset(&mut self.class_iter);
+        self.class_iter.reset();
         self.fiber_iter.reset();
         self.fiber_iter.shift(0);
     }

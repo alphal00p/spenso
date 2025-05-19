@@ -8,6 +8,7 @@ use std::fmt::Debug;
 use super::indices::AbstractFiberIndex;
 use super::traits::{
     AbstractFiber, FiberIteratorItem, IteratesAlongFibers, IteratesAlongPermutedFibers,
+    ResetableIterator, ShiftableIterator,
 };
 use crate::structure::{
     concrete_index::ConcreteIndex, concrete_index::FlatIndex, dimension::Dimension,
@@ -18,7 +19,7 @@ use linnet::permutation::Permutation;
 
 /// Represents a single stride and shift for fiber iteration
 ///
-/// Used by `CoreFlatFiberIterator` to efficiently iterate through fibers.
+/// Used by [CoreFlatFiberIterator] to efficiently iterate through fibers.
 #[derive(Debug, Clone, Copy)]
 pub struct SingleStrideShift {
     /// The stride to use for iteration
@@ -270,15 +271,19 @@ impl Iterator for CoreFlatFiberIterator {
     }
 }
 
-impl<R: RepName> IteratesAlongFibers<R> for CoreFlatFiberIterator {
+impl ResetableIterator for CoreFlatFiberIterator {
     fn reset(&mut self) {
         self.varying_fiber_index = 0.into();
     }
+}
 
+impl ShiftableIterator for CoreFlatFiberIterator {
     fn shift(&mut self, shift: usize) {
         self.zero_index = shift.into();
     }
+}
 
+impl<R: RepName> IteratesAlongFibers<R> for CoreFlatFiberIterator {
     fn new<I, J>(fiber: &I, conj: bool) -> Self
     where
         I: AbstractFiber<J, Repr = R>,
@@ -507,6 +512,20 @@ impl<R: RepName> Iterator for CoreExpandedFiberIterator<R> {
     }
 }
 
+impl<R: RepName> ShiftableIterator for CoreExpandedFiberIterator<R> {
+    fn shift(&mut self, shift: usize) {
+        self.zero_index = shift.into();
+    }
+}
+
+impl<R: RepName> ResetableIterator for CoreExpandedFiberIterator<R> {
+    fn reset(&mut self) {
+        self.flat = 0.into();
+        self.exhausted = false;
+        self.varying_fiber_index = vec![0; self.dims.len()];
+    }
+}
+
 impl<R: RepName> IteratesAlongFibers<R> for CoreExpandedFiberIterator<R> {
     fn new<I, J>(fiber: &I, conj: bool) -> Self
     where
@@ -526,16 +545,6 @@ impl<R: RepName> IteratesAlongFibers<R> for CoreExpandedFiberIterator<R> {
             Self::init_iter(fiber, true, None),
             Self::init_iter(fiber, false, None),
         )
-    }
-
-    fn reset(&mut self) {
-        self.flat = 0.into();
-        self.exhausted = false;
-        self.varying_fiber_index = vec![0; self.dims.len()];
-    }
-
-    fn shift(&mut self, shift: usize) {
-        self.zero_index = shift.into();
     }
 }
 
@@ -560,15 +569,19 @@ pub struct MetricFiberIterator<R: RepName> {
     neg: bool,
 }
 
-impl<R: RepName> IteratesAlongFibers<R> for MetricFiberIterator<R> {
+impl<R: RepName> ResetableIterator for MetricFiberIterator<R> {
     fn reset(&mut self) {
         self.iter.reset();
     }
+}
 
+impl<R: RepName> ShiftableIterator for MetricFiberIterator<R> {
     fn shift(&mut self, shift: usize) {
         self.iter.shift(shift);
     }
+}
 
+impl<R: RepName> IteratesAlongFibers<R> for MetricFiberIterator<R> {
     fn new<I, J>(fiber: &I, conj: bool) -> Self
     where
         I: AbstractFiber<J, Repr = R>,

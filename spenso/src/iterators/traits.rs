@@ -3,16 +3,16 @@
 //! This module provides the fundamental traits that define how iterators
 //! operate on tensor data structures.
 
-use bitvec::vec::BitVec;
+use super::fiber::{Fiber, FiberClass, FiberClassMut, FiberMut};
+use super::indices::{AbstractFiberIndex, FiberData};
 use crate::structure::{
     concrete_index::{ExpandedIndex, FlatIndex},
-    HasStructure, TensorStructure,
-    representation::{RepName, Representation},
     dimension::Dimension,
+    representation::{RepName, Representation},
+    HasStructure, TensorStructure,
 };
+use bitvec::vec::BitVec;
 use linnet::permutation::Permutation;
-use super::indices::{AbstractFiberIndex, FiberData};
-use super::fiber::{Fiber, FiberMut, FiberClass, FiberClassMut};
 
 /// Trait for items yielded by fiber iterators
 ///
@@ -21,7 +21,7 @@ use super::fiber::{Fiber, FiberMut, FiberClass, FiberClassMut};
 pub trait FiberIteratorItem {
     /// Additional data carried by the iterator item
     type OtherData;
-    
+
     /// Returns the flat index of the item
     fn flat_idx(&self) -> FlatIndex;
 
@@ -38,14 +38,27 @@ impl FiberIteratorItem for FlatIndex {
     fn other_data(self) -> Self::OtherData {}
 }
 
+pub trait ResetableIterator {
+    /// Reset the iterator to its initial position
+    fn reset(&mut self);
+}
+
+pub trait ShiftableIterator {
+    /// Shift the iterator by the specified amount
+    ///
+    /// # Arguments
+    ///
+    /// * `shift` - The amount to shift by
+    fn shift(&mut self, shift: usize);
+}
+
 /// Trait for iterators that traverse along fibers
 ///
 /// Defines the core operations for iterators that move along tensor fibers,
 /// with support for resetting and creating paired conjugate iterators.
-pub trait IteratesAlongFibers<R: RepName>: Iterator {
-    /// Reset the iterator to its initial position
-    fn reset(&mut self);
-
+pub trait IteratesAlongFibers<R: RepName>:
+    Iterator + ShiftableIterator + ResetableIterator
+{
     /// Create a new iterator from a fiber
     ///
     /// # Arguments
@@ -68,13 +81,6 @@ pub trait IteratesAlongFibers<R: RepName>: Iterator {
         I: AbstractFiber<J, Repr = R>,
         J: AbstractFiberIndex,
         Self: Sized;
-
-    /// Shift the iterator by the specified amount
-    ///
-    /// # Arguments
-    ///
-    /// * `shift` - The amount to shift by
-    fn shift(&mut self, shift: usize);
 }
 
 /// Trait for iterators that traverse permuted fibers
@@ -101,22 +107,22 @@ pub trait IteratesAlongPermutedFibers<R: RepName>: IteratesAlongFibers<R> {
 pub trait AbstractFiber<Out: AbstractFiberIndex>: std::ops::Index<usize, Output = Out> {
     /// Representation type for the fiber
     type Repr: RepName;
-    
+
     /// Returns the strides of the fiber
     fn strides(&self) -> Vec<usize>;
-    
+
     /// Returns the shape of the fiber
     fn shape(&self) -> Vec<Dimension>;
-    
+
     /// Returns the representations of the fiber dimensions
     fn reps(&self) -> Vec<Representation<Self::Repr>>;
-    
+
     /// Returns the order (number of dimensions) of the fiber
     fn order(&self) -> usize;
-    
+
     /// Returns the single varying dimension if there is one
     fn single(&self) -> Option<usize>;
-    
+
     /// Returns a bitvector indicating free (true) and fixed (false) dimensions
     fn bitvec(&self) -> BitVec;
 }
@@ -126,7 +132,9 @@ pub trait AbstractFiber<Out: AbstractFiberIndex>: std::ops::Index<usize, Output 
 /// Defines the interface for tensor types that support various forms of iteration.
 pub trait IteratableTensor: HasStructure + Sized + TensorStructure {
     /// Type of data yielded by iterators over this tensor
-    type Data<'a> where Self: 'a;
+    type Data<'a>
+    where
+        Self: 'a;
 
     /// Returns an iterator over expanded indices and data
     fn iter_expanded(&self) -> impl Iterator<Item = (ExpandedIndex, Self::Data<'_>)>;

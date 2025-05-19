@@ -3,9 +3,10 @@
 //! This module provides the core abstractions for tensor indices and fibers,
 //! which are used to navigate tensor data structures efficiently.
 
-use std::fmt::{Debug, Display};
-use serde::{Deserialize, Serialize};
 use crate::structure::concrete_index::FlatIndex;
+use bitvec::vec::BitVec;
+use serde::{Deserialize, Serialize};
+use std::fmt::{Debug, Display};
 
 /// Abstract trait for fiber indices
 ///
@@ -88,6 +89,8 @@ pub enum FiberData<'a> {
     Pos(&'a [isize]),
     /// Integer filter where non-zero values indicate free indices
     IntFilter(&'a [u8]),
+    /// A bitvec filter where true indicates free indices
+    BitVec(&'a BitVec),
 }
 
 impl From<usize> for FiberData<'_> {
@@ -99,6 +102,12 @@ impl From<usize> for FiberData<'_> {
 impl<'a> From<&'a [bool]> for FiberData<'a> {
     fn from(value: &'a [bool]) -> Self {
         Self::BoolFilter(value)
+    }
+}
+
+impl<'a> From<&'a BitVec> for FiberData<'a> {
+    fn from(value: &'a BitVec) -> Self {
+        Self::BitVec(value)
     }
 }
 

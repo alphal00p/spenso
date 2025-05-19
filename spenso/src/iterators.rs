@@ -38,7 +38,8 @@ pub use tensor_iterators::{
     SparseTensorLinearIterator, SparseTensorTraceIterator, TensorStructureIndexIterator,
 };
 pub use traits::{
-    AbstractFiber, FiberIteratorItem, IteratableTensor, IteratesAlongFibers, IteratesAlongPermutedFibers,
+    AbstractFiber, FiberIteratorItem, IteratableTensor, IteratesAlongFibers,
+    IteratesAlongPermutedFibers, ResetableIterator, ShiftableIterator,
 };
 
 // Re-export helper types

@@ -3,10 +3,18 @@ use std::collections::HashMap;
 // use num::Zero;
 
 use crate::{
-    algebra::algebraic_traits::{IsZero, RefZero},
-    algebra::upgrading_arithmetic::{FallibleAddAssign, FallibleSubAssign, TrySmallestUpgrade},
-    iterators::IteratableTensor,
-    structure::{slot::IsAbstractSlot, StructureContract, TensorStructure},
+    algebra::{
+        algebraic_traits::{IsZero, RefZero},
+        upgrading_arithmetic::{FallibleAddAssign, FallibleSubAssign, TrySmallestUpgrade},
+    },
+    iterators::{
+        CoreFlatFiberIterator, Fiber, FiberData, IteratableTensor, IteratesAlongFibers,
+        ResetableIterator, ShiftableIterator,
+    },
+    structure::{
+        concrete_index::ExpandedIndex, slot::IsAbstractSlot, HasStructure, StructureContract,
+        TensorStructure,
+    },
     tensors::data::{DataIterator, DenseTensor, SparseTensor},
 };
 
@@ -196,7 +204,6 @@ where
     fn single_contract(
         &self,
         other: &SparseTensor<T, I>,
-
         final_structure: I,
         i: usize,
         j: usize,
@@ -290,7 +297,56 @@ where
         i: usize,
         j: usize,
     ) -> Result<Self::LCM, ContractionError> {
-        todo!()
+        let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
+        let mut result_data = vec![zero.clone(); resulting_structure.size()?];
+
+        let self_fiber_class = Fiber::from(&resulting_partition, &resulting_structure);
+        let (mut self_fiber_class_iter, mut other_fiber_class_iter) =
+            CoreFlatFiberIterator::new_paired_conjugates(&self_fiber_class);
+
+        let mut iter_self = self.fiber(FiberData::from(i)).iter();
+        let mut iter_other = other.fiber(FiberData::from(j)).iter();
+
+        let fiber_representation = self.reps()[i];
+        let fiber_dim: usize = fiber_representation.dim.try_into()?;
+
+        for mut fiber_class_a_id in self_fiber_class_iter.by_ref() {
+            for fiber_class_b_id in other_fiber_class_iter.by_ref() {
+                let result_index = fiber_class_a_id + fiber_class_b_id;
+                let ((_, expa), (_, expb)): ((Vec<_>, ExpandedIndex), (Vec<_>, ExpandedIndex)) =
+                    resulting_structure
+                        .expanded_index(result_index)?
+                        .into_iter()
+                        .enumerate()
+                        .partition(|(i, a)| resulting_partition[*i]);
+
+                let shift_a = self.structure().flat_index(expa).unwrap();
+                let shift_b = other.structure().flat_index(expb).unwrap();
+
+                iter_self.shift(shift_a.into());
+                iter_other.shift(shift_b.into());
+
+                for (k, ((a, _), (b, _))) in
+                    (iter_self.by_ref()).zip(iter_other.by_ref()).enumerate()
+                {
+                    if fiber_representation.is_neg(k) {
+                        result_data[usize::from(result_index)]
+                            .sub_assign_fallible(&(a.mul_fallible(b).unwrap()));
+                    } else {
+                        result_data[usize::from(result_index)]
+                            .add_assign_fallible(&a.mul_fallible(b).unwrap());
+                    }
+                }
+            }
+            other_fiber_class_iter.reset();
+        }
+        let result = DenseTensor {
+            data: result_data,
+            structure: resulting_structure,
+        };
+
+        Ok(result)
+        // todo!()
     }
 }
 

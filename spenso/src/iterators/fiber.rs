@@ -3,7 +3,7 @@
 //! This module contains implementations of fiber types that represent fixed and free
 //! tensor dimensions, enabling efficient iteration through tensor elements.
 
-use bitvec::vec::BitVec;
+use bitvec::{slice::BitSlice, vec::BitVec};
 use std::{
     fmt::{Debug, Display},
     ops::Index,
@@ -41,6 +41,7 @@ impl BareFiber {
         match data {
             FiberData::Flat(i) => Self::from_flat(i, structure),
             FiberData::BoolFilter(b) => Self::from_filter(b),
+            FiberData::BitVec(b) => Self::from_bitvec(b),
             FiberData::Single(i) => {
                 let mut out = Self::zeros(structure);
                 out.free(i);
@@ -98,6 +99,29 @@ impl BareFiber {
     ///
     /// * `filter` - A slice of booleans where true indicates a free index
     pub fn from_filter(filter: &[bool]) -> BareFiber {
+        let mut f = BareFiber {
+            indices: filter
+                .iter()
+                .map(|i| {
+                    if *i {
+                        FiberIndex::Free
+                    } else {
+                        FiberIndex::Fixed(0)
+                    }
+                })
+                .collect(),
+            is_single: FiberIndex::Free,
+        };
+        f.is_single();
+        f
+    }
+
+    /// Creates a bare fiber from a boolean filter
+    ///
+    /// # Arguments
+    ///
+    /// * `filter` - A slice of booleans where true indicates a free index
+    pub fn from_bitvec(filter: &BitVec) -> BareFiber {
         let mut f = BareFiber {
             indices: filter
                 .iter()
@@ -298,9 +322,9 @@ where
     }
 
     /// Creates a fiber from data and a tensor structure
-    pub fn from<'b>(data: FiberData<'b>, structure: &'a S) -> Self {
+    pub fn from<'b>(data: impl Into<FiberData<'b>>, structure: &'a S) -> Self {
         Fiber {
-            bare_fiber: BareFiber::from(data, structure),
+            bare_fiber: BareFiber::from(data.into(), structure),
             structure,
         }
     }

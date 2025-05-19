@@ -2,11 +2,16 @@ use bitvec::vec::BitVec;
 use log::trace;
 
 use crate::{
-    algebra::algebraic_traits::{IsZero, RefZero},
-    algebra::upgrading_arithmetic::{
-        FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade,
+    algebra::{
+        algebraic_traits::{IsZero, RefZero},
+        upgrading_arithmetic::{
+            FallibleAddAssign, FallibleMul, FallibleSubAssign, TrySmallestUpgrade,
+        },
     },
-    structure::{HasStructure, MergeInfo, StructureContract, StructureError, TensorStructure},
+    structure::{
+        dimension::DimensionError, HasStructure, MergeInfo, StructureContract, StructureError,
+        TensorStructure,
+    },
     tensors::data::{DataTensor, NumTensor},
 };
 
@@ -18,6 +23,8 @@ pub enum ContractionError {
     EmptySparse,
     #[error("Structure Error:{0}")]
     StructureError(#[from] StructureError),
+    #[error("Dimension Error:{0}")]
+    DimensionError(#[from] DimensionError),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

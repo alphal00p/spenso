@@ -4,7 +4,8 @@
 
 use crate::iterators::{
     CoreExpandedFiberIterator, CoreFlatFiberIterator, Fiber, IteratesAlongFibers,
-    IteratesAlongPermutedFibers, MetricFiberIterator, MetricItem,
+    IteratesAlongPermutedFibers, MetricFiberIterator, MetricItem, ResetableIterator,
+    ShiftableIterator,
 };
 use crate::structure::representation::RepName;
 use crate::structure::{concrete_index::FlatIndex, representation::Euclidean, OrderedStructure};

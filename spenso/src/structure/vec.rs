@@ -308,10 +308,7 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
             .collect();
     }
 
-    fn merge(
-        &self,
-        other: &Self,
-    ) -> Result<(Self, Vec<usize>, Vec<usize>, MergeInfo), StructureError> {
+    fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError> {
         let (structure, pos_self, pos_other, mergeinfo) = self
             .structure
             .merge_ordered_ref_with_common_indices(&other.structure)?;

@@ -1,11 +1,17 @@
+use bitvec::vec::BitVec;
 use log::trace;
 use std::collections::HashMap;
 // use num::Zero;
 use crate::{
-    algebra::algebraic_traits::{IsZero, RefZero},
-    algebra::upgrading_arithmetic::{FallibleAddAssign, FallibleSubAssign, TrySmallestUpgrade},
-    iterators::IteratableTensor,
-    structure::{HasStructure, StructureContract, TensorStructure},
+    algebra::{
+        algebraic_traits::{IsZero, RefZero},
+        upgrading_arithmetic::{FallibleAddAssign, FallibleSubAssign, TrySmallestUpgrade},
+    },
+    iterators::{
+        CoreFlatFiberIterator, Fiber, FiberData, IteratableTensor, IteratesAlongFibers,
+        ResetableIterator,
+    },
+    structure::{concrete_index::ExpandedIndex, HasStructure, StructureContract, TensorStructure},
     tensors::data::{DataIterator, DenseTensor, SparseTensor},
 };
 
@@ -294,10 +300,64 @@ where
     fn multi_contract_interleaved(
         &self,
         other: &DenseTensor<T, I>,
+        pos_self: BitVec,
+        pos_other: BitVec,
         resulting_structure: <Self::LCM as HasStructure>::Structure,
         resulting_partition: bitvec::prelude::BitVec,
     ) -> Result<Self::LCM, ContractionError> {
-        todo!()
+        // Assume we're contracting the first positions for now - this needs to be updated
+        let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
+
+        // Initialize result tensor with default values
+        let mut result_data = vec![zero.clone(); resulting_structure.size()?];
+
+        let self_fiber_class = Fiber::from(&resulting_partition, &resulting_structure); //We use the partition as a filter here, for indices that belong to self, vs those that belong to other
+        let (mut self_fiber_class_iter, mut other_fiber_class_iter) =
+            CoreFlatFiberIterator::new_paired_conjugates(&self_fiber_class); // these are iterators over the open indices of self and other, except expressed in the flat indices of the resulting structure
+
+        let mut iter_self = self.fiber(FiberData::from(&pos_self)).iter_metric(); //The summed over index comes from the actual self structure (and is a single index)
+        let mut iter_other = other.fiber(FiberData::from(&pos_other)).iter(); // same for other
+
+        //We first iterate over the free indices (self_fiber_class)
+        for fiber_class_a_id in self_fiber_class_iter.by_ref() {
+            for fiber_class_b_id in other_fiber_class_iter.by_ref() {
+                // This is the index in the resulting structure for these two class indices
+                let result_index = fiber_class_a_id + fiber_class_b_id;
+
+                //To obtain the corresponding flat indices for the self and other we partition the expanded index
+                let ((_, expa), (_, expb)): ((Vec<_>, ExpandedIndex), (Vec<_>, ExpandedIndex)) =
+                    resulting_structure
+                        .expanded_index(result_index)?
+                        .into_iter()
+                        .enumerate()
+                        .partition(|(i, _)| resulting_partition[*i]);
+
+                // And now we flatten
+                let shift_a = self.structure().flat_index(expa).unwrap();
+                let shift_b = other.structure().flat_index(expb).unwrap();
+
+                // we shift the fiber start by the flattened indices. This also resets the iterator
+                iter_self.shift(shift_a.into());
+                iter_other.shift(shift_b.into());
+
+                for ((a, (neg, _)), (b, _)) in (iter_self.by_ref()).zip(iter_other.by_ref()) {
+                    if neg {
+                        result_data[usize::from(result_index)]
+                            .sub_assign_fallible(&(a.mul_fallible(b).unwrap()));
+                    } else {
+                        result_data[usize::from(result_index)]
+                            .add_assign_fallible(&a.mul_fallible(b).unwrap());
+                    }
+                }
+            }
+            other_fiber_class_iter.reset();
+        }
+        let result = DenseTensor {
+            data: result_data,
+            structure: resulting_structure,
+        };
+
+        Ok(result)
     }
 }
 
@@ -314,10 +374,70 @@ where
     fn multi_contract_interleaved(
         &self,
         other: &DenseTensor<T, I>,
+        pos_self: BitVec,
+        pos_other: BitVec,
         resulting_structure: <Self::LCM as HasStructure>::Structure,
         resulting_partition: bitvec::prelude::BitVec,
     ) -> Result<Self::LCM, ContractionError> {
-        todo!()
+        let zero = if let Some((_, s)) = self.flat_iter().next() {
+            s.try_upgrade().unwrap().as_ref().ref_zero()
+        } else if let Some((_, o)) = other.iter_flat().next() {
+            o.try_upgrade().unwrap().as_ref().ref_zero()
+        } else {
+            return Err(ContractionError::EmptySparse);
+        };
+
+        let mut result_data = vec![zero.clone(); resulting_structure.size()?];
+
+        let self_fiber_class = Fiber::from(&resulting_partition, &resulting_structure); //We use the partition as a filter here, for indices that belong to self, vs those that belong to other
+        let (mut self_fiber_class_iter, mut other_fiber_class_iter) =
+            CoreFlatFiberIterator::new_paired_conjugates(&self_fiber_class); // these are iterators over the open indices of self and other, except expressed in the flat indices of the resulting structure
+        let mut iter_self = self.fiber(FiberData::from(&pos_self)).iter_metric(); //The summed over index comes from the actual self structure (and is a single index)
+        let mut iter_other = other.fiber(FiberData::from(&pos_other)).iter(); // same for other
+
+        //We first iterate over the free indices (self_fiber_class)
+        for fiber_class_a_id in self_fiber_class_iter.by_ref() {
+            for fiber_class_b_id in other_fiber_class_iter.by_ref() {
+                // This is the index in the resulting structure for these two class indices
+                let result_index = fiber_class_a_id + fiber_class_b_id;
+
+                //To obtain the corresponding flat indices for the self and other we partition the expanded index
+                let ((_, expa), (_, expb)): ((Vec<_>, ExpandedIndex), (Vec<_>, ExpandedIndex)) =
+                    resulting_structure
+                        .expanded_index(result_index)?
+                        .into_iter()
+                        .enumerate()
+                        .partition(|(i, _)| resulting_partition[*i]);
+
+                // And now we flatten
+                let shift_a = self.structure().flat_index(expa).unwrap();
+                let shift_b = other.structure().flat_index(expb).unwrap();
+
+                // we shift the fiber start by the flattened indices. This also resets the iterator
+                iter_self.shift(shift_a.into());
+                iter_other.shift(shift_b.into());
+
+                for (a, skip, (neg, _)) in iter_self.by_ref() {
+                    if let Some((b, _)) = iter_other.by_ref().nth(skip) {
+                        if neg {
+                            result_data[usize::from(result_index)]
+                                .sub_assign_fallible(&a.mul_fallible(b).unwrap());
+                        } else {
+                            result_data[usize::from(result_index)]
+                                .add_assign_fallible(&a.mul_fallible(b).unwrap());
+                        }
+                    }
+                }
+            }
+            other_fiber_class_iter.reset();
+        }
+
+        let result = DenseTensor {
+            data: result_data,
+            structure: resulting_structure,
+        };
+
+        Ok(result)
     }
 }
 
@@ -334,10 +454,64 @@ where
     fn multi_contract_interleaved(
         &self,
         other: &SparseTensor<T, I>,
+        pos_self: BitVec,
+        pos_other: BitVec,
         resulting_structure: <Self::LCM as HasStructure>::Structure,
         resulting_partition: bitvec::prelude::BitVec,
     ) -> Result<Self::LCM, ContractionError> {
-        todo!()
+        let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
+        let mut result_data = vec![zero.clone(); resulting_structure.size()?];
+
+        let self_fiber_class = Fiber::from(&resulting_partition, &resulting_structure); //We use the partition as a filter here, for indices that belong to self, vs those that belong to other
+        let (mut self_fiber_class_iter, mut other_fiber_class_iter) =
+            CoreFlatFiberIterator::new_paired_conjugates(&self_fiber_class); // these are iterators over the open indices of self and other, except expressed in the flat indices of the resulting structure
+
+        let mut iter_self = self.fiber(FiberData::from(&pos_self)).iter_metric(); //The summed over index comes from the actual self structure (and is a single index)
+        let mut iter_other = other.fiber(FiberData::from(&pos_other)).iter(); // same for other
+
+        //We first iterate over the free indices (self_fiber_class)
+        for fiber_class_a_id in self_fiber_class_iter.by_ref() {
+            for fiber_class_b_id in other_fiber_class_iter.by_ref() {
+                // This is the index in the resulting structure for these two class indices
+                let result_index = fiber_class_a_id + fiber_class_b_id;
+
+                //To obtain the corresponding flat indices for the self and other we partition the expanded index
+                let ((_, expa), (_, expb)): ((Vec<_>, ExpandedIndex), (Vec<_>, ExpandedIndex)) =
+                    resulting_structure
+                        .expanded_index(result_index)?
+                        .into_iter()
+                        .enumerate()
+                        .partition(|(i, _)| resulting_partition[*i]);
+
+                // And now we flatten
+                let shift_a = self.structure().flat_index(expa).unwrap();
+                let shift_b = other.structure().flat_index(expb).unwrap();
+
+                // we shift the fiber start by the flattened indices. This also resets the iterator
+                iter_self.shift(shift_a.into());
+                iter_other.shift(shift_b.into());
+
+                for (b, skip, _) in iter_other.by_ref() {
+                    if let Some((a, (neg, _))) = iter_self.by_ref().nth(skip) {
+                        if neg {
+                            result_data[usize::from(result_index)]
+                                .sub_assign_fallible(&a.mul_fallible(b).unwrap());
+                        } else {
+                            result_data[usize::from(result_index)]
+                                .add_assign_fallible(&a.mul_fallible(b).unwrap());
+                        }
+                    }
+                }
+            }
+            other_fiber_class_iter.reset();
+        }
+
+        let result = DenseTensor {
+            data: result_data,
+            structure: resulting_structure,
+        };
+
+        Ok(result)
     }
 }
 
@@ -354,9 +528,99 @@ where
     fn multi_contract_interleaved(
         &self,
         other: &SparseTensor<T, I>,
+        pos_self: BitVec,
+        pos_other: BitVec,
         resulting_structure: <Self::LCM as HasStructure>::Structure,
         resulting_partition: bitvec::prelude::BitVec,
     ) -> Result<Self::LCM, ContractionError> {
-        todo!()
+        let mut result_data = HashMap::default();
+        if let Some((_, s)) = self.flat_iter().next() {
+            let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
+
+            let self_fiber_class = Fiber::from(&resulting_partition, &resulting_structure); //We use the partition as a filter here, for indices that belong to self, vs those that belong to other
+            let (mut self_fiber_class_iter, mut other_fiber_class_iter) =
+                CoreFlatFiberIterator::new_paired_conjugates(&self_fiber_class); // these are iterators over the open indices of self and other, except expressed in the flat indices of the resulting structure
+
+            let mut iter_self = self.fiber(FiberData::from(&pos_self)).iter_metric(); //The summed over index comes from the actual self structure (and is a single index)
+            let mut iter_other = other.fiber(FiberData::from(&pos_other)).iter(); // same for other
+
+            //We first iterate over the free indices (self_fiber_class)
+            for fiber_class_a_id in self_fiber_class_iter.by_ref() {
+                for fiber_class_b_id in other_fiber_class_iter.by_ref() {
+                    // This is the index in the resulting structure for these two class indices
+                    let result_index = fiber_class_a_id + fiber_class_b_id;
+
+                    //To obtain the corresponding flat indices for the self and other we partition the expanded index
+                    let ((_, expa), (_, expb)): ((Vec<_>, ExpandedIndex), (Vec<_>, ExpandedIndex)) =
+                        resulting_structure
+                            .expanded_index(result_index)?
+                            .into_iter()
+                            .enumerate()
+                            .partition(|(i, _)| resulting_partition[*i]);
+
+                    // And now we flatten
+                    let shift_a = self.structure().flat_index(expa).unwrap();
+                    let shift_b = other.structure().flat_index(expb).unwrap();
+
+                    // we shift the fiber start by the flattened indices. This also resets the iterator
+                    iter_self.shift(shift_a.into());
+                    iter_other.shift(shift_b.into());
+
+                    let mut items = iter_self
+                        .next()
+                        .map(|(a, skip, (neg, _))| (a, skip, neg))
+                        .zip(iter_other.next().map(|(b, skip, _)| (b, skip)));
+
+                    let mut value = zero.clone();
+                    let mut nonzero = false;
+
+                    while let Some(((a, skip_a, neg), (b, skip_b))) = items {
+                        if skip_a > skip_b {
+                            //Advance iter_other
+                            let b = iter_other
+                                .by_ref()
+                                .next()
+                                .map(|(b, skip, _)| (b, skip + skip_b + 1));
+                            items = Some((a, skip_a, neg)).zip(b);
+                        } else if skip_b > skip_a {
+                            //Advance iter_self
+                            let a = iter_self
+                                .by_ref()
+                                .next()
+                                .map(|(a, skip, (neg, _))| (a, skip + skip_a + 1, neg));
+                            items = a.zip(Some((b, skip_b)));
+                        } else {
+                            // skip_a == skip_b
+                            if neg {
+                                value.sub_assign_fallible(&a.mul_fallible(b).unwrap());
+                            } else {
+                                value.add_assign_fallible(&a.mul_fallible(b).unwrap());
+                            }
+                            let b = iter_other
+                                .by_ref()
+                                .next()
+                                .map(|(b, skip, _)| (b, skip + skip_b + 1));
+                            let a = iter_self
+                                .by_ref()
+                                .next()
+                                .map(|(a, skip, (neg, _))| (a, skip + skip_a + 1, neg));
+                            items = a.zip(b);
+                            nonzero = true;
+                        }
+                    }
+
+                    if nonzero && !value.is_zero() {
+                        result_data.insert(result_index.into(), value);
+                    }
+                }
+                other_fiber_class_iter.reset();
+            }
+        }
+        let result = SparseTensor {
+            elements: result_data,
+            structure: resulting_structure,
+        };
+
+        Ok(result)
     }
 }

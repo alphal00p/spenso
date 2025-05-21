@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = [ "bitvec_test",
     "spenso",
     "spenso-macros"
 ]

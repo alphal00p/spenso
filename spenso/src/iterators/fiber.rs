@@ -309,6 +309,17 @@ where
         super::fiber_iterators::FiberIterator::new_permuted(self, permutation, false)
     }
 
+    /// Creates a metric iterator over the fiber
+    pub fn iter_metric(
+        self,
+    ) -> super::fiber_iterators::FiberIterator<
+        'a,
+        S,
+        super::core_iterators::MetricFiberIterator<<S::Slot as IsAbstractSlot>::R>,
+    > {
+        super::fiber_iterators::FiberIterator::new(self, false)
+    }
+
     /// Creates a permuted metric iterator over the fiber
     pub fn iter_perm_metric(
         self,

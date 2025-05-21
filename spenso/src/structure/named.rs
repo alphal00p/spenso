@@ -11,6 +11,7 @@ use super::{
     HasName, IndexlessNamedStructure, MergeInfo, OrderedStructure, ScalarStructure,
     SmartShadowStructure, StructureContract, StructureError, TensorStructure,
 };
+use bitvec::{order::Lsb0, vec::BitVec};
 
 use anyhow::{anyhow, Result};
 use delegate::delegate;
@@ -266,10 +267,7 @@ impl<N, A, R: RepName<Dual = R>> StructureContract for NamedStructure<N, A, R> {
         self.structure.concat(other.structure)
     }
 
-    fn merge(
-        &self,
-        other: &Self,
-    ) -> Result<(Self, Vec<usize>, Vec<usize>, MergeInfo), StructureError> {
+    fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError> {
         let (structure, pos_self, pos_other, mergeinfo) = self.structure.merge(&other.structure)?;
         Ok((
             Self {

@@ -639,10 +639,7 @@ pub trait StructureContract: Sized {
     ///
     /// Otherwise returns a new structure without any common indices, the positions of the common indices self, and the positions in other, along with a MergeInfo specifying whether the merger is clean or not.
     ///
-    fn merge(
-        &self,
-        other: &Self,
-    ) -> Result<(Self, Vec<usize>, Vec<usize>, MergeInfo), StructureError>;
+    fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError>;
 
     fn concat(&mut self, other: Self);
 

@@ -52,11 +52,15 @@ pub trait MergeOrdered<T>: Sized {
     fn merge_ordered_ref_with_common_removal(&self, other: &Self) -> (Self, Vec<T>, MergeInfo)
     where
         T: Ord + Clone;
-        
+
     /// Merges self with another vector, separating common items.
-    /// Returns: (merged_non_common_items, Vec<usize> of indices in first vec, Vec<usize> of indices in second vec, merge_info_for_non_common)
+    /// Returns: (merged_non_common_items, BitVec with bits set for common indices in first vec, BitVec with bits set for common indices in second vec, merge_info_for_non_common)
+    /// Returns: (merged_non_common_items, BitVec with bits set for common indices in first vec, BitVec with bits set for common indices in second vec, merge_info_for_non_common)
     /// Errors if either self or other contain duplicates.
-    fn merge_ordered_ref_with_common_indices(&self, other: &Self) -> Result<(Self, Vec<usize>, Vec<usize>, MergeInfo), DuplicateItemError>
+    fn merge_ordered_ref_with_common_indices(
+        &self,
+        other: &Self,
+    ) -> Result<(Self, BitVec, BitVec, MergeInfo), DuplicateItemError>
     where
         T: Ord + Clone;
 
@@ -495,23 +499,26 @@ impl<T: Ord + Clone> MergeOrdered<T> for Vec<T> {
             }
         }
     }
-    
-    fn merge_ordered_ref_with_common_indices(&self, other: &Self) -> Result<(Self, Vec<usize>, Vec<usize>, MergeInfo), DuplicateItemError>
+
+    fn merge_ordered_ref_with_common_indices(
+        &self,
+        other: &Self,
+    ) -> Result<(Self, BitVec, BitVec, MergeInfo), DuplicateItemError>
     where
         T: Ord + Clone,
     {
         // Check for duplicates in self
         for i in 1..self.len() {
-            if self[i-1] == self[i] {
+            if self[i - 1] == self[i] {
                 return Err(DuplicateItemError {
                     message: format!("Duplicate item found in first vector at index {}", i),
                 });
             }
         }
-        
+
         // Check for duplicates in other
         for j in 1..other.len() {
-            if other[j-1] == other[j] {
+            if other[j - 1] == other[j] {
                 return Err(DuplicateItemError {
                     message: format!("Duplicate item found in second vector at index {}", j),
                 });
@@ -528,8 +535,10 @@ impl<T: Ord + Clone> MergeOrdered<T> for Vec<T> {
         );
 
         let mut result_non_common = Vec::with_capacity(self.len() + other.len());
-        let mut common_indices_self = Vec::new(); // Will hold indices of common elements in self
-        let mut common_indices_other = Vec::new(); // Will hold indices of common elements in other
+        let mut common_indices_self = BitVec::with_capacity(self.len()); // BitVec for common elements in self
+        common_indices_self.resize(self.len(), false);
+        let mut common_indices_other = BitVec::with_capacity(other.len()); // BitVec for common elements in other
+        common_indices_other.resize(other.len(), false);
 
         if self.is_empty() || other.is_empty() {
             // If either is empty, there are no common elements
@@ -574,8 +583,8 @@ impl<T: Ord + Clone> MergeOrdered<T> for Vec<T> {
         let complete_merge = |current_i: &mut usize,
                               current_j: &mut usize,
                               res: &mut Vec<T>,
-                              common_idx_self: &mut Vec<usize>,
-                              common_idx_other: &mut Vec<usize>,
+                              common_idx_self: &mut BitVec,
+                              common_idx_other: &mut BitVec,
                               part: &mut BitVec,
                               s_vec: &Self,
                               o_vec: &Self| {
@@ -588,9 +597,10 @@ impl<T: Ord + Clone> MergeOrdered<T> for Vec<T> {
                     res.push(o_vec[*current_j].clone());
                     part.push(false);
                     *current_j += 1;
-                } else { // Common item found
-                    common_idx_self.push(*current_i); // Store index in first vector
-                    common_idx_other.push(*current_j); // Store index in second vector
+                } else {
+                    // Common item found
+                    common_idx_self.set(*current_i, true); // Set bit for index in first vector
+                    common_idx_other.set(*current_j, true); // Set bit for index in second vector
                     *current_i += 1;
                     *current_j += 1;
                 }
@@ -626,9 +636,10 @@ impl<T: Ord + Clone> MergeOrdered<T> for Vec<T> {
                     &mut last_added_to_result_from_self_val,
                     &mut transitions,
                 );
-            } else { // Common item
-                common_indices_self.push(i); // Store index in first vector
-                common_indices_other.push(j); // Store index in second vector
+            } else {
+                // Common item
+                common_indices_self.set(i, true); // Set bit for index in first vector
+                common_indices_other.set(j, true); // Set bit for index in second vector
                 i += 1;
                 j += 1;
                 continue; // Skip transition check for common items since they're not added to result_non_common
@@ -742,7 +753,7 @@ impl<T: Ord + Clone> MergeOrdered<T> for Vec<T> {
 mod tests {
     use super::*;
     use bitvec::prelude::*;
-    
+
     // Tests for merge_ordered_ref_with_common_indices
     #[test]
     fn test_merge_with_indices_no_common() {
@@ -752,11 +763,22 @@ mod tests {
         assert!(result.is_ok());
         let (res, common_indices_a, common_indices_b, info) = result.unwrap();
         assert_eq!(res, vec![1, 2, 3, 4, 5, 6]);
-        assert!(common_indices_a.is_empty());
-        assert!(common_indices_b.is_empty());
-        assert_eq!(info, MergeInfo::Interleaved(bitvec![1, 0, 1, 0, 1, 0]));
+        let mut expected_a: BitVec = BitVec::with_capacity(3);
+        expected_a.resize(3, false);
+        let mut expected_b: BitVec = BitVec::with_capacity(3);
+        expected_b.resize(3, false);
+        assert_eq!(common_indices_a, expected_a);
+        assert_eq!(common_indices_b, expected_b);
+        let mut expected_interleaved = BitVec::with_capacity(6);
+        expected_interleaved.push(true);
+        expected_interleaved.push(false);
+        expected_interleaved.push(true);
+        expected_interleaved.push(false);
+        expected_interleaved.push(true);
+        expected_interleaved.push(false);
+        assert_eq!(info, MergeInfo::Interleaved(expected_interleaved));
     }
-    
+
     #[test]
     fn test_merge_with_indices_with_common() {
         let vec_a = vec![1, 3, 5, 7];
@@ -765,11 +787,25 @@ mod tests {
         assert!(result.is_ok());
         let (res, common_indices_a, common_indices_b, info) = result.unwrap();
         assert_eq!(res, vec![1, 2, 5, 6]);
-        assert_eq!(common_indices_a, vec![1, 3]); // 3 is at index 1, 7 is at index 3 in vec_a
-        assert_eq!(common_indices_b, vec![1, 3]); // 3 is at index 1, 7 is at index 3 in vec_b
-        assert_eq!(info, MergeInfo::Interleaved(bitvec![1, 0, 1, 0]));
+        let mut expected_a: BitVec = BitVec::with_capacity(4);
+        expected_a.resize(4, false);
+        expected_a.set(1, true);
+        expected_a.set(3, true);
+        let mut expected_b: BitVec = BitVec::with_capacity(4);
+        expected_b.resize(4, false);
+        expected_b.set(1, true);
+        expected_b.set(3, true);
+        assert_eq!(common_indices_a, expected_a); // 3 is at index 1, 7 is at index 3 in vec_a
+        assert_eq!(common_indices_b, expected_b); // 3 is at index 1, 7 is at index 3 in vec_b
+
+        let mut expected_interleaved = BitVec::with_capacity(4);
+        expected_interleaved.push(true);
+        expected_interleaved.push(false);
+        expected_interleaved.push(true);
+        expected_interleaved.push(false);
+        assert_eq!(info, MergeInfo::Interleaved(expected_interleaved));
     }
-    
+
     #[test]
     fn test_merge_with_indices_empty_vectors() {
         let vec_a: Vec<i32> = vec![];
@@ -778,39 +814,55 @@ mod tests {
         assert!(result.is_ok());
         let (res, common_indices_a, common_indices_b, info) = result.unwrap();
         assert_eq!(res, vec![2, 4, 6]);
-        assert!(common_indices_a.is_empty());
-        assert!(common_indices_b.is_empty());
+        let mut expected_a: BitVec = BitVec::with_capacity(3);
+        expected_a.resize(3, false);
+        let mut expected_b: BitVec = BitVec::with_capacity(3);
+        expected_b.resize(3, false);
+        assert_eq!(common_indices_a, expected_a);
+        assert_eq!(common_indices_b, expected_b);
         assert_eq!(info, MergeInfo::SecondBeforeFirst);
-        
+
         let vec_a = vec![1, 3, 5];
         let vec_b: Vec<i32> = vec![];
         let result = vec_a.merge_ordered_ref_with_common_indices(&vec_b);
         assert!(result.is_ok());
         let (res, common_indices_a, common_indices_b, info) = result.unwrap();
         assert_eq!(res, vec![1, 3, 5]);
-        assert!(common_indices_a.is_empty());
-        assert!(common_indices_b.is_empty());
+        let mut expected_a: BitVec = BitVec::with_capacity(3);
+        expected_a.resize(3, false);
+        let mut expected_b: BitVec = BitVec::with_capacity(3);
+        expected_b.resize(3, false);
+        assert_eq!(common_indices_a, expected_a);
+        assert_eq!(common_indices_b, expected_b);
         assert_eq!(info, MergeInfo::FirstBeforeSecond);
     }
-    
+
     #[test]
     fn test_merge_with_indices_error_duplicate_in_first() {
-        let vec_a = vec![1, 3, 3, 5]; // Duplicate 3
-        let vec_b = vec![2, 4, 6];
+        let vec_a = vec![1, 2, 2, 3]; // Duplicate 2
+        let vec_b = vec![4, 5, 6];
         let result = vec_a.merge_ordered_ref_with_common_indices(&vec_b);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().message, "Duplicate item found in first vector at index 2");
+        let error = result.unwrap_err();
+        assert_eq!(
+            error.message,
+            "Duplicate item found in first vector at index 2"
+        );
     }
-    
+
     #[test]
     fn test_merge_with_indices_error_duplicate_in_second() {
-        let vec_a = vec![1, 3, 5];
-        let vec_b = vec![2, 4, 4, 6]; // Duplicate 4
+        let vec_a = vec![1, 4, 5];
+        let vec_b = vec![2, 3, 3, 6]; // Duplicate 3
         let result = vec_a.merge_ordered_ref_with_common_indices(&vec_b);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().message, "Duplicate item found in second vector at index 2");
+        let error = result.unwrap_err();
+        assert_eq!(
+            error.message,
+            "Duplicate item found in second vector at index 2"
+        );
     }
-    
+
     #[test]
     fn test_merge_with_indices_clean_split() {
         let vec_a = vec![1, 2, 3];
@@ -819,20 +871,20 @@ mod tests {
         assert!(result.is_ok());
         let (res, common_indices_a, common_indices_b, info) = result.unwrap();
         assert_eq!(res, vec![1, 2, 3, 4, 5, 6]);
-        assert!(common_indices_a.is_empty());
-        assert!(common_indices_b.is_empty());
+        assert_eq!(common_indices_a, bitvec![0, 0, 0]);
+        assert_eq!(common_indices_b, bitvec![0, 0, 0]);
         assert_eq!(info, MergeInfo::FirstBeforeSecond);
-        
-        // Reverse case
-        let vec_a = vec![4, 5, 6];
-        let vec_b = vec![1, 2, 3];
-        let result = vec_a.merge_ordered_ref_with_common_indices(&vec_b);
-        assert!(result.is_ok());
-        let (res, common_indices_a, common_indices_b, info) = result.unwrap();
-        assert_eq!(res, vec![1, 2, 3, 4, 5, 6]);
-        assert!(common_indices_a.is_empty());
-        assert!(common_indices_b.is_empty());
-        assert_eq!(info, MergeInfo::SecondBeforeFirst);
+
+        // Common split case 2: SecondBeforeFirst
+        let vec_c = vec![4, 5, 6];
+        let vec_d = vec![1, 2, 3];
+        let result2 = vec_c.merge_ordered_ref_with_common_indices(&vec_d);
+        assert!(result2.is_ok());
+        let (res2, common_indices_c, common_indices_d, info2) = result2.unwrap();
+        assert_eq!(res2, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(common_indices_c, bitvec![0, 0, 0]);
+        assert_eq!(common_indices_d, bitvec![0, 0, 0]);
+        assert_eq!(info2, MergeInfo::SecondBeforeFirst);
     }
 
     #[test]

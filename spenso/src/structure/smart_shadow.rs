@@ -13,6 +13,7 @@ use super::{
     HasName, IndexlessNamedStructure, MergeInfo, NamedStructure, OrderedStructure, ScalarStructure,
     StructureContract, StructureError, TensorStructure, TracksCount,
 };
+use bitvec::{order::Lsb0, vec::BitVec};
 
 use anyhow::{anyhow, Result};
 
@@ -155,10 +156,7 @@ impl<N, A, R: RepName<Dual = R>> StructureContract for SmartShadowStructure<N, A
     fn concat(&mut self, other: Self) {
         self.structure.concat(other.structure)
     }
-    fn merge(
-        &self,
-        other: &Self,
-    ) -> Result<(Self, Vec<usize>, Vec<usize>, MergeInfo), StructureError> {
+    fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError> {
         let contractions = self.contractions + other.contractions;
         let (structure, pos_self, pos_other, mergeinfo) = self.structure.merge(&other.structure)?;
         Ok((

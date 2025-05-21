@@ -95,6 +95,8 @@ pub trait MultiContractInterleaved<T> {
     fn multi_contract_interleaved(
         &self,
         other: &T,
+        pos_self: BitVec,
+        pos_other: BitVec,
         resulting_structure: <Self::LCM as HasStructure>::Structure,
         resulting_partition: BitVec,
     ) -> Result<Self::LCM, ContractionError>;
@@ -144,10 +146,13 @@ where
 {
     type LCM = O;
     fn contract(&self, other: &T) -> Result<Self::LCM, ContractionError> {
-        let (resulting_structure, mut pos_self, mut pos_other, mergeinfo) =
+        let (resulting_structure, pos_self, pos_other, mergeinfo) =
             self.structure().merge(other.structure())?;
 
-        match pos_self.len() {
+        // Count bits set to true in the BitVec
+        let common_count_self = pos_self.count_ones();
+        
+        match common_count_self {
             0 => {
                 trace!("exterior");
                 match mergeinfo {
@@ -163,8 +168,9 @@ where
                 }
             }
             1 => {
-                let i = pos_self.pop().unwrap();
-                let j = pos_other.pop().unwrap();
+                // Find indices where bits are set to true
+                let i = pos_self.first_one().expect("Expected a bit to be set");
+                let j = pos_other.first_one().expect("Expected a bit to be set");
                 trace!("single");
                 match mergeinfo {
                     MergeInfo::Interleaved(partition) => self.single_contract_interleaved(
@@ -185,9 +191,13 @@ where
             _ => {
                 trace!("multi");
                 match mergeinfo {
-                    MergeInfo::Interleaved(partition) => {
-                        self.multi_contract_interleaved(other, resulting_structure, partition)
-                    }
+                    MergeInfo::Interleaved(partition) => self.multi_contract_interleaved(
+                        other,
+                        pos_self,
+                        pos_other,
+                        resulting_structure,
+                        partition,
+                    ),
                     MergeInfo::FirstBeforeSecond => self.multi_contract(other, resulting_structure),
                     MergeInfo::SecondBeforeFirst => other.multi_contract(self, resulting_structure),
                 }

@@ -11,7 +11,10 @@ use crate::{
         CoreFlatFiberIterator, Fiber, FiberData, IteratableTensor, IteratesAlongFibers,
         ResetableIterator,
     },
-    structure::{concrete_index::ExpandedIndex, HasStructure, StructureContract, TensorStructure},
+    structure::{
+        concrete_index::{ExpandedIndex, FlatIndex},
+        HasStructure, StructureContract, TensorStructure,
+    },
     tensors::data::{DataIterator, DenseTensor, SparseTensor},
 };
 
@@ -318,6 +321,9 @@ where
         let mut iter_self = self.fiber(FiberData::from(&pos_self)).iter_metric(); //The summed over index comes from the actual self structure (and is a single index)
         let mut iter_other = other.fiber(FiberData::from(&pos_other)).iter(); // same for other
 
+        let mut exp_self = self.expanded_index(FlatIndex::from(0)).unwrap();
+        let mut exp_other = other.expanded_index(FlatIndex::from(0)).unwrap();
+
         //We first iterate over the free indices (self_fiber_class)
         for fiber_class_a_id in self_fiber_class_iter.by_ref() {
             for fiber_class_b_id in other_fiber_class_iter.by_ref() {
@@ -332,9 +338,21 @@ where
                         .enumerate()
                         .partition(|(i, _)| resulting_partition[*i]);
 
+                // println!("expa: {:?}", expa);
+                for (i, v) in pos_self.iter_ones().zip(expa) {
+                    exp_self.indices[i] = v;
+                }
+
+                for (i, v) in pos_other.iter_ones().zip(expb) {
+                    exp_other.indices[i] = v;
+                }
+
+                // println!("exp_self: {:?}", exp_self);
+                // println!("exp_other: {:?}", exp_other);
+                // println!("")
                 // And now we flatten
-                let shift_a = self.structure().flat_index(expa).unwrap();
-                let shift_b = other.structure().flat_index(expb).unwrap();
+                let shift_a = self.structure().flat_index(&exp_self).unwrap();
+                let shift_b = other.structure().flat_index(&exp_other).unwrap();
 
                 // we shift the fiber start by the flattened indices. This also resets the iterator
                 iter_self.shift(shift_a.into());
@@ -395,6 +413,9 @@ where
         let mut iter_self = self.fiber(FiberData::from(&pos_self)).iter_metric(); //The summed over index comes from the actual self structure (and is a single index)
         let mut iter_other = other.fiber(FiberData::from(&pos_other)).iter(); // same for other
 
+        let mut exp_self = self.expanded_index(FlatIndex::from(0)).unwrap();
+        let mut exp_other = other.expanded_index(FlatIndex::from(0)).unwrap();
+
         //We first iterate over the free indices (self_fiber_class)
         for fiber_class_a_id in self_fiber_class_iter.by_ref() {
             for fiber_class_b_id in other_fiber_class_iter.by_ref() {
@@ -409,9 +430,21 @@ where
                         .enumerate()
                         .partition(|(i, _)| resulting_partition[*i]);
 
+                // println!("expa: {:?}", expa);
+                for (i, v) in pos_self.iter_ones().zip(expa) {
+                    exp_self.indices[i] = v;
+                }
+
+                for (i, v) in pos_other.iter_ones().zip(expb) {
+                    exp_other.indices[i] = v;
+                }
+
+                // println!("exp_self: {:?}", exp_self);
+                // println!("exp_other: {:?}", exp_other);
+                // println!("")
                 // And now we flatten
-                let shift_a = self.structure().flat_index(expa).unwrap();
-                let shift_b = other.structure().flat_index(expb).unwrap();
+                let shift_a = self.structure().flat_index(&exp_self).unwrap();
+                let shift_b = other.structure().flat_index(&exp_other).unwrap();
 
                 // we shift the fiber start by the flattened indices. This also resets the iterator
                 iter_self.shift(shift_a.into());
@@ -469,6 +502,9 @@ where
         let mut iter_self = self.fiber(FiberData::from(&pos_self)).iter_metric(); //The summed over index comes from the actual self structure (and is a single index)
         let mut iter_other = other.fiber(FiberData::from(&pos_other)).iter(); // same for other
 
+        let mut exp_self = self.expanded_index(FlatIndex::from(0)).unwrap();
+        let mut exp_other = other.expanded_index(FlatIndex::from(0)).unwrap();
+
         //We first iterate over the free indices (self_fiber_class)
         for fiber_class_a_id in self_fiber_class_iter.by_ref() {
             for fiber_class_b_id in other_fiber_class_iter.by_ref() {
@@ -483,9 +519,21 @@ where
                         .enumerate()
                         .partition(|(i, _)| resulting_partition[*i]);
 
+                // println!("expa: {:?}", expa);
+                for (i, v) in pos_self.iter_ones().zip(expa) {
+                    exp_self.indices[i] = v;
+                }
+
+                for (i, v) in pos_other.iter_ones().zip(expb) {
+                    exp_other.indices[i] = v;
+                }
+
+                // println!("exp_self: {:?}", exp_self);
+                // println!("exp_other: {:?}", exp_other);
+                // println!("")
                 // And now we flatten
-                let shift_a = self.structure().flat_index(expa).unwrap();
-                let shift_b = other.structure().flat_index(expb).unwrap();
+                let shift_a = self.structure().flat_index(&exp_self).unwrap();
+                let shift_b = other.structure().flat_index(&exp_other).unwrap();
 
                 // we shift the fiber start by the flattened indices. This also resets the iterator
                 iter_self.shift(shift_a.into());
@@ -544,6 +592,9 @@ where
             let mut iter_self = self.fiber(FiberData::from(&pos_self)).iter_metric(); //The summed over index comes from the actual self structure (and is a single index)
             let mut iter_other = other.fiber(FiberData::from(&pos_other)).iter(); // same for other
 
+            let mut exp_self = self.expanded_index(FlatIndex::from(0)).unwrap();
+            let mut exp_other = other.expanded_index(FlatIndex::from(0)).unwrap();
+
             //We first iterate over the free indices (self_fiber_class)
             for fiber_class_a_id in self_fiber_class_iter.by_ref() {
                 for fiber_class_b_id in other_fiber_class_iter.by_ref() {
@@ -558,9 +609,21 @@ where
                             .enumerate()
                             .partition(|(i, _)| resulting_partition[*i]);
 
+                    // println!("expa: {:?}", expa);
+                    for (i, v) in pos_self.iter_ones().zip(expa) {
+                        exp_self.indices[i] = v;
+                    }
+
+                    for (i, v) in pos_other.iter_ones().zip(expb) {
+                        exp_other.indices[i] = v;
+                    }
+
+                    // println!("exp_self: {:?}", exp_self);
+                    // println!("exp_other: {:?}", exp_other);
+                    // println!("")
                     // And now we flatten
-                    let shift_a = self.structure().flat_index(expa).unwrap();
-                    let shift_b = other.structure().flat_index(expb).unwrap();
+                    let shift_a = self.structure().flat_index(&exp_self).unwrap();
+                    let shift_b = other.structure().flat_index(&exp_other).unwrap();
 
                     // we shift the fiber start by the flattened indices. This also resets the iterator
                     iter_self.shift(shift_a.into());

@@ -275,19 +275,19 @@ impl<K> NetworkGraph<K> {
                 if all_leaves && has_children {
                     let op = *op;
 
-                    println!(
-                        "Extracting: {}",
-                        self.graph.dot_impl(
-                            &subgraph,
-                            "",
-                            &|a| if let NetworkEdge::Slot(s) = a {
-                                Some(format!("label=\"{s}\""))
-                            } else {
-                                None
-                            },
-                            &|a| None
-                        )
-                    );
+                    // println!(
+                    //     "Extracting: {}",
+                    //     self.graph.dot_impl(
+                    //         &subgraph,
+                    //         "",
+                    //         &|a| if let NetworkEdge::Slot(s) = a {
+                    //             Some(format!("label=\"{s}\""))
+                    //         } else {
+                    //             None
+                    //         },
+                    //         &|a| None
+                    //     )
+                    // );
 
                     let extracted = self.graph.extract(
                         &subgraph,

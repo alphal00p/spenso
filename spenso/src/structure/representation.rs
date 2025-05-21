@@ -361,29 +361,36 @@ impl<T: RepName> Representation<T> {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, Ord, Serialize, Deserialize, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, Serialize, Deserialize, Encode, Decode)]
 pub enum LibraryRep {
     SelfDual(u16),
     InlineMetric(u16),
     Dualizable(i16),
 }
 
-impl PartialOrd for LibraryRep {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+impl Ord for LibraryRep {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
-            (LibraryRep::SelfDual(a), LibraryRep::SelfDual(b)) => a.partial_cmp(b),
-            (LibraryRep::InlineMetric(a), LibraryRep::InlineMetric(b)) => a.partial_cmp(b),
-            (LibraryRep::Dualizable(a), LibraryRep::Dualizable(b)) => match a.cmp(&b.abs()) {
-                Ordering::Equal => a.partial_cmp(b),
-                a => Some(a),
-            },
+            (LibraryRep::SelfDual(a), LibraryRep::SelfDual(b)) => a.cmp(b),
+            (LibraryRep::InlineMetric(a), LibraryRep::InlineMetric(b)) => a.cmp(b),
+            (LibraryRep::Dualizable(a), LibraryRep::Dualizable(b)) => {
+                // println!("a{a}b{b}");
+                // match
+                a.abs().cmp(&b.abs())
+            }
             (LibraryRep::SelfDual(_), LibraryRep::Dualizable(_))
             | (LibraryRep::SelfDual(_), LibraryRep::InlineMetric(_))
-            | (LibraryRep::InlineMetric(_), LibraryRep::Dualizable(_)) => Some(Ordering::Greater),
+            | (LibraryRep::InlineMetric(_), LibraryRep::Dualizable(_)) => Ordering::Greater,
             (LibraryRep::Dualizable(_), LibraryRep::SelfDual(_))
             | (LibraryRep::InlineMetric(_), LibraryRep::SelfDual(_))
-            | (LibraryRep::Dualizable(_), LibraryRep::InlineMetric(_)) => Some(Ordering::Less),
+            | (LibraryRep::Dualizable(_), LibraryRep::InlineMetric(_)) => Ordering::Less,
         }
+    }
+}
+
+impl PartialOrd for LibraryRep {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -414,6 +421,12 @@ impl LibraryRep {
 
     pub fn all_inline_metrics() -> impl Iterator<Item = &'static LibraryRep> {
         INLINE_METRIC.iter().map(|(rep, _)| rep)
+    }
+
+    pub fn all_representations() -> impl Iterator<Item = &'static LibraryRep> {
+        Self::all_self_duals()
+            .chain(Self::all_dualizables())
+            .chain(Self::all_inline_metrics())
     }
 }
 

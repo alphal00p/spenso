@@ -583,7 +583,7 @@ mod test {
         net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
 
         if let Ok(ExecutionResult::Val(v)) = net.result_tensor(&lib) {
-            println!("Hi{}", v)
+            println!("{}", v)
         }
         println!(
             "{}",

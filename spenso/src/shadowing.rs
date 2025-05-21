@@ -660,7 +660,7 @@ pub mod test {
         let mut tensor_library: TensorLibrary<MixedTensor<f64, ExplicitKey>> = TensorLibrary::new();
         tensor_library.update_ids();
 
-        for rep in REPS.read().unwrap().reps() {
+        for rep in LibraryRep::all_representations() {
             let structure = [rep.new_rep(4), rep.new_rep(4).dual()];
 
             let idstructure: IndexlessNamedStructure<Symbol, (), LibraryRep> =
@@ -679,6 +679,7 @@ pub mod test {
                 .clone()
                 .map_structure(|_| trace_structure.clone().dual());
 
+            // println!("{}", rep);
             assert_eq!(
                 4.,
                 id1.contract(&id2)

@@ -284,13 +284,11 @@ impl HasName for SymbolicTensor {
 impl Contract<SymbolicTensor> for SymbolicTensor {
     type LCM = SymbolicTensor;
     fn contract(&self, other: &SymbolicTensor) -> Result<Self::LCM, ContractionError> {
-        let mut new_structure = self.structure.clone();
-
         let expression = &other.expression * &self.expression;
-        new_structure.merge(&other.structure);
+        let (structure, _, _, _) = self.structure.merge(&other.structure)?;
         Ok(SymbolicTensor {
             expression,
-            structure: new_structure,
+            structure,
         })
     }
 }

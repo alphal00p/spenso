@@ -163,14 +163,15 @@ impl<R: RepName> TryFrom<MulView<'_>> for OrderedStructure<R> {
 
 impl<S: RepName, R: From<S> + RepName> FromIterator<Slot<S>> for OrderedStructure<R> {
     fn from_iter<T: IntoIterator<Item = Slot<S>>>(iter: T) -> Self {
-        Self {
-            structure: iter.into_iter().map(|a| a.cast()).collect(),
-        }
+        let mut structure: Vec<Slot<R>> = iter.into_iter().map(|a| a.cast()).collect();
+        structure.sort();
+        Self { structure }
     }
 }
 
 impl<R: RepName> From<Vec<Slot<R>>> for OrderedStructure<R> {
-    fn from(structure: Vec<Slot<R>>) -> Self {
+    fn from(mut structure: Vec<Slot<R>>) -> Self {
+        structure.sort();
         Self { structure }
     }
 }
@@ -309,9 +310,21 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
     }
 
     fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError> {
+        // println!("self\n{}", self);
+        // println!("other\n{}", other);
         let (structure, pos_self, pos_other, mergeinfo) = self
             .structure
-            .merge_ordered_ref_with_common_indices(&other.structure)?;
+            .merge_ordered_ref_with_comparison_and_matching(
+                &other.structure,
+                |a, b| a.cmp(b),
+                |a, b| {
+                    // println!("Does {a} match {b}?");
+                    let a = a.matches(b);
+                    // println!("{a}");
+                    a
+                },
+            )?;
+        // println!("{:?}", structure);
 
         Ok((Self { structure }, pos_self, pos_other, mergeinfo))
     }

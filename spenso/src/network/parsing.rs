@@ -74,6 +74,7 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
                 if let Some(e) = is_structure {
                     Err(StructureError::EmptyStructure(e))
                 } else {
+                    structure.structure.structure.sort();
                     Ok(structure)
                 }
             }

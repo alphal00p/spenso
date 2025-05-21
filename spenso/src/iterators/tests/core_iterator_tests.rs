@@ -7,7 +7,7 @@ use crate::iterators::{
     IteratesAlongPermutedFibers, MetricFiberIterator, MetricItem, ResetableIterator,
     ShiftableIterator,
 };
-use crate::structure::representation::RepName;
+use crate::structure::representation::{Minkowski, RepName};
 use crate::structure::{concrete_index::FlatIndex, representation::Euclidean, OrderedStructure};
 use linnet::permutation::Permutation;
 
@@ -29,7 +29,7 @@ fn test_core_flat_iterator() {
     // Should have 2 indices (since dimension 0 has size 2)
     assert_eq!(indices.len(), 2);
     assert_eq!(indices[0], 0.into());
-    assert_eq!(indices[1], 1.into());
+    assert_eq!(indices[1], 3.into());
 
     // Test iteration with conjugate
     let mut iter_conj = CoreFlatFiberIterator::new(&fiber, true);
@@ -57,7 +57,7 @@ fn test_core_expanded_iterator() {
     let indices: Vec<usize> = std::iter::from_fn(|| iter.next().map(|a| a.into())).collect();
 
     // Should iterate through all elements (2*3 = 6)
-    assert_eq!(indices, vec![0, 2, 4, 6, 8]);
+    assert_eq!(indices, vec![0, 5, 10]);
 
     // Test reset functionality
     iter.reset();
@@ -73,7 +73,7 @@ fn test_core_expanded_iterator() {
 
 #[test]
 fn test_metric_iterator() {
-    let rep = Euclidean {};
+    let rep = Minkowski {};
     let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(2, 1)]);
 
     // Create a fiber with all indices free

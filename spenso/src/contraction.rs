@@ -151,7 +151,7 @@ where
 
         // Count bits set to true in the BitVec
         let common_count_self = pos_self.count_ones();
-        
+
         match common_count_self {
             0 => {
                 trace!("exterior");
@@ -184,7 +184,7 @@ where
                         self.single_contract(other, resulting_structure, i, j)
                     }
                     MergeInfo::SecondBeforeFirst => {
-                        other.single_contract(self, resulting_structure, i, j)
+                        other.single_contract(self, resulting_structure, j, i)
                     }
                 }
             }

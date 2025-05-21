@@ -161,6 +161,7 @@ where
         let mut result_data = vec![zero.clone(); final_structure.size()?];
         let mut result_index = 0;
 
+        // println!("i{i}j{j}self{}other{}", self.order(), other.order());
         let mut self_iter = self.fiber_class(i.into()).iter();
         let mut other_iter = other.fiber_class(j.into()).iter();
 
@@ -319,16 +320,22 @@ where
                 let result_index = fiber_class_a_id + fiber_class_b_id;
 
                 //To obtain the corresponding flat indices for the self and other we partition the expanded index
-                let ((_, expa), (_, expb)): ((Vec<_>, ExpandedIndex), (Vec<_>, ExpandedIndex)) =
-                    resulting_structure
-                        .expanded_index(result_index)?
-                        .into_iter()
-                        .enumerate()
-                        .partition(|(i, _)| resulting_partition[*i]);
+                let ((_, mut expa), (_, mut expb)): (
+                    (Vec<_>, ExpandedIndex),
+                    (Vec<_>, ExpandedIndex),
+                ) = resulting_structure
+                    .expanded_index(result_index)?
+                    .into_iter()
+                    .enumerate()
+                    .partition(|(i, _)| resulting_partition[*i]);
+
+                expa.indices.insert(i, 0);
+
+                expb.indices.insert(j, 0);
 
                 // And now we flatten
-                let shift_a = self.structure().flat_index(expa).unwrap();
-                let shift_b = other.structure().flat_index(expb).unwrap();
+                let shift_a = self.structure().flat_index(&expa).unwrap();
+                let shift_b = other.structure().flat_index(&expb).unwrap();
 
                 // we shift the fiber start by the flattened indices. This also resets the iterator
                 iter_self.shift(shift_a.into());
@@ -394,16 +401,22 @@ where
                 let result_index = fiber_class_a_id + fiber_class_b_id;
 
                 //To obtain the corresponding flat indices for the self and other we partition the expanded index
-                let ((_, expa), (_, expb)): ((Vec<_>, ExpandedIndex), (Vec<_>, ExpandedIndex)) =
-                    resulting_structure
-                        .expanded_index(result_index)?
-                        .into_iter()
-                        .enumerate()
-                        .partition(|(i, _)| resulting_partition[*i]);
+                let ((_, mut expa), (_, mut expb)): (
+                    (Vec<_>, ExpandedIndex),
+                    (Vec<_>, ExpandedIndex),
+                ) = resulting_structure
+                    .expanded_index(result_index)?
+                    .into_iter()
+                    .enumerate()
+                    .partition(|(i, _)| resulting_partition[*i]);
+
+                expa.indices.insert(i, 0);
+
+                expb.indices.insert(j, 0);
 
                 // And now we flatten
-                let shift_a = self.structure().flat_index(expa).unwrap();
-                let shift_b = other.structure().flat_index(expb).unwrap();
+                let shift_a = self.structure().flat_index(&expa).unwrap();
+                let shift_b = other.structure().flat_index(&expb).unwrap();
 
                 // we shift the fiber start by the flattened indices. This also resets the iterator
                 iter_self.shift(shift_a.into());
@@ -478,16 +491,22 @@ where
                 let result_index = fiber_class_a_id + fiber_class_b_id;
 
                 //To obtain the corresponding flat indices for the self and other we partition the expanded index
-                let ((_, expa), (_, expb)): ((Vec<_>, ExpandedIndex), (Vec<_>, ExpandedIndex)) =
-                    resulting_structure
-                        .expanded_index(result_index)?
-                        .into_iter()
-                        .enumerate()
-                        .partition(|(i, _)| resulting_partition[*i]);
+                let ((_, mut expa), (_, mut expb)): (
+                    (Vec<_>, ExpandedIndex),
+                    (Vec<_>, ExpandedIndex),
+                ) = resulting_structure
+                    .expanded_index(result_index)?
+                    .into_iter()
+                    .enumerate()
+                    .partition(|(i, _)| resulting_partition[*i]);
+
+                expa.indices.insert(i, 0);
+
+                expb.indices.insert(j, 0);
 
                 // And now we flatten
-                let shift_a = self.structure().flat_index(expa).unwrap();
-                let shift_b = other.structure().flat_index(expb).unwrap();
+                let shift_a = self.structure().flat_index(&expa).unwrap();
+                let shift_b = other.structure().flat_index(&expb).unwrap();
 
                 // we shift the fiber start by the flattened indices. This also resets the iterator
                 iter_self.shift(shift_a.into());
@@ -555,16 +574,22 @@ where
                     let result_index = fiber_class_a_id + fiber_class_b_id;
 
                     //To obtain the corresponding flat indices for the self and other we partition the expanded index
-                    let ((_, expa), (_, expb)): ((Vec<_>, ExpandedIndex), (Vec<_>, ExpandedIndex)) =
-                        resulting_structure
-                            .expanded_index(result_index)?
-                            .into_iter()
-                            .enumerate()
-                            .partition(|(i, _)| resulting_partition[*i]);
+                    let ((_, mut expa), (_, mut expb)): (
+                        (Vec<_>, ExpandedIndex),
+                        (Vec<_>, ExpandedIndex),
+                    ) = resulting_structure
+                        .expanded_index(result_index)?
+                        .into_iter()
+                        .enumerate()
+                        .partition(|(i, _)| resulting_partition[*i]);
+
+                    expa.indices.insert(i, 0);
+
+                    expb.indices.insert(j, 0);
 
                     // And now we flatten
-                    let shift_a = self.structure().flat_index(expa).unwrap();
-                    let shift_b = other.structure().flat_index(expb).unwrap();
+                    let shift_a = self.structure().flat_index(&expa).unwrap();
+                    let shift_b = other.structure().flat_index(&expb).unwrap();
 
                     // we shift the fiber start by the flattened indices. This also resets the iterator
                     iter_self.shift(shift_a.into());

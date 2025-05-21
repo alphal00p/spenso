@@ -55,10 +55,10 @@ pub mod named;
 pub use named::NamedStructure;
 pub mod permuted;
 pub use permuted::PermutedStructure;
+pub mod ordered;
 pub mod representation;
 pub mod slot;
-pub mod vec;
-pub use vec::OrderedStructure;
+pub use ordered::OrderedStructure;
 
 pub mod smart_shadow;
 pub use smart_shadow::SmartShadowStructure;

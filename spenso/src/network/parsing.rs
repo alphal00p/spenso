@@ -1,4 +1,4 @@
-use symbolica::atom::Symbol;
+use symbolica::atom::{AtomCore, Symbol};
 
 use super::*;
 
@@ -22,6 +22,31 @@ use crate::structure::{HasStructure, TensorStructure};
 use crate::{shadowing::Concretize, structure::representation::LibraryRep, structure::HasName};
 
 pub type ShadowedStructure = NamedStructure<Symbol, Vec<Atom>, LibraryRep>;
+
+impl<'a> TryFrom<AtomView<'a>> for ShadowedStructure {
+    type Error = StructureError;
+    fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
+        if let AtomView::Fun(f) = value {
+            f.try_into()
+        } else {
+            Err(StructureError::ParsingError(value.to_plain_string()))
+        }
+    }
+}
+
+impl TryFrom<Atom> for ShadowedStructure {
+    type Error = StructureError;
+    fn try_from(value: Atom) -> Result<Self, Self::Error> {
+        value.as_view().try_into()
+    }
+}
+
+impl TryFrom<&Atom> for ShadowedStructure {
+    type Error = StructureError;
+    fn try_from(value: &Atom) -> Result<Self, Self::Error> {
+        value.as_view().try_into()
+    }
+}
 
 impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
     type Error = StructureError;
@@ -354,6 +379,7 @@ pub mod test {
         let _ = ETS.id;
         let expr = parse!("-g(mink(4,6))*Q(2,mink(4,7))+g(mink(4,6))*Q(3,mink(4,7))").unwrap();
         let lib = DummyLibrary::<_>::new();
+        println!("Hi");
         let mut net =
             Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
                 .unwrap();

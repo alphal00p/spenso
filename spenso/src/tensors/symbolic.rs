@@ -341,3 +341,21 @@ impl std::fmt::Display for SymbolicTensor {
         write!(f, "{}", self.expression)
     }
 }
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use crate::{network::library::symbolic::ETS, structure};
+    use symbolica::parse;
+
+    #[test]
+    fn parse() {
+        let _ = ETS.id;
+        let expr = parse!("g(mink(4,6),mink(4,7))").unwrap();
+
+        let structure =
+            SymbolicTensor::from_named(&NamedStructure::try_from(expr).unwrap()).unwrap();
+
+        structure.contract(&structure).unwrap();
+    }
+}

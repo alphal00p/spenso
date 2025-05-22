@@ -785,6 +785,8 @@ where
         Store: ExecuteOp<L, K>,
     {
         self.merge_ops();
+        // println!("Hi");
+        // Ok(())
         Strat::execute_all::<C>(&mut self.store, &mut self.graph, lib)
     }
 }

@@ -78,8 +78,8 @@ use thiserror::Error;
 /// assert_eq!("custom_lor🠓4|₀", format!("{nuu}"));
 /// ```
 pub struct Slot<T: RepName> {
-    pub(crate) rep: Representation<T>,
     pub aind: AbstractIndex,
+    pub(crate) rep: Representation<T>,
 }
 
 impl<T: RepName> Slot<T> {

@@ -763,6 +763,8 @@ pub enum StructureError {
     WrongNumberOfArguments(usize, usize),
     #[error("Non traced out indices before merger {0}")]
     NonTracedOut(#[from] DuplicateItemError),
+    #[error("Parsing error: expected function view found {0}")]
+    ParsingError(String),
 }
 
 pub trait HasName {

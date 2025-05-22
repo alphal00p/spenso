@@ -16,8 +16,6 @@ use crate::{
 #[cfg(feature = "shadowing")]
 use anyhow::Result;
 
-use anyhow::anyhow;
-use delegate::delegate;
 #[cfg(feature = "shadowing")]
 use symbolica::atom::{
     representation::{FunView, MulView},
@@ -32,6 +30,8 @@ use super::{
     MergeInfo, NamedStructure, ScalarStructure, SmartShadowStructure, StructureContract,
     StructureError, TensorStructure,
 };
+use anyhow::anyhow;
+use delegate::delegate;
 #[cfg(not(feature = "shadowing"))]
 use serde::{Deserialize, Serialize};
 
@@ -396,8 +396,8 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
     }
 
     fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError> {
-        // println!("self\n{}", self);
-        // println!("other\n{}", other);
+        println!("self\n{}", self);
+        println!("other\n{}", other);
         let (structure, pos_self, pos_other, mergeinfo) = self
             .structure
             .merge_ordered_ref_with_comparison_and_matching(
@@ -410,7 +410,7 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
                     a
                 },
             )?;
-        // println!("{:?}", structure);
+        println!("{:?}", structure);
 
         Ok((Self { structure }, pos_self, pos_other, mergeinfo))
     }

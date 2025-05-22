@@ -567,7 +567,7 @@ impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scala
                 TensorOrScalarOrKey::Scalar(s) => Cow::Owned(T::new_scalar(s.into())),
                 TensorOrScalarOrKey::Key { key, graph_slots } => {
                     let inds: Vec<_> = graph_slots.iter().map(|a| a.aind).collect();
-                    let less = lib.get(key)?.into_owned().reindex(&inds)?;
+                    let less = lib.get(key)?.into_owned().reindex(&inds)?.structure;
 
                     Cow::Owned(less)
                 }

@@ -8,8 +8,8 @@ use super::{
     dimension::Dimension,
     representation::{LibraryRep, RepName, Representation},
     slot::{DualSlotTo, IsAbstractSlot, Slot, SlotError},
-    HasName, IndexlessNamedStructure, MergeInfo, OrderedStructure, ScalarStructure,
-    SmartShadowStructure, StructureContract, StructureError, TensorStructure,
+    HasName, IndexlessNamedStructure, MergeInfo, OrderedStructure, PermutedStructure,
+    ScalarStructure, SmartShadowStructure, StructureContract, StructureError, TensorStructure,
 };
 use bitvec::{order::Lsb0, vec::BitVec};
 
@@ -62,86 +62,20 @@ pub type AtomStructure<R> = NamedStructure<SerializableSymbol, Vec<SerializableA
 
 impl<Name, Args, R: RepName> NamedStructure<Name, Args, R> {
     #[must_use]
-    pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> Self
+    pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> PermutedStructure<Self>
     where
         R: From<I>,
         I: RepName,
         T: IntoIterator<Item = Slot<I>>,
     {
-        Self {
-            structure: iter.into_iter().map(|a| a.cast()).collect(),
-            global_name: Some(name),
-            additional_args: args,
-        }
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<'a, R: RepName<Dual = R>> TryFrom<FunView<'a>>
-    for SmartShadowStructure<SerializableSymbol, Vec<SerializableAtom>, R>
-{
-    type Error = StructureError;
-    fn try_from(value: FunView<'a>) -> std::result::Result<Self, Self::Error> {
-        AtomStructure::<R>::try_from(value).map(|x| x.into())
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<'a, R: RepName<Dual = R>> TryFrom<FunView<'a>> for AtomStructure<R> {
-    type Error = StructureError;
-    fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
-        match value.get_symbol() {
-            s if s == AIND_SYMBOLS.aind => {
-                let mut structure: Vec<Slot<R>> = vec![];
-
-                for arg in value.iter() {
-                    structure.push(arg.try_into()?);
-                }
-
-                Ok(OrderedStructure::from(structure).into())
-            }
-            name => {
-                let mut structure: AtomStructure<R> = OrderedStructure::default().into();
-                structure.set_name(name.into());
-                let mut args = vec![];
-                let mut is_structure = Some(SlotError::EmptyStructure);
-
-                for arg in value.iter() {
-                    let slot: Result<Slot<R>, _> = arg.try_into();
-
-                    match slot {
-                        Ok(slot) => {
-                            is_structure = None;
-                            structure.structure.push(slot);
-                        }
-                        Err(e) => {
-                            if let AtomView::Fun(f) = arg {
-                                if f.get_symbol() == AIND_SYMBOLS.aind {
-                                    let internal_s = AtomStructure::try_from(f);
-
-                                    if let Ok(s) = internal_s {
-                                        structure.extend(s);
-                                        is_structure = None;
-                                        continue;
-                                    }
-                                }
-                            }
-                            is_structure = Some(e);
-                            args.push(arg.to_owned().into());
-                        }
-                    }
-                }
-
-                if !args.is_empty() {
-                    structure.additional_args = Some(args);
-                }
-                if let Some(e) = is_structure {
-                    Err(StructureError::EmptyStructure(e))
-                } else {
-                    Ok(structure)
-                }
-            }
-        }
+        iter.into_iter()
+            .map(|a| a.cast())
+            .collect::<PermutedStructure<_>>()
+            .map_structure(move |structure| Self {
+                structure,
+                global_name: Some(name),
+                additional_args: args,
+            })
     }
 }
 
@@ -207,11 +141,19 @@ impl<N, A, R: RepName<Dual = R>> TensorStructure for NamedStructure<N, A, R> {
     // type R = PhysicalReps;
     type Indexed = Self;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
-        Ok(Self {
-            global_name: self.global_name,
-            additional_args: self.additional_args,
-            structure: self.structure.reindex(indices)?,
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+        let res = self.structure.reindex(indices)?;
+
+        Ok(PermutedStructure {
+            structure: Self {
+                global_name: self.global_name,
+                additional_args: self.additional_args,
+                structure: res.structure,
+            },
+            permutation: res.permutation,
         })
     }
 

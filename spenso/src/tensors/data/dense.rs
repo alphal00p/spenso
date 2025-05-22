@@ -1,12 +1,14 @@
 use crate::{
-    algebra::algebraic_traits::IsZero,
-    algebra::complex::Complex,
-    algebra::upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
+    algebra::{
+        algebraic_traits::IsZero,
+        complex::Complex,
+        upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
+    },
     iterators::{DenseTensorLinearIterator, IteratableTensor, SparseTensorLinearIterator},
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
-        CastStructure, HasName, HasStructure, OrderedStructure, ScalarStructure, ScalarTensor,
-        StructureContract, TensorStructure, TracksCount,
+        CastStructure, HasName, HasStructure, OrderedStructure, PermutedStructure, ScalarStructure,
+        ScalarTensor, StructureContract, TensorStructure, TracksCount,
     },
 };
 
@@ -72,8 +74,19 @@ where
     type Indexed = DenseTensor<T, S::Indexed>;
     type Slot = S::Slot;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
-        self.map_structure_result(|s| s.reindex(indices))
+    fn reindex(
+        mut self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+        let res = self.structure.reindex(indices)?;
+
+        Ok(PermutedStructure {
+            structure: DenseTensor {
+                structure: res.structure,
+                data: self.data,
+            },
+            permutation: res.permutation,
+        })
     }
 
     fn dual(self) -> Self {

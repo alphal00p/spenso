@@ -664,7 +664,7 @@ pub mod test {
             let structure = [rep.new_rep(4), rep.new_rep(4).dual()];
 
             let idstructure: IndexlessNamedStructure<Symbol, (), LibraryRep> =
-                IndexlessNamedStructure::from_iter(structure, ETS.id, None);
+                IndexlessNamedStructure::from_iter(structure, ETS.id, None).structure;
 
             let idkey = ExplicitKey::from_structure(&idstructure).unwrap();
 
@@ -673,7 +673,8 @@ pub mod test {
             let trace_structure: OrderedStructure = OrderedStructure::from_iter([
                 rep.new_rep(4).slot(3),
                 rep.new_rep(4).dual().slot(4),
-            ]);
+            ])
+            .structure;
             let id1 = id.map_structure(|_| trace_structure.clone());
             let id2 = id1
                 .clone()

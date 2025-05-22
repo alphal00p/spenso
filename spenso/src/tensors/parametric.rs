@@ -5,11 +5,11 @@ use std::{
     io::Cursor,
 };
 
-use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
 use crate::structure::representation::Representation;
 use crate::structure::slot::IsAbstractSlot;
 use crate::structure::StructureError;
+use crate::structure::{abstract_index::AbstractIndex, PermutedStructure};
 use ahash::HashMap;
 use delegate::delegate;
 
@@ -262,25 +262,25 @@ impl<Args: IntoArgs> TensorCoefficient for ExpandedCoefficent<Args> {
     }
 }
 
-impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<Atom>>> {
-    type Error = Error;
+// impl<'a> TryFrom<FunView<'a>> for DenseTensor<Atom, NamedStructure<Symbol, Vec<Atom>>> {
+//     type Error = Error;
 
-    fn try_from(f: FunView<'a>) -> Result<Self> {
-        let mut structure: Vec<Slot<LibraryRep>> = vec![];
-        let f_id = f.get_symbol();
-        let mut args = vec![];
+//     fn try_from(f: FunView<'a>) -> Result<Self> {
+//         let mut structure: Vec<Slot<LibraryRep>> = vec![];
+//         let f_id = f.get_symbol();
+//         let mut args = vec![];
 
-        for arg in f.iter() {
-            if let Ok(arg) = arg.try_into() {
-                structure.push(arg);
-            } else {
-                args.push(arg.to_owned());
-            }
-        }
-        let s = NamedStructure::from_iter(structure, f_id, Some(args));
-        s.to_dense_expanded_labels()
-    }
-}
+//         for arg in f.iter() {
+//             if let Ok(arg) = arg.try_into() {
+//                 structure.push(arg);
+//             } else {
+//                 args.push(arg.to_owned());
+//             }
+//         }
+//         let s = NamedStructure::from_iter(structure, f_id, Some(args));
+//         s.to_dense_expanded_labels()
+//     }
+// }
 
 #[derive(
     Clone, Debug, PartialEq, Eq, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
@@ -307,8 +307,18 @@ where
     type Indexed = ParamTensor<S::Indexed>;
     type Slot = S::Slot;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
-        self.map_structure_result(|s| s.reindex(indices))
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+        let res = self.tensor.reindex(indices)?;
+        Ok(PermutedStructure {
+            structure: ParamTensor {
+                tensor: res.structure,
+                param_type: self.param_type,
+            },
+            permutation: res.permutation,
+        })
     }
 
     fn dual(self) -> Self {
@@ -1136,10 +1146,25 @@ where
     type Indexed = ParamOrConcrete<C::Indexed, S::Indexed>;
     type Slot = S::Slot;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         Ok(match self {
-            ParamOrConcrete::Concrete(c) => ParamOrConcrete::Concrete(c.reindex(indices)?),
-            ParamOrConcrete::Param(p) => ParamOrConcrete::Param(p.reindex(indices)?),
+            ParamOrConcrete::Concrete(c) => {
+                let res = c.reindex(indices)?;
+                PermutedStructure {
+                    permutation: res.permutation,
+                    structure: ParamOrConcrete::Concrete(res.structure),
+                }
+            }
+            ParamOrConcrete::Param(p) => {
+                let res = p.reindex(indices)?;
+                PermutedStructure {
+                    permutation: res.permutation,
+                    structure: ParamOrConcrete::Param(res.structure),
+                }
+            }
         })
     }
 
@@ -2261,8 +2286,19 @@ where
     type Indexed = EvalTensor<T, S::Indexed>;
     type Slot = S::Slot;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
-        self.map_structure_result(|s| s.reindex(indices))
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+        let res = self.structure.reindex(indices)?;
+        Ok(PermutedStructure {
+            structure: EvalTensor {
+                eval: self.eval,
+                indexmap: self.indexmap,
+                structure: res.structure,
+            },
+            permutation: res.permutation,
+        })
     }
 
     fn dual(self) -> Self {
@@ -2992,13 +3028,9 @@ pub mod test {
     #[test]
     fn tensor_structure() {
         let a: MixedTensor<f64, OrderedStructure> =
-            MixedTensor::param(DataTensor::Sparse(SparseTensor::empty(OrderedStructure::<
-                LibraryRep,
-            >::from_iter(
-                [
-                Minkowski {}.new_slot(2, 1),
-            ]
-            ))));
+            MixedTensor::param(DataTensor::Sparse(SparseTensor::empty(
+                OrderedStructure::<LibraryRep>::from_iter([Minkowski {}.new_slot(2, 1)]).structure,
+            )));
 
         assert_eq!(a.size().unwrap(), 2);
     }

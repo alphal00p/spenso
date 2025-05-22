@@ -8,8 +8,8 @@ use super::{
     dimension::Dimension,
     representation::{LibraryRep, RepName, Representation},
     slot::{ConstructibleSlot, DualSlotTo, IsAbstractSlot, Slot},
-    HasName, NamedStructure, OrderedStructure, ScalarStructure, SmartShadowStructure,
-    StructureContract, StructureError, TensorStructure,
+    HasName, NamedStructure, OrderedStructure, PermutedStructure, ScalarStructure,
+    SmartShadowStructure, StructureContract, StructureError, TensorStructure,
 };
 
 use anyhow::{anyhow, Result};
@@ -22,8 +22,17 @@ use crate::{
     structure::ToSymbolic,
     tensors::parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
 };
+
+#[cfg(feature = "shadowing")]
+use crate::{structure::FlatIndex, tensors::data::DenseTensor};
+
 #[cfg(not(feature = "shadowing"))]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "shadowing")]
+use symbolica::atom::{
+    representation::{FunView, MulView},
+    Atom, AtomView, FunctionBuilder, Symbol,
+};
 
 #[derive(
     Clone,
@@ -64,10 +73,21 @@ impl<R: RepName> std::fmt::Display for IndexLess<R> {
         Ok(())
     }
 }
-impl<R: RepName> FromIterator<Representation<R>> for IndexLess<R> {
+impl<R: RepName> FromIterator<Representation<R>> for PermutedStructure<IndexLess<R>> {
     fn from_iter<I: IntoIterator<Item = Representation<R>>>(iter: I) -> Self {
-        IndexLess {
-            structure: iter.into_iter().collect(),
+        let structure: Vec<_> = iter.into_iter().collect();
+        structure.into()
+    }
+}
+
+impl<R: RepName> From<Vec<Representation<R>>> for PermutedStructure<IndexLess<R>> {
+    fn from(mut structure: Vec<Representation<R>>) -> Self {
+        let permutation = Permutation::sort(&structure);
+        permutation.apply_slice_in_place(&mut structure);
+
+        PermutedStructure {
+            permutation,
+            structure: IndexLess { structure },
         }
     }
 }
@@ -135,7 +155,10 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T> {
     // type R = T;
     type Indexed = OrderedStructure<T>;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<OrderedStructure<T>, StructureError> {
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<OrderedStructure<T>>, StructureError> {
         if self.structure.len() != indices.len() {
             return Err(StructureError::WrongNumberOfArguments(
                 indices.len(),
@@ -151,7 +174,11 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T> {
             .collect())
     }
     fn dual(self) -> Self {
-        self.structure.into_iter().map(|r| r.dual()).collect()
+        self.structure
+            .into_iter()
+            .map(|r| r.dual())
+            .collect::<PermutedStructure<_>>()
+            .structure
     }
 
     fn external_reps_iter(
@@ -240,7 +267,74 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {}
+impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {
+    fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
+        ExpandedCoefficent {
+            name: None,
+            index: self.co_expanded_index(id).unwrap(),
+            args: None,
+        }
+    }
+
+    fn to_dense_labeled<R>(
+        self,
+        index_to_atom: impl Fn(&Self, FlatIndex) -> R,
+    ) -> Result<DenseTensor<Atom, Self>>
+    where
+        Self: Sized,
+        R: TensorCoefficient,
+    {
+        let mut data = vec![];
+        for index in 0..self.size()? {
+            data.push(index_to_atom(&self, index.into()).to_atom().unwrap());
+        }
+
+        Ok(DenseTensor {
+            data,
+            structure: self,
+        })
+    }
+
+    fn to_dense_labeled_complex<R>(
+        self,
+        index_to_atom: impl Fn(&Self, FlatIndex) -> R,
+    ) -> Result<DenseTensor<Atom, Self>>
+    where
+        Self: Sized,
+        R: TensorCoefficient,
+    {
+        let mut data = vec![];
+        for index in 0..self.size()? {
+            let re = index_to_atom(&self, index.into()).to_atom_re().unwrap();
+            let im = index_to_atom(&self, index.into()).to_atom_im().unwrap();
+            let i = Atom::new_var(Atom::I);
+            data.push(&re + i * &im);
+        }
+
+        Ok(DenseTensor {
+            data,
+            structure: self,
+        })
+    }
+
+    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
+        let slots = self
+            .external_structure_iter()
+            .map(|slot| slot.to_atom())
+            .collect::<Vec<_>>();
+
+        let mut value_builder = FunctionBuilder::new(name.ref_into_symbol());
+
+        for arg in args {
+            value_builder = value_builder.add_arg(arg);
+        }
+
+        for s in slots {
+            value_builder = value_builder.add_arg(&s);
+        }
+        value_builder.finish()
+    }
+}
 
 #[derive(
     Clone,
@@ -269,11 +363,16 @@ impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructu
     fn reindex(
         self,
         indices: &[AbstractIndex],
-    ) -> Result<NamedStructure<Name, Args, R>, StructureError> {
-        Ok(NamedStructure {
-            structure: OrderedStructure::from_iter(self.structure.to_indexed(indices)?),
-            global_name: self.global_name,
-            additional_args: self.additional_args,
+    ) -> Result<PermutedStructure<NamedStructure<Name, Args, R>>, StructureError> {
+        let res = self.structure.reindex(indices)?;
+
+        Ok(PermutedStructure {
+            structure: NamedStructure {
+                global_name: self.global_name,
+                additional_args: self.additional_args,
+                structure: res.structure,
+            },
+            permutation: res.permutation,
         })
     }
 
@@ -302,28 +401,20 @@ impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructu
 
 impl<Name, Args, R: RepName> IndexlessNamedStructure<Name, Args, R> {
     #[must_use]
-    pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> Self
+    pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> PermutedStructure<Self>
     where
         I: RepName,
         R: From<I>,
         T: IntoIterator<Item = Representation<I>>,
     {
-        Self {
-            structure: iter.into_iter().map(|a| a.cast()).collect(),
-            global_name: Some(name),
-            additional_args: args,
-        }
-    }
-
-    pub fn to_indexed(
-        self,
-        indices: &[AbstractIndex],
-    ) -> Result<NamedStructure<Name, Args, R>, StructureError> {
-        Ok(NamedStructure {
-            structure: OrderedStructure::from_iter(self.structure.to_indexed(indices)?),
-            global_name: self.global_name,
-            additional_args: self.additional_args,
-        })
+        iter.into_iter()
+            .map(|a| a.cast())
+            .collect::<PermutedStructure<_>>()
+            .map_structure(move |structure| Self {
+                structure,
+                global_name: Some(name),
+                additional_args: args,
+            })
     }
 }
 

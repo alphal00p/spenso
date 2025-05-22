@@ -12,7 +12,7 @@ use crate::{
         dimension::DimensionError, HasStructure, MergeInfo, StructureContract, StructureError,
         TensorStructure,
     },
-    tensors::data::{DataTensor, NumTensor},
+    tensors::data::DataTensor,
 };
 
 use thiserror::Error;
@@ -221,23 +221,6 @@ where
             (DataTensor::Sparse(s), DataTensor::Dense(o)) => Ok(DataTensor::Dense(s.contract(o)?)),
             (DataTensor::Sparse(s), DataTensor::Sparse(o)) => {
                 Ok(DataTensor::Sparse(s.contract(o)?))
-            }
-        }
-    }
-}
-
-impl<I> Contract<NumTensor<I>> for NumTensor<I>
-where
-    I: Clone + TensorStructure + StructureContract,
-{
-    type LCM = NumTensor<I>;
-    fn contract(&self, other: &NumTensor<I>) -> Result<Self::LCM, ContractionError> {
-        match (self, other) {
-            (NumTensor::Float(a), NumTensor::Float(b)) => Ok(NumTensor::Float(a.contract(b)?)),
-            (NumTensor::Float(a), NumTensor::Complex(b)) => Ok(NumTensor::Complex(a.contract(b)?)),
-            (NumTensor::Complex(a), NumTensor::Float(b)) => Ok(NumTensor::Complex(a.contract(b)?)),
-            (NumTensor::Complex(a), NumTensor::Complex(b)) => {
-                Ok(NumTensor::Complex(a.contract(b)?))
             }
         }
     }

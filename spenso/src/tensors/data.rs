@@ -1,12 +1,14 @@
 use crate::{
-    algebra::algebraic_traits::IsZero,
-    algebra::complex::Complex,
-    algebra::upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
+    algebra::{
+        algebraic_traits::IsZero,
+        complex::Complex,
+        upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
+    },
     iterators::{DenseTensorLinearIterator, IteratableTensor, SparseTensorLinearIterator},
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
-        CastStructure, HasName, HasStructure, OrderedStructure, ScalarStructure, ScalarTensor,
-        StructureContract, TensorStructure, TracksCount,
+        CastStructure, HasName, HasStructure, OrderedStructure, PermutedStructure, ScalarStructure,
+        ScalarTensor, StructureContract, TensorStructure, TracksCount,
     },
 };
 
@@ -364,8 +366,26 @@ where
     type Indexed = DataTensor<T, S::Indexed>;
     type Slot = S::Slot;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
-        self.map_structure_result(|s| s.reindex(indices))
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+        Ok(match self {
+            DataTensor::Dense(d) => {
+                let res = d.reindex(indices)?;
+                PermutedStructure {
+                    structure: DataTensor::Dense(res.structure),
+                    permutation: res.permutation,
+                }
+            }
+            DataTensor::Sparse(d) => {
+                let res = d.reindex(indices)?;
+                PermutedStructure {
+                    structure: DataTensor::Sparse(res.structure),
+                    permutation: res.permutation,
+                }
+            }
+        })
     }
 
     fn dual(self) -> Self {
@@ -619,176 +639,6 @@ where
         Self::GetDataOwned: Clone,
     {
         self.get_ref_linear(index).cloned()
-    }
-}
-
-/// Enum for a datatensor with specific numeric data type, generic on the structure type `I`
-#[derive(Debug, Clone, EnumTryAsInner, Serialize, Deserialize)]
-#[derive_err(Debug)]
-pub enum NumTensor<T: TensorStructure = OrderedStructure> {
-    Float(DataTensor<f64, T>),
-    Complex(DataTensor<Complex<f64>, T>),
-}
-
-impl<S> TensorStructure for NumTensor<S>
-where
-    S: TensorStructure,
-{
-    // type R = <T::Structure as TensorStructure>::R;
-    type Indexed = NumTensor<S::Indexed>;
-    type Slot = S::Slot;
-
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
-        self.map_structure_result(|s| s.reindex(indices))
-    }
-
-    fn dual(self) -> Self {
-        self.map_same_structure(|s| s.dual())
-    }
-
-    delegate! {
-        to self.structure() {
-            fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
-            fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
-            fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
-            fn get_slot(&self, i: usize)-> Option<Self::Slot>;
-            fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn get_dim(&self, i: usize)-> Option<Dimension>;
-            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
-            fn order(&self)-> usize;
-        }
-    }
-}
-
-impl<T> HasStructure for NumTensor<T>
-where
-    T: TensorStructure,
-{
-    type Scalar = Complex<f64>;
-    type ScalarRef<'a>
-        = Complex<&'a f64>
-    where
-        Self: 'a;
-    type Structure = T;
-    type Store<S>
-        = NumTensor<S>
-    where
-        S: TensorStructure;
-
-    fn map_structure<O: TensorStructure>(self, f: impl Fn(Self::Structure) -> O) -> Self::Store<O> {
-        match self {
-            NumTensor::Float(fl) => NumTensor::Float(fl.map_structure(f)),
-            NumTensor::Complex(c) => NumTensor::Complex(c.map_structure(f)),
-        }
-    }
-
-    fn map_structure_result<O: TensorStructure, Er>(
-        self,
-        f: impl Fn(Self::Structure) -> Result<O, Er>,
-    ) -> std::result::Result<Self::Store<O>, Er> {
-        Ok(match self {
-            NumTensor::Float(fl) => match fl.map_structure_result(f) {
-                Ok(fl) => NumTensor::Float(fl),
-                Err(er) => return Err(er),
-            },
-            NumTensor::Complex(c) => match c.map_structure_result(f) {
-                Ok(c) => NumTensor::Complex(c),
-                Err(er) => return Err(er),
-            },
-        })
-    }
-
-    fn structure(&self) -> &Self::Structure {
-        match self {
-            NumTensor::Float(f) => f.structure(),
-            NumTensor::Complex(c) => c.structure(),
-        }
-    }
-
-    fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
-        match self {
-            NumTensor::Float(v) => NumTensor::Float(v.map_same_structure(f)),
-            NumTensor::Complex(c) => NumTensor::Complex(c.map_same_structure(f)),
-        }
-    }
-
-    fn mut_structure(&mut self) -> &mut Self::Structure {
-        match self {
-            NumTensor::Float(f) => f.mut_structure(),
-            NumTensor::Complex(c) => c.mut_structure(),
-        }
-    }
-
-    fn scalar(self) -> Option<Self::Scalar> {
-        match self {
-            NumTensor::Float(f) => f.scalar().map(|x| Complex { re: x, im: 0. }),
-            NumTensor::Complex(c) => c.scalar(),
-        }
-    }
-
-    fn scalar_ref(&self) -> Option<Self::ScalarRef<'_>> {
-        match self {
-            NumTensor::Float(f) => f.scalar_ref().map(|x| Complex { re: x, im: &0. }),
-            NumTensor::Complex(c) => c.scalar_ref().map(|a| a.as_ref()),
-        }
-    }
-}
-
-impl<T> ScalarTensor for NumTensor<T>
-where
-    T: TensorStructure + ScalarStructure,
-{
-    fn new_scalar(scalar: Self::Scalar) -> Self {
-        NumTensor::Complex(DataTensor::new_scalar(scalar))
-    }
-}
-
-impl<T> TracksCount for NumTensor<T>
-where
-    T: TracksCount + TensorStructure,
-{
-    fn contractions_num(&self) -> usize {
-        match self {
-            NumTensor::Float(f) => f.contractions_num(),
-            NumTensor::Complex(c) => c.contractions_num(),
-        }
-    }
-}
-
-impl<T> From<DenseTensor<f64, T>> for NumTensor<T>
-where
-    T: TensorStructure,
-{
-    fn from(other: DenseTensor<f64, T>) -> Self {
-        NumTensor::Float(DataTensor::Dense(other))
-    }
-}
-
-impl<T> From<SparseTensor<f64, T>> for NumTensor<T>
-where
-    T: TensorStructure,
-{
-    fn from(other: SparseTensor<f64, T>) -> Self {
-        NumTensor::Float(DataTensor::Sparse(other))
-    }
-}
-
-impl<T> From<DenseTensor<Complex<f64>, T>> for NumTensor<T>
-where
-    T: TensorStructure,
-{
-    fn from(other: DenseTensor<Complex<f64>, T>) -> Self {
-        NumTensor::Complex(DataTensor::Dense(other))
-    }
-}
-
-impl<T> From<SparseTensor<Complex<f64>, T>> for NumTensor<T>
-where
-    T: TensorStructure,
-{
-    fn from(other: SparseTensor<Complex<f64>, T>) -> Self {
-        NumTensor::Complex(DataTensor::Sparse(other))
     }
 }
 

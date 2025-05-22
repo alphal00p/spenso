@@ -1,17 +1,27 @@
+use std::ops::Deref;
+
 use bitvec::vec::BitVec;
 use indexmap::IndexMap;
+use linnet::permutation::Permutation;
 
 use crate::utils::MergeOrdered;
 
 #[cfg(feature = "shadowing")]
-use super::{ToSymbolic, AIND_SYMBOLS};
+use crate::{
+    shadowing::symbolica_utils::IntoSymbol,
+    structure::{ExpandedCoefficent, FlatIndex, ToSymbolic, AIND_SYMBOLS},
+    tensors::{data::DenseTensor, parametric::TensorCoefficient},
+};
+
+#[cfg(feature = "shadowing")]
+use anyhow::Result;
 
 use anyhow::anyhow;
 use delegate::delegate;
 #[cfg(feature = "shadowing")]
 use symbolica::atom::{
     representation::{FunView, MulView},
-    AtomView,
+    Atom, AtomView, FunctionBuilder, Symbol,
 };
 
 use super::{
@@ -34,7 +44,30 @@ use serde::{Deserialize, Serialize};
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
 pub struct OrderedStructure<R: RepName = LibraryRep> {
-    pub structure: Vec<Slot<R>>,
+    structure: Vec<Slot<R>>,
+    // permutation: Option<Permutation>,
+}
+
+pub struct PermutedStructure<S> {
+    pub structure: S,
+    pub permutation: Permutation,
+}
+
+impl<S> Deref for PermutedStructure<S> {
+    type Target = S;
+
+    fn deref(&self) -> &Self::Target {
+        &self.structure
+    }
+}
+
+impl<S> PermutedStructure<S> {
+    pub fn map_structure<U>(self, mut f: impl FnOnce(S) -> U) -> PermutedStructure<U> {
+        PermutedStructure {
+            structure: f(self.structure),
+            permutation: self.permutation,
+        }
+    }
 }
 
 impl<R: RepName<Dual = R>> TensorStructure for OrderedStructure<R> {
@@ -42,7 +75,10 @@ impl<R: RepName<Dual = R>> TensorStructure for OrderedStructure<R> {
     type Indexed = Self;
     // type R = PhysicalReps;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         if self.structure.len() != indices.len() {
             return Err(StructureError::WrongNumberOfArguments(
                 self.structure.len(),
@@ -58,7 +94,10 @@ impl<R: RepName<Dual = R>> TensorStructure for OrderedStructure<R> {
     }
 
     fn dual(self) -> Self {
-        self.into_iter().map(|s| s.dual()).collect()
+        self.into_iter()
+            .map(|s| s.dual())
+            .collect::<PermutedStructure<_>>()
+            .structure
     }
     fn external_reps_iter(
         &self,
@@ -105,74 +144,43 @@ impl<R: RepName> Default for OrderedStructure<R> {
     }
 }
 
-#[cfg(feature = "shadowing")]
-impl<R: RepName> TryFrom<AtomView<'_>> for OrderedStructure<R> {
-    type Error = SlotError;
-    fn try_from(value: AtomView) -> Result<Self, Self::Error> {
-        match value {
-            AtomView::Mul(mul) => mul.try_into(),
-            AtomView::Fun(fun) => fun.try_into(),
-            AtomView::Pow(_) => {
-                Ok(OrderedStructure::<R>::default()) // powers do not have a structure
-            }
-            _ => Err(anyhow!("Not a structure: {value}").into()), // could check if it
-        }
-    }
-}
-
 // impl From<Vec<PhysicalSlots>> for VecStructure {
 //     fn from(value: Vec<PhysicalSlots>) -> Self {
 //         VecStructure { structure: value }
 //     }
 // }
 
-#[cfg(feature = "shadowing")]
-impl<R: RepName> TryFrom<FunView<'_>> for OrderedStructure<R> {
-    type Error = SlotError;
-    fn try_from(value: FunView) -> Result<Self, Self::Error> {
-        if value.get_symbol() == AIND_SYMBOLS.aind {
-            let mut structure: Vec<Slot<R>> = vec![];
-
-            for arg in value.iter() {
-                structure.push(arg.try_into()?);
-            }
-
-            Ok(OrderedStructure { structure })
-        } else {
-            let mut structure: Self = vec![].into();
-            for arg in value.iter() {
-                structure.extend(arg.try_into()?); // append all the structures found
-            }
-            Ok(structure)
-        }
+impl<R: RepName> OrderedStructure<R> {
+    pub fn from_iter<S: RepName, T: IntoIterator<Item = Slot<S>>>(
+        iter: T,
+    ) -> PermutedStructure<Self>
+    where
+        R: From<S>,
+    {
+        let structure: Vec<Slot<R>> = iter.into_iter().map(|a| a.cast()).collect();
+        PermutedStructure::from(structure)
     }
 }
 
-#[cfg(feature = "shadowing")]
-impl<R: RepName> TryFrom<MulView<'_>> for OrderedStructure<R> {
-    type Error = SlotError;
-    fn try_from(value: MulView) -> Result<Self, Self::Error> {
-        let mut structure: Self = vec![].into();
-
-        for arg in value.iter() {
-            structure.extend(arg.try_into()?);
-        }
-        Ok(structure)
-    }
-}
-
-impl<S: RepName, R: From<S> + RepName> FromIterator<Slot<S>> for OrderedStructure<R> {
+impl<S: RepName, R: From<S> + RepName> FromIterator<Slot<S>>
+    for PermutedStructure<OrderedStructure<R>>
+{
     fn from_iter<T: IntoIterator<Item = Slot<S>>>(iter: T) -> Self {
-        let mut structure: Vec<Slot<R>> = iter.into_iter().map(|a| a.cast()).collect();
-        structure.sort();
-        Self { structure }
+        let structure: Vec<Slot<R>> = iter.into_iter().map(|a| a.cast()).collect();
+        PermutedStructure::from(structure)
     }
 }
 
-impl<R: RepName> From<Vec<Slot<R>>> for OrderedStructure<R> {
+impl<R: RepName> From<Vec<Slot<R>>> for PermutedStructure<OrderedStructure<R>> {
     fn from(mut structure: Vec<Slot<R>>) -> Self {
-        structure.sort();
-        Self { structure }
+        let permutation = Permutation::sort(&structure);
+
+        permutation.apply_slice_in_place(&mut structure);
+
+        PermutedStructure {
+            structure: OrderedStructure { structure },
+            permutation,
+        }
     }
 }
 
@@ -201,12 +209,18 @@ impl<'a, R: RepName> IntoIterator for &'a mut OrderedStructure<R> {
 }
 
 impl<R: RepName> OrderedStructure<R> {
-    pub fn new(structure: Vec<Slot<R>>) -> Self {
-        Self { structure }
+    pub fn new(structure: Vec<Slot<R>>) -> PermutedStructure<Self> {
+        PermutedStructure::from(structure)
     }
 
     pub fn push(&mut self, item: Slot<R>) {
         self.structure.push(item)
+    }
+
+    pub fn sort(&mut self) -> Permutation {
+        let permutation = Permutation::sort(&self.structure);
+        permutation.apply_slice_in_place(&mut self.structure);
+        permutation
     }
 
     fn extend(&mut self, other: Self) {
@@ -214,11 +228,15 @@ impl<R: RepName> OrderedStructure<R> {
     }
 
     pub fn to_named<N, A>(self, name: N, args: Option<A>) -> NamedStructure<N, A, R> {
-        NamedStructure::from_iter(self, name, args)
+        NamedStructure {
+            structure: self,
+            global_name: Some(name),
+            additional_args: args,
+        }
     }
 
     pub fn empty() -> Self {
-        Self { structure: vec![] }
+        Self::default()
     }
 }
 
@@ -265,12 +283,79 @@ impl<R: RepName> std::fmt::Display for OrderedStructure<R> {
 
 impl<R: RepName> ScalarStructure for OrderedStructure<R> {
     fn scalar_structure() -> Self {
-        OrderedStructure { structure: vec![] }
+        Self::default()
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl<R: RepName<Dual = R>> ToSymbolic for OrderedStructure<R> {}
+impl<R: RepName<Dual = R>> ToSymbolic for OrderedStructure<R> {
+    fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
+        ExpandedCoefficent {
+            name: None,
+            index: self.co_expanded_index(id).unwrap(),
+            args: None,
+        }
+    }
+
+    fn to_dense_labeled<T>(
+        self,
+        index_to_atom: impl Fn(&Self, FlatIndex) -> T,
+    ) -> Result<DenseTensor<Atom, Self>>
+    where
+        Self: Sized,
+        T: TensorCoefficient,
+    {
+        let mut data = vec![];
+        for index in 0..self.size()? {
+            data.push(index_to_atom(&self, index.into()).to_atom().unwrap());
+        }
+
+        Ok(DenseTensor {
+            data,
+            structure: self,
+        })
+    }
+
+    fn to_dense_labeled_complex<T>(
+        self,
+        index_to_atom: impl Fn(&Self, FlatIndex) -> T,
+    ) -> Result<DenseTensor<Atom, Self>>
+    where
+        Self: Sized,
+        T: TensorCoefficient,
+    {
+        let mut data = vec![];
+        for index in 0..self.size()? {
+            let re = index_to_atom(&self, index.into()).to_atom_re().unwrap();
+            let im = index_to_atom(&self, index.into()).to_atom_im().unwrap();
+            let i = Atom::new_var(Atom::I);
+            data.push(&re + i * &im);
+        }
+
+        Ok(DenseTensor {
+            data,
+            structure: self,
+        })
+    }
+
+    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
+        let slots = self
+            .external_structure_iter()
+            .map(|slot| slot.to_atom())
+            .collect::<Vec<_>>();
+
+        let mut value_builder = FunctionBuilder::new(name.ref_into_symbol());
+
+        for arg in args {
+            value_builder = value_builder.add_arg(arg);
+        }
+
+        for s in slots {
+            value_builder = value_builder.add_arg(&s);
+        }
+        value_builder.finish()
+    }
+}
 
 impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
     fn trace(&mut self, i: usize, j: usize) {
@@ -306,7 +391,8 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
                     None
                 }
             })
-            .collect();
+            .collect::<PermutedStructure<_>>()
+            .structure;
     }
 
     fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError> {

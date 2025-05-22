@@ -15,7 +15,8 @@ fn test_fiber_creation() {
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),
-    ]);
+    ])
+    .structure;
 
     // Test creation from boolean filter
     let filter = [true, false, true];
@@ -53,7 +54,8 @@ fn test_fiber_modification() {
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),
-    ]);
+    ])
+    .structure;
 
     // Start with all zeros
     let mut fiber = Fiber::zeros(&structure);
@@ -93,7 +95,8 @@ fn test_fiber_class_conversion() {
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),
-    ]);
+    ])
+    .structure;
 
     // Create a fiber with mixed fixed/free indices
     let filter = [true, false, true];
@@ -122,7 +125,7 @@ fn test_fiber_class_conversion() {
 #[test]
 fn test_fiber_display() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![rep.new_slot(3, 0), rep.new_slot(4, 0)]);
+    let structure = OrderedStructure::new(vec![rep.new_slot(3, 0), rep.new_slot(4, 0)]).structure;
 
     // Create a fiber with specific pattern
     let mut fiber = Fiber::zeros(&structure);
@@ -141,7 +144,8 @@ fn test_single_fiber_detection() {
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),
-    ]);
+    ])
+    .structure;
 
     // Create fibers with different numbers of free indices
     let mut zero_free = Fiber::zeros(&structure);

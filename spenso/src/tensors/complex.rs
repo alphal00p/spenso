@@ -6,7 +6,7 @@ use std::{
 use crate::{
     iterators::IteratorEnum,
     network::Ref,
-    structure::concrete_index::ConcreteIndex,
+    structure::{concrete_index::ConcreteIndex, PermutedStructure},
     tensors::data::{SparseTensor, StorageTensor},
 };
 use anyhow::{anyhow, Result};
@@ -369,8 +369,26 @@ where
     type Indexed = RealOrComplexTensor<T, S::Indexed>;
     type Slot = S::Slot;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
-        self.map_structure_result(|s| s.reindex(indices))
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+        Ok(match self {
+            RealOrComplexTensor::Complex(d) => {
+                let res = d.reindex(indices)?;
+                PermutedStructure {
+                    structure: RealOrComplexTensor::Complex(res.structure),
+                    permutation: res.permutation,
+                }
+            }
+            RealOrComplexTensor::Real(d) => {
+                let res = d.reindex(indices)?;
+                PermutedStructure {
+                    structure: RealOrComplexTensor::Real(res.structure),
+                    permutation: res.permutation,
+                }
+            }
+        })
     }
 
     fn dual(self) -> Self {

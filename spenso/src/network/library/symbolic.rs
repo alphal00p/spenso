@@ -24,11 +24,14 @@ impl ExplicitKey {
     pub fn from_structure<S: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs>>(
         structure: &S,
     ) -> Option<Self> {
-        Some(IndexlessNamedStructure::from_iter(
-            structure.reps().into_iter().map(|r| r.to_lib()),
-            structure.name()?.ref_into_symbol(),
-            structure.args().map(|a| a.args()),
-        ))
+        Some(
+            IndexlessNamedStructure::from_iter(
+                structure.reps().into_iter().map(|r| r.to_lib()),
+                structure.name()?.ref_into_symbol(),
+                structure.args().map(|a| a.args()),
+            )
+            .structure,
+        )
     }
 }
 
@@ -241,6 +244,7 @@ impl<T: HasStructure<Structure = ExplicitKey> + SetTensorData + Clone + LibraryT
             symbol!(Self::METRIC_NAME),
             None,
         )
+        .structure
     }
 
     pub fn generic_mink_metric(key: ExplicitKey) -> T
@@ -380,9 +384,9 @@ mod test {
         lib.get(&key).unwrap();
         let indexed = key
             .clone()
-            .to_indexed(&[0.into(), 1.into(), 2.into()])
+            .reindex(&[0.into(), 1.into(), 2.into()])
             .unwrap();
-        let expr = indexed.to_symbolic().unwrap();
+        let expr = indexed.structure.to_symbolic().unwrap();
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -414,8 +418,11 @@ mod test {
         }) = net.result().unwrap()
         {
             // println!("YaY:{a}");
-            assert_eq!(graph_slots, indexed.structure.structure);
-            assert_eq!(&key, res_key);
+            assert_eq!(
+                graph_slots,
+                indexed.structure.structure.external_structure()
+            );
+            assert_eq!(&key.structure, res_key);
         } else {
             panic!("Not Key")
         }
@@ -436,8 +443,9 @@ mod test {
 
         let indexed = key
             .clone()
-            .to_indexed(&[0.into(), 1.into(), 2.into()])
-            .unwrap();
+            .reindex(&[0.into(), 1.into(), 2.into()])
+            .unwrap()
+            .structure;
         let expr = indexed.to_symbolic().unwrap();
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,

@@ -4,11 +4,13 @@ use crate::{
     algebra::complex::{Complex, RealOrComplex},
     structure::{
         abstract_index::AbstractIndex, concrete_index::ConcreteIndex, dimension::Dimension,
-        representation::Representation, slot::IsAbstractSlot, HasStructure, StructureError,
-        TensorStructure,
+        representation::Representation, slot::IsAbstractSlot, HasStructure, PermutedStructure,
+        StructureError, TensorStructure,
     },
-    tensors::complex::RealOrComplexTensor,
-    tensors::data::{DataTensor, DenseTensor, SetTensorData, SparseTensor},
+    tensors::{
+        complex::RealOrComplexTensor,
+        data::{DataTensor, DenseTensor, SetTensorData, SparseTensor},
+    },
 };
 
 use anyhow::Result;
@@ -113,7 +115,10 @@ impl<T> Iterator for DummyIter<T> {
 impl<T: TensorStructure> TensorStructure for DummyLibraryTensor<T> {
     type Slot = T::Slot;
     type Indexed = T::Indexed;
-    fn reindex(self, _indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
+    fn reindex(
+        self,
+        _indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         unimplemented!()
     }
     fn dual(self) -> Self {
@@ -278,18 +283,19 @@ impl<D: Clone, S: TensorStructure + Clone> LibraryTensor for DataTensor<D, S> {
     }
 
     fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError> {
-        let new_structure = self.structure().clone().reindex(indices)?;
+        Ok(self.clone().reindex(indices)?.structure)
+        // let new_structure = self.structure().clone().reindex(indices)?;
 
-        Ok(match self {
-            DataTensor::Dense(d) => DataTensor::Dense(DenseTensor {
-                data: d.data.clone(),
-                structure: new_structure,
-            }),
-            DataTensor::Sparse(s) => DataTensor::Sparse(SparseTensor {
-                elements: s.elements.clone(),
-                structure: new_structure,
-            }),
-        })
+        // Ok(match self {
+        //     DataTensor::Dense(d) => DataTensor::Dense(DenseTensor {
+        //         data: d.data.clone(),
+        //         structure: new_structure,
+        //     }),
+        //     DataTensor::Sparse(s) => DataTensor::Sparse(SparseTensor {
+        //         elements: s.elements.clone(),
+        //         structure: new_structure,
+        //     }),
+        // })
     }
 }
 

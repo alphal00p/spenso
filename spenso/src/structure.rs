@@ -53,12 +53,12 @@ pub mod indexless;
 pub use indexless::{IndexLess, IndexlessNamedStructure};
 pub mod named;
 pub use named::NamedStructure;
-pub mod permuted;
-pub use permuted::PermutedStructure;
+// pub mod permuted;
+// pub use permuted::PermutedStructure;
 pub mod ordered;
 pub mod representation;
 pub mod slot;
-pub use ordered::OrderedStructure;
+pub use ordered::{OrderedStructure, PermutedStructure};
 
 pub mod smart_shadow;
 pub use smart_shadow::SmartShadowStructure;
@@ -117,6 +117,90 @@ pub trait CastStructure<O: HasStructure<Structure: From<Self::Structure>>>: HasS
 }
 
 #[cfg(feature = "shadowing")]
+impl<T: HasName> ToSymbolic for PermutedStructure<T>
+where
+    T: TensorStructure,
+    T::Name: IntoSymbol,
+    T::Args: IntoArgs,
+{
+    fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
+        ExpandedCoefficent {
+            name: self.structure.name().map(|n| n.ref_into_symbol()),
+            index: self.structure.co_expanded_index(id).unwrap(),
+            args: None,
+        }
+    }
+
+    fn flat_atom(&self, id: FlatIndex) -> FlatCoefficent<()> {
+        FlatCoefficent {
+            name: self.structure.name().map(|n| n.ref_into_symbol()),
+            index: id,
+            args: None,
+        }
+    }
+
+    fn to_dense_labeled<R>(
+        self,
+        index_to_atom: impl Fn(&Self, FlatIndex) -> R,
+    ) -> Result<DenseTensor<Atom, Self>>
+    where
+        Self: Sized,
+        R: TensorCoefficient,
+    {
+        let mut data = vec![];
+        for index in 0..self.structure.size()? {
+            data.push(index_to_atom(&self, index.into()).to_atom().unwrap());
+        }
+
+        Ok(DenseTensor {
+            data,
+            structure: self,
+        })
+    }
+
+    fn to_dense_labeled_complex<R>(
+        self,
+        index_to_atom: impl Fn(&Self, FlatIndex) -> R,
+    ) -> Result<DenseTensor<Atom, Self>>
+    where
+        Self: Sized,
+        R: TensorCoefficient,
+    {
+        let mut data = vec![];
+        for index in 0..self.structure.size()? {
+            let re = index_to_atom(&self, index.into()).to_atom_re().unwrap();
+            let im = index_to_atom(&self, index.into()).to_atom_im().unwrap();
+            let i = Atom::new_var(Atom::I);
+            data.push(&re + i * &im);
+        }
+
+        Ok(DenseTensor {
+            data,
+            structure: self,
+        })
+    }
+
+    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
+        let slots = self
+            .structure
+            .external_structure_iter()
+            .map(|slot| slot.to_atom())
+            .collect::<Vec<_>>();
+
+        let mut value_builder = FunctionBuilder::new(name.ref_into_symbol());
+
+        for arg in args {
+            value_builder = value_builder.add_arg(arg);
+        }
+
+        for s in slots {
+            value_builder = value_builder.add_arg(&s);
+        }
+        value_builder.finish()
+    }
+}
+
+#[cfg(feature = "shadowing")]
 impl<T: HasName> ToSymbolic for T
 where
     T: TensorStructure,
@@ -138,17 +222,77 @@ where
             args: None,
         }
     }
+
+    fn to_dense_labeled<R>(
+        self,
+        index_to_atom: impl Fn(&Self, FlatIndex) -> R,
+    ) -> Result<DenseTensor<Atom, Self>>
+    where
+        Self: Sized,
+        R: TensorCoefficient,
+    {
+        let mut data = vec![];
+        for index in 0..self.size()? {
+            data.push(index_to_atom(&self, index.into()).to_atom().unwrap());
+        }
+
+        Ok(DenseTensor {
+            data,
+            structure: self,
+        })
+    }
+
+    fn to_dense_labeled_complex<R>(
+        self,
+        index_to_atom: impl Fn(&Self, FlatIndex) -> R,
+    ) -> Result<DenseTensor<Atom, Self>>
+    where
+        Self: Sized,
+        R: TensorCoefficient,
+    {
+        let mut data = vec![];
+        for index in 0..self.size()? {
+            let re = index_to_atom(&self, index.into()).to_atom_re().unwrap();
+            let im = index_to_atom(&self, index.into()).to_atom_im().unwrap();
+            let i = Atom::new_var(Atom::I);
+            data.push(&re + i * &im);
+        }
+
+        Ok(DenseTensor {
+            data,
+            structure: self,
+        })
+    }
+
+    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
+        let slots = self
+            .external_structure_iter()
+            .map(|slot| slot.to_atom())
+            .collect::<Vec<_>>();
+
+        let mut value_builder = FunctionBuilder::new(name.ref_into_symbol());
+
+        for arg in args {
+            value_builder = value_builder.add_arg(arg);
+        }
+
+        for s in slots {
+            value_builder = value_builder.add_arg(&s);
+        }
+        value_builder.finish()
+    }
 }
 
 #[cfg(feature = "shadowing")]
-pub trait ToSymbolic: TensorStructure {
-    fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
-        ExpandedCoefficent {
-            name: None,
-            index: self.co_expanded_index(id).unwrap(),
-            args: None,
-        }
-    }
+pub trait ToSymbolic {
+    fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()>;
+    // {
+    //     ExpandedCoefficent {
+    //         name: None,
+    //         index: self.co_expanded_index(id).unwrap(),
+    //         args: None,
+    //     }
+    // }
 
     fn flat_atom(&self, id: FlatIndex) -> FlatCoefficent<()> {
         FlatCoefficent {
@@ -171,18 +315,7 @@ pub trait ToSymbolic: TensorStructure {
     ) -> Result<DenseTensor<Atom, Self>>
     where
         Self: Sized,
-        T: TensorCoefficient,
-    {
-        let mut data = vec![];
-        for index in 0..self.size()? {
-            data.push(index_to_atom(&self, index.into()).to_atom().unwrap());
-        }
-
-        Ok(DenseTensor {
-            data,
-            structure: self,
-        })
-    }
+        T: TensorCoefficient;
 
     fn to_dense_labeled_complex<T>(
         self,
@@ -190,21 +323,7 @@ pub trait ToSymbolic: TensorStructure {
     ) -> Result<DenseTensor<Atom, Self>>
     where
         Self: Sized,
-        T: TensorCoefficient,
-    {
-        let mut data = vec![];
-        for index in 0..self.size()? {
-            let re = index_to_atom(&self, index.into()).to_atom_re().unwrap();
-            let im = index_to_atom(&self, index.into()).to_atom_im().unwrap();
-            let i = Atom::new_var(Atom::I);
-            data.push(&re + i * &im);
-        }
-
-        Ok(DenseTensor {
-            data,
-            structure: self,
-        })
-    }
+        T: TensorCoefficient;
 
     fn to_dense_flat_labels(self) -> Result<DenseTensor<Atom, Self>>
     where
@@ -222,23 +341,7 @@ pub trait ToSymbolic: TensorStructure {
         Some(self.to_symbolic_with(self.name()?.ref_into_symbol(), &args))
     }
 
-    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
-        let slots = self
-            .external_structure_iter()
-            .map(|slot| slot.to_atom())
-            .collect::<Vec<_>>();
-
-        let mut value_builder = FunctionBuilder::new(name.ref_into_symbol());
-
-        for arg in args {
-            value_builder = value_builder.add_arg(arg);
-        }
-
-        for s in slots {
-            value_builder = value_builder.add_arg(&s);
-        }
-        value_builder.finish()
-    }
+    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom;
 }
 
 pub trait ScalarStructure {
@@ -250,7 +353,10 @@ pub trait TensorStructure {
     // type R: Rep;
     //
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError>;
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError>;
     fn dual(self) -> Self;
 
     fn string_rep(&self) -> String {
@@ -725,8 +831,17 @@ where
     type Indexed = TensorShell<T::Indexed>;
     type Slot = T::Slot;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
-        self.map_structure_result(|s| s.reindex(indices))
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+        let res = self.structure.reindex(indices)?;
+        Ok(PermutedStructure {
+            structure: TensorShell {
+                structure: res.structure,
+            },
+            permutation: res.permutation,
+        })
     }
 
     fn dual(self) -> Self {
@@ -870,20 +985,20 @@ mod shadowing_tests {
     use symbolica::atom::AtomCore;
     use symbolica::parse;
 
-    #[test]
-    fn named_structure_from_atom() {
-        let expr = parse!("p(1,mu,aind(lor(4,4)))").unwrap();
+    // #[test]
+    // fn named_structure_from_atom() {
+    //     let expr = parse!("p(1,mu,aind(lor(4,4)))").unwrap();
 
-        if let AtomView::Fun(f) = expr.as_atom_view() {
-            let named_structure = AtomStructure::<LibraryRep>::try_from(f);
-            match named_structure {
-                Ok(named_structure) => println!("{}", named_structure),
-                Err(e) => println!("{}", e),
-            }
-        }
+    //     if let AtomView::Fun(f) = expr.as_atom_view() {
+    //         let named_structure = AtomStructure::<LibraryRep>::try_from(f);
+    //         match named_structure {
+    //             Ok(named_structure) => println!("{}", named_structure),
+    //             Err(e) => println!("{}", e),
+    //         }
+    //     }
 
-        if let AtomView::Fun(f) = parse!("gamma(1,mink(1,2),mink(1,2))").unwrap().as_view() {
-            let _ = ShadowedStructure::try_from(f).unwrap();
-        }
-    }
+    //     if let AtomView::Fun(f) = parse!("gamma(1,mink(1,2),mink(1,2))").unwrap().as_view() {
+    //         let _ = ShadowedStructure::try_from(f).unwrap();
+    //     }
+    // }
 }

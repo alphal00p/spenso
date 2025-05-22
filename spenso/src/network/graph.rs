@@ -1104,6 +1104,8 @@ impl<'a, K: Clone> Sub<NetworkGraph<K>> for &'a NetworkGraph<K> {
 #[cfg(test)]
 pub mod test {
 
+    use std::ops::Deref;
+
     use crate::{
         network::graph::NetworkLeaf,
         structure::{
@@ -1126,7 +1128,8 @@ pub mod test {
             &OrderedStructure::<LibraryRep>::from_iter([
                 Minkowski {}.new_slot(1, 2),
                 Minkowski {}.new_slot(2, 2),
-            ]),
+            ])
+            .structure,
             NetworkLeaf::LocalTensor(1),
         );
 
@@ -1134,7 +1137,8 @@ pub mod test {
             &OrderedStructure::<LibraryRep>::from_iter([
                 Minkowski {}.new_slot(1, 2),
                 Minkowski {}.new_slot(2, 2),
-            ]),
+            ])
+            .structure,
             NetworkLeaf::LocalTensor(2),
         );
 
@@ -1142,7 +1146,8 @@ pub mod test {
             &OrderedStructure::<LibraryRep>::from_iter([
                 Lorentz {}.new_slot(1, 2).to_lib(),
                 Euclidean {}.new_slot(2, 2).to_lib(),
-            ]),
+            ])
+            .structure,
             NetworkLeaf::LocalTensor(2),
         );
 
@@ -1150,7 +1155,8 @@ pub mod test {
             &OrderedStructure::<LibraryRep>::from_iter([
                 Lorentz {}.dual().new_slot(1, 2).to_lib(),
                 Euclidean {}.new_slot(2, 1).to_lib(),
-            ]),
+            ])
+            .structure,
             NetworkLeaf::LocalTensor(2),
         );
         let s2 = NetworkGraph::scalar(3);

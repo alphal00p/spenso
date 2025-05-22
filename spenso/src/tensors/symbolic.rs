@@ -13,8 +13,8 @@ use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         abstract_index::AIND_SYMBOLS, representation::LibrarySlot, HasName, HasStructure,
-        MergeInfo, NamedStructure, OrderedStructure, StructureContract, TensorShell,
-        TensorStructure, ToSymbolic,
+        MergeInfo, NamedStructure, OrderedStructure, PermutedStructure, StructureContract,
+        TensorShell, TensorStructure, ToSymbolic,
     },
     tensors::parametric::MixedTensor,
 };
@@ -56,10 +56,17 @@ impl TensorStructure for SymbolicTensor {
     type Indexed = SymbolicTensor;
     type Slot = LibrarySlot;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
-        Ok(Self {
-            structure: self.structure.reindex(indices)?,
-            expression: self.expression,
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+        let res = self.structure.reindex(indices)?;
+        Ok(PermutedStructure {
+            structure: Self {
+                structure: res.structure,
+                expression: self.expression,
+            },
+            permutation: res.permutation,
         })
     }
 
@@ -186,7 +193,7 @@ impl SymbolicTensor {
     {
         Some(SymbolicTensor {
             expression: structure.to_symbolic()?,
-            structure: structure.external_structure().into(),
+            structure: PermutedStructure::from(structure.external_structure()).structure,
         })
     }
 
@@ -228,20 +235,20 @@ impl SymbolicTensor {
     }
 }
 
-impl TryFrom<Atom> for SymbolicTensor {
-    type Error = String;
-    fn try_from(value: Atom) -> Result<Self, Self::Error> {
-        let structure = value
-            .as_view()
-            .try_into()
-            .unwrap_or(OrderedStructure::empty());
+// impl TryFrom<Atom> for SymbolicTensor {
+//     type Error = String;
+//     fn try_from(value: Atom) -> Result<Self, Self::Error> {
+//         let structure = value
+//             .as_view()
+//             .try_into()
+//             .unwrap_or(OrderedStructure::empty());
 
-        Ok(SymbolicTensor {
-            structure,
-            expression: value,
-        })
-    }
-}
+//         Ok(SymbolicTensor {
+//             structure,
+//             expression: value,
+//         })
+//     }
+// }
 
 impl HasName for SymbolicTensor {
     type Name = Symbol;

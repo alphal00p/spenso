@@ -10,8 +10,9 @@ use super::{
     dimension::Dimension,
     representation::{LibraryRep, RepName, Representation},
     slot::{ConstructibleSlot, DualSlotTo, IsAbstractSlot, Slot},
-    HasName, IndexlessNamedStructure, MergeInfo, NamedStructure, OrderedStructure, ScalarStructure,
-    StructureContract, StructureError, TensorStructure, TracksCount,
+    HasName, IndexlessNamedStructure, MergeInfo, NamedStructure, OrderedStructure,
+    PermutedStructure, ScalarStructure, StructureContract, StructureError, TensorStructure,
+    TracksCount,
 };
 use bitvec::{order::Lsb0, vec::BitVec};
 
@@ -44,18 +45,41 @@ pub struct SmartShadowStructure<Name = String, Args = usize, R: RepName = Librar
 }
 
 impl<Name, Args, R: RepName> SmartShadowStructure<Name, Args, R> {
+    pub fn map_underlying_structure(
+        self,
+        mut f: impl FnMut(OrderedStructure<R>) -> OrderedStructure<R>,
+    ) -> Self {
+        Self {
+            structure: f(self.structure),
+            contractions: self.contractions,
+            global_name: self.global_name,
+            additional_args: self.additional_args,
+        }
+    }
+
     /// Constructs a new [`SmartShadow`] from a list of tuples of indices and dimension (assumes they are all euclidean), along with a name
     #[must_use]
-    pub fn from_iter<I, T>(iter: T, name: Option<Name>, args: Option<Args>) -> Self
+    pub fn from_iter<I, T>(
+        iter: T,
+        name: Option<Name>,
+        args: Option<Args>,
+    ) -> PermutedStructure<Self>
     where
         I: Into<Slot<R>>,
         T: IntoIterator<Item = I>,
     {
-        Self {
-            structure: iter.into_iter().map(I::into).collect(),
-            global_name: name,
-            additional_args: args,
-            contractions: 0,
+        let res = iter
+            .into_iter()
+            .map(I::into)
+            .collect::<PermutedStructure<_>>();
+        PermutedStructure {
+            structure: Self {
+                structure: res.structure,
+                global_name: name,
+                additional_args: args,
+                contractions: 0,
+            },
+            permutation: res.permutation,
         }
     }
 }
@@ -112,12 +136,20 @@ impl<N, A, R: RepName<Dual = R>> TensorStructure for SmartShadowStructure<N, A, 
     type Slot = Slot<R>;
     type Indexed = Self;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
-        Ok(Self {
-            contractions: self.contractions,
-            global_name: self.global_name,
-            additional_args: self.additional_args,
-            structure: self.structure.reindex(indices)?,
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+        let res = self.structure.reindex(indices)?;
+
+        Ok(PermutedStructure {
+            structure: Self {
+                contractions: self.contractions,
+                global_name: self.global_name,
+                additional_args: self.additional_args,
+                structure: res.structure,
+            },
+            permutation: res.permutation,
         })
     }
     // type R = PhysicalReps;

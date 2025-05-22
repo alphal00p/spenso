@@ -34,7 +34,7 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
                     structure.push(arg.try_into()?);
                 }
 
-                Ok(OrderedStructure::from(structure).into())
+                Ok(OrderedStructure::new(structure).structure.into())
             }
             name => {
                 let mut structure: ShadowedStructure = OrderedStructure::default().into();
@@ -74,7 +74,7 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
                 if let Some(e) = is_structure {
                     Err(StructureError::EmptyStructure(e))
                 } else {
-                    structure.structure.structure.sort();
+                    structure.structure.sort();
                     Ok(structure)
                 }
             }
@@ -274,6 +274,7 @@ pub mod test {
             symbol!("T"),
             None,
         )
+        .structure
         .to_symbolic()
         .unwrap();
 
@@ -286,6 +287,7 @@ pub mod test {
             symbol!("TT"),
             None,
         )
+        .structure
         .to_symbolic()
         .unwrap();
 
@@ -298,11 +300,13 @@ pub mod test {
             symbol!("TTT"),
             None,
         )
+        .structure
         .to_symbolic()
         .unwrap();
 
         let tensor4 =
             ShadowedStructure::from_iter([Lorentz {}.new_slot(3, 2).to_lib()], symbol!("L"), None)
+                .structure
                 .to_symbolic()
                 .unwrap();
 
@@ -311,6 +315,7 @@ pub mod test {
             symbol!("P"),
             None,
         )
+        .structure
         .to_symbolic()
         .unwrap();
 

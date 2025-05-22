@@ -2,7 +2,7 @@ use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
 use crate::structure::representation::Representation;
 use crate::structure::slot::IsAbstractSlot;
-use crate::structure::StructureError;
+use crate::structure::{PermutedStructure, StructureError};
 use crate::{
     algebra::algebraic_traits::IsZero,
     algebra::complex::Complex,
@@ -76,8 +76,19 @@ where
     type Indexed = SparseTensor<T, S::Indexed>;
     type Slot = S::Slot;
 
-    fn reindex(self, indices: &[AbstractIndex]) -> Result<Self::Indexed, StructureError> {
-        self.map_structure_result(|s| s.reindex(indices))
+    fn reindex(
+        self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+        let res = self.structure.reindex(indices)?;
+
+        Ok(PermutedStructure {
+            structure: SparseTensor {
+                structure: res.structure,
+                elements: self.elements,
+            },
+            permutation: res.permutation,
+        })
     }
 
     fn dual(self) -> Self {

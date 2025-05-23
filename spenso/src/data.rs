@@ -31,6 +31,8 @@ use std::{
     ops::{Index, IndexMut},
 };
 
+use linnet::permutation::Permutation;
+
 #[cfg(feature = "shadowing")]
 use std::collections::HashMap;
 #[cfg(feature = "shadowing")]
@@ -147,6 +149,16 @@ pub trait GetTensorData {
     fn get_owned_linear(&self, index: FlatIndex) -> Option<Self::GetDataOwned>
     where
         Self::GetDataOwned: Clone;
+}
+
+/// Trait for permuting the data of a tensor
+pub trait Permutable: Sized {
+    /// Permutes the tensor according to the given permutation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the permutation is not compatible with the tensor structure.
+    fn permute(&self, permutation: &Permutation) -> Result<Self>;
 }
 
 /// Sparse data tensor, generic on storage type `T`, and structure type `I`.
@@ -1221,6 +1233,117 @@ where
         Self::GetDataOwned: Clone,
     {
         self.get_ref_linear(index).cloned()
+    }
+}
+
+impl<T, R> Permutable for DenseTensor<T, crate::structure::VecStructure<R>>
+where
+    T: Clone + Default,
+    R: Clone + PartialEq + Eq + Hash + std::fmt::Debug + Default + Send + Sync + 'static,
+    crate::structure::VecStructure<R>: TensorStructure<Slot = crate::structure::Slot<R>> + Clone, // Ensure Slot type matches and it's Clone
+    // ExpandedIndex is Vec<ConcreteIndex> and ConcreteIndex is Clone, so apply_slice is fine for it.
+    // Slot<R> must be Clone for apply_slice. Slot<R> is Clone if R is Clone.
+{
+    fn permute(&self, permutation: &Permutation) -> Result<Self> {
+        if self.structure().order() != permutation.len() {
+            return Err(anyhow!(
+                "Permutation length {} does not match tensor order {}",
+                permutation.len(),
+                self.structure().order()
+            ));
+        }
+
+        if self.structure().order() == 0 {
+            // Scalar tensor, permutation is identity
+            return Ok(self.clone());
+        }
+
+        // S::Slot is crate::structure::Slot<R>
+        let original_slots: Vec<crate::structure::Slot<R>> = self.structure().external_structure();
+        let permuted_slots_vec: Vec<crate::structure::Slot<R>> = permutation.apply_slice(&original_slots);
+
+        let permuted_structure = crate::structure::VecStructure::new(permuted_slots_vec);
+        
+        // permuted_tensor needs to be Self, which is DenseTensor<T, VecStructure<R>>
+        let mut permuted_tensor = DenseTensor::<T, crate::structure::VecStructure<R>>::default(permuted_structure.clone());
+
+        for (original_flat_index, value) in self.flat_iter() {
+            let original_expanded_index = self.structure().expanded_index(original_flat_index)?;
+            
+            let permuted_expanded_index_vec = permutation.apply_slice(&original_expanded_index); 
+            
+            let new_flat_index = permuted_tensor
+                .structure()
+                .flat_index(&permuted_expanded_index_vec)?;
+            permuted_tensor.set_flat(new_flat_index, value.clone())?;
+        }
+
+        Ok(permuted_tensor)
+    }
+}
+
+impl<T, R> Permutable for SparseTensor<T, crate::structure::VecStructure<R>>
+where
+    T: Clone, // Only Clone is needed for sparse, no Default.
+    R: Clone + PartialEq + Eq + Hash + std::fmt::Debug + Default + Send + Sync + 'static,
+    crate::structure::VecStructure<R>: TensorStructure<Slot = crate::structure::Slot<R>> + Clone,
+{
+    fn permute(&self, permutation: &Permutation) -> Result<Self> {
+        if self.structure().order() != permutation.len() {
+            return Err(anyhow!(
+                "Permutation length {} does not match tensor order {}",
+                permutation.len(),
+                self.structure().order()
+            ));
+        }
+
+        if self.structure().order() == 0 {
+            // Scalar tensor, permutation is identity
+            return Ok(self.clone());
+        }
+
+        let original_slots: Vec<crate::structure::Slot<R>> = self.structure().external_structure();
+        let permuted_slots_vec: Vec<crate::structure::Slot<R>> = permutation.apply_slice(&original_slots);
+
+        let permuted_structure = crate::structure::VecStructure::new(permuted_slots_vec);
+        
+        let mut permuted_tensor = SparseTensor::<T, crate::structure::VecStructure<R>>::empty(permuted_structure);
+
+        for (original_flat_index, value) in self.elements.iter() { // Iterate over existing elements
+            let original_expanded_index = self.structure().expanded_index(*original_flat_index)?;
+            
+            let permuted_expanded_index_vec = permutation.apply_slice(&original_expanded_index); 
+            
+            let new_flat_index = permuted_tensor
+                .structure()
+                .flat_index(&permuted_expanded_index_vec)?;
+            permuted_tensor.set_flat(new_flat_index, value.clone())?;
+        }
+
+        Ok(permuted_tensor)
+    }
+}
+
+impl<T, R> Permutable for DataTensor<T, crate::structure::VecStructure<R>>
+where
+    T: Clone + Default, // T must be Default because DenseTensor::permute requires it.
+    R: Clone + PartialEq + Eq + Hash + std::fmt::Debug + Default + Send + Sync + 'static,
+    crate::structure::VecStructure<R>: TensorStructure<Slot = crate::structure::Slot<R>> + Clone,
+    // Individual permute methods for DenseTensor and SparseTensor already have their specific bounds.
+    // This impl for DataTensor ensures those bounds are met.
+{
+    fn permute(&self, permutation: &Permutation) -> Result<Self> {
+        match self {
+            DataTensor::Dense(dense_tensor) => {
+                let permuted_dense = dense_tensor.permute(permutation)?;
+                Ok(DataTensor::Dense(permuted_dense))
+            }
+            DataTensor::Sparse(sparse_tensor) => {
+                // SparseTensor::permute only needs T: Clone, which is satisfied by T: Clone + Default
+                let permuted_sparse = sparse_tensor.permute(permutation)?;
+                Ok(DataTensor::Sparse(permuted_sparse))
+            }
+        }
     }
 }
 

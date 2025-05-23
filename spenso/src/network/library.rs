@@ -385,7 +385,7 @@ impl_tensor_library_data!(i64, 0, 1);
 impl_tensor_library_data!(
     symbolica::atom::Atom,
     symbolica::atom::Atom::Zero,
-    symbolica::atom::Atom::new_num(1)
+    symbolica::atom::Atom::num(1)
 );
 
 impl<T: TensorLibraryData> TensorLibraryData for RealOrComplex<T> {

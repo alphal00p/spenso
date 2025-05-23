@@ -52,8 +52,7 @@ where
 
     fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
         Some(std::borrow::Cow::Owned(
-            self.re.try_upgrade()?.as_ref()
-                + self.im.try_upgrade()?.as_ref() * Atom::new_var(Atom::I),
+            self.re.try_upgrade()?.as_ref() + self.im.try_upgrade()?.as_ref() * Atom::i(),
         ))
     }
 }
@@ -79,8 +78,7 @@ where
         match self {
             RealOrComplex::Real(r) => r.try_upgrade(),
             RealOrComplex::Complex(c) => Some(std::borrow::Cow::Owned(
-                c.re.try_upgrade()?.as_ref()
-                    + c.im.try_upgrade()?.as_ref() * Atom::new_var(Atom::I),
+                c.re.try_upgrade()?.as_ref() + c.im.try_upgrade()?.as_ref() * Atom::i(),
             )),
         }
     }

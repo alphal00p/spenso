@@ -46,9 +46,9 @@ pub enum DualConciousIndex {
 impl From<DualConciousIndex> for Atom {
     fn from(value: DualConciousIndex) -> Self {
         match value {
-            DualConciousIndex::Up(s) => Atom::new_num(s as i64),
-            DualConciousIndex::Down(s) => function!(symbol!(DOWN), Atom::new_num(s as i64)),
-            DualConciousIndex::SelfDual(s) => Atom::new_num(s as i64),
+            DualConciousIndex::Up(s) => Atom::num(s as i64),
+            DualConciousIndex::Down(s) => function!(symbol!(DOWN), Atom::num(s as i64)),
+            DualConciousIndex::SelfDual(s) => Atom::num(s as i64),
         }
     }
 }
@@ -147,7 +147,7 @@ impl AsRef<[ConcreteIndex]> for ExpandedIndex {
 //     fn from(value: ExpandedIndex) -> Self {
 //         let mut cind = FunctionBuilder::new(Symbol::new(CONCRETEIND));
 //         for i in value.iter() {
-//             cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
+//             cind = cind.add_arg(Atom::num(*i as i64).as_atom_view());
 //         }
 //         cind.finish()
 //     }
@@ -203,7 +203,7 @@ pub struct FlatIndex {
 impl From<FlatIndex> for Atom {
     fn from(value: FlatIndex) -> Self {
         let mut cind = FunctionBuilder::new(symbol!(FLATIND));
-        cind = cind.add_arg(Atom::new_num(value.index as i64).as_atom_view());
+        cind = cind.add_arg(Atom::num(value.index as i64).as_atom_view());
         cind.finish()
     }
 }

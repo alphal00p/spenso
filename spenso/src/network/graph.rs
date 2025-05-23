@@ -706,7 +706,7 @@ impl<K> NetworkGraph<K> {
         let mut to_del: BitVec = self.graph.empty_subgraph();
 
         for sum in self.graph.connected_components(&sums) {
-            let nodes: Vec<_> = self.graph.iter_node_data(&sum).map(|(a, _, _)| a).collect();
+            let nodes: Vec<_> = self.graph.iter_nodes_of(&sum).map(|(a, _, _)| a).collect();
 
             if nodes.len() > 1 {
                 let (_, sub) = self.graph.identify_nodes_without_self_edges::<BitVec>(
@@ -717,11 +717,7 @@ impl<K> NetworkGraph<K> {
             }
         }
         for prod in self.graph.connected_components(&prods) {
-            let nodes: Vec<_> = self
-                .graph
-                .iter_node_data(&prod)
-                .map(|(a, _, _)| a)
-                .collect();
+            let nodes: Vec<_> = self.graph.iter_nodes_of(&prod).map(|(a, _, _)| a).collect();
             if nodes.len() > 1 {
                 let (_, sub) = self.graph.identify_nodes_without_self_edges::<BitVec>(
                     &nodes,

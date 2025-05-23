@@ -117,7 +117,7 @@ where
 
 impl<T: Into<Coefficient>> MulAssign<Complex<T>> for Atom {
     fn mul_assign(&mut self, rhs: Complex<T>) {
-        *self = self.as_ref() * (Atom::new_var(Atom::I) * rhs.im + rhs.re);
+        *self = self.as_ref() * (Atom::i() * rhs.im + rhs.re);
     }
 }
 
@@ -126,7 +126,7 @@ where
     for<'a> &'a T: Into<Coefficient>,
 {
     fn mul_assign(&mut self, rhs: &Complex<T>) {
-        *self = self.as_ref() + &rhs.re + Atom::I + &rhs.im;
+        *self = self.as_ref() + &rhs.re + Atom::i() + &rhs.im;
     }
 }
 

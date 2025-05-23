@@ -10,11 +10,12 @@ use std::{borrow::Cow, fmt::Display};
 use symbolica::{
     atom::{Atom, AtomView},
     domains::{
-        float::{Real, SingleFloat},
+        float::{Complex as SymComplex, Real, SingleFloat},
         rational::Rational,
+        InternalOrdering,
     },
     evaluate::{
-        CompileOptions, CompiledCode, CompiledEvaluator, EvalTree, ExportedCode,
+        CompileOptions, CompiledCode, CompiledEvaluator, EvalTree, ExportNumber, ExportedCode,
         ExpressionEvaluator, FunctionMap, InlineASM,
     },
 };
@@ -164,7 +165,12 @@ impl<
         fn_map: &FunctionMap,
         params: &[Atom],
     ) -> anyhow::Result<
-        EvalTreeTensorNetworkSet<Rational, S, K, Store::Store<DataTensor<usize, S>, usize>>,
+        EvalTreeTensorNetworkSet<
+            SymComplex<Rational>,
+            S,
+            K,
+            Store::Store<DataTensor<usize, S>, usize>,
+        >,
     >
     where
         Store::Store<DataTensor<usize, S>, usize>:
@@ -235,7 +241,7 @@ impl<
         S: Clone + TensorStructure,
         K,
         Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize>,
-    > EvalTreeTensorNetworkSet<Rational, S, K, Store>
+    > EvalTreeTensorNetworkSet<SymComplex<Rational>, S, K, Store>
 {
     pub fn horner_scheme(&mut self) {
         self.shared_data.horner_scheme();
@@ -275,7 +281,7 @@ impl<
 
     pub fn common_subexpression_elimination(&mut self)
     where
-        T: std::fmt::Debug + std::hash::Hash + Eq + Ord + Clone + Default,
+        T: std::fmt::Debug + std::hash::Hash + Eq + InternalOrdering + Clone + Default,
     {
         self.shared_data.common_subexpression_elimination()
     }
@@ -392,7 +398,7 @@ impl<
         inline_asm: InlineASM,
     ) -> Result<SharedTensorNetworkSet<ExportedCode, S, K, Store>, std::io::Error>
     where
-        T: std::fmt::Display,
+        T: ExportNumber + SingleFloat,
     {
         Ok(SharedTensorNetworkSet {
             networks: self.networks.clone(),

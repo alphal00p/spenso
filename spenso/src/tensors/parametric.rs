@@ -52,12 +52,14 @@ use symbolica::{
     atom::{representation::FunView, Atom, AtomCore, AtomView, FunctionBuilder, KeyLookup, Symbol},
     coefficient::Coefficient,
     domains::{
-        float::{NumericalFloatLike, Real},
+        float::{NumericalFloatLike, Real, SingleFloat},
         rational::Rational,
+        InternalOrdering,
     },
     evaluate::{
         CompileOptions, CompiledCode, CompiledEvaluator, CompiledEvaluatorFloat, EvalTree,
-        EvaluationFn, ExportedCode, Expression, ExpressionEvaluator, FunctionMap, InlineASM,
+        EvaluationFn, ExportNumber, ExportedCode, Expression, ExpressionEvaluator, FunctionMap,
+        InlineASM,
     },
     id::Pattern,
     state::{State, StateMap},
@@ -71,7 +73,7 @@ use symbolica::domains::float::Complex as SymComplex;
 
 // impl RefZero for Atom {
 //     fn ref_zero(&self) -> Self {
-//         Atom::new_num(0)
+//         Atom::num(0)
 //     }
 // }
 
@@ -694,7 +696,7 @@ impl<S: TensorStructure + Clone> ParamTensorSet<S> {
         &self,
         fn_map: &FunctionMap,
         params: &[Atom],
-    ) -> Result<EvalTreeTensorSet<Rational, S>> {
+    ) -> Result<EvalTreeTensorSet<SymComplex<Rational>, S>> {
         match &self.tensors {
             TensorSet::Scalars(s) => {
                 trace!("turning {} scalars into eval tree", s.len());
@@ -978,7 +980,7 @@ impl<C> From<&Atom> for ConcreteOrParam<C> {
 
 impl<C> crate::algebra::algebraic_traits::One for ConcreteOrParam<C> {
     fn one() -> Self {
-        ConcreteOrParam::Param(Atom::new_num(1))
+        ConcreteOrParam::Param(Atom::num(1))
     }
 }
 
@@ -1375,10 +1377,10 @@ impl<T: Into<Atom>> From<ConcreteOrParam<T>> for Atom {
 impl<T: Into<Coefficient>> From<RealOrComplex<T>> for Atom {
     fn from(value: RealOrComplex<T>) -> Self {
         match value {
-            RealOrComplex::Real(x) => Atom::new_num(x),
+            RealOrComplex::Real(x) => Atom::num(x),
             RealOrComplex::Complex(x) => {
-                let (re, im) = (Atom::new_num(x.re), Atom::new_num(x.im));
-                let i = Atom::new_var(Atom::I);
+                let (re, im) = (Atom::num(x.re), Atom::num(x.im));
+                let i = Atom::i();
                 re + im * i
             }
         }
@@ -1990,7 +1992,7 @@ pub type EvalTreeTensor<T, S> = EvalTensor<EvalTree<T>, S>;
 
 pub type EvalTreeTensorSet<T, S> = EvalTensorSet<(EvalTree<T>, Option<Vec<Expression<T>>>), S>;
 
-impl<S: Clone + TensorStructure> EvalTreeTensorSet<Rational, S> {
+impl<S: Clone + TensorStructure> EvalTreeTensorSet<SymComplex<Rational>, S> {
     pub fn horner_scheme(&mut self) {
         self.eval.0.horner_scheme()
     }
@@ -2035,7 +2037,7 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
 
     pub fn common_subexpression_elimination(&mut self)
     where
-        T: Debug + Hash + Eq + Ord + Clone + Default,
+        T: Debug + Hash + Eq + Clone + Default + InternalOrdering,
     {
         self.eval.0.common_subexpression_elimination()
     }
@@ -2063,7 +2065,7 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
     }
 }
 
-impl<S: Clone> EvalTreeTensor<Rational, S> {
+impl<S: Clone> EvalTreeTensor<SymComplex<Rational>, S> {
     pub fn horner_scheme(&mut self) {
         self.eval.horner_scheme()
     }
@@ -2072,9 +2074,9 @@ impl<S: Clone> EvalTreeTensor<Rational, S> {
         &mut self,
         iterations: usize,
         n_cores: usize,
-        scheme: Option<Vec<Expression<Rational>>>,
+        scheme: Option<Vec<Expression<SymComplex<Rational>>>>,
         verbose: bool,
-    ) -> Vec<Expression<Rational>> {
+    ) -> Vec<Expression<SymComplex<Rational>>> {
         self.eval
             .optimize_horner_scheme(iterations, n_cores, scheme, verbose)
     }
@@ -2083,16 +2085,16 @@ impl<S: Clone> EvalTreeTensor<Rational, S> {
         &mut self,
         iterations: usize,
         n_cores: usize,
-        start_scheme: Option<Vec<Expression<Rational>>>,
+        start_scheme: Option<Vec<Expression<SymComplex<Rational>>>>,
         verbose: bool,
-    ) -> EvalTensor<ExpressionEvaluator<Rational>, S> {
+    ) -> EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, S> {
         let _ = self.optimize_horner_scheme(iterations, n_cores, start_scheme, verbose);
         self.common_subexpression_elimination();
         self.clone().linearize(None)
     }
 }
 
-impl<S: Clone> EvalTreeTensor<Rational, S> {
+impl<S: Clone> EvalTreeTensor<SymComplex<Rational>, S> {
     pub fn from_dense(
         dense: &DenseTensor<Atom, S>,
         fn_map: &FunctionMap,
@@ -2168,7 +2170,7 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
 
     pub fn common_subexpression_elimination(&mut self)
     where
-        T: Debug + Hash + Eq + Ord + Clone + Default,
+        T: Debug + Hash + Eq + InternalOrdering + Clone + Default,
     {
         self.eval.common_subexpression_elimination()
     }
@@ -2387,15 +2389,15 @@ impl<T, S: TensorStructure> HasStructure for EvalTensor<T, S> {
 impl<S: TensorStructure + Clone>
     EvalTensorSet<
         (
-            ExpressionEvaluator<Rational>,
-            Option<Vec<Expression<Rational>>>,
+            ExpressionEvaluator<SymComplex<Rational>>,
+            Option<Vec<Expression<SymComplex<Rational>>>>,
         ),
         S,
     >
 {
     pub fn push_optimize(
         &mut self,
-        mut tensor: EvalTreeTensor<Rational, S>,
+        mut tensor: EvalTreeTensor<SymComplex<Rational>, S>,
         cpe_rounds: Option<usize>,
         iterations: usize,
         n_cores: usize,
@@ -2439,7 +2441,7 @@ impl<T, S> EvalTensor<ExpressionEvaluator<T>, S> {
         inline_asm: InlineASM,
     ) -> Result<EvalTensor<SerializableExportedCode, S>, std::io::Error>
     where
-        T: Display,
+        T: ExportNumber + SingleFloat,
         S: Clone,
     {
         Ok(EvalTensor {
@@ -2580,7 +2582,7 @@ pub struct SerializableExportedCode {
     pub function_name: String,
 }
 impl SerializableExportedCode {
-    pub fn export_cpp<T: Display>(
+    pub fn export_cpp<T: ExportNumber + SingleFloat>(
         expr: &ExpressionEvaluator<T>,
         filename: &str,
         function_name: &str,
@@ -2761,7 +2763,7 @@ impl<T, S: TensorStructure> LinearizedEvalTensorSet<T, S> {
         inline_asm: InlineASM,
     ) -> Result<EvalTensorSet<SerializableExportedCode, S>, std::io::Error>
     where
-        T: Display,
+        T: ExportNumber + SingleFloat,
         S: Clone,
     {
         Ok(EvalTensorSet {

@@ -12,10 +12,11 @@ use symbolica::{
         float::{Complex as SymComplex, NumericalFloatLike, Real, SingleFloat},
         rational::Rational,
         rational_polynomial::{FromNumeratorAndDenominator, RationalPolynomial},
-        EuclideanDomain,
+        EuclideanDomain, InternalOrdering,
     },
     evaluate::{
-        CompileOptions, EvalTree, EvaluationFn, ExpressionEvaluator, FunctionMap, InlineASM,
+        CompileOptions, EvalTree, EvaluationFn, ExportNumber, ExpressionEvaluator, FunctionMap,
+        InlineASM,
     },
     id::{BorrowReplacement, Pattern},
     poly::{
@@ -101,7 +102,7 @@ where
         scalar_name: &str,
     ) -> Network<Store::Store<ParamTensor<T::Structure>, Atom>, K> {
         self.map_ref_mut_enumerate(
-            |(i, _)| Atom::new_var(symbol!(format!("{}{}", scalar_name, i))),
+            |(i, _)| Atom::var(symbol!(format!("{}{}", scalar_name, i))),
             |(i, t)| {
                 t.set_name(symbol!(format!("{}{}", tensor_name, i)));
 
@@ -530,7 +531,13 @@ impl<
         &self,
         fn_map: &FunctionMap,
         params: &[Atom],
-    ) -> Result<Network<Store::Store<EvalTreeTensor<Rational, S>, EvalTree<Rational>>, K>, String>
+    ) -> Result<
+        Network<
+            Store::Store<EvalTreeTensor<SymComplex<Rational>, S>, EvalTree<SymComplex<Rational>>>,
+            K,
+        >,
+        String,
+    >
     where
         S: TensorStructure,
     {
@@ -609,7 +616,7 @@ impl<
 
     pub fn common_subexpression_elimination(&mut self)
     where
-        T: std::fmt::Debug + std::hash::Hash + Eq + Ord + Clone + Default,
+        T: std::fmt::Debug + std::hash::Hash + Eq + InternalOrdering + Clone + Default,
         S: Clone,
     {
         self.iter_tensors_mut()
@@ -662,7 +669,7 @@ impl<
         TensorNetworkError<K>,
     >
     where
-        T: NumericalFloatLike,
+        T: NumericalFloatLike + ExportNumber + SingleFloat,
         S: Clone,
     {
         // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
@@ -770,7 +777,10 @@ impl<
 }
 
 impl<
-        Store: TensorScalarStore<Tensor = EvalTreeTensor<Rational, S>, Scalar = EvalTree<Rational>>,
+        Store: TensorScalarStore<
+            Tensor = EvalTreeTensor<SymComplex<Rational>, S>,
+            Scalar = EvalTree<SymComplex<Rational>>,
+        >,
         S: Clone + TensorStructure,
         K: Clone,
     > Network<Store, K>

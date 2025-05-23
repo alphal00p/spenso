@@ -11,7 +11,7 @@ use std::ops::AddAssign;
 use symbolica::{
     atom::Symbol,
     atom::{Atom, AtomView},
-    parse, symbol,
+    symbol, try_parse,
 };
 
 #[cfg(feature = "shadowing")]
@@ -54,15 +54,15 @@ mod test {
             function!(AIND_SYMBOLS.dind, function!(AIND_SYMBOLS.uind, Atom::Zero))
         );
         assert_eq!(atom, Atom::Zero, "{atom}");
-        let atom = parse_lit!(dind(dind(f(1)))).unwrap();
+        let atom = parse_lit!(dind(dind(f(1))));
 
-        assert_eq!(atom, parse_lit!(f(1)).unwrap(), "{atom}");
+        assert_eq!(atom, parse_lit!(f(1)), "{atom}");
 
         let f = symbol!("f");
         let fa = function!(f, symbol!("a__"));
 
-        let atom = parse_lit!(g(dind(f(1)), f(2))).unwrap();
-        let tgt = parse_lit!(g(f(1), dind(f(2)))).unwrap();
+        let atom = parse_lit!(g(dind(f(1)), f(2)));
+        let tgt = parse_lit!(g(f(1), dind(f(2))));
 
         let rep = atom
             .replace(fa.clone())
@@ -70,8 +70,8 @@ mod test {
 
         assert_eq!(rep, tgt, "{rep} not equal to {tgt}");
 
-        let atom = parse_lit!(g(aind(f(1)), f(2))).unwrap();
-        let tgt = parse_lit!(g(f(1), aind(f(2)))).unwrap();
+        let atom = parse_lit!(g(aind(f(1)), f(2)));
+        let tgt = parse_lit!(g(f(1), aind(f(2))));
         let rep = atom.replace_multiple(&[
             Replacement::new(
                 fa.clone().to_pattern(),
@@ -108,8 +108,7 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
             } else{
                 false
             }
-        })
-        .unwrap(),
+        }),
         dind: symbol!(DOWNIND;;|view,out|{
             if let AtomView::Fun(dind1)=view{
                 if dind1.get_nargs()==1{
@@ -132,8 +131,7 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
             } else{
                 false
             }
-        })
-        .unwrap(),
+        }),
         selfdualind: symbol!(SELFDUALIND;;|view,out|{
             if let AtomView::Fun(f)=view{
                 if f.get_nargs()==1{
@@ -146,8 +144,7 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
             } else{
                 false
             }
-        })
-        .unwrap(),
+        }),
     });
 
 /// A type that represents the name of an index in a tensor.
@@ -250,10 +247,10 @@ impl From<usize> for AbstractIndex {
 impl From<AbstractIndex> for Atom {
     fn from(value: AbstractIndex) -> Self {
         match value {
-            AbstractIndex::Normal(v) => Atom::new_num(v as i64),
-            AbstractIndex::Dualize(v) => Atom::new_num(-(v as i64)),
+            AbstractIndex::Normal(v) => Atom::num(v as i64),
+            AbstractIndex::Dualize(v) => Atom::num(-(v as i64)),
             #[cfg(feature = "shadowing")]
-            AbstractIndex::Symbol(v) => Atom::new_var(v.into()),
+            AbstractIndex::Symbol(v) => Atom::var(v.into()),
         }
     }
 }
@@ -305,7 +302,7 @@ impl TryFrom<AtomView<'_>> for AbstractIndex {
     fn try_from(view: AtomView<'_>) -> Result<Self, Self::Error> {
         match view {
             AtomView::Num(n) => {
-                if let CoefficientView::Natural(n, 1) = n.get_coeff_view() {
+                if let CoefficientView::Natural(n, 1, _, _) = n.get_coeff_view() {
                     return Ok(AbstractIndex::from(n as i32));
                 }
                 Err(AbstractIndexError::NotNatural)
@@ -321,7 +318,7 @@ impl TryFrom<std::string::String> for AbstractIndex {
     type Error = AbstractIndexError;
 
     fn try_from(value: std::string::String) -> Result<Self, Self::Error> {
-        let atom = parse!(&value).map_err(AbstractIndexError::ParsingError)?;
+        let atom = try_parse!(&value).map_err(AbstractIndexError::ParsingError)?;
         Self::try_from(atom.as_view())
     }
 }
@@ -331,7 +328,7 @@ impl TryFrom<&'_ str> for AbstractIndex {
     type Error = AbstractIndexError;
 
     fn try_from(value: &'_ str) -> Result<Self, Self::Error> {
-        let atom = parse!(value).map_err(AbstractIndexError::ParsingError)?;
+        let atom = try_parse!(value).map_err(AbstractIndexError::ParsingError)?;
         Self::try_from(atom.as_view())
     }
 }

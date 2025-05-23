@@ -205,7 +205,7 @@ pub fn atomic_flat_label<I: IntoSymbol>(index: usize, name: I) -> Atom {
 #[cfg(feature = "shadowing")]
 pub fn atomic_flat_label_id(index: usize, id: Symbol) -> Atom {
     let mut value_builder = FunctionBuilder::new(id);
-    value_builder = value_builder.add_arg(Atom::new_num(index as i64).as_atom_view());
+    value_builder = value_builder.add_arg(Atom::num(index as i64).as_atom_view());
     value_builder.finish()
 }
 #[cfg(feature = "shadowing")]
@@ -217,7 +217,7 @@ pub fn atomic_expanded_label_id(indices: &[ConcreteIndex], name: Symbol, args: &
         value_builder = value_builder.add_arg(arg);
     }
     for &index in indices {
-        index_func = index_func.add_arg(Atom::new_num(index as i64).as_atom_view());
+        index_func = index_func.add_arg(Atom::num(index as i64).as_atom_view());
     }
 
     let indices = index_func.finish();
@@ -243,7 +243,7 @@ pub trait IntoArgs {
 #[cfg(feature = "shadowing")]
 impl IntoArgs for usize {
     fn ref_into_args(&self) -> impl Iterator<Item = Atom> {
-        std::iter::once(Atom::new_num(*self as i64))
+        std::iter::once(Atom::num(*self as i64))
     }
     fn cooked_name(&self) -> std::string::String {
         format!("{self}")

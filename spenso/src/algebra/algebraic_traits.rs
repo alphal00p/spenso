@@ -50,7 +50,7 @@ pub trait RefOne {
 #[cfg(feature = "shadowing")]
 impl RefZero for Atom {
     fn ref_zero(&self) -> Self {
-        Atom::new_num(0)
+        Atom::num(0)
     }
 }
 
@@ -64,7 +64,7 @@ impl RefZero for Integer {
 #[cfg(feature = "shadowing")]
 impl RefZero for SerializableAtom {
     fn ref_zero(&self) -> Self {
-        Atom::new_num(0).into()
+        Atom::num(0).into()
     }
 }
 

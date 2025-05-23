@@ -10,7 +10,7 @@ use symbolica::{
         factorized_rational_polynomial::{
             FactorizedRationalPolynomial, FromNumeratorAndFactorizedDenominator,
         },
-        float::{Real, SingleFloat},
+        float::{Complex as SymComplex, Real, SingleFloat},
         integer::Z,
         rational::Rational,
         rational_polynomial::{
@@ -1203,9 +1203,9 @@ pub trait TensorAtomOps: HasStructure {
     /// All variables and all user functions in the expression must occur in the map.
     fn to_evaluation_tree(
         &self,
-        fn_map: &FunctionMap<Rational>,
+        fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
-    ) -> Result<EvalTreeTensor<Rational, Self::Structure>, String>;
+    ) -> Result<EvalTreeTensor<SymComplex<Rational>, Self::Structure>, String>;
 
     /// Create an efficient evaluator for a (nested) expression.
     /// All free parameters must appear in `params` and all other variables
@@ -1213,10 +1213,10 @@ pub trait TensorAtomOps: HasStructure {
     /// The function map may have nested expressions.
     fn evaluator(
         &self,
-        fn_map: &FunctionMap<Rational>,
+        fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
         optimization_settings: OptimizationSettings,
-    ) -> Result<EvalTensor<ExpressionEvaluator<Rational>, Self::Structure>, String>;
+    ) -> Result<EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, Self::Structure>, String>;
 
     /// Get all symbols in the expression, optionally including function symbols.
     fn get_all_symbols(&self, include_function_symbols: bool) -> HashSet<Symbol>;
@@ -1282,9 +1282,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DenseTensor<Atom, S> {
 
     fn to_evaluation_tree(
         &self,
-        fn_map: &FunctionMap<Rational>,
+        fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
-    ) -> Result<EvalTreeTensor<Rational, Self::Structure>, String> {
+    ) -> Result<EvalTreeTensor<SymComplex<Rational>, Self::Structure>, String> {
         let atomviews: Vec<AtomView> = self.data.iter().map(|a| a.as_view()).collect();
         let eval = AtomView::to_eval_tree_multiple(&atomviews, fn_map, params)?;
 
@@ -1297,10 +1297,11 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DenseTensor<Atom, S> {
 
     fn evaluator(
         &self,
-        fn_map: &FunctionMap<Rational>,
+        fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
         optimization_settings: OptimizationSettings,
-    ) -> Result<EvalTensor<ExpressionEvaluator<Rational>, Self::Structure>, String> {
+    ) -> Result<EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, Self::Structure>, String>
+    {
         let mut tree = self.to_evaluation_tree(fn_map, params)?;
 
         Ok(tree.optimize(
@@ -1374,9 +1375,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for SparseTensor<Atom, S> {
 
     fn to_evaluation_tree(
         &self,
-        fn_map: &FunctionMap<Rational>,
+        fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
-    ) -> Result<EvalTreeTensor<Rational, Self::Structure>, String> {
+    ) -> Result<EvalTreeTensor<SymComplex<Rational>, Self::Structure>, String> {
         let atomviews: Vec<AtomView> = self.iter_flat().map(|(_, a)| a.as_view()).collect();
         let eval = AtomView::to_eval_tree_multiple(&atomviews, fn_map, params)?;
 
@@ -1389,10 +1390,11 @@ impl<S: TensorStructure + Clone> TensorAtomOps for SparseTensor<Atom, S> {
 
     fn evaluator(
         &self,
-        fn_map: &FunctionMap<Rational>,
+        fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
         optimization_settings: OptimizationSettings,
-    ) -> Result<EvalTensor<ExpressionEvaluator<Rational>, Self::Structure>, String> {
+    ) -> Result<EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, Self::Structure>, String>
+    {
         let mut tree = self.to_evaluation_tree(fn_map, params)?;
 
         Ok(tree.optimize(
@@ -1438,10 +1440,11 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DataTensor<Atom, S> {
 
     fn evaluator(
         &self,
-        fn_map: &FunctionMap<Rational>,
+        fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
         optimization_settings: OptimizationSettings,
-    ) -> Result<EvalTensor<ExpressionEvaluator<Rational>, Self::Structure>, String> {
+    ) -> Result<EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, Self::Structure>, String>
+    {
         match self {
             DataTensor::Dense(d) => d.evaluator(fn_map, params, optimization_settings),
             DataTensor::Sparse(s) => s.evaluator(fn_map, params, optimization_settings),
@@ -1482,9 +1485,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DataTensor<Atom, S> {
 
     fn to_evaluation_tree(
         &self,
-        fn_map: &FunctionMap<Rational>,
+        fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
-    ) -> Result<EvalTreeTensor<Rational, Self::Structure>, String> {
+    ) -> Result<EvalTreeTensor<SymComplex<Rational>, Self::Structure>, String> {
         match self {
             DataTensor::Dense(d) => d.to_evaluation_tree(fn_map, params),
             DataTensor::Sparse(s) => s.to_evaluation_tree(fn_map, params),
@@ -1506,10 +1509,11 @@ impl<S: TensorStructure + Clone> TensorAtomOps for ParamTensor<S> {
 
     fn evaluator(
         &self,
-        fn_map: &FunctionMap<Rational>,
+        fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
         optimization_settings: OptimizationSettings,
-    ) -> Result<EvalTensor<ExpressionEvaluator<Rational>, Self::Structure>, String> {
+    ) -> Result<EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, Self::Structure>, String>
+    {
         self.tensor.evaluator(fn_map, params, optimization_settings)
     }
 
@@ -1536,9 +1540,9 @@ impl<S: TensorStructure + Clone> TensorAtomOps for ParamTensor<S> {
 
     fn to_evaluation_tree(
         &self,
-        fn_map: &FunctionMap<Rational>,
+        fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
-    ) -> Result<EvalTreeTensor<Rational, Self::Structure>, String> {
+    ) -> Result<EvalTreeTensor<SymComplex<Rational>, Self::Structure>, String> {
         self.tensor.to_evaluation_tree(fn_map, params)
     }
 

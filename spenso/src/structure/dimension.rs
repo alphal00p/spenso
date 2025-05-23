@@ -48,8 +48,8 @@ impl Dimension {
     #[cfg(feature = "shadowing")]
     pub fn to_symbolic(&self) -> Atom {
         match self {
-            Self::Concrete(c) => Atom::new_num(*c as i64),
-            Self::Symbolic(s) => Atom::new_var((*s).into()),
+            Self::Concrete(c) => Atom::num(*c as i64),
+            Self::Symbolic(s) => Atom::var((*s).into()),
         }
     }
 }
@@ -102,7 +102,7 @@ impl<'a> TryFrom<AtomView<'a>> for Dimension {
         match value {
             AtomView::Var(a) => Ok(Dimension::Symbolic(a.get_symbol().into())),
             AtomView::Num(n) => match n.get_coeff_view() {
-                CoefficientView::Natural(n, 1) => {
+                CoefficientView::Natural(n, 1, _, _) => {
                     if n < 0 {
                         return Err(DimensionError::Negative);
                     }
@@ -152,11 +152,11 @@ mod shadowing_tests {
 
     #[test]
     fn dimension_from_view() {
-        let a = Atom::new_num(5);
-        let b = Atom::new_var(symbol!("b"));
+        let a = Atom::num(5);
+        let b = Atom::var(symbol!("b"));
         let c = function!(symbol!("a"), symbol!("b"));
-        let d = Atom::new_num(-1);
-        let e = Atom::new_num((1, 2));
+        let d = Atom::num(-1);
+        let e = Atom::num((1, 2));
 
         let dima = Dimension::try_from(a.as_view()).unwrap();
 

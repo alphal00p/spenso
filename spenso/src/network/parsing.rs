@@ -193,7 +193,7 @@ where
                 return Ok(Self::from_scalar(value.as_view().try_into()?));
             }
             if n == 0 {
-                let one = Atom::new_num(1);
+                let one = Atom::num(1);
                 return Ok(Self::from_scalar(one.as_view().try_into()?));
             } else if n == 1 {
                 return Self::try_from_view(base, library);
@@ -244,7 +244,7 @@ pub mod test {
 
     #[test]
     fn parse_scalar() {
-        let expr = parse!("1").unwrap();
+        let expr = parse!("1");
 
         let lib = DummyLibrary::<_>::new();
         let mut net =
@@ -262,7 +262,7 @@ pub mod test {
 
     #[test]
     fn parse_scalar_expr() {
-        let expr = parse!("(y+x(mink(4,1))*y(mink(4,1))) *(1+1+2*x*(3*sin(r))/t)").unwrap();
+        let expr = parse!("(y+x(mink(4,1))*y(mink(4,1))) *(1+1+2*x*(3*sin(r))/t)");
 
         let lib = DummyLibrary::<_>::new();
         let mut net =
@@ -344,8 +344,7 @@ pub mod test {
         .to_symbolic()
         .unwrap();
 
-        let expr =
-            (parse!("a*sin(x/2)").unwrap() * tensor1 * tensor2 * tensor3 + tensor4) * tensor5;
+        let expr = (parse!("a*sin(x/2)") * tensor1 * tensor2 * tensor3 + tensor4) * tensor5;
 
         let lib = DummyLibrary::<_>::new();
         let mut net =
@@ -379,7 +378,7 @@ pub mod test {
     #[test]
     fn parse_big_tensors() {
         let _ = ETS.id;
-        let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))").unwrap();
+        let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))");
         let lib = DummyLibrary::<_>::new();
         println!("Hi");
         let mut net =
@@ -401,7 +400,7 @@ pub mod test {
     #[test]
     fn parse_neg_tensors() {
         let _ = ETS.id;
-        let expr = parse!("-g(mink(4,6))*Q(2,mink(4,7))+g(mink(4,6))*Q(3,mink(4,7))").unwrap();
+        let expr = parse!("-g(mink(4,6))*Q(2,mink(4,7))+g(mink(4,6))*Q(3,mink(4,7))");
         let lib = DummyLibrary::<_>::new();
         println!("Hi");
         let mut net =

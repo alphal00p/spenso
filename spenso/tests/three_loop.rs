@@ -84,7 +84,7 @@
 //     // let mut constvec = AHashMap::new();
 
 //     // for (k, v) in const_atom_map.iter() {
-//     //     constvec.insert(Atom::new_var(*k), *v);
+//     //     constvec.insert(Atom::var(*k), *v);
 //     // }
 //     // for (k, &v) in constvec.iter() {
 //     //     const_map.insert(k.as_view(), v.into());
@@ -94,12 +94,12 @@
 //     // let mut fn_map: FunctionMap<Rational> = FunctionMap::new();
 
 //     // for (k, v) in const_atom_map.iter() {
-//     //     let name_re = Atom::new_var(symbol!(k.to_string() + "_re"));
-//     //     let name_im = Atom::new_var(symbol!(k.to_string() + "_im"));
-//     //     let i = Atom::new_var(Atom::I);
+//     //     let name_re = Atom::var(symbol!(k.to_string() + "_re"));
+//     //     let name_im = Atom::var(symbol!(k.to_string() + "_im"));
+//     //     let i = Atom::var(Atom::I);
 //     //     let pat = &name_re + i * &name_im;
 //     //     replacements.push(Replacement::new(
-//     //         Atom::new_var(*k).to_pattern(),
+//     //         Atom::var(*k).to_pattern(),
 //     //         pat.to_pattern(),
 //     //     ));
 
@@ -108,7 +108,7 @@
 //     // }
 
 //     // let mut params = data_atom_map.0.clone();
-//     // params.push(Atom::new_var(Atom::I));
+//     // params.push(Atom::var(Atom::I));
 
 //     // let mut truth_net = network.clone();
 

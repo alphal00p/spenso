@@ -1055,7 +1055,7 @@ impl TrySmallestUpgrade<Atom> for f64 {
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
         let natrat = symbolica::domains::rational::Rational::from(*self);
-        let symrat = Atom::new_num(symbolica::coefficient::Coefficient::from(natrat));
+        let symrat = Atom::num(symbolica::coefficient::Coefficient::from(natrat));
 
         Some(Cow::Owned(symrat))
     }
@@ -1067,7 +1067,7 @@ impl TrySmallestUpgrade<SerializableAtom> for f64 {
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
         let natrat = symbolica::domains::rational::Rational::from(*self);
-        let symrat = Atom::new_num(symbolica::coefficient::Coefficient::from(natrat)).into();
+        let symrat = Atom::num(symbolica::coefficient::Coefficient::from(natrat)).into();
 
         Some(Cow::Owned(symrat))
     }
@@ -1078,7 +1078,7 @@ impl TrySmallestUpgrade<Atom> for i32 {
     type LCM = Atom;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
-        let symnum = Atom::new_num(*self);
+        let symnum = Atom::num(*self);
 
         Some(Cow::Owned(symnum))
     }
@@ -1089,7 +1089,7 @@ impl TrySmallestUpgrade<SerializableAtom> for i32 {
     type LCM = SerializableAtom;
 
     fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
-        let symnum = Atom::new_num(*self).into();
+        let symnum = Atom::num(*self).into();
 
         Some(Cow::Owned(symnum))
     }
@@ -1232,7 +1232,8 @@ impl TrySmallestUpgrade<SerializableAtom> for Complex<f64> {
             <f64 as TrySmallestUpgrade<SerializableAtom>>::try_upgrade(&self.re)?;
         let imag: Cow<'_, SerializableAtom> =
             <f64 as TrySmallestUpgrade<SerializableAtom>>::try_upgrade(&self.im)?;
-        let i = SerializableAtom::from(Atom::new_var(Atom::I));
+
+        let i = SerializableAtom::from(Atom::i());
         let symrat = (i * imag.as_ref()) + real.as_ref();
 
         Some(Cow::Owned(symrat))
@@ -1444,13 +1445,13 @@ mod test {
         assert_eq!(d, Some(16.));
         assert_eq!(e, Some(16.));
 
-        let a = parse!("a(2)").unwrap();
-        let b = &parse!("b(1)").unwrap();
+        let a = parse!("a(2)");
+        let b = &parse!("b(1)");
 
         let mut f = a.mul_fallible(&4.).unwrap();
         f.add_assign_fallible(b);
 
-        let i = Atom::new_var(Atom::I);
+        let i = Atom::i();
 
         f.add_assign_fallible(&i);
 

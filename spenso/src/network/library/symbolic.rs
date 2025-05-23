@@ -166,8 +166,8 @@ pub struct ExplicitTensorSymbols {
 }
 
 pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTensorSymbols {
-    id: symbol!(TensorLibrary::<TensorShell<ExplicitKey>>::ID_NAME;Symmetric).unwrap(),
-    metric: symbol!(TensorLibrary::<TensorShell<ExplicitKey>>::METRIC_NAME;Symmetric).unwrap(),
+    id: symbol!(TensorLibrary::<TensorShell<ExplicitKey>>::ID_NAME;Symmetric),
+    metric: symbol!(TensorLibrary::<TensorShell<ExplicitKey>>::METRIC_NAME;Symmetric),
 });
 
 impl<T: HasStructure<Structure = ExplicitKey>> TensorLibrary<T> {
@@ -490,7 +490,7 @@ mod test {
     fn dot() {
         let lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
 
-        let expr = parse!("p(1,mink(4,2))*q(2,mink(4,2))").unwrap();
+        let expr = parse!("p(1,mink(4,2))*q(2,mink(4,2))");
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -519,7 +519,7 @@ mod test {
 
         if let Ok(ExecutionResult::Val(a)) = net.result_scalar() {
             if let ConcreteOrParam::Param(a) = a.as_ref() {
-                let res= parse!("p(1,cind(0))*q(2,cind(0))-p(1,cind(1))*q(2,cind(1))-p(1,cind(2))*q(2,cind(2))-p(1,cind(3))*q(2,cind(3))").unwrap();
+                let res= parse!("p(1,cind(0))*q(2,cind(0))-p(1,cind(1))*q(2,cind(1))-p(1,cind(2))*q(2,cind(2))-p(1,cind(3))*q(2,cind(3))");
                 assert_eq!(a, &res);
             } else {
                 panic!("Not Key")
@@ -534,7 +534,7 @@ mod test {
         let _ = ETS.id;
         let lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
 
-        let expr = parse!(" -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))").unwrap();
+        let expr = parse!(" -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))");
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -574,7 +574,7 @@ mod test {
 
         let expr =
             parse!("(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*g(mink(4,4),mink(4,7))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))")
-                .unwrap();
+                ;
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -609,7 +609,7 @@ mod test {
     #[test]
     fn one_times_x() {
         let mut a: Network<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, DummyKey> =
-            Network::one() * Network::from_scalar(Atom::new_var(symbol!("x")));
+            Network::one() * Network::from_scalar(Atom::var(symbol!("x")));
 
         // a.merge_ops();
         a.execute::<Sequential, SmallestDegree, _>(&DummyLibrary::default())

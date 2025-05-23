@@ -168,7 +168,7 @@ where
         for index in 0..self.structure.size()? {
             let re = index_to_atom(&self, index.into()).to_atom_re().unwrap();
             let im = index_to_atom(&self, index.into()).to_atom_im().unwrap();
-            let i = Atom::new_var(Atom::I);
+            let i = Atom::i();
             data.push(&re + i * &im);
         }
 
@@ -252,7 +252,7 @@ where
         for index in 0..self.size()? {
             let re = index_to_atom(&self, index.into()).to_atom_re().unwrap();
             let im = index_to_atom(&self, index.into()).to_atom_im().unwrap();
-            let i = Atom::new_var(Atom::I);
+            let i = Atom::i();
             data.push(&re + i * &im);
         }
 

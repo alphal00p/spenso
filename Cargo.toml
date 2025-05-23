@@ -1,9 +1,6 @@
 [workspace]
-members = [
-    "spenso",
-    "spenso-macros"
-]
-resolver = "2" # Add this line
+members = ["spenso", "spenso-macros"]
+resolver = "2"                        # Add this line
 
 [workspace.package]
 authors = ["Lucien Huber <cargo+mail@lucien.ch>"]
@@ -20,4 +17,4 @@ lto = "fat"
 # linnet = {path = "../linnet"}
 # linnet = {git ="https://github.com/alphal00p/linnet", rev = "4c58ee517de69e71c9c1354fd55078c5acc21e31"}
 # symbolica = { path = "../symbolica" }
-symbolica={git="https://github.com/alphal00p/symbolica",rev="8ec5f90129ef74809b48de85354f02347c522f5e"}
+symbolica = { git = "https://github.com/benruijl/symbolica", branch = "complex_coeff" }

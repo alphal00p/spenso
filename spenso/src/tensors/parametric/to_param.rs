@@ -19,13 +19,13 @@ pub trait ToAtom {
 
 impl ToAtom for f64 {
     fn to_atom(self) -> Atom {
-        Atom::new_num(self)
+        Atom::num(self)
     }
 }
 
 impl ToAtom for Complex<f64> {
     fn to_atom(self) -> Atom {
-        Atom::new_num(self.re) + Atom::new_num(self.im) * Atom::I
+        Atom::num(self.re) + Atom::num(self.im) * Atom::i()
     }
 }
 
@@ -36,7 +36,7 @@ where
     fn to_atom(self) -> Atom {
         match self {
             RealOrComplex::Real(r) => r.to_atom(),
-            RealOrComplex::Complex(c) => c.re.to_atom() + c.im.to_atom() * Atom::I,
+            RealOrComplex::Complex(c) => c.re.to_atom() + c.im.to_atom() * Atom::i(),
         }
     }
 }
@@ -56,7 +56,7 @@ impl<I: TensorStructure + Clone, D: ToAtom + Clone> ToParam for RealOrComplexTen
             tensor: match self {
                 RealOrComplexTensor::Real(r) => r.map_data(ToAtom::to_atom),
                 RealOrComplexTensor::Complex(c) => {
-                    c.map_data(|a| a.re.to_atom() + a.im.to_atom() * Atom::I)
+                    c.map_data(|a| a.re.to_atom() + a.im.to_atom() * Atom::i())
                 }
             },
             param_type: ParamOrComposite::Composite,

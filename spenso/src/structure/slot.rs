@@ -319,7 +319,7 @@ impl<T: RepName> Slot<T> {
     pub fn to_pattern(&self, dimension: Symbol) -> Atom {
         self.rep
             .rep
-            .to_symbolic([Atom::new_var(dimension), Atom::from(self.aind)])
+            .to_symbolic([Atom::var(dimension), Atom::from(self.aind)])
     }
 }
 
@@ -395,7 +395,7 @@ mod shadowing_tests {
             mu.dual()
         );
 
-        let expr = parse!("dind(lor(4,-1))").unwrap();
+        let expr = parse!("dind(lor(4,-1))");
 
         let _slot: Slot<LibraryRep> = Slot::try_from(expr.as_view()).unwrap();
         let _slot: Slot<DualLorentz> = Slot::try_from(expr.as_view()).unwrap();

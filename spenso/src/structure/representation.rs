@@ -55,7 +55,7 @@ pub trait BaseRepName: RepName<Dual: RepName> + Default {
 
     #[cfg(feature = "shadowing")]
     fn pattern(symbol: Symbol) -> Atom {
-        Self::default().to_symbolic([Atom::new_var(symbol)])
+        Self::default().to_symbolic([Atom::var(symbol)])
     }
 
     fn slot<D: Into<Dimension>, A: Into<AbstractIndex>>(dim: D, aind: A) -> Slot<Self>
@@ -356,7 +356,7 @@ impl<T: RepName> Representation<T> {
     pub fn to_pattern_wrapped(&self, aind: Symbol) -> Atom {
         self.rep.to_symbolic([
             self.dim.to_symbolic(),
-            function!(symbol!("indexid"), Atom::new_var(aind)),
+            function!(symbol!("indexid"), Atom::var(aind)),
         ])
     }
 }

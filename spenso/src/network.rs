@@ -1025,7 +1025,7 @@ where
         let (mut scalars, mut scalar_nodes): (Vec<_>, Vec<_>) = graph
             .graph
             .iter_nodes()
-            .filter_map(|(_, nid, c)| {
+            .filter_map(|(nid, _, c)| {
                 if let NetworkNode::Leaf(NetworkLeaf::Scalar(i)) = c {
                     Some((*i, nid))
                 } else {
@@ -1089,8 +1089,8 @@ impl SmallestDegree {
         let edge_to_contract = graph
             .graph
             .iter_nodes()
-            .filter(|(_, nid, _)| *nid != head)
-            .filter_map(|(a, nid1, n1)| {
+            .filter(|(nid, _, _)| *nid != head)
+            .filter_map(|(nid1, a, n1)| {
                 let mut degree = 0;
                 let mut first = None;
                 for h in a {

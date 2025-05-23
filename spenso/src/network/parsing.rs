@@ -374,6 +374,30 @@ pub mod test {
         }
     }
 
+    // -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))
+
+    #[test]
+    fn parse_big_tensors() {
+        let _ = ETS.id;
+        let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))").unwrap();
+        let lib = DummyLibrary::<_>::new();
+        println!("Hi");
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+
+        println!("{}", expr);
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+    }
     #[test]
     fn parse_neg_tensors() {
         let _ = ETS.id;

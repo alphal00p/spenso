@@ -2,7 +2,9 @@
   "editor.formatOnSave": true,
   "editor.formatOnPaste": true,
   "rust-analyzer.cargo.features": "all",
-  "rust-analyzer.runnables.extraArgs": ["--release"],
+  "rust-analyzer.runnables.extraArgs": [
+    // ""
+  ],
   "conventionalCommits.scopes": [
     "iterators",
     "test",

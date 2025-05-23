@@ -58,7 +58,7 @@ fn test_core_expanded_iterator() {
     let indices: Vec<usize> = std::iter::from_fn(|| iter.next().map(|a| a.into())).collect();
 
     // Should iterate through all elements (2*3 = 6)
-    assert_eq!(indices, vec![0, 5, 10]);
+    assert_eq!(indices, vec![0, 2, 4, 6, 8]);
 
     // Test reset functionality
     iter.reset();

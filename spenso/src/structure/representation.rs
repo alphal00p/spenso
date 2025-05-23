@@ -6,7 +6,7 @@ use super::{
 };
 use ahash::AHashMap;
 use append_only_vec::AppendOnlyVec;
-use linnet::half_edge::involution::Orientation;
+use linnet::{half_edge::involution::Orientation, permutation::Permutation};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use spenso_macros::SimpleRepresentation;
@@ -386,6 +386,40 @@ impl Ord for LibraryRep {
             | (LibraryRep::Dualizable(_), LibraryRep::InlineMetric(_)) => Ordering::Less,
         }
     }
+}
+
+#[test]
+fn sorting_reps() {
+    let mut a = [
+        Euclidean {}.new_rep(4).cast(),
+        Euclidean {}.new_rep(4).cast(),
+        LibraryRep::from(Minkowski {}).new_rep(4),
+    ];
+
+    let perm = Permutation::sort(a);
+    perm.apply_slice_in_place(&mut a);
+
+    let mut b = [
+        Euclidean {}.new_rep(4).cast(),
+        LibraryRep::from(Minkowski {}).new_rep(4),
+        Euclidean {}.new_rep(4).cast(),
+    ];
+
+    let perm = Permutation::sort(b);
+    perm.apply_slice_in_place(&mut b);
+
+    let mut c = [
+        LibraryRep::from(Minkowski {}).new_rep(4),
+        Euclidean {}.new_rep(4).cast(),
+        Euclidean {}.new_rep(4).cast(),
+    ];
+
+    let perm = Permutation::sort(b);
+    perm.apply_slice_in_place(&mut b);
+
+    assert_eq!(a, b);
+    assert_eq!(a, c);
+    // assert_eq!()
 }
 
 impl PartialOrd for LibraryRep {

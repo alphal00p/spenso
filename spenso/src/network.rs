@@ -1018,6 +1018,8 @@ where
         // First do all scalar products and then store the outcome of it in the head
         //
         //
+
+        // println!("trstrst");
         let head = graph.graph.node_id(graph.head());
 
         let (mut scalars, mut scalar_nodes): (Vec<_>, Vec<_>) = graph

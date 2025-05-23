@@ -12,8 +12,6 @@ use delegate::delegate;
 use dimension::Dimension;
 use indexmap::IndexMap;
 
-use linnet::permutation::PermutationInvIter;
-use linnet::permutation::PermutationInvIterMut;
 use thiserror::Error;
 
 use crate::utils::DuplicateItemError;

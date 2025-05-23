@@ -9,6 +9,7 @@ use linnet::{
     half_edge::{
         builder::HedgeGraphBuilder,
         involution::{EdgeData, Flow, Hedge},
+        nodestore::NodeStorageOps,
         subgraph::{ModifySubgraph, SubGraph, SubGraphOps},
         tree::SimpleTraversalTree,
         HedgeGraph, HedgeGraphError, NodeIndex,
@@ -157,6 +158,11 @@ impl<K> NetworkGraph<K> {
     where
         K: Clone,
     {
+        // println!(
+        //     "Joining \n{} with\n {}",
+        //     self.dot_simple(),
+        //     replacement.dot_simple()
+        // );
         self.graph
             .join_mut(
                 replacement.graph,
@@ -360,6 +366,8 @@ impl<K> NetworkGraph<K> {
             .graph
             .identify_nodes_without_self_edges::<BitVec>(nodes, node_data);
 
+        self.graph.forget_identification_history();
+        self.graph.node_store.check_and_set_nodes().unwrap();
         self.graph.delete_hedges(&sub);
         n
     }
@@ -419,6 +427,13 @@ impl<K> NetworkGraph<K> {
                 NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
             },
         )
+    }
+
+    pub fn dot_simple(&self) -> String
+// where
+        // K: Display,
+    {
+        self.dot_impl(|i| i.to_string(), |_| "".into(), |i| i.to_string())
     }
 
     pub fn zero() -> Self {
@@ -717,6 +732,7 @@ impl<K> NetworkGraph<K> {
         }
 
         self.graph.delete_hedges(&to_del);
+        self.graph.forget_identification_history();
     }
     pub fn simplify_identity_ops(&mut self) {}
 
@@ -1163,11 +1179,13 @@ pub mod test {
 
         let mut expr = t3b * (&t + &t2) * s2 * (&s + &zero) * (t3 * (t + t2) * s * (one + zero));
 
-        println!("{}", expr.dot());
+        // println!("{}", expr.dot());
         expr.merge_ops();
         println!("{}", expr.dot());
-        // if let Some((a, op, l)) = expr.extract_next_ready_op() {
-        //     println!("{}", a.dot());
-        // }
+
+        // expr.extract_next_ready_op();
+        if let Some((a, op, l)) = expr.extract_next_ready_op() {
+            println!("{}", a.dot());
+        }
     }
 }

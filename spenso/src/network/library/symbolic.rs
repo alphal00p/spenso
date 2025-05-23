@@ -369,13 +369,16 @@ mod test {
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         let key = ExplicitKey::from_iter(
             [
+                Euclidean {}.new_rep(4).cast(),
+                Euclidean {}.new_rep(4).cast(),
                 LibraryRep::from(Minkowski {}).new_rep(4),
-                Euclidean {}.new_rep(4).cast(),
-                Euclidean {}.new_rep(4).cast(),
             ],
             symbol!("gamma"),
             None,
         );
+
+        println!("{}", key.structure);
+        println!("{}", key.permutation);
 
         let one = ConcreteOrParam::Concrete(RealOrComplex::Real(1.));
         lib.insert_explicit_sparse(key.clone(), [(vec![0, 0, 1], one)])

@@ -175,7 +175,7 @@ where
         let s: Result<PermutedStructure<S>, _> = value.try_into();
 
         if let Ok(s) = s {
-            println!("Perm:{}", s.permutation);
+            // println!("Perm:{}", s.permutation);
             // let s = s;
             match library.key_for_structure(&s.structure) {
                 Ok(key) => {
@@ -259,7 +259,7 @@ pub mod test {
 
     use super::*;
     use library::{symbolic::ETS, DummyLibrary};
-    use symbolica::{parse, symbol};
+    use symbolica::{parse, parse_lit, symbol};
 
     #[test]
     fn parse_scalar() {
@@ -392,12 +392,12 @@ pub mod test {
         }
     }
 
-    // -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))
+    // -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))
 
     #[test]
     fn parse_big_tensors() {
         let _ = ETS.id;
-        let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))");
+        let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))");
         let lib = DummyLibrary::<_>::new();
         println!("Hi");
         let mut net =
@@ -448,6 +448,73 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
+        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+            net.result().unwrap()
+        {
+            // println!("YaY:{}", (&expr - &tensor.expression).expand());
+            assert_eq!(expr, tensor.expression);
+        } else {
+            panic!("Not tensor")
+        }
+    }
+
+    #[test]
+    fn many_sums() {
+        let _ = ETS.id;
+        let expr = parse_lit!(
+            (P(4, mink(4, r_2)) + N(4, mink(4, r_2)))
+                * (P(5, mink(4, r_3)) + N(5, mink(4, r_3)))
+                * (A(mink(4, r_2), mink(4, r_3)) + B(mink(4, r_2), mink(4, r_3)))
+        );
+        let lib = DummyLibrary::<_>::new();
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+
+        println!("{}", expr);
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+        net.execute::<StepsDebug<6>, SmallestDegree, _>(&lib)
+            .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+            net.result().unwrap()
+        {
+            // println!("YaY:{}", (&expr - &tensor.expression).expand());
+            assert_eq!(expr, tensor.expression);
+        } else {
+            panic!("Not tensor")
+        }
+    }
+
+    #[test]
+    fn parse_problem() {
+        let _ = ETS.id;
+        let expr = parse!("((N(4,mink(4,l_2))*P(4,mink(4,r_2))+N(4,mink(4,r_2))*P(4,mink(4,l_2)))*N(4,mink(4,dummy_ss_4_1))*P(4,mink(4,dummy_ss_4_1))+-1*N(4,mink(4,dummy_ss_4_2))^2*P(4,mink(4,l_2))*P(4,mink(4,r_2))+-1*N(4,mink(4,dummy_ss_4_3))*N(4,mink(4,dummy_ss_4_4))*P(4,mink(4,dummy_ss_4_3))*P(4,mink(4,dummy_ss_4_4))*g(mink(4,l_2),mink(4,r_2)))*((N(5,mink(4,l_3))*P(5,mink(4,r_3))+N(5,mink(4,r_3))*P(5,mink(4,l_3)))*N(5,mink(4,dummy_ss_5_1))*P(5,mink(4,dummy_ss_5_1))+-1*N(5,mink(4,dummy_ss_5_2))^2*P(5,mink(4,l_3))*P(5,mink(4,r_3))+-1*N(5,mink(4,dummy_ss_5_3))*N(5,mink(4,dummy_ss_5_4))*P(5,mink(4,dummy_ss_5_3))*P(5,mink(4,dummy_ss_5_4))*g(mink(4,l_3),mink(4,r_3)))*(-1*G^2*P(0,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5))+G^2*P(2,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5)))*(-1*P(2,mink(4,l_20))+P(0,mink(4,l_20)))*-1*G^2*P(2,mink(4,dummy_2_0))*P(3,mink(4,dummy_3_1))*𝑖*𝟙(bis(4,l_0),bis(4,l_7))*𝟙(bis(4,l_1),bis(4,l_4))*𝟙(mink(4,l_2),mink(4,l_5))*𝟙(mink(4,l_3),mink(4,l_4))*gamma(bis(4,l_1),bis(4,r_1),mink(4,dummy_3_1))*gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_20))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))*gamma(bis(4,r_0),bis(4,l_0),mink(4,dummy_2_0))
+");
+
+        let lib = DummyLibrary::<_>::new();
+        println!("Hi");
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+
+        println!("{}", expr);
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
         if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
             net.result().unwrap()
         {

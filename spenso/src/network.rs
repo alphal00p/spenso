@@ -12,12 +12,14 @@ use crate::algebra::algebraic_traits::{One, Zero};
 use crate::algebra::ScalarMul;
 use crate::contraction::Contract;
 use crate::network::library::LibraryTensor;
+use crate::shadowing::symbolica_utils::IntoArgs;
 // use crate::shadowing::Concretize;
 use crate::structure::representation::LibrarySlot;
 use crate::structure::StructureError;
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use std::usize;
 use store::{NetworkStore, TensorScalarStore, TensorScalarStoreMapping};
 use thiserror::Error;
 // use log::trace;
@@ -440,6 +442,10 @@ impl<S: TensorScalarStore, K> Network<S, K> {
 
 #[derive(Error, Debug)]
 pub enum TensorNetworkError<K: Display> {
+    #[error("More than one neg")]
+    MoreThanOneNeg,
+    #[error("Childless neg")]
+    ChildlessNeg,
     #[error("Contraction Error:{0}")]
     ContractionError(#[from] ContractionError),
     #[error("Scalar connected by a slot edge")]
@@ -689,6 +695,77 @@ where
 
 pub struct Sequential;
 
+pub struct Nsteps {
+    steps: usize,
+}
+
+pub struct Steps<const N: usize> {}
+pub struct StepsDebug<const N: usize> {}
+
+impl<const N: usize, E, L, K> ExecutionStrategy<E, L, K> for StepsDebug<N>
+where
+    E: ExecuteOp<L, K>,
+    K: Clone,
+{
+    fn execute_all<C: ContractionStrategy<E, L, K>>(
+        executor: &mut E,
+        graph: &mut NetworkGraph<K>,
+        lib: &L,
+    ) -> Result<(), TensorNetworkError<K>>
+    where
+        K: Display,
+    {
+        for _ in 0..N {
+            // find the *one* ready op
+            if let Some((extracted_graph, op)) = graph.extract_next_ready_op() {
+                println!(
+                    "Extracted_graph: {}",
+                    extracted_graph.dot_impl(
+                        |s| s.to_string(),
+                        |s| "".to_string(),
+                        |s| s.to_string()
+                    )
+                );
+                println!(
+                    "Graph: {}",
+                    graph.dot_impl(|s| s.to_string(), |s| "".to_string(), |s| s.to_string())
+                );
+                // execute + splice
+                let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
+                graph.splice_descendents_of(replacement);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl<const N: usize, E, L, K> ExecutionStrategy<E, L, K> for Steps<N>
+where
+    E: ExecuteOp<L, K>,
+    K: Clone,
+{
+    fn execute_all<C: ContractionStrategy<E, L, K>>(
+        executor: &mut E,
+        graph: &mut NetworkGraph<K>,
+        lib: &L,
+    ) -> Result<(), TensorNetworkError<K>>
+    where
+        K: Display,
+    {
+        for _ in 0..N {
+            // find the *one* ready op
+            if let Some((extracted_graph, op)) = graph.extract_next_ready_op() {
+                // execute + splice
+                let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
+                graph.splice_descendents_of(replacement);
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl<E, L, K> ExecutionStrategy<E, L, K> for Sequential
 where
     E: ExecuteOp<L, K>,
@@ -704,9 +781,9 @@ where
     {
         while {
             // find the *one* ready op
-            if let Some((extracted_graph, op, leaves)) = graph.extract_next_ready_op() {
+            if let Some((extracted_graph, op)) = graph.extract_next_ready_op() {
                 // execute + splice
-                let replacement = executor.execute::<C>(extracted_graph, lib, op, &leaves)?;
+                let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
                 graph.splice_descendents_of(replacement);
                 true
             } else {
@@ -765,7 +842,6 @@ pub trait ExecuteOp<L, K>: Sized {
         graph: NetworkGraph<K>,
         lib: &L,
         op: NetworkOp,
-        targets: &[NetworkLeafWithInds<K>],
     ) -> Result<NetworkGraph<K>, TensorNetworkError<K>>
     where
         K: Display;
@@ -812,53 +888,93 @@ impl<
 {
     fn execute<C: ContractionStrategy<Self, L, K>>(
         &mut self,
-        graph: NetworkGraph<K>,
+        mut graph: NetworkGraph<K>,
         lib: &L,
         op: NetworkOp,
-        targets: &[NetworkLeafWithInds<K>],
     ) -> Result<NetworkGraph<K>, TensorNetworkError<K>> {
         match op {
             NetworkOp::Neg => {
-                debug_assert_eq!(targets.len(), 1);
-                let target = &targets[0];
+                let mut ops = graph.graph.iter_nodes().find(|(nid, n, d)| {
+                    if let NetworkNode::Op(NetworkOp::Neg) = d {
+                        true
+                    } else {
+                        false
+                    }
+                });
 
-                match target {
-                    NetworkLeafWithInds::Scalar(s) => {
-                        let s = self.scalar[*s].clone().neg();
-                        let pos = self.scalar.len();
-                        self.scalar.push(s);
-                        Ok(NetworkGraph::scalar(pos))
+                let (opid, children, _) = ops.unwrap();
+
+                let mut child = None;
+                for c in children {
+                    if let Some(id) = graph.graph.involved_node_id(c) {
+                        if let NetworkNode::Leaf(l) = &graph.graph[id] {
+                            if let Some(_) = child {
+                                return Err(TensorNetworkError::MoreThanOneNeg);
+                            } else {
+                                child = Some((id, l));
+                            }
+                        }
                     }
-                    NetworkLeafWithInds::LibraryKey { key, inds } => {
-                        let t = T::from(lib.get(key).unwrap().with_indices(inds).unwrap()).neg();
-                        let pos = self.tensors.len();
-                        let node = NetworkLeaf::LocalTensor(pos);
-                        self.tensors.push(t);
-                        Ok(NetworkGraph::tensor(&self.tensors[pos], node))
-                    }
-                    NetworkLeafWithInds::LocalTensor(t) => {
-                        let t = self.tensors[*t].clone().neg();
-                        let pos = self.tensors.len();
-                        let node = NetworkLeaf::LocalTensor(pos);
-                        self.tensors.push(t);
-                        Ok(NetworkGraph::tensor(&self.tensors[pos], node))
-                    }
+                }
+                if let Some((child_id, leaf)) = child {
+                    let new_node = match leaf {
+                        NetworkLeaf::Scalar(s) => {
+                            let s = self.scalar[*s].clone().neg();
+                            let pos = self.scalar.len();
+                            self.scalar.push(s);
+
+                            NetworkLeaf::Scalar(pos)
+                        }
+                        NetworkLeaf::LibraryKey(key) => {
+                            let inds = graph.inds(child_id);
+                            let t =
+                                T::from(lib.get(key).unwrap().with_indices(&inds).unwrap()).neg();
+                            let pos = self.tensors.len();
+                            self.tensors.push(t);
+                            NetworkLeaf::LocalTensor(pos)
+                        }
+                        NetworkLeaf::LocalTensor(t) => {
+                            let t = self.tensors[*t].clone().neg();
+                            let pos = self.tensors.len();
+                            self.tensors.push(t);
+                            NetworkLeaf::LocalTensor(pos)
+                        }
+                    };
+                    graph.identify_nodes_without_self_edges(
+                        &[child_id, opid],
+                        NetworkNode::Leaf(new_node),
+                    );
+                    Ok(graph)
+                } else {
+                    return Err(TensorNetworkError::ChildlessNeg);
                 }
             }
             NetworkOp::Product => C::contract(self, graph, lib),
             NetworkOp::Sum => {
-                let first = &targets[0];
+                let mut op = None;
+                let mut targets = Vec::new();
+                let mut all_nodes = Vec::new();
+                for (n, c, v) in graph.graph.iter_nodes() {
+                    all_nodes.push(n);
+                    if let NetworkNode::Op(NetworkOp::Sum) = v {
+                        op = Some((n, c))
+                    } else if let NetworkNode::Leaf(l) = &v {
+                        targets.push((n, l));
+                    }
+                }
 
-                match first {
-                    NetworkLeafWithInds::Scalar(s) => {
+                let (nf, first) = &targets[0];
+
+                let new_node = match first {
+                    NetworkLeaf::Scalar(s) => {
                         let mut accumulator = self.scalar[*s].clone();
 
-                        for t in &targets[1..] {
+                        for (nid, t) in &targets[1..] {
                             match t {
-                                NetworkLeafWithInds::Scalar(s) => {
+                                NetworkLeaf::Scalar(s) => {
                                     accumulator += self.scalar[*s].refer();
                                 }
-                                NetworkLeafWithInds::LocalTensor(t) => {
+                                NetworkLeaf::LocalTensor(t) => {
                                     if let Some(s) = self.tensors[*t].scalar_ref() {
                                         accumulator += s;
                                     } else {
@@ -867,7 +983,7 @@ impl<
                                         ));
                                     }
                                 }
-                                NetworkLeafWithInds::LibraryKey { .. } => {
+                                NetworkLeaf::LibraryKey { .. } => {
                                     return Err(TensorNetworkError::ScalarLibSum("".to_string()));
                                 }
                             }
@@ -875,20 +991,19 @@ impl<
 
                         let pos = self.scalar.len();
                         self.scalar.push(accumulator);
-
-                        Ok(NetworkGraph::scalar(pos))
+                        NetworkLeaf::Scalar(pos)
                     }
-                    NetworkLeafWithInds::LocalTensor(t) => {
+                    NetworkLeaf::LocalTensor(t) => {
                         let mut accumulator = self.tensors[*t].clone();
                         if accumulator.is_scalar() {
                             let mut accumulator = Sc::from(accumulator.scalar().unwrap());
 
-                            for t in &targets[1..] {
+                            for (_, t) in &targets[1..] {
                                 match t {
-                                    NetworkLeafWithInds::Scalar(s) => {
+                                    NetworkLeaf::Scalar(s) => {
                                         accumulator += self.scalar[*s].refer();
                                     }
-                                    NetworkLeafWithInds::LocalTensor(t) => {
+                                    NetworkLeaf::LocalTensor(t) => {
                                         if let Some(s) = self.tensors[*t].scalar_ref() {
                                             accumulator += s;
                                         } else {
@@ -897,7 +1012,7 @@ impl<
                                             ));
                                         }
                                     }
-                                    NetworkLeafWithInds::LibraryKey { .. } => {
+                                    NetworkLeaf::LibraryKey { .. } => {
                                         return Err(TensorNetworkError::ScalarLibSum(
                                             "".to_string(),
                                         ));
@@ -907,21 +1022,21 @@ impl<
 
                             let pos = self.scalar.len();
                             self.scalar.push(accumulator);
-
-                            Ok(NetworkGraph::scalar(pos))
+                            NetworkLeaf::Scalar(pos)
                         } else {
-                            for t in &targets[1..] {
+                            for (nid, t) in &targets[1..] {
                                 match t {
-                                    NetworkLeafWithInds::Scalar(_) => {
+                                    NetworkLeaf::Scalar(_) => {
                                         return Err(TensorNetworkError::SumScalarTensor(
                                             "".to_string(),
                                         ))
                                     }
-                                    NetworkLeafWithInds::LocalTensor(t) => {
+                                    NetworkLeaf::LocalTensor(t) => {
                                         accumulator += self.tensors[*t].refer();
                                     }
-                                    NetworkLeafWithInds::LibraryKey { key, inds } => {
-                                        let with_index = lib.get(key)?.with_indices(inds)?;
+                                    NetworkLeaf::LibraryKey(key) => {
+                                        let inds = graph.inds(*nid);
+                                        let with_index = lib.get(key)?.with_indices(&inds)?;
                                         accumulator += with_index;
                                     }
                                 }
@@ -930,24 +1045,23 @@ impl<
                             let pos = self.tensors.len();
                             self.tensors.push(accumulator);
 
-                            Ok(NetworkGraph::tensor(
-                                &self.tensors[pos],
-                                NetworkLeaf::LocalTensor(pos),
-                            ))
+                            NetworkLeaf::LocalTensor(pos)
                         }
                     }
-                    NetworkLeafWithInds::LibraryKey { key, inds } => {
-                        let mut accumulator = T::from(lib.get(key)?.with_indices(inds)?);
-                        for t in &targets[1..] {
+                    NetworkLeaf::LibraryKey(key) => {
+                        let inds = graph.inds(*nf);
+                        let mut accumulator = T::from(lib.get(key)?.with_indices(&inds)?);
+                        for (nid, t) in &targets[1..] {
                             match t {
-                                NetworkLeafWithInds::Scalar(_) => {
+                                NetworkLeaf::Scalar(_) => {
                                     return Err(TensorNetworkError::SumScalarTensor("".to_string()))
                                 }
-                                NetworkLeafWithInds::LocalTensor(t) => {
+                                NetworkLeaf::LocalTensor(t) => {
                                     accumulator += self.tensors[*t].refer();
                                 }
-                                NetworkLeafWithInds::LibraryKey { key, inds } => {
-                                    let with_index = lib.get(key)?.with_indices(inds)?;
+                                NetworkLeaf::LibraryKey(key) => {
+                                    let inds = graph.inds(*nid);
+                                    let with_index = lib.get(key)?.with_indices(&inds)?;
                                     accumulator += with_index;
                                 }
                             }
@@ -956,12 +1070,12 @@ impl<
                         let pos = self.tensors.len();
                         self.tensors.push(accumulator);
 
-                        Ok(NetworkGraph::tensor(
-                            &self.tensors[pos],
-                            NetworkLeaf::LocalTensor(pos),
-                        ))
+                        NetworkLeaf::LocalTensor(pos)
                     }
-                }
+                };
+
+                graph.identify_nodes_without_self_edges(&all_nodes, NetworkNode::Leaf(new_node));
+                Ok(graph)
             }
         }
     }

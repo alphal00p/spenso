@@ -14,6 +14,7 @@ use linnet::{
         tree::SimpleTraversalTree,
         HedgeGraph, HedgeGraphError, NodeIndex,
     },
+    permutation::Permutation,
     tree::child_pointer::ParentChildStore,
 };
 use serde::{Deserialize, Serialize};
@@ -43,8 +44,9 @@ use super::TensorNetworkError;
 )]
 pub struct NetworkGraph<K> {
     pub graph: HedgeGraph<NetworkEdge, NetworkNode<K>>, //, Forest<NetworkNode<K>, ChildVecStore<()>>>,
-                                                        // #[bincode(with_serde)]
-                                                        // uncontracted: BitVec,
+    pub slot_order: Vec<u8>,
+    // #[bincode(with_serde)]
+    // uncontracted: BitVec,
 }
 
 #[derive(
@@ -68,6 +70,15 @@ pub enum NetworkEdge {
     // Port,
     Head,
     Slot(LibrarySlot),
+}
+
+impl Display for NetworkEdge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NetworkEdge::Head => write!(f, "Head"),
+            NetworkEdge::Slot(slot) => write!(f, "Slot({})", slot),
+        }
+    }
 }
 
 impl NetworkEdge {
@@ -139,9 +150,20 @@ pub enum NetworkLeafWithInds<K> {
 
 impl<K> From<HedgeGraphBuilder<NetworkEdge, NetworkNode<K>>> for NetworkGraph<K> {
     fn from(builder: HedgeGraphBuilder<NetworkEdge, NetworkNode<K>>) -> Self {
-        let graph = builder.build();
+        let graph: HedgeGraph<NetworkEdge, NetworkNode<K>> = builder.build();
+        // graph.hed
+        let mut slot_order = vec![0; graph.n_hedges()];
+
+        for (_, n, _) in graph.iter_nodes() {
+            let mut ord = 1;
+            for c in n {
+                slot_order[c.0] = ord;
+                ord += 1;
+            }
+        }
         // let uncontracted = graph.empty_subgraph();
         Self {
+            slot_order,
             graph,
             // uncontracted,
         }
@@ -154,6 +176,40 @@ pub enum NetworkGraphError {
 }
 
 impl<K> NetworkGraph<K> {
+    pub fn slots(&self, nodeid: NodeIndex) -> Vec<LibrarySlot> {
+        let mut slots = Vec::new();
+        let mut ord = Vec::new();
+        if let NetworkNode::Leaf(_) = &self.graph[nodeid] {
+            for n in self.graph.iter_crown(nodeid) {
+                if let NetworkEdge::Slot(s) = self.graph[[&n]] {
+                    slots.push(s);
+                    ord.push(self.slot_order[n.0]);
+                }
+            }
+        }
+
+        let perm = Permutation::sort(ord);
+        perm.apply_slice_in_place(&mut slots);
+        slots
+    }
+
+    pub fn inds(&self, nodeid: NodeIndex) -> Vec<AbstractIndex> {
+        let mut slots = Vec::new();
+        let mut ord = Vec::new();
+        if let NetworkNode::Leaf(_) = &self.graph[nodeid] {
+            for n in self.graph.iter_crown(nodeid) {
+                if let NetworkEdge::Slot(s) = self.graph[[&n]] {
+                    slots.push(s.aind);
+                    ord.push(self.slot_order[n.0]);
+                }
+            }
+        }
+
+        let perm = Permutation::sort(ord);
+        perm.apply_slice_in_place(&mut slots);
+        slots
+    }
+
     pub fn splice_descendents_of(&mut self, replacement: Self)
     where
         K: Clone,
@@ -163,13 +219,64 @@ impl<K> NetworkGraph<K> {
         //     self.dot_simple(),
         //     replacement.dot_simple()
         // );
+        //
+        self.slot_order.extend(replacement.slot_order);
         self.graph
             .join_mut(
                 replacement.graph,
-                |sf, sd, of, od| sf == -of && sd == od,
+                |sf, sd, of, od| {
+                    let flow_match = sf == -of;
+                    let desc_match = sd == od;
+                    // if desc_match{
+
+                    // println!("looking at {sd} vs {od}, flow_match: {flow_match},sf  {sf:?},of {of:?}, desc_match: {desc_match}");
+                    // }
+                    // if flow_match && desc_match {
+                    // sd.data
+                    // println!("Splicing");
+                    // }
+                    flow_match && desc_match
+                },
                 |sf, sd, _, _| (sf, sd),
             )
             .unwrap();
+    }
+
+    pub fn extract<S: SubGraph<Base = BitVec>>(&mut self, subgraph: &S) -> Self
+    where
+        K: Clone,
+    {
+        let mut left = Hedge(0);
+        let mut extracted = Hedge(self.graph.n_hedges());
+        while left < extracted {
+            if !subgraph.includes(&left) {
+                //left is in the right place
+                left.0 += 1;
+            } else {
+                //left needs to be swapped
+                extracted.0 -= 1;
+                if !subgraph.includes(&extracted) {
+                    //only with an extracted that is in the wrong spot
+                    self.slot_order.swap(left.0, extracted.0);
+                    left.0 += 1;
+                }
+            }
+        }
+
+        let extracted = self.graph.extract(
+            subgraph,
+            |a| a.map(Clone::clone),
+            |a| a,
+            |a| a.clone(),
+            |a| a,
+        );
+
+        let slot_order = self.slot_order.split_off(left.0);
+
+        Self {
+            slot_order,
+            graph: extracted,
+        }
     }
 
     pub fn find_all_ready_ops(&mut self) -> Vec<(Self, NetworkOp, Vec<NetworkLeaf<K>>)>
@@ -199,29 +306,15 @@ impl<K> NetworkGraph<K> {
                 });
                 if ok {
                     let op = *op;
-                    let extracted = self.graph.extract(
-                        &subgraph,
-                        |a| a.map(Clone::clone),
-                        |a| a,
-                        |a| a.clone(),
-                        |a| a,
-                    );
-                    out.push((
-                        Self {
-                            // uncontracted: extracted.empty_subgraph(),
-                            graph: extracted,
-                        },
-                        op,
-                        leaves,
-                    ))
+                    let extracted = self.extract(&subgraph);
+
+                    out.push((extracted, op, leaves))
                 }
             }
         }
         out
     }
-    pub fn extract_next_ready_op(
-        &mut self,
-    ) -> Option<(Self, NetworkOp, Vec<NetworkLeafWithInds<K>>)>
+    pub fn extract_next_ready_op(&mut self) -> Option<(Self, NetworkOp)>
     where
         K: Clone,
     {
@@ -234,7 +327,7 @@ impl<K> NetworkGraph<K> {
         for nid in tt.iter_preorder_tree_nodes(&self.graph, root_node) {
             if let NetworkNode::Op(op) = &self.graph[nid] {
                 let mut subgraph: BitVec = self.graph.empty_subgraph();
-                let mut leaves = Vec::new();
+
                 let mut all_leaves = true;
                 let mut has_children = false;
 
@@ -251,21 +344,6 @@ impl<K> NetworkGraph<K> {
                             for h in self.graph.iter_crown(child) {
                                 if let NetworkEdge::Slot(s) = self.graph[[&h]] {
                                     slots.push(s.aind)
-                                }
-                            }
-
-                            match a {
-                                NetworkLeaf::LibraryKey(l) => {
-                                    leaves.push(NetworkLeafWithInds::LibraryKey {
-                                        key: l.clone(),
-                                        inds: slots,
-                                    });
-                                }
-                                NetworkLeaf::Scalar(a) => {
-                                    leaves.push(NetworkLeafWithInds::Scalar(*a));
-                                }
-                                NetworkLeaf::LocalTensor(t) => {
-                                    leaves.push(NetworkLeafWithInds::LocalTensor(*t));
                                 }
                             }
                         }
@@ -295,22 +373,9 @@ impl<K> NetworkGraph<K> {
                     //     )
                     // );
 
-                    let extracted = self.graph.extract(
-                        &subgraph,
-                        |a| a.map(Clone::clone),
-                        |a| a,
-                        |a| a.clone(),
-                        |a| a,
-                    );
+                    let extracted = self.extract(&subgraph);
 
-                    return Some((
-                        Self {
-                            // uncontracted: extracted.empty_subgraph(),
-                            graph: extracted,
-                        },
-                        op,
-                        leaves,
-                    ));
+                    return Some((extracted, op));
                 }
             }
         }
@@ -744,6 +809,7 @@ impl<K> NetworkGraph<K> {
         ) -> (Flow, EdgeData<NetworkEdge>),
     ) -> Result<(), HedgeGraphError> {
         self.graph.join_mut(other.graph, matching_fn, merge_fn)?;
+        self.slot_order.extend(other.slot_order);
         // self.uncontracted.join_mut(other.uncontracted);
         Ok(())
     }
@@ -811,7 +877,12 @@ impl<K> NAdd for NetworkGraph<K> {
         .unwrap();
 
         for rhs in all {
-            debug_assert!(slots.len() == rhs.n_dangling());
+            debug_assert!(
+                slots.len() == rhs.n_dangling(),
+                "Mismatched dangling edges in sum, Trying to add {} to {}",
+                add.dot_simple(),
+                rhs.dot_simple()
+            );
 
             add.join_mut(
                 rhs,
@@ -1180,7 +1251,7 @@ pub mod test {
         println!("{}", expr.dot());
 
         // expr.extract_next_ready_op();
-        if let Some((a, op, l)) = expr.extract_next_ready_op() {
+        if let Some((a, op)) = expr.extract_next_ready_op() {
             println!("{}", a.dot());
         }
     }

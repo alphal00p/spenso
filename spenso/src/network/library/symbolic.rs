@@ -209,9 +209,12 @@ impl<
     // type Structure = ExplicitKey;
 
     fn get<'a>(&'a self, key: &Self::Key) -> Result<Cow<'a, Self::Value>, LibraryError<Self::Key>> {
+        println!("Trying:{}", key);
         if let Some(tensor) = self.explicit_dimension.get(key) {
+            println!("found explicit");
             Ok(Cow::Borrowed(tensor))
         } else if let Some(builder) = self.generic_dimension.get(&key.clone().into()) {
+            println!("found generic");
             Ok(Cow::Owned(builder(key.clone())))
         } else {
             Err(LibraryError::NotFound(key.clone()))
@@ -336,6 +339,8 @@ impl<T: HasStructure<Structure = ExplicitKey> + SetTensorData + Clone + LibraryT
     where
         T: Clone,
     {
+        // println!("Trying:{}", key);
+
         if let Some(tensor) = self.explicit_dimension.get(key) {
             Ok(Cow::Borrowed(tensor))
         } else if let Some(builder) = self.generic_dimension.get(&key.clone().into()) {
@@ -532,7 +537,8 @@ mod test {
     #[test]
     fn big_expr() {
         let _ = ETS.id;
-        let lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        lib.update_ids();
 
         let expr = parse!(" -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))");
         let mut net = Network::<

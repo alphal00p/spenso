@@ -98,6 +98,24 @@ pub enum NetworkNode<LibKey> {
     // Port,
 }
 
+impl<K> NetworkNode<K> {
+    pub fn is_leaf(&self) -> bool {
+        matches!(self, NetworkNode::Leaf(_))
+    }
+
+    pub fn is_op(&self) -> bool {
+        matches!(self, NetworkNode::Op(_))
+    }
+
+    pub fn is_scalar(&self) -> bool {
+        matches!(self, NetworkNode::Leaf(NetworkLeaf::Scalar(_)))
+    }
+
+    pub fn is_tensor(&self) -> bool {
+        self.is_leaf() && !self.is_scalar()
+    }
+}
+
 impl<K: Display> Display for NetworkNode<K> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -129,6 +147,12 @@ pub enum NetworkLeaf<K> {
     LocalTensor(usize),
     LibraryKey(K),
     Scalar(usize),
+}
+
+impl<K> NetworkLeaf<K> {
+    pub fn is_scalar(&self) -> bool {
+        matches!(self, NetworkLeaf::Scalar(_))
+    }
 }
 
 impl<K: Display> Display for NetworkLeaf<K> {
@@ -359,19 +383,19 @@ impl<K> NetworkGraph<K> {
                 if all_leaves && has_children {
                     let op = *op;
 
-                    // println!(
-                    //     "Extracting: {}",
-                    //     self.graph.dot_impl(
-                    //         &subgraph,
-                    //         "",
-                    //         &|a| if let NetworkEdge::Slot(s) = a {
-                    //             Some(format!("label=\"{s}\""))
-                    //         } else {
-                    //             None
-                    //         },
-                    //         &|a| None
-                    //     )
-                    // );
+                    println!(
+                        "Extracting: {}",
+                        self.graph.dot_impl(
+                            &subgraph,
+                            "",
+                            &|a| if let NetworkEdge::Slot(s) = a {
+                                Some(format!("label=\"{s}\""))
+                            } else {
+                                None
+                            },
+                            &|a| None
+                        )
+                    );
 
                     let extracted = self.extract(&subgraph);
 
@@ -422,6 +446,26 @@ impl<K> NetworkGraph<K> {
         });
     }
 
+    pub fn delete<S: SubGraph<Base = BitVec>>(&mut self, subgraph: &S) {
+        let mut left = Hedge(0);
+        let mut extracted = Hedge(self.graph.n_hedges());
+        while left < extracted {
+            if !subgraph.includes(&left) {
+                //left is in the right place
+                left.0 += 1;
+            } else {
+                //left needs to be swapped
+                extracted.0 -= 1;
+                if !subgraph.includes(&extracted) {
+                    // println!("{extracted}<=>{left}");
+                    //only with an extracted that is in the wrong spot
+                    self.slot_order.swap(left.0, extracted.0);
+                    left.0 += 1;
+                }
+            }
+        }
+        self.graph.delete_hedges(subgraph);
+    }
     pub fn identify_nodes_without_self_edges(
         &mut self,
         nodes: &[NodeIndex],
@@ -433,7 +477,35 @@ impl<K> NetworkGraph<K> {
 
         self.graph.forget_identification_history();
         self.graph.node_store.check_and_set_nodes().unwrap();
-        self.graph.delete_hedges(&sub);
+        self.delete(&sub);
+
+        self.graph.node_store.check_and_set_nodes().unwrap();
+        n
+    }
+
+    pub fn identify_nodes_without_self_edges_merge_heads(
+        &mut self,
+        nodes: &[NodeIndex],
+        node_data: NetworkNode<K>,
+    ) -> NodeIndex {
+        let (n, mut sub) = self
+            .graph
+            .identify_nodes_without_self_edges::<BitVec>(nodes, node_data);
+        let mut first = false;
+        for h in self.graph.iter_crown(n) {
+            // println!("{h}");
+            if self.graph[[&h]].is_head() {
+                if first {
+                    sub.add(h);
+                    sub.add(self.graph.inv(h));
+                }
+                first = true;
+            }
+        }
+        self.delete(&sub);
+        self.graph.forget_identification_history();
+        self.graph.node_store.check_and_set_nodes().unwrap();
+
         n
     }
 

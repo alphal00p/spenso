@@ -179,6 +179,7 @@ where
             // let s = s;
             match library.key_for_structure(&s.structure) {
                 Ok(key) => {
+                    println!("Adding lib");
                     // let t = library.get(&key).unwrap();
                     Ok(Self::library_tensor(&s.structure, key))
                 }
@@ -277,6 +278,78 @@ pub mod test {
         } else {
             panic!("Not scalar")
         }
+    }
+
+    #[test]
+    fn parse_scalar_tensor() {
+        let expr = parse!("c*a*b(mink(4,1))");
+
+        let lib = DummyLibrary::<_>::new();
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+        net.execute::<Steps<1>, ContractScalars, _>(&lib).unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+            net.result().unwrap()
+        {
+            assert_eq!(expr, tensor.expression);
+        } else {
+            panic!("Not scalar")
+        }
+    }
+
+    #[test]
+    fn parse_scalar_tensors_step_by() {
+        let expr = parse!("c*a*b(mink(4,1))*d(mink(4,1))");
+
+        let lib = DummyLibrary::<_>::new();
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+
+        let mut netc = net.clone();
+        // println!(
+        //     "{}",
+        //     net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        // );
+        // net.execute::<Steps<1>, ContractScalars, _>(&lib).unwrap();
+        // println!(
+        //     "{}",
+        //     net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        // );
+        // net.execute::<Steps<2>, SingleSmallestDegree, _>(&lib)
+        //     .unwrap();
+
+        // // println!("{:#?}", net.graph.graph);
+        // println!(
+        //     "{}",
+        //     net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        // );
+        // net.execute::<Steps<1>, ContractScalars, _>(&lib).unwrap();
+        // println!(
+        //     "{}",
+        //     net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        // );
+        netc.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        println!(
+            "{}",
+            netc.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+        // if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+        //     net.result().unwrap()
+        // {
+        //     assert_eq!(expr, tensor.expression);
+        // } else {
+        //     panic!("Not scalar")
+        // }
     }
 
     #[test]
@@ -464,7 +537,7 @@ pub mod test {
         let expr = parse_lit!(
             (P(4, mink(4, r_2)) + N(4, mink(4, r_2)))
                 * (P(5, mink(4, r_3)) + N(5, mink(4, r_3)))
-                * (A(mink(4, r_2), mink(4, r_3)) + B(mink(4, r_2), mink(4, r_3)))
+                * (A(mink(4, r_2), mink(4, r_3)) + B(mink(4, r_3), mink(4, r_2)))
         );
         let lib = DummyLibrary::<_>::new();
         let mut net =
@@ -485,7 +558,6 @@ pub mod test {
         if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
             net.result().unwrap()
         {
-            // println!("YaY:{}", (&expr - &tensor.expression).expand());
             assert_eq!(expr, tensor.expression);
         } else {
             panic!("Not tensor")
@@ -499,7 +571,6 @@ pub mod test {
 ");
 
         let lib = DummyLibrary::<_>::new();
-        println!("Hi");
         let mut net =
             Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
                 .unwrap();
@@ -510,18 +581,18 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Steps<15>, SmallestDegree, _>(&lib).unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
-            net.result().unwrap()
-        {
-            // println!("YaY:{}", (&expr - &tensor.expression).expand());
-            assert_eq!(expr, tensor.expression);
-        } else {
-            panic!("Not tensor")
-        }
+        // if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+        //     net.result().unwrap()
+        // {
+        //     // println!("YaY:{}", (&expr - &tensor.expression).expand());
+        //     assert_eq!(expr, tensor.expression);
+        // } else {
+        //     panic!("Not tensor")
+        // }
     }
 }

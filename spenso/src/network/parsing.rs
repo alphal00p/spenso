@@ -8,7 +8,9 @@ use crate::network::library::LibraryTensor;
 use crate::structure::abstract_index::AIND_SYMBOLS;
 // use crate::shadowing::Concretize;
 use crate::structure::slot::{Slot, SlotError};
-use crate::structure::{NamedStructure, OrderedStructure, StructureError, TensorShell};
+use crate::structure::{
+    NamedStructure, OrderedStructure, PermutedStructure, StructureError, TensorShell,
+};
 
 use std::fmt::Display;
 
@@ -23,7 +25,7 @@ use crate::{shadowing::Concretize, structure::representation::LibraryRep, struct
 
 pub type ShadowedStructure = NamedStructure<Symbol, Vec<Atom>, LibraryRep>;
 
-impl<'a> TryFrom<AtomView<'a>> for ShadowedStructure {
+impl<'a> TryFrom<AtomView<'a>> for PermutedStructure<ShadowedStructure> {
     type Error = StructureError;
     fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
         if let AtomView::Fun(f) = value {
@@ -34,21 +36,21 @@ impl<'a> TryFrom<AtomView<'a>> for ShadowedStructure {
     }
 }
 
-impl TryFrom<Atom> for ShadowedStructure {
+impl TryFrom<Atom> for PermutedStructure<ShadowedStructure> {
     type Error = StructureError;
     fn try_from(value: Atom) -> Result<Self, Self::Error> {
         value.as_view().try_into()
     }
 }
 
-impl TryFrom<&Atom> for ShadowedStructure {
+impl TryFrom<&Atom> for PermutedStructure<ShadowedStructure> {
     type Error = StructureError;
     fn try_from(value: &Atom) -> Result<Self, Self::Error> {
         value.as_view().try_into()
     }
 }
 
-impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
+impl<'a> TryFrom<FunView<'a>> for PermutedStructure<ShadowedStructure> {
     type Error = StructureError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         match value.get_symbol() {
@@ -59,12 +61,14 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
                     structure.push(arg.try_into()?);
                 }
 
-                Ok(OrderedStructure::new(structure).structure.into())
+                let o = OrderedStructure::new(structure);
+                let p = o.map_structure(|s| s.into());
+
+                Ok(p)
             }
             name => {
-                let mut structure: ShadowedStructure = OrderedStructure::default().into();
-                structure.set_name(name.into());
                 let mut args = vec![];
+                let mut slots = vec![];
                 let mut is_structure = Some(SlotError::EmptyStructure);
 
                 for arg in value.iter() {
@@ -73,7 +77,7 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
                     match slot {
                         Ok(slot) => {
                             is_structure = None;
-                            structure.structure.push(slot);
+                            slots.push(slot);
                         }
                         Err(e) => {
                             if let AtomView::Fun(f) = arg {
@@ -81,7 +85,10 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
                                     let internal_s = Self::try_from(f);
 
                                     if let Ok(s) = internal_s {
-                                        structure.extend(s);
+                                        let p = s.permutation;
+                                        let mut v = s.structure.structure.structure;
+                                        p.apply_slice_in_place_inv(&mut v); //undo sorting
+                                        slots.extend(v);
                                         is_structure = None;
                                         continue;
                                     }
@@ -93,13 +100,15 @@ impl<'a> TryFrom<FunView<'a>> for ShadowedStructure {
                     }
                 }
 
-                if !args.is_empty() {
-                    structure.additional_args = Some(args);
-                }
                 if let Some(e) = is_structure {
                     Err(StructureError::EmptyStructure(e))
                 } else {
-                    structure.structure.sort();
+                    let mut structure: PermutedStructure<ShadowedStructure> =
+                        OrderedStructure::new(slots).map_structure(Into::into);
+                    structure.structure.set_name(name.into());
+                    if !args.is_empty() {
+                        structure.structure.additional_args = Some(args);
+                    }
                     Ok(structure)
                 }
             }
@@ -123,8 +132,9 @@ where
         library: &Lib,
     ) -> Result<Self, TensorNetworkError<K>>
     where
-        S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
+        S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
+        PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         match value {
             AtomView::Mul(m) => Self::try_from_mul(m, library),
@@ -140,8 +150,9 @@ where
         library: &Lib,
     ) -> Result<Self, TensorNetworkError<K>>
     where
-        S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
+        S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
+        PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         let mut iter = value.iter();
 
@@ -157,19 +168,25 @@ where
         library: &Lib,
     ) -> Result<Self, TensorNetworkError<K>>
     where
-        S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
+        S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
+        PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
-        let s: Result<S, _> = value.try_into();
+        let s: Result<PermutedStructure<S>, _> = value.try_into();
 
         if let Ok(s) = s {
+            println!("Perm:{}", s.permutation);
             // let s = s;
-            match library.key_for_structure(&s) {
+            match library.key_for_structure(&s.structure) {
                 Ok(key) => {
                     // let t = library.get(&key).unwrap();
-                    Ok(Self::library_tensor(&s, key))
+                    Ok(Self::library_tensor(&s.structure, key))
                 }
-                Err(_) => Ok(Self::from_tensor(s.to_shell().concretize())),
+                Err(_) => Ok(Self::from_tensor(
+                    s.structure
+                        .to_shell()
+                        .concretize(Some(s.permutation.inverse())),
+                )),
             }
         } else {
             Ok(Self::from_scalar(
@@ -183,8 +200,9 @@ where
         library: &Lib,
     ) -> std::result::Result<Self, TensorNetworkError<K>>
     where
-        S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
+        S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
+        PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         let (base, exp) = value.get_base_exp();
 
@@ -212,8 +230,9 @@ where
         library: &Lib,
     ) -> Result<Self, TensorNetworkError<K>>
     where
-        S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
+        S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
+        PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         let mut iter = value.iter();
 
@@ -300,7 +319,7 @@ pub mod test {
             None,
         )
         .structure
-        .to_symbolic()
+        .to_symbolic(None)
         .unwrap();
 
         let tensor2 = ShadowedStructure::from_iter(
@@ -313,7 +332,7 @@ pub mod test {
             None,
         )
         .structure
-        .to_symbolic()
+        .to_symbolic(None)
         .unwrap();
 
         let tensor3 = ShadowedStructure::from_iter(
@@ -326,13 +345,13 @@ pub mod test {
             None,
         )
         .structure
-        .to_symbolic()
+        .to_symbolic(None)
         .unwrap();
 
         let tensor4 =
             ShadowedStructure::from_iter([Lorentz {}.new_slot(3, 2).to_lib()], symbol!("L"), None)
                 .structure
-                .to_symbolic()
+                .to_symbolic(None)
                 .unwrap();
 
         let tensor5 = ShadowedStructure::from_iter(
@@ -341,7 +360,7 @@ pub mod test {
             None,
         )
         .structure
-        .to_symbolic()
+        .to_symbolic(None)
         .unwrap();
 
         let expr = (parse!("a*sin(x/2)") * tensor1 * tensor2 * tensor3 + tensor4) * tensor5;
@@ -396,11 +415,21 @@ pub mod test {
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
+
+        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+            net.result().unwrap()
+        {
+            // println!("YaY:{}", (&expr - &tensor.expression).expand());
+            assert_eq!(expr, tensor.expression);
+        } else {
+            panic!("Not tensor")
+        }
     }
     #[test]
     fn parse_neg_tensors() {
         let _ = ETS.id;
-        let expr = parse!("-g(mink(4,6))*Q(2,mink(4,7))+g(mink(4,6))*Q(3,mink(4,7))");
+        let expr =
+            parse!("-d(mink(4,6),mink(4,5))*Q(2,mink(4,7))+d(mink(4,6),mink(4,5))*Q(3,mink(4,7))");
         let lib = DummyLibrary::<_>::new();
         println!("Hi");
         let mut net =
@@ -418,5 +447,14 @@ pub mod test {
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
+
+        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+            net.result().unwrap()
+        {
+            // println!("YaY:{}", (&expr - &tensor.expression).expand());
+            assert_eq!(expr, tensor.expression);
+        } else {
+            panic!("Not tensor")
+        }
     }
 }

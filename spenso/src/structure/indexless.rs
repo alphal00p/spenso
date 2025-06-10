@@ -317,22 +317,18 @@ impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {
         })
     }
 
-    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
-        let slots = self
+    fn to_symbolic_with(&self, name: Symbol, args: &[Atom], perm: Option<Permutation>) -> Atom {
+        let mut slots = self
             .external_structure_iter()
             .map(|slot| slot.to_atom())
             .collect::<Vec<_>>();
-
-        let mut value_builder = FunctionBuilder::new(name.ref_into_symbol());
-
-        for arg in args {
-            value_builder = value_builder.add_arg(arg);
+        if let Some(p) = perm {
+            p.apply_slice_in_place(&mut slots);
         }
-
-        for s in slots {
-            value_builder = value_builder.add_arg(&s);
-        }
-        value_builder.finish()
+        FunctionBuilder::new(name.ref_into_symbol())
+            .add_args(args)
+            .add_args(&slots)
+            .finish()
     }
 }
 

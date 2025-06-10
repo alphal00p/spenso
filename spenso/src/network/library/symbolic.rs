@@ -389,7 +389,7 @@ mod test {
             .clone()
             .reindex(&[0.into(), 1.into(), 2.into()])
             .unwrap();
-        let expr = indexed.structure.to_symbolic().unwrap();
+        let expr = indexed.structure.to_symbolic(None).unwrap();
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -449,7 +449,7 @@ mod test {
             .reindex(&[0.into(), 1.into(), 2.into()])
             .unwrap()
             .structure;
-        let expr = indexed.to_symbolic().unwrap();
+        let expr = indexed.to_symbolic(None).unwrap();
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -480,7 +480,7 @@ mod test {
         {
             // println!("YaY:{a}");
 
-            assert_eq!(tensor, &indexed.to_shell().concretize());
+            assert_eq!(tensor, &indexed.to_shell().concretize(None));
         } else {
             panic!("Not Key")
         }

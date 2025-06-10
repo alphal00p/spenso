@@ -44,7 +44,7 @@ use serde::{Deserialize, Serialize};
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
 pub struct OrderedStructure<R: RepName = LibraryRep> {
-    structure: Vec<Slot<R>>,
+    pub(crate) structure: Vec<Slot<R>>,
     // permutation: Option<Permutation>,
 }
 
@@ -209,6 +209,8 @@ impl<'a, R: RepName> IntoIterator for &'a mut OrderedStructure<R> {
 }
 
 impl<R: RepName> OrderedStructure<R> {
+    /// Creates a new ordered structure from this unsorted list of slots.
+    /// Returns a tuple struct of a the permutation that was used to sort the vector as well as the ordered structure itself
     pub fn new(structure: Vec<Slot<R>>) -> PermutedStructure<Self> {
         PermutedStructure::from(structure)
     }
@@ -338,22 +340,18 @@ impl<R: RepName<Dual = R>> ToSymbolic for OrderedStructure<R> {
         })
     }
 
-    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
-        let slots = self
+    fn to_symbolic_with(&self, name: Symbol, args: &[Atom], perm: Option<Permutation>) -> Atom {
+        let mut slots = self
             .external_structure_iter()
             .map(|slot| slot.to_atom())
             .collect::<Vec<_>>();
-
-        let mut value_builder = FunctionBuilder::new(name.ref_into_symbol());
-
-        for arg in args {
-            value_builder = value_builder.add_arg(arg);
+        if let Some(p) = perm {
+            p.apply_slice_in_place(&mut slots);
         }
-
-        for s in slots {
-            value_builder = value_builder.add_arg(&s);
-        }
-        value_builder.finish()
+        FunctionBuilder::new(name.ref_into_symbol())
+            .add_args(args)
+            .add_args(&slots)
+            .finish()
     }
 }
 

@@ -191,9 +191,26 @@ impl SymbolicTensor {
         N::Name: IntoSymbol + Clone,
         N::Args: IntoArgs,
     {
+        let permuted_structure = PermutedStructure::from(structure.external_structure());
         Some(SymbolicTensor {
-            expression: structure.to_symbolic()?,
-            structure: PermutedStructure::from(structure.external_structure()).structure,
+            expression: structure.to_symbolic(Some(permuted_structure.permutation))?,
+            structure: permuted_structure.structure,
+        })
+    }
+
+    pub fn from_permuted<N>(structure: &PermutedStructure<N>) -> Option<Self>
+    where
+        N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot>,
+        N::Name: IntoSymbol + Clone,
+        N::Args: IntoArgs,
+    {
+        let permuted_structure = PermutedStructure::from(structure.structure.external_structure());
+
+        Some(SymbolicTensor {
+            expression: structure
+                .structure
+                .to_symbolic(Some(structure.permutation.clone()))?,
+            structure: permuted_structure.structure,
         })
     }
 
@@ -353,8 +370,10 @@ pub mod test {
         let _ = ETS.id;
         let expr = parse!("g(mink(4,6),mink(4,7))");
 
-        let structure =
-            SymbolicTensor::from_named(&NamedStructure::try_from(expr).unwrap()).unwrap();
+        let structure = SymbolicTensor::from_permuted(
+            &PermutedStructure::<ShadowedStructure>::try_from(expr).unwrap(),
+        )
+        .unwrap();
 
         structure.contract(&structure).unwrap();
     }

@@ -9,6 +9,7 @@ use crate::{
     tensors::symbolic::SymbolicTensor,
 };
 use anyhow::Result;
+use linnet::permutation::Permutation;
 use symbolica::{atom::Atom, evaluate::FunctionMap};
 
 pub mod symbolica_utils;
@@ -42,29 +43,29 @@ pub trait Shadowable:
 }
 
 pub trait Concretize<T> {
-    fn concretize(self) -> T;
+    fn concretize(self, perm: Option<Permutation>) -> T;
 }
 
 impl Concretize<SymbolicTensor> for ShadowedStructure {
-    fn concretize(self) -> SymbolicTensor {
+    fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor {
         SymbolicTensor {
-            expression: self.to_symbolic().unwrap(),
+            expression: self.to_symbolic(perm).unwrap(),
             structure: self.structure,
         }
     }
 }
 
 impl Concretize<SymbolicTensor> for TensorShell<ShadowedStructure> {
-    fn concretize(self) -> SymbolicTensor {
+    fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor {
         SymbolicTensor {
-            expression: self.to_symbolic().unwrap(),
+            expression: self.to_symbolic(perm).unwrap(),
             structure: self.structure.structure,
         }
     }
 }
 
 impl<S: Shadowable> Concretize<DenseTensor<Atom, S::Structure>> for S {
-    fn concretize(self) -> DenseTensor<Atom, S::Structure> {
+    fn concretize(self, perm: Option<Permutation>) -> DenseTensor<Atom, S::Structure> {
         // self.flat_s
         // todo!()
         self.expanded_shadow().unwrap()
@@ -72,27 +73,29 @@ impl<S: Shadowable> Concretize<DenseTensor<Atom, S::Structure>> for S {
 }
 
 impl<S: Shadowable> Concretize<DataTensor<Atom, S::Structure>> for S {
-    fn concretize(self) -> DataTensor<Atom, S::Structure> {
+    fn concretize(self, perm: Option<Permutation>) -> DataTensor<Atom, S::Structure> {
         // self.flat_s
         // todo!()
-        <S as Concretize<DenseTensor<Atom, S::Structure>>>::concretize(self).into()
+        <S as Concretize<DenseTensor<Atom, S::Structure>>>::concretize(self, perm).into()
     }
 }
 
 impl<S: Shadowable> Concretize<ParamTensor<S::Structure>> for S {
-    fn concretize(self) -> ParamTensor<S::Structure> {
+    fn concretize(self, perm: Option<Permutation>) -> ParamTensor<S::Structure> {
         // self.flat_s
         // todo!()
-        ParamTensor::param(<S as Concretize<DataTensor<Atom, S::Structure>>>::concretize(self))
+        ParamTensor::param(
+            <S as Concretize<DataTensor<Atom, S::Structure>>>::concretize(self, perm),
+        )
     }
 }
 
 impl<T: Clone, S: Shadowable> Concretize<MixedTensor<T, S::Structure>> for S {
-    fn concretize(self) -> MixedTensor<T, S::Structure> {
+    fn concretize(self, perm: Option<Permutation>) -> MixedTensor<T, S::Structure> {
         // self.flat_s
         // todo!()
         MixedTensor::<T, S::Structure>::param(
-            <S as Concretize<DataTensor<Atom, S::Structure>>>::concretize(self),
+            <S as Concretize<DataTensor<Atom, S::Structure>>>::concretize(self, perm),
         )
     }
 }

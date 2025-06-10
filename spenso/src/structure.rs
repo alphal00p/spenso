@@ -12,6 +12,7 @@ use delegate::delegate;
 use dimension::Dimension;
 use indexmap::IndexMap;
 
+use linnet::permutation;
 use thiserror::Error;
 
 use crate::utils::DuplicateItemError;
@@ -178,23 +179,24 @@ where
         })
     }
 
-    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
-        let slots = self
+    fn to_symbolic_with(
+        &self,
+        name: Symbol,
+        args: &[Atom],
+        permutation: Option<Permutation>,
+    ) -> Atom {
+        let mut slots = self
             .structure
             .external_structure_iter()
             .map(|slot| slot.to_atom())
             .collect::<Vec<_>>();
-
-        let mut value_builder = FunctionBuilder::new(name.ref_into_symbol());
-
-        for arg in args {
-            value_builder = value_builder.add_arg(arg);
+        if let Some(perm) = permutation {
+            perm.apply_slice_in_place(&mut slots);
         }
-
-        for s in slots {
-            value_builder = value_builder.add_arg(&s);
-        }
-        value_builder.finish()
+        FunctionBuilder::new(name.ref_into_symbol())
+            .add_args(args)
+            .add_args(&slots)
+            .finish()
     }
 }
 
@@ -262,22 +264,19 @@ where
         })
     }
 
-    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom {
-        let slots = self
+    fn to_symbolic_with(&self, name: Symbol, args: &[Atom], perm: Option<Permutation>) -> Atom {
+        let mut slots = self
             .external_structure_iter()
             .map(|slot| slot.to_atom())
             .collect::<Vec<_>>();
-
-        let mut value_builder = FunctionBuilder::new(name.ref_into_symbol());
-
-        for arg in args {
-            value_builder = value_builder.add_arg(arg);
+        if let Some(perm) = perm {
+            perm.apply_slice_in_place(&mut slots);
         }
 
-        for s in slots {
-            value_builder = value_builder.add_arg(&s);
-        }
-        value_builder.finish()
+        FunctionBuilder::new(name.ref_into_symbol())
+            .add_args(args)
+            .add_args(&slots)
+            .finish()
     }
 }
 
@@ -330,16 +329,16 @@ pub trait ToSymbolic {
         self.to_dense_labeled(Self::flat_atom)
     }
 
-    fn to_symbolic(&self) -> Option<Atom>
+    fn to_symbolic(&self, perm: Option<Permutation>) -> Option<Atom>
     where
         Self: HasName<Name: IntoSymbol, Args: IntoArgs>,
     {
         let args = self.args().map(|s| s.args()).unwrap_or_default();
 
-        Some(self.to_symbolic_with(self.name()?.ref_into_symbol(), &args))
+        Some(self.to_symbolic_with(self.name()?.ref_into_symbol(), &args, perm))
     }
 
-    fn to_symbolic_with(&self, name: Symbol, args: &[Atom]) -> Atom;
+    fn to_symbolic_with(&self, name: Symbol, args: &[Atom], perm: Option<Permutation>) -> Atom;
 }
 
 pub trait ScalarStructure {

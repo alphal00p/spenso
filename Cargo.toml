@@ -1,6 +1,6 @@
 [workspace]
 members = ["spenso", "spenso-macros", "weyl", "idenso"]
-resolver = "2"                        # Add this line
+resolver = "2"                                          # Add this line
 
 [workspace.package]
 authors = ["Lucien Huber <cargo+mail@lucien.ch>"]
@@ -14,7 +14,7 @@ lto = "fat"
 
 [patch.crates-io]
 # symbolica = { git = "https://github.com/benruijl/symbolica", rev = "57f25f34928ca667bd5889d94ed616d15e2ad94f" }
-# linnet = {path = "../linnet"}
-# linnet = {git ="https://github.com/alphal00p/linnet", rev = "4c58ee517de69e71c9c1354fd55078c5acc21e31"}
+# linnet = { path = "../linnet" }
+linnet = { git = "https://github.com/alphal00p/linnet", rev = "50d4d036fd2cfdf75c79a3c168c7d8357ec16831" }
 # symbolica = { path = "../symbolica" }
 symbolica = { git = "https://github.com/benruijl/symbolica", branch = "complex_coeff" }

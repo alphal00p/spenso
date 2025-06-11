@@ -11,11 +11,11 @@ use linnet::{
         involution::{EdgeData, Flow, Hedge},
         nodestore::NodeStorageOps,
         subgraph::{ModifySubgraph, SubGraph, SubGraphOps},
-        tree::SimpleTraversalTree,
+        tree::{SimpleTraversalTree, TTRoot},
         HedgeGraph, HedgeGraphError, NodeIndex,
     },
     permutation::Permutation,
-    tree::child_pointer::ParentChildStore,
+    tree::{child_pointer::ParentChildStore, child_vec::ChildVecStore},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -343,10 +343,24 @@ impl<K> NetworkGraph<K> {
         K: Clone,
     {
         // build a traversal over *all* internal edges
-        let tt: SimpleTraversalTree<ParentChildStore<()>> = self.expr_tree().cast();
+        let tt: SimpleTraversalTree<ChildVecStore<()>> = self.expr_tree().cast();
         let head = self.head();
         let root_node = self.graph.node_id(head);
 
+        println!("//tree:\n{}", self.graph.dot(&tt.tree_subgraph));
+        println!(
+            "//tree:\n{}",
+            self.graph.dot(&tt.tree_subgraph(self.graph.as_ref()))
+        );
+        // println!("tree{:#?}", tt);
+        println!(
+            "tree{}",
+            tt.debug_draw(|a| match a {
+                TTRoot::Child(a) => a.to_string(),
+                TTRoot::Root => "Root".into(),
+                _ => "".into(),
+            })
+        );
         // look for the first op node whose children are all leaves
         for nid in tt.iter_preorder_tree_nodes(&self.graph, root_node) {
             if let NetworkNode::Op(op) = &self.graph[nid] {
@@ -359,7 +373,9 @@ impl<K> NetworkGraph<K> {
                     subgraph.add(h);
                 }
 
+                println!("parent:{nid}");
                 for child in tt.iter_children(nid, &self.graph) {
+                    println!("Child:{child}");
                     has_children = true;
                     match &self.graph[child] {
                         NetworkNode::Leaf(a) => {
@@ -502,8 +518,9 @@ impl<K> NetworkGraph<K> {
                 first = true;
             }
         }
-        self.delete(&sub);
         self.graph.forget_identification_history();
+        self.graph.node_store.check_and_set_nodes().unwrap();
+        self.delete(&sub);
         self.graph.node_store.check_and_set_nodes().unwrap();
 
         n

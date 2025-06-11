@@ -1169,7 +1169,6 @@ where
                 }
             })
             .collect();
-        println!("hii");
 
         if let Some(f) = scalars.pop() {
             let mut acc = executor.scalar[f].clone();
@@ -1179,7 +1178,9 @@ where
             }
 
             let new_node = if include_head {
-                scalar_nodes.push(head.unwrap());
+                if let Some(head) = head {
+                    scalar_nodes.push(head);
+                }
                 if let Some(other) = other {
                     scalar_nodes.push(other);
                     if let NetworkNode::Leaf(l) = &graph.graph[other] {
@@ -1230,9 +1231,11 @@ where
             let mut didsmth = false;
             if include_head {
                 if let Some(other) = other {
-                    let v = graph.graph[other].clone();
-                    graph.identify_nodes_without_self_edges(&[head.unwrap(), other], v);
-                    didsmth = true;
+                    if let Some(head) = head {
+                        let v = graph.graph[other].clone();
+                        graph.identify_nodes_without_self_edges(&[head, other], v);
+                        didsmth = true;
+                    }
                 }
             }
             Ok((graph, didsmth))
@@ -1270,21 +1273,15 @@ where
     {
         let (mut graph, mut didsmth) = ContractScalars::contract(executor, graph, lib)?;
 
-        println!("{}", graph.dot_simple());
         while {
             let (newgraph, smth) = SingleSmallestDegree::contract(executor, graph, lib)?;
             graph = newgraph;
             smth
         } {
-            println!("hhhh");
             didsmth |= true
         }
 
-        println!("slot contract: {}", graph.dot_simple());
-
-        println!("hhhh");
         let (graph, _) = ContractScalars::contract(executor, graph, lib)?;
-        println!("scalar_contract: {}", graph.dot_simple());
 
         Ok((graph, didsmth))
     }
@@ -1318,25 +1315,38 @@ where
     where
         K: Display,
     {
-        let mut n_tensors = 0;
+        let mut last_tensor = None;
         let edge_to_contract = graph
             .graph
             .iter_nodes()
             .filter(|(_, _, d)| d.is_tensor())
             .filter_map(|(nid1, a, n1)| {
-                n_tensors += 1;
                 let mut degree = 0;
                 let mut first = None;
                 for h in a {
                     if graph.graph[[&h]].is_slot() && graph.graph.inv(h) != h {
                         first = Some(h); //only contract slot hedges
+                        degree += 1
                     }
-                    degree += 1
                 }
 
-                // let n1 = &graph.graph[graph.graph.node_id(first?)];
-                let nid2 = graph.graph.involved_node_id(first?)?;
+                let nid2 = if degree == 0 {
+                    //no internal slots to contract
+                    // contract with last tensor (give max  weight  so only happens when there are no internal slots)
+                    degree = i32::MAX;
+                    if let Some(last_tensor) = last_tensor {
+                        last_tensor
+                    } else {
+                        last_tensor = Some(nid1);
+                        return None;
+                    }
+                } else {
+                    graph.graph.involved_node_id(first?)?
+                };
+
                 let n2 = &graph.graph[nid2];
+
+                last_tensor = Some(nid1);
 
                 Some((degree, nid1, n1, nid2, n2))
             })
@@ -1361,14 +1371,7 @@ where
                         NetworkLeaf::LocalTensor(pos)
                     }
                     (NetworkLeaf::LibraryKey(l1), NetworkLeaf::LocalTensor(l2)) => {
-                        let l1_inds: Vec<_> = graph
-                            .graph
-                            .iter_crown(nid1)
-                            .filter_map(|i| match graph.graph[[&i]] {
-                                NetworkEdge::Head => None,
-                                NetworkEdge::Slot(s) => Some(s.aind),
-                            })
-                            .collect();
+                        let l1_inds: Vec<_> = graph.inds(nid1);
 
                         let contracted = executor.tensors[*l2]
                             .contract(&lib.get(l1)?.with_indices(&l1_inds)?)?;
@@ -1378,14 +1381,7 @@ where
                     }
 
                     (NetworkLeaf::LocalTensor(l2), NetworkLeaf::LibraryKey(l1)) => {
-                        let l1_inds: Vec<_> = graph
-                            .graph
-                            .iter_crown(nid2)
-                            .filter_map(|i| match graph.graph[[&i]] {
-                                NetworkEdge::Head => None,
-                                NetworkEdge::Slot(s) => Some(s.aind),
-                            })
-                            .collect();
+                        let l1_inds: Vec<_> = graph.inds(nid2);
 
                         let contracted = executor.tensors[*l2]
                             .contract(&lib.get(l1)?.with_indices(&l1_inds)?)?;
@@ -1436,14 +1432,6 @@ where
             );
             Ok((graph, true))
         } else {
-            if n_tensors > 1 {
-                //Need to exterior product
-                let tensors: Vec<_> = graph
-                    .graph
-                    .iter_nodes()
-                    .filter(|(_, _, d)| d.is_tensor())
-                    .collect();
-            }
             Ok((graph, false))
         }
     }

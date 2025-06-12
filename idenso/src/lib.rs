@@ -1,3 +1,4 @@
+#![allow(uncommon_codepoints)]
 use color::color_conj_impl;
 use gamma::{factor_conj_impl, gamma_conj_impl, pol_conj_impl};
 use metric::{

@@ -27,9 +27,9 @@ pub struct MetricSymbols {
 }
 
 pub static MS: LazyLock<MetricSymbols> = LazyLock::new(|| MetricSymbols {
-    dim: symbol!("dim"),
-    dot: symbol!("dot";Symmetric, Linear),
-    dummy: symbol!("custom::dummy"),
+    dim: symbol!("spenso::dim"),
+    dot: symbol!("spenso::dot";Symmetric, Linear),
+    dummy: symbol!("spenso::dummy"),
 });
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
@@ -80,7 +80,7 @@ pub fn cook_function_impl(fun: FunView) -> Result<Symbol, CookingError> {
                         name.push_str(&imnum.to_string());
                         if d != 1 {
                             name.push(':');
-                            name.push_str(&d.to_string());
+                            name.push_str(&imden.to_string());
                         }
                     }
                 }

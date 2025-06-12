@@ -1,5 +1,5 @@
 [package]
-name = "weyl"
+name = "spenso-hep-lib"
 version = "0.0.0"
 edition = "2024"
 authors.workspace = true

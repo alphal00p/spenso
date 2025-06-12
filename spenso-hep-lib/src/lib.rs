@@ -1,6 +1,9 @@
 use std::{ops::Neg, sync::LazyLock};
 
-use idenso::representations::{Bispinor, initialize};
+use idenso::{
+    gamma::AGS,
+    representations::{Bispinor, initialize},
+};
 use spenso::{
     algebra::complex::Complex,
     network::library::{
@@ -17,22 +20,6 @@ use spenso::{
     },
 };
 use symbolica::{atom::Symbol, symbol};
-
-pub struct GammaLibrary {
-    pub gamma: Symbol,
-    pub projp: Symbol,
-    pub projm: Symbol,
-    pub gamma5: Symbol,
-    pub sigma: Symbol,
-}
-
-pub static WEYL: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
-    gamma: symbol!("weyl::gamma"),
-    projp: symbol!("weyl::projp"),
-    projm: symbol!("weyl::projm"),
-    gamma5: symbol!("weyl::gamma5"),
-    sigma: symbol!("weyl::sigma"),
-});
 
 #[allow(clippy::similar_names)]
 pub fn gamma_data_dirac<T, N>(structure: N, one: T, zero: T) -> SparseTensor<Complex<T>, N>
@@ -364,7 +351,7 @@ pub fn projp_strct(name: Symbol) -> PermutedStructure<ExplicitKey> {
     ExplicitKey::from_iter([Bispinor {}.new_rep(4), Bispinor {}.new_rep(4)], name, None)
 }
 
-pub fn weyl<T: TensorLibraryData + Clone + Default>(
+pub fn hep_lib<T: TensorLibraryData + Clone + Default>(
     one: T,
     zero: T,
 ) -> TensorLibrary<MixedTensor<T, ExplicitKey>> {
@@ -372,23 +359,23 @@ pub fn weyl<T: TensorLibraryData + Clone + Default>(
     initialize();
     weyl.update_ids();
 
-    let gamma_key = gamma4D_strct(WEYL.gamma).structure;
+    let gamma_key = gamma4D_strct(AGS.gamma).structure;
     weyl.insert_explicit(gamma_data_weyl(gamma_key, one.clone(), zero.clone()).into());
 
-    let gamma5_key = gamma5_strct(WEYL.gamma5).structure;
+    let gamma5_key = gamma5_strct(AGS.gamma5).structure;
     weyl.insert_explicit(gamma5_weyl_data(gamma5_key, one.clone(), zero.clone()).into());
 
-    let projm_key = projm_strct(WEYL.projm).structure;
+    let projm_key = projm_strct(AGS.projm).structure;
     weyl.insert_explicit(proj_m_data_weyl(projm_key, one.clone(), zero.clone()).into());
 
-    let projp_key = projp_strct(WEYL.projp).structure;
+    let projp_key = projp_strct(AGS.projp).structure;
     weyl.insert_explicit(proj_p_data_weyl(projp_key, one.clone(), zero.clone()).into());
 
     weyl
 }
 
-pub static WEYLIB: LazyLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>> =
-    LazyLock::new(|| weyl(1., 0.));
+pub static HEP_LIB: LazyLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>> =
+    LazyLock::new(|| hep_lib(1., 0.));
 
 #[cfg(test)]
 mod tests {
@@ -409,12 +396,12 @@ mod tests {
     #[test]
     fn simple_scalar() {
         let _ = ETS.id;
-        let a = WEYLIB.get(&gamma4D_strct(WEYL.gamma).structure).unwrap();
+        let a = WEYLIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
 
-        let expr = parse!("weyl::gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*weyl::gamma(bis(4,l_6),bis(4,l_5),mink(4,l_4))*weyl::gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
+        let expr = parse!("gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_4))*gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
             ","spenso");
         // let expr = parse!(
-        // "weyl::gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
+        // "gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
         // ",
         // "spenso"
         // );
@@ -482,9 +469,9 @@ mod tests {
     #[test]
     fn parse_problem() {
         let _ = ETS.id;
-        let a = WEYLIB.get(&gamma4D_strct(WEYL.gamma).structure).unwrap();
+        let a = WEYLIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
 
-        let expr = parse!("((N(4,mink(4,l_2))*P(4,mink(4,r_2))+N(4,mink(4,r_2))*P(4,mink(4,l_2)))*N(4,mink(4,dummy_ss_4_1))*P(4,mink(4,dummy_ss_4_1))+-1*N(4,mink(4,dummy_ss_4_2))^2*P(4,mink(4,l_2))*P(4,mink(4,r_2))+-1*N(4,mink(4,dummy_ss_4_3))*N(4,mink(4,dummy_ss_4_4))*P(4,mink(4,dummy_ss_4_3))*P(4,mink(4,dummy_ss_4_4))*g(mink(4,l_2),mink(4,r_2)))*((N(5,mink(4,l_3))*P(5,mink(4,r_3))+N(5,mink(4,r_3))*P(5,mink(4,l_3)))*N(5,mink(4,dummy_ss_5_1))*P(5,mink(4,dummy_ss_5_1))+-1*N(5,mink(4,dummy_ss_5_2))^2*P(5,mink(4,l_3))*P(5,mink(4,r_3))+-1*N(5,mink(4,dummy_ss_5_3))*N(5,mink(4,dummy_ss_5_4))*P(5,mink(4,dummy_ss_5_3))*P(5,mink(4,dummy_ss_5_4))*g(mink(4,l_3),mink(4,r_3)))*(-1*G^2*P(0,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*weyl::gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*weyl::gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*weyl::gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5))+G^2*P(2,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*weyl::gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*weyl::gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*weyl::gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5)))*(-1*P(2,mink(4,l_20))+P(0,mink(4,l_20)))*-1*G^2*P(2,mink(4,dummy_2_0))*P(3,mink(4,dummy_3_1))*𝑖*𝟙(bis(4,l_0),bis(4,l_7))*𝟙(bis(4,l_1),bis(4,l_4))*𝟙(mink(4,l_2),mink(4,l_5))*𝟙(mink(4,l_3),mink(4,l_4))*weyl::gamma(bis(4,l_1),bis(4,r_1),mink(4,dummy_3_1))*weyl::gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*weyl::gamma(bis(4,l_6),bis(4,l_5),mink(4,l_20))*weyl::gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))*weyl::gamma(bis(4,r_0),bis(4,l_0),mink(4,dummy_2_0))
+        let expr = parse!("((N(4,mink(4,l_2))*P(4,mink(4,r_2))+N(4,mink(4,r_2))*P(4,mink(4,l_2)))*N(4,mink(4,dummy_ss_4_1))*P(4,mink(4,dummy_ss_4_1))+-1*N(4,mink(4,dummy_ss_4_2))^2*P(4,mink(4,l_2))*P(4,mink(4,r_2))+-1*N(4,mink(4,dummy_ss_4_3))*N(4,mink(4,dummy_ss_4_4))*P(4,mink(4,dummy_ss_4_3))*P(4,mink(4,dummy_ss_4_4))*g(mink(4,l_2),mink(4,r_2)))*((N(5,mink(4,l_3))*P(5,mink(4,r_3))+N(5,mink(4,r_3))*P(5,mink(4,l_3)))*N(5,mink(4,dummy_ss_5_1))*P(5,mink(4,dummy_ss_5_1))+-1*N(5,mink(4,dummy_ss_5_2))^2*P(5,mink(4,l_3))*P(5,mink(4,r_3))+-1*N(5,mink(4,dummy_ss_5_3))*N(5,mink(4,dummy_ss_5_4))*P(5,mink(4,dummy_ss_5_3))*P(5,mink(4,dummy_ss_5_4))*g(mink(4,l_3),mink(4,r_3)))*(-1*G^2*P(0,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5))+G^2*P(2,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5)))*(-1*P(2,mink(4,l_20))+P(0,mink(4,l_20)))*-1*G^2*P(2,mink(4,dummy_2_0))*P(3,mink(4,dummy_3_1))*𝑖*𝟙(bis(4,l_0),bis(4,l_7))*𝟙(bis(4,l_1),bis(4,l_4))*𝟙(mink(4,l_2),mink(4,l_5))*𝟙(mink(4,l_3),mink(4,l_4))*gamma(bis(4,l_1),bis(4,r_1),mink(4,dummy_3_1))*gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_20))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))*gamma(bis(4,r_0),bis(4,l_0),mink(4,dummy_2_0))
             ","spenso");
         // println!("{}", expr);
 

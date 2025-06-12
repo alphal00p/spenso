@@ -761,6 +761,8 @@ checksum = "f154ce46856750ed433c8649605bf7ed2de3bc35fd9d2a9f30cddd873c80cb08"
 name = "idenso"
 version = "0.0.0"
 dependencies = [
+ "bincode",
+ "bincode-trait-derive",
  "itertools 0.14.0",
  "linnet",
  "spenso",
@@ -1650,6 +1652,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "spenso-hep-lib"
+version = "0.0.0"
+dependencies = [
+ "idenso",
+ "spenso",
+ "spenso-macros",
+ "symbolica",
+]
+
+[[package]]
 name = "spenso-macros"
 version = "0.1.0"
 dependencies = [
@@ -2039,16 +2051,6 @@ checksum = "33b6dd2ef9186f1f2072e409e99cd22a975331a6b3591b12c764e0e55c60d5d2"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "weyl"
-version = "0.0.0"
-dependencies = [
- "idenso",
- "spenso",
- "spenso-macros",
- "symbolica",
 ]
 
 [[package]]

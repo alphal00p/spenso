@@ -4,12 +4,10 @@ use std::{
 };
 
 use crate::{
-    iterators::IteratorEnum,
     network::Ref,
-    structure::concrete_index::ConcreteIndex,
     tensors::data::{SparseTensor, StorageTensor},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
@@ -26,11 +24,11 @@ use symbolica::{
     evaluate::FunctionMap,
 };
 
+use crate::structure::StructureError;
 use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
 use crate::structure::representation::Representation;
 use crate::structure::slot::IsAbstractSlot;
-use crate::structure::StructureError;
 use delegate::delegate;
 
 #[cfg(feature = "shadowing")]
@@ -48,9 +46,9 @@ use crate::{
     contraction::{Contract, ContractableWith, ContractionError, Trace},
     iterators::IteratableTensor,
     structure::{
-        concrete_index::{ExpandedIndex, FlatIndex},
         CastStructure, HasName, HasStructure, ScalarStructure, ScalarTensor, StructureContract,
         TensorStructure, TracksCount,
+        concrete_index::{ExpandedIndex, FlatIndex},
     },
     tensors::data::{DataTensor, GetTensorData, HasTensorData, SetTensorData, SparseOrDense},
 };

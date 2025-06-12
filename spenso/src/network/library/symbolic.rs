@@ -12,6 +12,7 @@ use anyhow::anyhow;
 use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
+        named::{IdentityName, ID_NAME},
         representation::{LibraryRep, RepName, REPS},
         HasName, IndexlessNamedStructure, TensorShell,
     },
@@ -62,12 +63,18 @@ impl<S: TensorStructure + Clone> LibraryTensor for ParamTensor<S> {
         ))
     }
 
-    fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError> {
+    fn with_indices(
+        &self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::WithIndices>, StructureError> {
         let new_tensor =
             <DataTensor<Atom, S> as LibraryTensor>::with_indices(&self.tensor, indices)?;
-        Ok(ParamTensor {
-            tensor: new_tensor,
-            param_type: self.param_type,
+        Ok(PermutedStructure {
+            structure: ParamTensor {
+                tensor: new_tensor.structure,
+                param_type: self.param_type,
+            },
+            permutation: new_tensor.permutation,
         })
     }
 }
@@ -115,13 +122,24 @@ impl<D: Default + Clone, S: TensorStructure + Clone> LibraryTensor for MixedTens
         ))
     }
 
-    fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError> {
+    fn with_indices(
+        &self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::WithIndices>, StructureError> {
         Ok(match self {
-            ParamOrConcrete::Concrete(c) => ParamOrConcrete::Concrete(
-                <RealOrComplexTensor<D, S> as LibraryTensor>::with_indices(c, indices)?,
-            ),
+            ParamOrConcrete::Concrete(c) => {
+                let strct = <RealOrComplexTensor<D, S> as LibraryTensor>::with_indices(c, indices)?;
+                PermutedStructure {
+                    structure: ParamOrConcrete::Concrete(strct.structure),
+                    permutation: strct.permutation,
+                }
+            }
             ParamOrConcrete::Param(p) => {
-                ParamOrConcrete::Param(<ParamTensor<S> as LibraryTensor>::with_indices(p, indices)?)
+                let strct = <ParamTensor<S> as LibraryTensor>::with_indices(p, indices)?;
+                PermutedStructure {
+                    structure: ParamOrConcrete::Param(strct.structure),
+                    permutation: strct.permutation,
+                }
             }
         })
     }
@@ -166,12 +184,17 @@ pub struct ExplicitTensorSymbols {
 }
 
 pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTensorSymbols {
-    id: symbol!(TensorLibrary::<TensorShell<ExplicitKey>>::ID_NAME;Symmetric),
+    id: Symbol::id(),
     metric: symbol!(TensorLibrary::<TensorShell<ExplicitKey>>::METRIC_NAME;Symmetric),
 });
 
+impl IdentityName for Symbol {
+    fn id() -> Self {
+        symbol!(ID_NAME;Symmetric)
+    }
+}
+
 impl<T: HasStructure<Structure = ExplicitKey>> TensorLibrary<T> {
-    pub const ID_NAME: &'static str = "𝟙";
     pub const METRIC_NAME: &'static str = "g";
 
     pub fn new() -> Self {

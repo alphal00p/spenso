@@ -243,7 +243,7 @@ impl<T: HasStructure + TensorStructure> LibraryTensor for DummyLibraryTensor<T> 
     fn with_indices(
         &self,
         _indices: &[AbstractIndex],
-    ) -> Result<Self::WithIndices, StructureError> {
+    ) -> Result<PermutedStructure<Self::WithIndices>, StructureError> {
         unimplemented!()
     }
 }
@@ -260,7 +260,10 @@ pub trait LibraryTensor: HasStructure + Sized + TensorStructure {
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
     ) -> Result<Self>;
 
-    fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError>;
+    fn with_indices(
+        &self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::WithIndices>, StructureError>;
 }
 
 impl<D: Clone, S: TensorStructure + Clone> LibraryTensor for DataTensor<D, S> {
@@ -282,8 +285,11 @@ impl<D: Clone, S: TensorStructure + Clone> LibraryTensor for DataTensor<D, S> {
         Ok(DataTensor::Sparse(SparseTensor::from_data(data, key)?))
     }
 
-    fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError> {
-        Ok(self.clone().reindex(indices)?.structure)
+    fn with_indices(
+        &self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::WithIndices>, StructureError> {
+        Ok(self.clone().reindex(indices)?)
         // let new_structure = self.structure().clone().reindex(indices)?;
 
         // Ok(match self {
@@ -328,12 +334,18 @@ impl<D: Clone + Default, S: TensorStructure + Clone> LibraryTensor for RealOrCom
         Ok(RealOrComplexTensor::Complex(complex_tensor))
     }
 
-    fn with_indices(&self, indices: &[AbstractIndex]) -> Result<Self::WithIndices, StructureError> {
+    fn with_indices(
+        &self,
+        indices: &[AbstractIndex],
+    ) -> Result<PermutedStructure<Self::WithIndices>, StructureError> {
         match self {
             RealOrComplexTensor::Real(real_tensor) => {
                 let new_real_tensor =
                     <DataTensor<D, S> as LibraryTensor>::with_indices(&real_tensor, indices)?;
-                Ok(RealOrComplexTensor::Real(new_real_tensor))
+                Ok(PermutedStructure {
+                    structure: RealOrComplexTensor::Real(new_real_tensor.structure),
+                    permutation: new_real_tensor.permutation,
+                })
             }
             RealOrComplexTensor::Complex(complex_tensor) => {
                 let new_complex_tensor =
@@ -341,7 +353,10 @@ impl<D: Clone + Default, S: TensorStructure + Clone> LibraryTensor for RealOrCom
                         &complex_tensor,
                         indices,
                     )?;
-                Ok(RealOrComplexTensor::Complex(new_complex_tensor))
+                Ok(PermutedStructure {
+                    structure: RealOrComplexTensor::Complex(new_complex_tensor.structure),
+                    permutation: new_complex_tensor.permutation,
+                })
             }
         }
     }

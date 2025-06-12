@@ -5,16 +5,21 @@ use crate::{
     algebra::ScalarMul,
     contraction::{Contract, ContractionError},
     network::{
-        library::symbolic::{ExplicitKey, TensorLibrary},
+        library::{
+            symbolic::{ExplicitKey, TensorLibrary},
+            TensorLibraryData,
+        },
         parsing::ShadowedStructure,
         store::NetworkStore,
         Network, Ref, TensorNetworkError,
     },
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
-        abstract_index::AIND_SYMBOLS, representation::LibrarySlot, HasName, HasStructure,
-        MergeInfo, NamedStructure, OrderedStructure, PermutedStructure, StructureContract,
-        TensorShell, TensorStructure, ToSymbolic,
+        abstract_index::AIND_SYMBOLS,
+        permuted::PermuteTensor,
+        representation::{LibraryRep, LibrarySlot},
+        HasName, HasStructure, MergeInfo, NamedStructure, OrderedStructure, PermutedStructure,
+        StructureContract, TensorShell, TensorStructure, ToSymbolic,
     },
     tensors::parametric::MixedTensor,
 };
@@ -26,7 +31,7 @@ use crate::structure::slot::IsAbstractSlot;
 use crate::structure::StructureError;
 use delegate::delegate;
 
-use symbolica::atom::{Atom, AtomView, Symbol};
+use symbolica::atom::{Atom, AtomCore, AtomView, Symbol};
 
 /// A fully symbolic tensor, with no concrete values.
 ///
@@ -47,6 +52,32 @@ impl Ref for SymbolicTensor {
         Self: 'a;
 
     fn refer<'a>(&'a self) -> Self::Ref<'a> {
+        self
+    }
+}
+
+impl PermuteTensor for SymbolicTensor {
+    type Id = SymbolicTensor;
+    type IdSlot = LibrarySlot;
+    type Permuted = SymbolicTensor;
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        Self::from_named(&NamedStructure::<Symbol, (), LibraryRep>::id(i, j)).unwrap()
+    }
+
+    fn permute(mut self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+        let (n, idstructures) = self.structure.clone().permute(permutation);
+
+        let mut ids = Atom::one();
+        for i in idstructures {
+            let o = i.external_structure();
+
+            ids *= Self::id(o[0], o[1]).expression;
+            self.expression = self.expression.replace(o[0].to_atom()).with(o[1].to_atom())
+        }
+
+        self.expression *= ids;
+
         self
     }
 }

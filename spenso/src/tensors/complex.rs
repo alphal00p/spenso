@@ -6,7 +6,10 @@ use std::{
 use crate::{
     iterators::IteratorEnum,
     network::Ref,
-    structure::{concrete_index::ConcreteIndex, PermutedStructure},
+    structure::{
+        concrete_index::ConcreteIndex, permuted::PermuteTensor, representation::RepName,
+        slot::Slot, OrderedStructure, PermutedStructure,
+    },
     tensors::data::{SparseTensor, StorageTensor},
 };
 use anyhow::{anyhow, Result};
@@ -357,6 +360,27 @@ where
                     }
                 }
             }, // p.append_map(fn_map, index_to_atom),
+        }
+    }
+}
+
+impl<T: Clone, S: Clone + Into<OrderedStructure<R>>, R: RepName<Dual = R>> PermuteTensor
+    for RealOrComplexTensor<T, S>
+where
+    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+{
+    type Id = RealOrComplexTensor<T, S>;
+    type IdSlot = (T, Slot<R>);
+    type Permuted = RealOrComplexTensor<T, S>;
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        RealOrComplexTensor::Real(DataTensor::id(i, j))
+    }
+
+    fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+        match self {
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.permute(permutation)),
+            RealOrComplexTensor::Complex(s) => RealOrComplexTensor::Complex(s.permute(permutation)),
         }
     }
 }

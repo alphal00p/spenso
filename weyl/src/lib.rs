@@ -509,6 +509,11 @@ mod tests {
 
         println!(
             "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        println!(
+            "{}",
             net.dot_display_impl(
                 |a| a.to_string(),
                 |_| None,

@@ -7,6 +7,9 @@ use crate::{
     iterators::{DenseTensorLinearIterator, IteratableTensor, SparseTensorLinearIterator},
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
+        permuted::PermuteTensor,
+        representation::RepName,
+        slot::Slot,
         CastStructure, HasName, HasStructure, OrderedStructure, PermutedStructure, ScalarStructure,
         ScalarTensor, StructureContract, TensorStructure, TracksCount,
     },
@@ -354,6 +357,27 @@ where
         match self {
             DataTensor::Dense(d) => d.symhashmap(name, args),
             DataTensor::Sparse(s) => s.symhashmap(name, args),
+        }
+    }
+}
+
+impl<T: Clone, S: Clone + Into<OrderedStructure<R>>, R: RepName<Dual = R>> PermuteTensor
+    for DataTensor<T, S>
+where
+    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+{
+    type Id = DataTensor<T, S>;
+    type IdSlot = (T, Slot<R>);
+    type Permuted = DataTensor<T, S>;
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        DataTensor::Sparse(SparseTensor::id(i, j))
+    }
+
+    fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+        match self {
+            DataTensor::Dense(d) => DataTensor::Dense(d.permute(permutation)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.permute(permutation)),
         }
     }
 }

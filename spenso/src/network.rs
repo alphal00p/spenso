@@ -12,6 +12,7 @@ use crate::algebra::algebraic_traits::{One, Zero};
 use crate::algebra::ScalarMul;
 use crate::contraction::Contract;
 use crate::network::library::LibraryTensor;
+use crate::structure::permuted::PermuteTensor;
 // use crate::shadowing::Concretize;
 use crate::structure::representation::LibrarySlot;
 use crate::structure::StructureError;
@@ -888,6 +889,9 @@ impl<
             + Ref,
         K: Display + Debug,
     > ExecuteOp<L, K> for NetworkStore<T, Sc>
+where
+    <L::Value as LibraryTensor>::WithIndices:
+        PermuteTensor<Permuted = <L::Value as LibraryTensor>::WithIndices>,
 {
     fn execute<C: ContractionStrategy<Self, L, K>>(
         &mut self,
@@ -931,8 +935,10 @@ impl<
                         }
                         NetworkLeaf::LibraryKey(key) => {
                             let inds = graph.inds(child_id);
-                            let t =
-                                T::from(lib.get(key).unwrap().with_indices(&inds).unwrap()).neg();
+                            let t = T::from(
+                                lib.get(key).unwrap().with_indices(&inds).unwrap().permute(),
+                            )
+                            .neg();
                             let pos = self.tensors.len();
                             self.tensors.push(t);
                             NetworkLeaf::LocalTensor(pos)
@@ -1043,7 +1049,8 @@ impl<
                                     }
                                     NetworkLeaf::LibraryKey(key) => {
                                         let inds = graph.inds(*nid);
-                                        let with_index = lib.get(key)?.with_indices(&inds)?;
+                                        let with_index =
+                                            lib.get(key)?.with_indices(&inds)?.permute();
                                         accumulator += with_index;
                                     }
                                 }
@@ -1057,7 +1064,7 @@ impl<
                     }
                     NetworkLeaf::LibraryKey(key) => {
                         let inds = graph.inds(*nf);
-                        let mut accumulator = T::from(lib.get(key)?.with_indices(&inds)?);
+                        let mut accumulator = T::from(lib.get(key)?.with_indices(&inds)?.permute());
                         for (nid, t) in &targets[1..] {
                             match t {
                                 NetworkLeaf::Scalar(_) => {
@@ -1068,7 +1075,7 @@ impl<
                                 }
                                 NetworkLeaf::LibraryKey(key) => {
                                     let inds = graph.inds(*nid);
-                                    let with_index = lib.get(key)?.with_indices(&inds)?;
+                                    let with_index = lib.get(key)?.with_indices(&inds)?.permute();
                                     accumulator += with_index;
                                 }
                             }
@@ -1130,8 +1137,9 @@ impl<
         K: Display + Debug + Clone,
     > ContractionStrategy<NetworkStore<T, Sc>, L, K> for ContractScalars
 where
-    <L::Value as LibraryTensor>::WithIndices:
-        Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T> + ScalarMul<Sc, Output = T>,
+    <L::Value as LibraryTensor>::WithIndices: Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + PermuteTensor<Permuted = <L::Value as LibraryTensor>::WithIndices>,
 {
     fn contract(
         executor: &mut NetworkStore<T, Sc>,
@@ -1263,8 +1271,9 @@ impl<
         K: Display + Debug + Clone,
     > ContractionStrategy<NetworkStore<T, Sc>, L, K> for SmallestDegree
 where
-    <L::Value as LibraryTensor>::WithIndices:
-        Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T> + ScalarMul<Sc, Output = T>,
+    <L::Value as LibraryTensor>::WithIndices: Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + PermuteTensor<Permuted = <L::Value as LibraryTensor>::WithIndices>,
     <<L::Value as LibraryTensor>::WithIndices as HasStructure>::Structure: Display,
     T::Structure: Display,
 {
@@ -1310,8 +1319,9 @@ impl<
         const N: usize,
     > ContractionStrategy<NetworkStore<T, Sc>, L, K> for SmallestDegreeIter<N>
 where
-    <L::Value as LibraryTensor>::WithIndices:
-        Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T> + ScalarMul<Sc, Output = T>,
+    <L::Value as LibraryTensor>::WithIndices: Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + PermuteTensor<Permuted = <L::Value as LibraryTensor>::WithIndices>,
     <<L::Value as LibraryTensor>::WithIndices as HasStructure>::Structure: Display,
     T::Structure: Display,
 {
@@ -1355,8 +1365,9 @@ impl<
         const D: bool,
     > ContractionStrategy<NetworkStore<T, Sc>, L, K> for SingleSmallestDegree<D>
 where
-    <L::Value as LibraryTensor>::WithIndices:
-        Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T> + ScalarMul<Sc, Output = T>,
+    <L::Value as LibraryTensor>::WithIndices: Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + PermuteTensor<Permuted = <L::Value as LibraryTensor>::WithIndices>,
     <<L::Value as LibraryTensor>::WithIndices as HasStructure>::Structure: Display,
     T::Structure: Display,
 {
@@ -1445,7 +1456,7 @@ where
                     (NetworkLeaf::LibraryKey(l1), NetworkLeaf::LocalTensor(l2)) => {
                         let l1_inds: Vec<_> = graph.inds(nid1);
 
-                        let l1 = lib.get(l1)?.with_indices(&l1_inds)?;
+                        let l1 = lib.get(l1)?.with_indices(&l1_inds)?.permute();
                         if D {
                             let st1 = l1.structure();
                             let st2 = executor.tensors[*l2].structure();
@@ -1463,7 +1474,7 @@ where
 
                     (NetworkLeaf::LocalTensor(l2), NetworkLeaf::LibraryKey(l1)) => {
                         let l1_inds: Vec<_> = graph.inds(nid2);
-                        let l1 = lib.get(l1)?.with_indices(&l1_inds)?;
+                        let l1 = lib.get(l1)?.with_indices(&l1_inds)?.permute();
                         if D {
                             let st1 = l1.structure();
                             let st2 = executor.tensors[*l2].structure();

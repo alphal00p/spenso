@@ -5,11 +5,11 @@ use std::{
     io::Cursor,
 };
 
-use crate::structure::dimension::Dimension;
-use crate::structure::representation::Representation;
 use crate::structure::slot::IsAbstractSlot;
 use crate::structure::StructureError;
 use crate::structure::{abstract_index::AbstractIndex, PermutedStructure};
+use crate::structure::{dimension::Dimension, representation::RepName};
+use crate::structure::{permuted::PermuteTensor, representation::Representation};
 use ahash::HashMap;
 use delegate::delegate;
 
@@ -300,6 +300,29 @@ pub mod add_assign;
 pub mod mul_assign;
 pub mod neg;
 pub mod scalar_mul;
+
+impl<S: Clone + Into<OrderedStructure<R>>, R: RepName<Dual = R>> PermuteTensor for ParamTensor<S>
+where
+    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+{
+    type Id = ParamTensor<S>;
+    type IdSlot = Slot<R>;
+    type Permuted = ParamTensor<S>;
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        ParamTensor {
+            tensor: DataTensor::id((Atom::Zero, i), (Atom::num(1), j)),
+            param_type: ParamOrComposite::Composite,
+        }
+    }
+
+    fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+        ParamTensor {
+            tensor: self.tensor.permute(permutation),
+            param_type: self.param_type,
+        }
+    }
+}
 
 impl<S> TensorStructure for ParamTensor<S>
 where
@@ -1134,6 +1157,31 @@ where
         match self {
             ParamOrConcrete::Concrete(x) => ParamOrConcrete::Concrete(x.to_sparse()),
             ParamOrConcrete::Param(x) => ParamOrConcrete::Param(x.to_sparse()),
+        }
+    }
+}
+
+impl<
+        C: PermuteTensor<Id = C, Permuted = C>,
+        S: Clone + Into<OrderedStructure<R>>,
+        R: RepName<Dual = R>,
+    > PermuteTensor for ParamOrConcrete<C, S>
+where
+    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+    C: HasStructure<Structure = S> + TensorStructure,
+{
+    type Id = ParamOrConcrete<C, S>;
+    type IdSlot = C::IdSlot;
+    type Permuted = ParamOrConcrete<C, S>;
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        ParamOrConcrete::Concrete(C::id(i, j))
+    }
+
+    fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+        match self {
+            ParamOrConcrete::Param(d) => ParamOrConcrete::Param(d.permute(permutation)),
+            ParamOrConcrete::Concrete(s) => ParamOrConcrete::Concrete(s.permute(permutation)),
         }
     }
 }

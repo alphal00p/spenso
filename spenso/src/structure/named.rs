@@ -140,10 +140,10 @@ impl<N, A, R: RepName> ScalarStructure for NamedStructure<N, A, R> {
 pub trait IdentityName {
     fn id() -> Self;
 }
-
+pub const ID_NAME: &'static str = "𝟙";
 impl IdentityName for String {
     fn id() -> Self {
-        "id".to_string()
+        ID_NAME.to_string()
     }
 }
 

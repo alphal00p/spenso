@@ -1,12 +1,13 @@
 #[cfg(feature = "shadowing")]
 use anyhow::Result;
 
-use bincode::{Decode, Encode};
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::AddAssign;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::Symbol,
@@ -147,6 +148,7 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
         }),
     });
 
+static DUMMYCOUNTER: AtomicUsize = AtomicUsize::new(0);
 /// A type that represents the name of an index in a tensor.
 #[derive(
     Debug,
@@ -168,8 +170,16 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
 pub enum AbstractIndex {
     Normal(usize),
     Dualize(usize),
+    Dummy(usize),
+    Added(usize),
     #[cfg(feature = "shadowing")]
     Symbol(SerializableSymbol),
+}
+
+impl AbstractIndex {
+    pub fn new_dummy() -> Self {
+        AbstractIndex::Dummy(DUMMYCOUNTER.fetch_add(1, Ordering::Relaxed))
+    }
 }
 
 #[cfg(feature = "shadowing")]
@@ -195,23 +205,45 @@ impl std::ops::Add<AbstractIndex> for AbstractIndex {
     fn add(self, rhs: AbstractIndex) -> Self::Output {
         match self {
             AbstractIndex::Normal(l) => match rhs {
-                AbstractIndex::Normal(r) => AbstractIndex::Normal(l + r),
-                AbstractIndex::Dualize(r) => AbstractIndex::Normal(l + r),
+                AbstractIndex::Normal(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Dualize(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Added(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Dummy(r) => AbstractIndex::Added(l + r),
                 #[cfg(feature = "shadowing")]
-                AbstractIndex::Symbol(r) => AbstractIndex::Normal(l + r.get_id() as usize),
+                AbstractIndex::Symbol(r) => AbstractIndex::Added(l + r.get_id() as usize),
             },
             AbstractIndex::Dualize(l) => match rhs {
-                AbstractIndex::Normal(r) => AbstractIndex::Normal(l + r),
-                AbstractIndex::Dualize(r) => AbstractIndex::Normal(l + r),
+                AbstractIndex::Normal(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Dualize(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Added(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Dummy(r) => AbstractIndex::Added(l + r),
                 #[cfg(feature = "shadowing")]
-                AbstractIndex::Symbol(r) => AbstractIndex::Normal(l + r.get_id() as usize),
+                AbstractIndex::Symbol(r) => AbstractIndex::Added(l + r.get_id() as usize),
+            },
+            AbstractIndex::Added(l) => match rhs {
+                AbstractIndex::Normal(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Dualize(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Added(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Dummy(r) => AbstractIndex::Added(l + r),
+                #[cfg(feature = "shadowing")]
+                AbstractIndex::Symbol(r) => AbstractIndex::Added(l + r.get_id() as usize),
+            },
+            AbstractIndex::Dummy(l) => match rhs {
+                AbstractIndex::Normal(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Dualize(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Added(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Dummy(r) => AbstractIndex::Added(l + r),
+                #[cfg(feature = "shadowing")]
+                AbstractIndex::Symbol(r) => AbstractIndex::Added(l + r.get_id() as usize),
             },
             #[cfg(feature = "shadowing")]
             AbstractIndex::Symbol(l) => match rhs {
-                AbstractIndex::Normal(r) => AbstractIndex::Normal(l.get_id() as usize + r),
-                AbstractIndex::Dualize(r) => AbstractIndex::Normal(l.get_id() as usize + r),
+                AbstractIndex::Normal(r) => AbstractIndex::Added(l.get_id() as usize + r),
+                AbstractIndex::Dualize(r) => AbstractIndex::Added(l.get_id() as usize + r),
+                AbstractIndex::Added(r) => AbstractIndex::Added(l.get_id() as usize + r),
+                AbstractIndex::Dummy(r) => AbstractIndex::Added(l.get_id() as usize + r),
                 AbstractIndex::Symbol(r) => {
-                    AbstractIndex::Normal(l.get_id() as usize + r.get_id() as usize)
+                    AbstractIndex::Added(l.get_id() as usize + r.get_id() as usize)
                 }
             },
         }
@@ -231,6 +263,10 @@ impl std::fmt::Display for AbstractIndex {
             AbstractIndex::Dualize(v) => {
                 write!(f, "{}", to_superscript(*v as isize))
             }
+            AbstractIndex::Dummy(v) => write!(f, "d{}", to_subscript(*v as isize)),
+            AbstractIndex::Added(v) => {
+                write!(f, "+{}", to_subscript(*v as isize))
+            }
             #[cfg(feature = "shadowing")]
             AbstractIndex::Symbol(v) => write!(f, "{}", v),
         }
@@ -249,7 +285,8 @@ impl From<AbstractIndex> for Atom {
         match value {
             AbstractIndex::Normal(v) => Atom::num(v as i64),
             AbstractIndex::Dualize(v) => Atom::num(-(v as i64)),
-            #[cfg(feature = "shadowing")]
+            AbstractIndex::Added(v) => Atom::num(v as i64),
+            AbstractIndex::Dummy(v) => Atom::var(symbol!(format!("d_{}", v))),
             AbstractIndex::Symbol(v) => Atom::var(v.into()),
         }
     }
@@ -259,6 +296,8 @@ impl From<AbstractIndex> for usize {
         match value {
             AbstractIndex::Dualize(v) => v,
             AbstractIndex::Normal(v) => v,
+            AbstractIndex::Added(v) => v,
+            AbstractIndex::Dummy(v) => v,
             #[cfg(feature = "shadowing")]
             AbstractIndex::Symbol(v) => v.get_id() as usize,
         }

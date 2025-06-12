@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-symbolica = { version = "0.16.0" }
+symbolica = { version = "0.17.0" }
 spenso = { path = "../spenso", features = ["shadowing"] }
 spenso-macros = { path = "../spenso-macros" }
 itertools = "0.14.0"

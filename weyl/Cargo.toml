@@ -9,6 +9,6 @@ repository.workspace = true
 [dependencies]
 
 spenso = { path = "../spenso", features = ["shadowing"] }
-symbolica = { version = "0.16.0" }
+symbolica = { version = "0.17.0" }
 spenso-macros = { path = "../spenso-macros" }
 idenso = { path = "../idenso" }

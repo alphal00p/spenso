@@ -1,7 +1,6 @@
 use crate::{
     structure::concrete_index::ConcreteIndex, tensors::parametric::atomcore::PatternReplacement,
 };
-use bincode::{Decode, Encode};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use symbolica::{
@@ -32,7 +31,7 @@ use serde::ser::SerializeStruct;
     PartialEq,
     Hash,
     Display,
-    Encode,
+    bincode_trait_derive::Encode,
     bincode_trait_derive::Decode,
     bincode_trait_derive::BorrowDecodeFromDecode,
 )]

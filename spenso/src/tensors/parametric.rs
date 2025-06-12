@@ -1216,7 +1216,12 @@ where
         self,
         _f: impl Fn(Self::Structure) -> Result<O, Er>,
     ) -> std::result::Result<Self::Store<O>, Er> {
-        todo!()
+        match self {
+            ParamOrConcrete::Concrete(c) => {
+                Ok(ParamOrConcrete::Concrete(c.map_structure_result(_f)?))
+            }
+            ParamOrConcrete::Param(p) => Ok(ParamOrConcrete::Param(p.map_structure_result(_f)?)),
+        }
     }
 
     fn structure(&self) -> &Self::Structure {

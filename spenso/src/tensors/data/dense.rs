@@ -7,6 +7,9 @@ use crate::{
     iterators::{DenseTensorLinearIterator, IteratableTensor, SparseTensorLinearIterator},
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
+        permuted::PermuteTensor,
+        representation::RepName,
+        slot::Slot,
         CastStructure, HasName, HasStructure, OrderedStructure, PermutedStructure, ScalarStructure,
         ScalarTensor, StructureContract, TensorStructure, TracksCount,
     },
@@ -63,6 +66,45 @@ impl<T, S> crate::network::Ref for DenseTensor<T, S> {
 
     fn refer<'a>(&'a self) -> Self::Ref<'a> {
         self
+    }
+}
+
+impl<T: Clone, S: Clone + Into<OrderedStructure<R>>, R: RepName<Dual = R>> PermuteTensor
+    for DenseTensor<T, S>
+where
+    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+{
+    type Id = DenseTensor<T, S>;
+    type IdSlot = (T, Slot<R>);
+    type Permuted = DenseTensor<T, S>;
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        let (zero, i) = i;
+        let (one, j) = j;
+        let s = S::id(i, j);
+        let mut data = vec![zero; s.size().unwrap()];
+        for i in 0..usize::try_from(i.dim()).unwrap() {
+            data[usize::from(s.flat_index([i, i]).unwrap())] = one.clone();
+        }
+        DenseTensor { data, structure: s }
+    }
+
+    fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+        let mut permuteds: OrderedStructure<R> = self.structure.clone().into();
+        permutation.apply_slice_in_place(&mut permuteds.structure);
+
+        let mut permuted = self.clone();
+        for (i, d) in self.iter_expanded() {
+            permuted
+                .set_flat(
+                    permuteds
+                        .flat_index(i.apply_permutation(permutation))
+                        .unwrap(),
+                    d.clone(),
+                )
+                .unwrap();
+        }
+        permuted
     }
 }
 

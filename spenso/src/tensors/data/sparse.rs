@@ -1,7 +1,8 @@
 use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
-use crate::structure::representation::Representation;
-use crate::structure::slot::IsAbstractSlot;
+use crate::structure::permuted::PermuteTensor;
+use crate::structure::representation::{RepName, Representation};
+use crate::structure::slot::{IsAbstractSlot, Slot};
 use crate::structure::{PermutedStructure, StructureError};
 use crate::{
     algebra::algebraic_traits::IsZero,
@@ -65,6 +66,48 @@ impl<T, S> crate::network::Ref for SparseTensor<T, S> {
 
     fn refer<'a>(&'a self) -> Self::Ref<'a> {
         self
+    }
+}
+
+impl<T: Clone, S: Clone + Into<OrderedStructure<R>>, R: RepName<Dual = R>> PermuteTensor
+    for SparseTensor<T, S>
+where
+    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+{
+    type Id = SparseTensor<T, S>;
+    type IdSlot = (T, Slot<R>);
+    type Permuted = SparseTensor<T, S>;
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        let (zero, i) = i;
+        let (one, j) = j;
+        let s = S::id(i, j);
+        let mut elements = std::collections::HashMap::new();
+        for i in 0..usize::try_from(i.dim()).unwrap() {
+            elements.insert(s.flat_index([i, i]).unwrap(), one.clone());
+        }
+        SparseTensor {
+            elements,
+            structure: s,
+        }
+    }
+
+    fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+        let mut permuteds: OrderedStructure<R> = self.structure.clone().into();
+        permutation.apply_slice_in_place(&mut permuteds.structure);
+
+        let mut permuted = self.clone();
+        for (i, d) in self.iter_expanded() {
+            permuted
+                .set_flat(
+                    permuteds
+                        .flat_index(i.apply_permutation(permutation))
+                        .unwrap(),
+                    d.clone(),
+                )
+                .unwrap();
+        }
+        permuted
     }
 }
 

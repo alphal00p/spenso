@@ -209,12 +209,12 @@ impl<
     // type Structure = ExplicitKey;
 
     fn get<'a>(&'a self, key: &Self::Key) -> Result<Cow<'a, Self::Value>, LibraryError<Self::Key>> {
-        println!("Trying:{}", key);
+        // println!("Trying:{}", key);
         if let Some(tensor) = self.explicit_dimension.get(key) {
-            println!("found explicit");
+            // println!("found explicit");
             Ok(Cow::Borrowed(tensor))
         } else if let Some(builder) = self.generic_dimension.get(&key.clone().into()) {
-            println!("found generic");
+            // println!("found generic");
             Ok(Cow::Owned(builder(key.clone())))
         } else {
             Err(LibraryError::NotFound(key.clone()))

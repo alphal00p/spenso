@@ -6,6 +6,7 @@ use linnet::permutation::Permutation;
 use super::{
     abstract_index::AbstractIndex,
     dimension::Dimension,
+    permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
     slot::{DualSlotTo, IsAbstractSlot, Slot, SlotError},
     HasName, IndexlessNamedStructure, MergeInfo, OrderedStructure, PermutedStructure,
@@ -136,10 +137,70 @@ impl<N, A, R: RepName> ScalarStructure for NamedStructure<N, A, R> {
     }
 }
 
+pub trait IdentityName {
+    fn id() -> Self;
+}
+
+impl IdentityName for String {
+    fn id() -> Self {
+        "id".to_string()
+    }
+}
+
+impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for NamedStructure<N, A, R> {
+    type Id = Self;
+    type IdSlot = Slot<R>;
+    type Permuted = (
+        NamedStructure<N, A, LibraryRep>,
+        Vec<NamedStructure<N, A, LibraryRep>>,
+    );
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        Self {
+            structure: OrderedStructure::id(i, j),
+            global_name: Some(N::id()),
+            additional_args: None,
+        }
+    }
+
+    fn permute(self, permutation: &Permutation) -> Self::Permuted {
+        let mut dummy_structure = Vec::new();
+        let mut ids = Vec::new();
+
+        for s in permutation.iter_slice_inv(&self.structure.structure) {
+            let d = s.to_dummy();
+            let ogs = s.to_lib();
+            dummy_structure.push(d);
+            ids.push(NamedStructure::id(d, ogs));
+        }
+        let strct = OrderedStructure::new(dummy_structure);
+        if !strct.permutation.is_identity() {
+            panic!("should be identity")
+        }
+
+        (
+            NamedStructure {
+                global_name: self.global_name,
+                additional_args: self.additional_args,
+                structure: strct.structure,
+            },
+            ids,
+        )
+    }
+}
+
 impl<N, A, R: RepName<Dual = R>> TensorStructure for NamedStructure<N, A, R> {
     type Slot = Slot<R>;
     // type R = PhysicalReps;
     type Indexed = Self;
+
+    // fn id(i: Self::Slot, j: Self::Slot) -> Self {
+    //     Self {
+    //         structure: OrderedStructure::id(i, j),
+    //         global_name: Some(N::id()),
+    //         additional_args: None,
+    //     }
+    // }
 
     fn reindex(
         self,

@@ -6,7 +6,7 @@ use super::{
 };
 use ahash::AHashMap;
 use append_only_vec::AppendOnlyVec;
-use linnet::{half_edge::involution::Orientation, permutation::Permutation};
+use linnet::half_edge::involution::Orientation;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use spenso_macros::SimpleRepresentation;
@@ -14,7 +14,7 @@ use std::{
     cmp::Ordering,
     convert::Infallible,
     fmt::{Debug, Display},
-    sync::RwLock,
+    sync::{LazyLock, RwLock},
 };
 use std::{hash::Hash, ops::Index};
 
@@ -119,7 +119,9 @@ pub trait RepName:
     type Base: RepName;
 
     fn from_library_rep(rep: LibraryRep) -> Result<Self, RepresentationError>;
-
+    fn is_dummy(self) -> bool {
+        false
+    }
     fn orientation(self) -> Orientation;
     fn dual(self) -> Self::Dual;
     fn is_dual(self) -> bool;
@@ -307,15 +309,103 @@ impl BaseRepName for Minkowski {
         Self::default()
     }
 }
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Default,
+    Encode,
+    Decode,
+)]
+pub struct Dummy {}
+
+impl From<Dummy> for LibraryRep {
+    fn from(_value: Dummy) -> Self {
+        ExtendibleReps::MINKOWSKI
+    }
+}
+
+impl RepName for Dummy {
+    type Base = Dummy;
+    type Dual = Dummy;
+
+    fn from_library_rep(rep: LibraryRep) -> Result<Self, RepresentationError> {
+        rep.try_into()
+    }
+
+    fn orientation(self) -> ::linnet::half_edge::involution::Orientation {
+        ::linnet::half_edge::involution::Orientation::Undirected
+    }
+
+    fn base(&self) -> Self::Base {
+        Dummy::selfless_base()
+    }
+
+    fn is_base(&self) -> bool {
+        true
+    }
+
+    fn dual(self) -> Self::Dual {
+        Dummy::selfless_dual()
+    }
+
+    fn is_dual(self) -> bool {
+        true
+    }
+
+    fn matches(&self, _: &Self::Dual) -> bool {
+        true
+    }
+
+    fn is_neg(self, i: usize) -> bool {
+        i > 0
+    }
+}
+
+impl Display for Dummy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "mink")
+    }
+}
+
+impl TryFrom<LibraryRep> for Dummy {
+    type Error = RepresentationError;
+
+    fn try_from(value: LibraryRep) -> std::result::Result<Self, Self::Error> {
+        if value == ExtendibleReps::MINKOWSKI {
+            std::result::Result::Ok(Dummy {})
+        } else {
+            Err(RepresentationError::WrongRepresentationError(
+                "mink".to_string(),
+                value.to_string(),
+            ))
+        }
+    }
+}
+
+impl BaseRepName for Dummy {
+    const NAME: &'static str = "mink";
+
+    fn selfless_base() -> Self::Base {
+        Self::default()
+    }
+
+    fn selfless_dual() -> Self::Dual {
+        Self::default()
+    }
+}
 
 #[derive(
     Debug,
     Copy,
     Clone,
-    Ord,
-    PartialOrd,
-    Eq,
-    PartialEq,
     Hash,
     Serialize,
     Deserialize,
@@ -332,10 +422,42 @@ pub struct Representation<T: RepName> {
     pub rep: T,
 }
 
+impl<T: RepName> Ord for Representation<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.rep.is_dummy() && other.rep.is_dummy() {
+            // self.dim.cmp(&other.dim)
+            Ordering::Equal
+        } else {
+            self.rep.cmp(&other.rep)
+        }
+    }
+}
+
+impl<T: RepName> PartialOrd for Representation<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T: RepName> PartialEq for Representation<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.rep == other.rep && self.dim == other.dim
+    }
+}
+
+impl<T: RepName> Eq for Representation<T> {}
+
 impl<T: RepName> Representation<T> {
     pub fn to_lib(self) -> Representation<LibraryRep> {
         let rep: LibraryRep = self.rep.into();
         Representation { dim: self.dim, rep }
+    }
+
+    pub fn to_dummy(self) -> Representation<Dummy> {
+        Representation {
+            dim: self.dim,
+            rep: Dummy {},
+        }
     }
 
     pub fn dot(&self) -> String {
@@ -366,6 +488,7 @@ pub enum LibraryRep {
     SelfDual(u16),
     InlineMetric(u16),
     Dualizable(i16),
+    Dummy,
 }
 
 impl Ord for LibraryRep {
@@ -384,12 +507,16 @@ impl Ord for LibraryRep {
             (LibraryRep::Dualizable(_), LibraryRep::SelfDual(_))
             | (LibraryRep::InlineMetric(_), LibraryRep::SelfDual(_))
             | (LibraryRep::Dualizable(_), LibraryRep::InlineMetric(_)) => Ordering::Less,
+            (LibraryRep::Dummy, LibraryRep::Dummy) => Ordering::Equal,
+            (LibraryRep::Dummy, _) => Ordering::Less,
+            (_, LibraryRep::Dummy) => Ordering::Greater,
         }
     }
 }
 
 #[test]
 fn sorting_reps() {
+    use linnet::permutation::Permutation;
     let mut a = [
         Euclidean {}.new_rep(4).cast(),
         Euclidean {}.new_rep(4).cast(),
@@ -408,7 +535,7 @@ fn sorting_reps() {
     let perm = Permutation::sort(b);
     perm.apply_slice_in_place(&mut b);
 
-    let mut c = [
+    let c = [
         LibraryRep::from(Minkowski {}).new_rep(4),
         Euclidean {}.new_rep(4).cast(),
         Euclidean {}.new_rep(4).cast(),
@@ -475,6 +602,12 @@ pub struct RepData {
     #[cfg(feature = "shadowing")]
     symbol: Symbol,
 }
+
+static DUMMY_REP_DATA: LazyLock<RepData> = LazyLock::new(|| RepData {
+    name: "Dummy".to_string(),
+    #[cfg(feature = "shadowing")]
+    symbol: symbol!("Dummy"),
+});
 
 pub struct ExtendibleReps {
     name_map: AHashMap<String, LibraryRep>,
@@ -560,7 +693,7 @@ impl ExtendibleReps {
     ) -> Result<LibraryRep, RepLibraryError> {
         if let Some(rep) = self.name_map.get(name) {
             match rep {
-                LibraryRep::SelfDual(_) | LibraryRep::Dualizable(_) => {
+                LibraryRep::SelfDual(_) | LibraryRep::Dualizable(_) | LibraryRep::Dummy => {
                     return Err(RepLibraryError::AlreadyExistsDifferentType(name.into()))
                 }
                 LibraryRep::InlineMetric(a) => {
@@ -602,6 +735,7 @@ impl Index<LibraryRep> for ExtendibleReps {
 
     fn index(&self, index: LibraryRep) -> &Self::Output {
         match index {
+            LibraryRep::Dummy => &*DUMMY_REP_DATA,
             LibraryRep::SelfDual(l) => &SELF_DUAL[l as usize].1,
             LibraryRep::InlineMetric(l) => &INLINE_METRIC[l as usize].1.rep_data,
             LibraryRep::Dualizable(l) => &DUALIZABLE[l.unsigned_abs() as usize - 1].1,
@@ -649,6 +783,7 @@ impl Default for ExtendibleReps {
 impl Display for LibraryRep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Dummy => write!(f, "Dummy"),
             Self::SelfDual(_) => write!(f, "{}", REPS.read().unwrap()[*self].name),
             Self::InlineMetric(_) => write!(f, "{}", REPS.read().unwrap()[*self].name),
             Self::Dualizable(l) => {
@@ -672,6 +807,7 @@ impl RepName for LibraryRep {
 
     fn orientation(self) -> Orientation {
         match self {
+            Self::Dummy => Orientation::Undirected,
             Self::SelfDual(_) => Orientation::Undirected,
             Self::InlineMetric(_) => Orientation::Undirected,
             Self::Dualizable(l) => {
@@ -689,6 +825,7 @@ impl RepName for LibraryRep {
     #[inline]
     fn dual(self) -> Self::Dual {
         match self {
+            Self::Dummy => Self::Dummy,
             Self::SelfDual(l) => Self::SelfDual(l),
             Self::InlineMetric(l) => Self::InlineMetric(l),
             Self::Dualizable(l) => Self::Dualizable(-l),
@@ -754,19 +891,7 @@ impl RepName for LibraryRep {
                     Err(RepresentationError::SymbolError(aind))
                 }
             }
-            LibraryRep::SelfDual(_) => {
-                if aind == AIND_SYMBOLS.selfdualind {
-                    Ok(rep)
-                } else if aind == AIND_SYMBOLS.dind || aind == AIND_SYMBOLS.uind {
-                    Err(RepresentationError::ExpectedDualStateError(
-                        AIND_SYMBOLS.selfdualind,
-                        aind,
-                    ))
-                } else {
-                    Err(RepresentationError::SymbolError(aind))
-                }
-            }
-            LibraryRep::InlineMetric(_) => {
+            LibraryRep::SelfDual(_) | LibraryRep::InlineMetric(_) | LibraryRep::Dummy => {
                 if aind == AIND_SYMBOLS.selfdualind {
                     Ok(rep)
                 } else if aind == AIND_SYMBOLS.dind || aind == AIND_SYMBOLS.uind {
@@ -811,8 +936,7 @@ impl RepName for LibraryRep {
         let inner = fun.finish();
 
         match self {
-            Self::SelfDual(_) => inner,
-            Self::InlineMetric(_) => inner,
+            Self::SelfDual(_) | Self::Dummy | Self::InlineMetric(_) => inner,
             Self::Dualizable(l) => {
                 if *l < 0 {
                     function!(AIND_SYMBOLS.dind, &inner)
@@ -1000,6 +1124,9 @@ impl<'a, T: RepName> FromIterator<&'a Representation<T>> for Vec<Dimension> {
         iter.into_iter().map(|rep| rep.dim).collect()
     }
 }
+
+#[cfg(test)]
+mod test {}
 
 #[cfg(test)]
 #[cfg(feature = "shadowing")]

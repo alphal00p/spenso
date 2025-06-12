@@ -8,6 +8,8 @@ use delegate::delegate;
 use super::{
     abstract_index::AbstractIndex,
     dimension::Dimension,
+    named::IdentityName,
+    permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
     slot::{ConstructibleSlot, DualSlotTo, IsAbstractSlot, Slot},
     HasName, IndexlessNamedStructure, MergeInfo, NamedStructure, OrderedStructure,
@@ -129,6 +131,50 @@ impl<N, A, R: RepName> ScalarStructure for SmartShadowStructure<N, A, R> {
             global_name: None,
             additional_args: None,
         }
+    }
+}
+
+impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for SmartShadowStructure<N, A, R> {
+    type Id = Self;
+    type IdSlot = Slot<R>;
+    type Permuted = (
+        SmartShadowStructure<N, A, LibraryRep>,
+        Vec<SmartShadowStructure<N, A, LibraryRep>>,
+    );
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        Self {
+            contractions: 0,
+            structure: OrderedStructure::id(i, j),
+            global_name: Some(N::id()),
+            additional_args: None,
+        }
+    }
+
+    fn permute(self, permutation: &Permutation) -> Self::Permuted {
+        let mut dummy_structure = Vec::new();
+        let mut ids = Vec::new();
+
+        for s in permutation.iter_slice_inv(&self.structure.structure) {
+            let d = s.to_dummy();
+            let ogs = s.to_lib();
+            dummy_structure.push(d);
+            ids.push(SmartShadowStructure::id(d, ogs));
+        }
+        let strct = OrderedStructure::new(dummy_structure);
+        if !strct.permutation.is_identity() {
+            panic!("should be identity")
+        }
+
+        (
+            SmartShadowStructure {
+                contractions: self.contractions,
+                global_name: self.global_name,
+                additional_args: self.additional_args,
+                structure: strct.structure,
+            },
+            ids,
+        )
     }
 }
 

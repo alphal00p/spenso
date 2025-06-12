@@ -1,15 +1,14 @@
-use std::fmt::Display;
-
-use indexmap::IndexMap;
 use linnet::permutation::Permutation;
 
 use super::{
     abstract_index::AbstractIndex,
     dimension::Dimension,
+    named::IdentityName,
+    permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
-    slot::{ConstructibleSlot, DualSlotTo, IsAbstractSlot, Slot},
+    slot::{IsAbstractSlot, Slot},
     HasName, NamedStructure, OrderedStructure, PermutedStructure, ScalarStructure,
-    SmartShadowStructure, StructureContract, StructureError, TensorStructure,
+    SmartShadowStructure, StructureError, TensorStructure,
 };
 
 use anyhow::{anyhow, Result};
@@ -17,22 +16,20 @@ use delegate::delegate;
 
 #[cfg(feature = "shadowing")]
 use crate::{
-    shadowing::symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom, SerializableSymbol},
-    structure::abstract_index::AIND_SYMBOLS,
+    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::ToSymbolic,
-    tensors::parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
+    tensors::parametric::{ExpandedCoefficent, TensorCoefficient},
 };
 
 #[cfg(feature = "shadowing")]
 use crate::{structure::FlatIndex, tensors::data::DenseTensor};
+#[cfg(feature = "shadowing")]
+use std::fmt::Display;
 
 #[cfg(not(feature = "shadowing"))]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "shadowing")]
-use symbolica::atom::{
-    representation::{FunView, MulView},
-    Atom, AtomView, FunctionBuilder, Symbol,
-};
+use symbolica::atom::{Atom, FunctionBuilder, Symbol};
 
 #[derive(
     Clone,
@@ -52,6 +49,38 @@ use symbolica::atom::{
 // #[cfg_attr(not(feature = "shadowing"), derive(bincode::Decode))]
 pub struct IndexLess<T: RepName = LibraryRep> {
     pub structure: Vec<Representation<T>>,
+}
+
+impl<R: RepName<Dual = R>> PermuteTensor for IndexLess<R> {
+    type Id = OrderedStructure<R>;
+    type IdSlot = Slot<R>;
+    type Permuted = (
+        OrderedStructure<LibraryRep>,
+        Vec<OrderedStructure<LibraryRep>>,
+    );
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        OrderedStructure::id(i, j)
+    }
+
+    fn permute(self, permutation: &Permutation) -> Self::Permuted {
+        let mut dummy_structure = Vec::new();
+        let mut ids = Vec::new();
+
+        for s in permutation.iter_slice_inv(&self.structure) {
+            let dind = AbstractIndex::new_dummy();
+            let d = s.to_dummy().to_lib().slot(dind);
+            let ogs = s.to_lib().slot(dind);
+            dummy_structure.push(d);
+            ids.push(OrderedStructure::id(d, ogs));
+        }
+        let strct = OrderedStructure::new(dummy_structure);
+        if !strct.permutation.is_identity() {
+            panic!("should be identity")
+        }
+
+        (strct.structure, ids)
+    }
 }
 
 impl<R: RepName> std::fmt::Display for IndexLess<R> {
@@ -352,6 +381,50 @@ pub struct IndexlessNamedStructure<Name = String, Args = usize, R: RepName = Lib
     pub global_name: Option<Name>,
     pub additional_args: Option<Args>,
 }
+
+impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for IndexlessNamedStructure<N, A, R> {
+    type Id = NamedStructure<N, A, R>;
+    type IdSlot = Slot<R>;
+    type Permuted = (
+        NamedStructure<N, A, LibraryRep>,
+        Vec<NamedStructure<N, A, LibraryRep>>,
+    );
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        NamedStructure {
+            structure: OrderedStructure::id(i, j),
+            global_name: Some(N::id()),
+            additional_args: None,
+        }
+    }
+
+    fn permute(self, permutation: &Permutation) -> Self::Permuted {
+        let mut dummy_structure = Vec::new();
+        let mut ids = Vec::new();
+
+        for s in permutation.iter_slice_inv(&self.structure.structure) {
+            let dind = AbstractIndex::new_dummy();
+            let d = s.to_dummy().to_lib().slot(dind);
+            let ogs = s.to_lib().slot(dind);
+            dummy_structure.push(d);
+            ids.push(NamedStructure::id(d, ogs));
+        }
+        let strct = OrderedStructure::new(dummy_structure);
+        if !strct.permutation.is_identity() {
+            panic!("should be identity")
+        }
+
+        (
+            NamedStructure {
+                global_name: self.global_name,
+                additional_args: self.additional_args,
+                structure: strct.structure,
+            },
+            ids,
+        )
+    }
+}
+
 impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructure<Name, Args, R> {
     type Slot = Slot<R>;
     type Indexed = NamedStructure<Name, Args, R>;

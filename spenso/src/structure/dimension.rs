@@ -5,8 +5,6 @@ use serde::{Deserialize, Serialize};
 use symbolica::{atom::AtomView, coefficient::CoefficientView};
 use thiserror::Error;
 
-use bincode::Encode;
-
 #[cfg(feature = "shadowing")]
 use symbolica::atom::{Atom, Symbol};
 

@@ -52,6 +52,7 @@ pub struct NetworkGraph<K> {
 #[derive(
     Debug,
     Clone,
+    Copy,
     PartialEq,
     Eq,
     PartialOrd,
@@ -217,6 +218,32 @@ impl<K> NetworkGraph<K> {
         slots
     }
 
+    pub fn sync_order(&mut self) {
+        for (v, n, _) in self.graph.iter_nodes() {
+            let mut slots = Vec::new();
+            let mut init_ord = Vec::new();
+            let mut new_ord = Vec::new();
+            let mut o = 0;
+            let mut nc = n.clone();
+            for h in nc {
+                new_ord.push(o);
+                o += 1;
+                slots.push(self.graph[[&h]]);
+                init_ord.push(self.slot_order[h.0]);
+            }
+            let perm = Permutation::sort(slots);
+            let perm2 = Permutation::sort(init_ord);
+
+            if perm != perm2 {
+                // println!("FU");
+                perm.apply_slice_in_place_inv(&mut new_ord);
+                for (i, h) in n.enumerate() {
+                    self.slot_order[h.0] = new_ord[i];
+                }
+            }
+        }
+    }
+
     pub fn inds(&self, nodeid: NodeIndex) -> Vec<AbstractIndex> {
         let mut slots = Vec::new();
         let mut ord = Vec::new();
@@ -230,7 +257,9 @@ impl<K> NetworkGraph<K> {
         }
 
         let perm = Permutation::sort(ord);
+
         perm.apply_slice_in_place(&mut slots);
+        // println!("Inds:{:?}", slots);
         slots
     }
 
@@ -347,20 +376,20 @@ impl<K> NetworkGraph<K> {
         let head = self.head();
         let root_node = self.graph.node_id(head);
 
-        println!("//tree:\n{}", self.graph.dot(&tt.tree_subgraph));
-        println!(
-            "//tree:\n{}",
-            self.graph.dot(&tt.tree_subgraph(self.graph.as_ref()))
-        );
+        // println!("//tree:\n{}", self.graph.dot(&tt.tree_subgraph));
+        // println!(
+        // "//tree:\n{}",
+        // self.graph.dot(&tt.tree_subgraph(self.graph.as_ref()))
+        // );
         // println!("tree{:#?}", tt);
-        println!(
-            "tree{}",
-            tt.debug_draw(|a| match a {
-                TTRoot::Child(a) => a.to_string(),
-                TTRoot::Root => "Root".into(),
-                _ => "".into(),
-            })
-        );
+        // println!(
+        //     "tree{}",
+        //     tt.debug_draw(|a| match a {
+        //         TTRoot::Child(a) => a.to_string(),
+        //         TTRoot::Root => "Root".into(),
+        //         _ => "".into(),
+        //     })
+        // );
         // look for the first op node whose children are all leaves
         for nid in tt.iter_preorder_tree_nodes(&self.graph, root_node) {
             if let NetworkNode::Op(op) = &self.graph[nid] {
@@ -373,9 +402,7 @@ impl<K> NetworkGraph<K> {
                     subgraph.add(h);
                 }
 
-                println!("parent:{nid}");
                 for child in tt.iter_children(nid, &self.graph) {
-                    println!("Child:{child}");
                     has_children = true;
                     match &self.graph[child] {
                         NetworkNode::Leaf(a) => {
@@ -399,19 +426,19 @@ impl<K> NetworkGraph<K> {
                 if all_leaves && has_children {
                     let op = *op;
 
-                    println!(
-                        "Extracting: {}",
-                        self.graph.dot_impl(
-                            &subgraph,
-                            "",
-                            &|a| if let NetworkEdge::Slot(s) = a {
-                                Some(format!("label=\"{s}\""))
-                            } else {
-                                None
-                            },
-                            &|a| None
-                        )
-                    );
+                    // println!(
+                    //     "Extracting: {}",
+                    //     self.graph.dot_impl(
+                    //         &subgraph,
+                    //         "",
+                    //         &|a| if let NetworkEdge::Slot(s) = a {
+                    //             Some(format!("label=\"{s}\""))
+                    //         } else {
+                    //             None
+                    //         },
+                    //         &|a| None
+                    //     )
+                    // );
 
                     let extracted = self.extract(&subgraph);
 

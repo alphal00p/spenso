@@ -179,7 +179,7 @@ where
             // let s = s;
             match library.key_for_structure(&s.structure) {
                 Ok(key) => {
-                    println!("Adding lib");
+                    // println!("Adding lib");
                     // let t = library.get(&key).unwrap();
                     Ok(Self::library_tensor(&s.structure, key))
                 }
@@ -325,7 +325,7 @@ pub mod test {
             "//Contract Scalars:\n{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
-        net.execute::<Steps<1>, SingleSmallestDegree, _>(&lib)
+        net.execute::<Steps<1>, SingleSmallestDegree<false>, _>(&lib)
             .unwrap();
 
         // println!("{:#?}", net.graph.graph);
@@ -333,7 +333,7 @@ pub mod test {
             "//Single Smallest Degree 1:\n{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
-        net.execute::<Steps<1>, SingleSmallestDegree, _>(&lib)
+        net.execute::<Steps<1>, SingleSmallestDegree<false>, _>(&lib)
             .unwrap();
 
         // println!("{:#?}", net.graph.graph);
@@ -608,7 +608,7 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Steps<10>, SingleSmallestDegree, _>(&lib)
+        net.execute::<Steps<10>, SingleSmallestDegree<false>, _>(&lib)
             .unwrap();
         println!(
             "{}",
@@ -621,7 +621,7 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Steps<10>, SingleSmallestDegree, _>(&lib)
+        net.execute::<Steps<10>, SingleSmallestDegree<false>, _>(&lib)
             .unwrap();
         println!(
             "{}",
@@ -633,7 +633,7 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Steps<15>, SingleSmallestDegree, _>(&lib)
+        net.execute::<Steps<15>, SingleSmallestDegree<false>, _>(&lib)
             .unwrap();
         println!(
             "{}",

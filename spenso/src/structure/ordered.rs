@@ -25,10 +25,11 @@ use symbolica::atom::{
 use super::{
     abstract_index::AbstractIndex,
     dimension::Dimension,
+    permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
     slot::{ConstructibleSlot, DualSlotTo, IsAbstractSlot, Slot, SlotError},
-    MergeInfo, NamedStructure, ScalarStructure, SmartShadowStructure, StructureContract,
-    StructureError, TensorStructure,
+    MergeInfo, NamedStructure, PermutedStructure, ScalarStructure, SmartShadowStructure,
+    StructureContract, StructureError, TensorStructure,
 };
 use anyhow::anyhow;
 use delegate::delegate;
@@ -48,24 +49,36 @@ pub struct OrderedStructure<R: RepName = LibraryRep> {
     // permutation: Option<Permutation>,
 }
 
-pub struct PermutedStructure<S> {
-    pub structure: S,
-    pub permutation: Permutation,
-}
+impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
+    type Id = Self;
+    type Permuted = (
+        OrderedStructure<LibraryRep>,
+        Vec<OrderedStructure<LibraryRep>>,
+    );
+    type IdSlot = Slot<R>;
 
-impl<S> Deref for PermutedStructure<S> {
-    type Target = S;
+    fn permute(self, permutation: &Permutation) -> Self::Permuted {
+        let mut dummy_structure = Vec::new();
+        let mut ids = Vec::new();
 
-    fn deref(&self) -> &Self::Target {
-        &self.structure
+        for s in permutation.iter_slice_inv(&self.structure) {
+            let d = s.to_dummy();
+            let ogs = s.to_lib();
+            dummy_structure.push(d);
+            ids.push(OrderedStructure::id(d, ogs));
+        }
+        let strct = OrderedStructure::new(dummy_structure);
+        if !strct.permutation.is_identity() {
+            panic!("should be identity")
+        }
+        (strct.structure, ids)
     }
-}
 
-impl<S> PermutedStructure<S> {
-    pub fn map_structure<U>(self, mut f: impl FnOnce(S) -> U) -> PermutedStructure<U> {
-        PermutedStructure {
-            structure: f(self.structure),
-            permutation: self.permutation,
+    fn id(i: Slot<R>, j: Slot<R>) -> Self::Id {
+        if i.dim() == j.dim() {
+            OrderedStructure::new(vec![i, j]).structure
+        } else {
+            panic!("Not same dimension for ID")
         }
     }
 }
@@ -74,6 +87,14 @@ impl<R: RepName<Dual = R>> TensorStructure for OrderedStructure<R> {
     type Slot = Slot<R>;
     type Indexed = Self;
     // type R = PhysicalReps;
+    //
+    // fn id(i: Self::Slot, j: Self::Slot) -> Self::Indexed {
+    //     if i.dim() == j.dim() {
+    //         OrderedStructure::new(vec![i, j]).structure
+    //     } else {
+    //         panic!("Not same dimension for ID")
+    //     }
+    // }
 
     fn reindex(
         self,
@@ -272,7 +293,7 @@ impl<R: RepName> std::fmt::Display for OrderedStructure<R> {
             write!(
                 f,
                 "{:<3} ({})",
-                usize::from(item.aind()),
+                item.aind(),
                 // IDPRINTER
                 //     .encode_string(usize::from(item.index) as u64)
                 //     .unwrap(),

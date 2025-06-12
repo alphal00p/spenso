@@ -64,7 +64,7 @@ serde_json = "1.0"
 # serde_toml = "0.0.1"
 slotmap = { version = "1.0.7", features = ["serde"] }
 # smartstring = { version = "1.0.1", features = ["serde"] }
-symbolica = { version = "0.16.0", optional = true, features = [
+symbolica = { version = "0.17.0", optional = true, features = [
     "serde",
     "bincode",
 ] }

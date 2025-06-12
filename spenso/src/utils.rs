@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use bitvec::vec::BitVec;
 
 use crate::structure::MergeInfo;
@@ -92,7 +94,7 @@ pub trait MergeOrdered<T>: Sized {
         M: Fn(&T, &T) -> bool;
 }
 
-impl<T> MergeOrdered<T> for Vec<T> {
+impl<T: Debug> MergeOrdered<T> for Vec<T> {
     fn merge_ordered_ref_with_common_removal(&self, other: &Self) -> (Self, Vec<T>, MergeInfo)
     where
         T: Ord + Clone,
@@ -536,7 +538,10 @@ impl<T> MergeOrdered<T> for Vec<T> {
                 && is_match(&self[i - 1], &self[i])
             {
                 return Err(DuplicateItemError {
-                    message: format!("Found duplicate item in first sequence"),
+                    message: format!(
+                        "Found duplicate item in first sequence: {:?} in {self:?}",
+                        self[i - 1]
+                    ),
                 });
             }
         }
@@ -547,7 +552,10 @@ impl<T> MergeOrdered<T> for Vec<T> {
                 && is_match(&other[i - 1], &other[i])
             {
                 return Err(DuplicateItemError {
-                    message: format!("Found duplicate item in second sequence"),
+                    message: format!(
+                        "Found duplicate item in second sequence: {:?} in {other:?}",
+                        other[i - 1]
+                    ),
                 });
             }
         }

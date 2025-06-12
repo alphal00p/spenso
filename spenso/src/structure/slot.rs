@@ -78,8 +78,8 @@ use thiserror::Error;
 /// assert_eq!("custom_lor🠓4|₀", format!("{nuu}"));
 /// ```
 pub struct Slot<T: RepName> {
-    pub aind: AbstractIndex,
     pub(crate) rep: Representation<T>,
+    pub aind: AbstractIndex,
 }
 
 impl<T: RepName> Slot<T> {
@@ -225,6 +225,11 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + D
 
     fn reindex(self, id: AbstractIndex) -> Self;
     fn dim(&self) -> Dimension;
+    fn to_dummy(&self) -> LibrarySlot {
+        let rep = self.rep().to_dummy().to_lib();
+        let aind = AbstractIndex::new_dummy();
+        Slot { rep, aind }
+    }
     fn to_lib(&self) -> LibrarySlot {
         let rep: LibraryRep = self.rep_name().into();
         rep.new_slot(self.dim(), self.aind())

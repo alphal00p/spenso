@@ -397,14 +397,87 @@ mod tests {
     use spenso::{
         network::{
             ContractScalars, ExecutionResult, Network, Sequential, SingleSmallestDegree,
-            SmallestDegree, Steps, StepsDebug, TensorOrScalarOrKey, library::symbolic::ETS,
-            parsing::ShadowedStructure, store::NetworkStore,
+            SmallestDegree, SmallestDegreeIter, Steps, StepsDebug, TensorOrScalarOrKey,
+            library::symbolic::ETS, parsing::ShadowedStructure, store::NetworkStore,
         },
         structure::HasStructure,
     };
     use symbolica::{atom::Atom, parse};
 
     use super::*;
+
+    #[test]
+    fn simple_scalar() {
+        let _ = ETS.id;
+        let a = WEYLIB.get(&gamma4D_strct(WEYL.gamma).structure).unwrap();
+
+        let expr = parse!("weyl::gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*weyl::gamma(bis(4,l_6),bis(4,l_5),mink(4,l_4))*weyl::gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
+            ","spenso");
+        // let expr = parse!(
+        // "weyl::gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
+        // ",
+        // "spenso"
+        // );
+        // println!("{}", expr);
+
+        let mut net =
+            Network::<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, _>::try_from_view(
+                expr.as_view(),
+                &*WEYLIB,
+            )
+            .unwrap();
+
+        println!(
+            "{}",
+            net.dot_display_impl(
+                |a| a.to_string(),
+                |a| Some(format!("{}", a.global_name.unwrap())),
+                |a| a.structure().global_name.unwrap().to_string()
+            )
+        );
+
+        net.execute::<Steps<1>, SmallestDegreeIter<1>, _>(&*WEYLIB)
+            .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(
+                |a| a.to_string(),
+                |a| Some(format!("{}", a.global_name?)),
+                |a| a
+                    .structure()
+                    .global_name
+                    .map(|a| a.to_string())
+                    .unwrap_or("".to_string())
+            )
+        );
+        net.execute::<Steps<1>, SmallestDegreeIter<2>, _>(&*WEYLIB)
+            .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(
+                |a| a.to_string(),
+                |a| Some(format!("{}", a.global_name?)),
+                |a| a
+                    .structure()
+                    .global_name
+                    .map(|a| a.to_string())
+                    .unwrap_or("".to_string())
+            )
+        );
+
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+        // if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+        //     net.result().unwrap()
+        // {
+        //     // println!("YaY:{}", (&expr - &tensor.expression).expand());
+        //     // assert_eq!(expr, tensor.expression);
+        // } else {
+        //     panic!("Not tensor")
+        // }
+    }
 
     #[test]
     fn parse_problem() {
@@ -431,20 +504,20 @@ mod tests {
             )
         );
 
-        net.execute::<Steps<16>, SmallestDegree, _>(&*WEYLIB)
-            .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| "".to_string())
-        );
-        // net.execute::<Steps<16>, ContractScalars, _>(&*WEYLIB)
-        // .unwrap();
-        net.execute::<Steps<1>, SmallestDegree, _>(&*WEYLIB)
+        net.execute::<Sequential, SmallestDegree, _>(&*WEYLIB)
             .unwrap();
 
         println!(
             "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| "".to_string())
+            net.dot_display_impl(
+                |a| a.to_string(),
+                |_| None,
+                |a| a
+                    .structure()
+                    .global_name
+                    .map(|a| a.to_string())
+                    .unwrap_or("".to_string())
+            )
         );
         // if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
         //     net.result().unwrap()

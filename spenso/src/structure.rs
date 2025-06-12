@@ -52,12 +52,12 @@ pub mod indexless;
 pub use indexless::{IndexLess, IndexlessNamedStructure};
 pub mod named;
 pub use named::NamedStructure;
-// pub mod permuted;
-// pub use permuted::PermutedStructure;
+pub mod permuted;
+pub use permuted::PermutedStructure;
 pub mod ordered;
 pub mod representation;
 pub mod slot;
-pub use ordered::{OrderedStructure, PermutedStructure};
+pub use ordered::OrderedStructure;
 
 pub mod smart_shadow;
 pub use smart_shadow::SmartShadowStructure;
@@ -810,7 +810,7 @@ pub trait HasName {
     bincode_trait_derive::Encode,
     bincode_trait_derive::Decode,
 )]
-pub struct TensorShell<S: TensorStructure> {
+pub struct TensorShell<S> {
     pub(crate) structure: S,
 }
 
@@ -951,7 +951,7 @@ where
 //     }
 // }
 
-impl<S: TensorStructure> TensorShell<S> {
+impl<S> TensorShell<S> {
     pub fn new(structure: S) -> Self {
         Self { structure }
     }

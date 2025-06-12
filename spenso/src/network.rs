@@ -895,6 +895,7 @@ impl<
         lib: &L,
         op: NetworkOp,
     ) -> Result<NetworkGraph<K>, TensorNetworkError<K>> {
+        graph.sync_order();
         match op {
             NetworkOp::Neg => {
                 let mut ops = graph.graph.iter_nodes().find(|(nid, n, d)| {
@@ -1089,10 +1090,11 @@ impl<
 
 pub struct SmallestDegree;
 
+pub struct SmallestDegreeIter<const N: usize>;
+
 pub struct ContractScalars;
 
-pub struct SingleSmallestDegree;
-
+pub struct SingleSmallestDegree<const D: bool>;
 pub trait Ref {
     type Ref<'a>
     where
@@ -1139,6 +1141,7 @@ where
     where
         K: Display,
     {
+        graph.sync_order();
         let mut other = None;
         let mut include_head = true;
         let mut head = None;
@@ -1262,6 +1265,8 @@ impl<
 where
     <L::Value as LibraryTensor>::WithIndices:
         Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T> + ScalarMul<Sc, Output = T>,
+    <<L::Value as LibraryTensor>::WithIndices as HasStructure>::Structure: Display,
+    T::Structure: Display,
 {
     fn contract(
         executor: &mut NetworkStore<T, Sc>,
@@ -1274,7 +1279,7 @@ where
         let (mut graph, mut didsmth) = ContractScalars::contract(executor, graph, lib)?;
 
         while {
-            let (newgraph, smth) = SingleSmallestDegree::contract(executor, graph, lib)?;
+            let (newgraph, smth) = SingleSmallestDegree::<false>::contract(executor, graph, lib)?;
             graph = newgraph;
             smth
         } {
@@ -1302,10 +1307,58 @@ impl<
             + From<T::Scalar>
             + Ref,
         K: Display + Debug + Clone,
-    > ContractionStrategy<NetworkStore<T, Sc>, L, K> for SingleSmallestDegree
+        const N: usize,
+    > ContractionStrategy<NetworkStore<T, Sc>, L, K> for SmallestDegreeIter<N>
 where
     <L::Value as LibraryTensor>::WithIndices:
         Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T> + ScalarMul<Sc, Output = T>,
+    <<L::Value as LibraryTensor>::WithIndices as HasStructure>::Structure: Display,
+    T::Structure: Display,
+{
+    fn contract(
+        executor: &mut NetworkStore<T, Sc>,
+        graph: NetworkGraph<K>,
+        lib: &L,
+    ) -> Result<(NetworkGraph<K>, bool), TensorNetworkError<K>>
+    where
+        K: Display,
+    {
+        let (mut graph, mut didsmth) = ContractScalars::contract(executor, graph, lib)?;
+
+        for _ in 0..N {
+            let (newgraph, smth) = SingleSmallestDegree::<false>::contract(executor, graph, lib)?;
+            graph = newgraph;
+            didsmth |= smth;
+        }
+
+        let (graph, _) = ContractScalars::contract(executor, graph, lib)?;
+
+        Ok((graph, didsmth))
+    }
+}
+
+impl<
+        T: HasStructure
+            + TensorStructure
+            + Clone
+            + Contract<LCM = T>
+            + ScalarMul<Sc, Output = T>
+            + Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T>
+            + From<<L::Value as LibraryTensor>::WithIndices>,
+        L: Library<T::Structure, Key = K, Value: LibraryTensor>,
+        Sc: for<'a> MulAssign<Sc::Ref<'a>>
+            + Clone
+            + for<'a> MulAssign<T::ScalarRef<'a>>
+            + From<T::Scalar>
+            + Ref,
+        K: Display + Debug + Clone,
+        const D: bool,
+    > ContractionStrategy<NetworkStore<T, Sc>, L, K> for SingleSmallestDegree<D>
+where
+    <L::Value as LibraryTensor>::WithIndices:
+        Contract<<L::Value as LibraryTensor>::WithIndices, LCM = T> + ScalarMul<Sc, Output = T>,
+    <<L::Value as LibraryTensor>::WithIndices as HasStructure>::Structure: Display,
+    T::Structure: Display,
 {
     fn contract(
         executor: &mut NetworkStore<T, Sc>,
@@ -1315,6 +1368,11 @@ where
     where
         K: Display,
     {
+        graph.sync_order();
+        if D {
+            println!("Contracting {}", graph.dot());
+        }
+
         let mut last_tensor = None;
         let edge_to_contract = graph
             .graph
@@ -1353,6 +1411,9 @@ where
             .min_by_key(|(degree, _, _, _, _)| *degree);
 
         if let Some((_, nid1, n1, nid2, n2)) = edge_to_contract {
+            if D {
+                println!("Contracting {} with {}", nid1, nid2);
+            }
             let new_node = match (n1, n2) {
                 (NetworkNode::Leaf(_), NetworkNode::Op(NetworkOp::Product))
                 | (NetworkNode::Op(NetworkOp::Product), NetworkNode::Leaf(_)) => {
@@ -1364,7 +1425,18 @@ where
                     }
 
                     (NetworkLeaf::LocalTensor(l1), NetworkLeaf::LocalTensor(l2)) => {
+                        if D {
+                            let st1 = executor.tensors[*l1].structure();
+                            let st2 = executor.tensors[*l2].structure();
+
+                            println!("Contracting {} with {}", st1, st2);
+                        }
+
                         let contracted = executor.tensors[*l1].contract(&executor.tensors[*l2])?;
+
+                        if D {
+                            println!("Obtained {}", contracted.structure());
+                        }
                         let pos = executor.tensors.len();
                         executor.tensors.push(contracted);
 
@@ -1373,8 +1445,17 @@ where
                     (NetworkLeaf::LibraryKey(l1), NetworkLeaf::LocalTensor(l2)) => {
                         let l1_inds: Vec<_> = graph.inds(nid1);
 
-                        let contracted = executor.tensors[*l2]
-                            .contract(&lib.get(l1)?.with_indices(&l1_inds)?)?;
+                        let l1 = lib.get(l1)?.with_indices(&l1_inds)?;
+                        if D {
+                            let st1 = l1.structure();
+                            let st2 = executor.tensors[*l2].structure();
+                            println!("Contracting {} with {}", st1, st2);
+                        }
+
+                        let contracted = executor.tensors[*l2].contract(&l1)?;
+                        if D {
+                            println!("Obtained {}", contracted.structure());
+                        }
                         let pos = executor.tensors.len();
                         executor.tensors.push(contracted);
                         NetworkLeaf::LocalTensor(pos)
@@ -1382,37 +1463,38 @@ where
 
                     (NetworkLeaf::LocalTensor(l2), NetworkLeaf::LibraryKey(l1)) => {
                         let l1_inds: Vec<_> = graph.inds(nid2);
+                        let l1 = lib.get(l1)?.with_indices(&l1_inds)?;
+                        if D {
+                            let st1 = l1.structure();
+                            let st2 = executor.tensors[*l2].structure();
+                            println!("Contracting {} with {}", st2, st1);
+                        }
 
-                        let contracted = executor.tensors[*l2]
-                            .contract(&lib.get(l1)?.with_indices(&l1_inds)?)?;
+                        let contracted = executor.tensors[*l2].contract(&l1)?;
+                        if D {
+                            println!("Obtained {}", contracted.structure());
+                        }
                         let pos = executor.tensors.len();
                         executor.tensors.push(contracted);
 
                         NetworkLeaf::LocalTensor(pos)
                     }
                     (NetworkLeaf::LibraryKey(l1), NetworkLeaf::LibraryKey(l2)) => {
-                        let l1_inds: Vec<_> = graph
-                            .graph
-                            .iter_crown(nid1)
-                            .filter_map(|i| match graph.graph[[&i]] {
-                                NetworkEdge::Head => None,
-                                NetworkEdge::Slot(s) => Some(s.aind),
-                            })
-                            .collect();
+                        let l1_inds: Vec<_> = graph.inds(nid1);
+                        let l1 = lib.get(l1)?.with_indices(&l1_inds)?;
 
-                        let l2_inds: Vec<_> = graph
-                            .graph
-                            .iter_crown(nid2)
-                            .filter_map(|i| match graph.graph[[&i]] {
-                                NetworkEdge::Head => None,
-                                NetworkEdge::Slot(s) => Some(s.aind),
-                            })
-                            .collect();
+                        let l2_inds: Vec<_> = graph.inds(nid2);
+                        let l2 = lib.get(l2)?.with_indices(&l2_inds)?;
+                        if D {
+                            let st1 = l1.structure();
+                            let st2 = l2.structure();
+                            println!("Contracting {} with {}", st2, st1);
+                        }
 
-                        let contracted = lib
-                            .get(l1)?
-                            .with_indices(&l1_inds)?
-                            .contract(&lib.get(l2)?.with_indices(&l2_inds)?)?;
+                        let contracted = l1.contract(&l2)?;
+                        if D {
+                            println!("Obtained {}", contracted.structure());
+                        }
                         let pos = executor.tensors.len();
                         executor.tensors.push(contracted);
 

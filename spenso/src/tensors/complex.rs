@@ -8,7 +8,7 @@ use crate::{
     network::Ref,
     structure::{
         concrete_index::ConcreteIndex, permuted::PermuteTensor, representation::RepName,
-        slot::Slot, OrderedStructure, PermutedStructure,
+        slot::Slot, IndexLess, OrderedStructure, PermutedStructure,
     },
     tensors::data::{SparseTensor, StorageTensor},
 };
@@ -364,7 +364,7 @@ where
     }
 }
 
-impl<T: Clone, S: Clone + Into<OrderedStructure<R>>, R: RepName<Dual = R>> PermuteTensor
+impl<T: Clone, S: Clone + Into<IndexLess<R>>, R: RepName<Dual = R>> PermuteTensor
     for RealOrComplexTensor<T, S>
 where
     S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,

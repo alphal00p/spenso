@@ -127,13 +127,14 @@ where
     Sc: for<'r> TryFrom<AtomView<'r>> + Clone,
     TensorNetworkError<K>: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
 {
-    pub fn try_from_view<S, Lib: Library<S, Key = K, Value: LibraryTensor<WithIndices = T>>>(
+    pub fn try_from_view<S, Lib: Library<S, Key = K>>(
         value: AtomView<'a>,
         library: &Lib,
     ) -> Result<Self, TensorNetworkError<K>>
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
+
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         match value {
@@ -145,13 +146,14 @@ where
         }
     }
 
-    fn try_from_mul<S, Lib: Library<S, Key = K, Value: LibraryTensor<WithIndices = T>>>(
+    fn try_from_mul<S, Lib: Library<S, Key = K>>(
         value: MulView<'a>,
         library: &Lib,
     ) -> Result<Self, TensorNetworkError<K>>
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
+
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         let mut iter = value.iter();
@@ -163,13 +165,14 @@ where
         Ok(first.n_mul(rest?))
     }
 
-    fn try_from_fun<S, Lib: Library<S, Key = K, Value: LibraryTensor<WithIndices = T>>>(
+    fn try_from_fun<S, Lib: Library<S, Key = K>>(
         value: FunView<'a>,
         library: &Lib,
     ) -> Result<Self, TensorNetworkError<K>>
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
+
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         let s: Result<PermutedStructure<S>, _> = value.try_into();
@@ -177,11 +180,17 @@ where
         if let Ok(s) = s {
             // println!("Perm:{}", s.permutation);
             // let s = s;
-            match library.key_for_structure(&s.structure) {
+            match library.key_for_structure(&s) {
                 Ok(key) => {
                     // println!("Adding lib");
                     // let t = library.get(&key).unwrap();
-                    Ok(Self::library_tensor(&s.structure, key))
+                    Ok(Self::library_tensor(
+                        &s.structure,
+                        PermutedStructure {
+                            structure: key,
+                            permutation: s.permutation,
+                        },
+                    ))
                 }
                 Err(_) => Ok(Self::from_tensor(
                     s.structure
@@ -196,13 +205,14 @@ where
         }
     }
 
-    fn try_from_pow<S, Lib: Library<S, Key = K, Value: LibraryTensor<WithIndices = T>>>(
+    fn try_from_pow<S, Lib: Library<S, Key = K>>(
         value: PowView<'a>,
         library: &Lib,
     ) -> std::result::Result<Self, TensorNetworkError<K>>
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
+
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         let (base, exp) = value.get_base_exp();
@@ -226,13 +236,14 @@ where
         }
     }
 
-    fn try_from_add<S, Lib: Library<S, Key = K, Value: LibraryTensor<WithIndices = T>>>(
+    fn try_from_add<S, Lib: Library<S, Key = K>>(
         value: AddView<'a>,
         library: &Lib,
     ) -> Result<Self, TensorNetworkError<K>>
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
+
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         let mut iter = value.iter();
@@ -271,7 +282,8 @@ pub mod test {
             Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
                 .unwrap();
 
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
 
         if let ExecutionResult::Val(TensorOrScalarOrKey::Scalar(a)) = net.result().unwrap() {
             println!("YaY:{a}")
@@ -292,7 +304,8 @@ pub mod test {
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
-        net.execute::<Steps<1>, ContractScalars, _>(&lib).unwrap();
+        net.execute::<Steps<1>, ContractScalars, _, _>(&lib)
+            .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
@@ -320,12 +333,13 @@ pub mod test {
             "//Init:\n{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
-        net.execute::<Steps<1>, ContractScalars, _>(&lib).unwrap();
+        net.execute::<Steps<1>, ContractScalars, _, _>(&lib)
+            .unwrap();
         println!(
             "//Contract Scalars:\n{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
-        net.execute::<Steps<1>, SingleSmallestDegree<false>, _>(&lib)
+        net.execute::<Steps<1>, SingleSmallestDegree<false>, _, _>(&lib)
             .unwrap();
 
         // println!("{:#?}", net.graph.graph);
@@ -333,7 +347,7 @@ pub mod test {
             "//Single Smallest Degree 1:\n{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
-        net.execute::<Steps<1>, SingleSmallestDegree<false>, _>(&lib)
+        net.execute::<Steps<1>, SingleSmallestDegree<false>, _, _>(&lib)
             .unwrap();
 
         // println!("{:#?}", net.graph.graph);
@@ -341,12 +355,14 @@ pub mod test {
             "//Single Smallest Degree 2:\n{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
-        net.execute::<Steps<1>, ContractScalars, _>(&lib).unwrap();
+        net.execute::<Steps<1>, ContractScalars, _, _>(&lib)
+            .unwrap();
         println!(
             "//Contract Scalars again:\n{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
-        netc.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        netc.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
         println!(
             "{}",
             netc.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
@@ -382,7 +398,8 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
@@ -464,7 +481,8 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
@@ -498,7 +516,8 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
@@ -530,7 +549,8 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
@@ -564,7 +584,7 @@ pub mod test {
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
-        net.execute::<StepsDebug<6>, SmallestDegree, _>(&lib)
+        net.execute::<StepsDebug<6>, SmallestDegree, _, _>(&lib)
             .unwrap();
         println!(
             "{}",
@@ -596,51 +616,56 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Steps<14>, SmallestDegree, _>(&lib).unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
-
-        net.execute::<Steps<10>, ContractScalars, _>(&lib).unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
-
-        net.execute::<Steps<10>, SingleSmallestDegree<false>, _>(&lib)
+        net.execute::<Steps<14>, SmallestDegree, _, _>(&lib)
             .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Steps<1>, ContractScalars, _>(&lib).unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
-
-        net.execute::<Steps<10>, SingleSmallestDegree<false>, _>(&lib)
-            .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
-        net.execute::<Steps<1>, ContractScalars, _>(&lib).unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
-
-        net.execute::<Steps<15>, SingleSmallestDegree<false>, _>(&lib)
+        net.execute::<Steps<10>, ContractScalars, _, _>(&lib)
             .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Steps<2>, ContractScalars, _>(&lib).unwrap();
+        net.execute::<Steps<10>, SingleSmallestDegree<false>, _, _>(&lib)
+            .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        net.execute::<Steps<1>, ContractScalars, _, _>(&lib)
+            .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        net.execute::<Steps<10>, SingleSmallestDegree<false>, _, _>(&lib)
+            .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+        net.execute::<Steps<1>, ContractScalars, _, _>(&lib)
+            .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        net.execute::<Steps<15>, SingleSmallestDegree<false>, _, _>(&lib)
+            .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        net.execute::<Steps<2>, ContractScalars, _, _>(&lib)
+            .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
@@ -657,7 +682,8 @@ pub mod test {
         let mut net =
             Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
                 .unwrap();
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())

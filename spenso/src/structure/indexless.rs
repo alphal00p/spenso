@@ -51,37 +51,27 @@ pub struct IndexLess<T: RepName = LibraryRep> {
     pub structure: Vec<Representation<T>>,
 }
 
-// impl<R: RepName<Dual = R>> PermuteTensor for IndexLess<R> {
-//     type Id = OrderedStructure<R>;
-//     type IdSlot = Slot<R>;
-//     type Permuted = (
-//         OrderedStructure<LibraryRep>,
-//         Vec<OrderedStructure<LibraryRep>>,
-//     );
+impl<R: RepName<Dual = R>> PermuteTensor for IndexLess<R> {
+    type Id = Self;
+    type Permuted = (IndexLess<LibraryRep>, Vec<IndexLess<LibraryRep>>);
+    type IdSlot = Slot<R>;
 
-//     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
-//         OrderedStructure::id(i, j)
-//     }
+    fn permute(self, permutation: &Permutation) -> Self::Permuted {
+        todo!()
+    }
 
-//     fn permute(self, permutation: &Permutation) -> Self::Permuted {
-//         let mut dummy_structure = Vec::new();
-//         let mut ids = Vec::new();
+    fn permute_reps(self, ind_perm: &Permutation, rep_perm: &Permutation) -> Self::Permuted {
+        todo!()
+    }
 
-//         for s in permutation.iter_slice_inv(&self.structure) {
-//             let dind = AbstractIndex::new_dummy();
-//             let d = s.to_dummy().to_lib().slot(dind);
-//             let ogs = s.to_lib().slot(dind);
-//             dummy_structure.push(d);
-//             ids.push(OrderedStructure::id(d, ogs));
-//         }
-//         let strct = OrderedStructure::new(dummy_structure);
-//         if !strct.permutation.is_identity() {
-//             panic!("should be identity")
-//         }
-
-//         (strct.structure, ids)
-//     }
-// }
+    fn id(i: Slot<R>, j: Slot<R>) -> Self::Id {
+        if i.dim() == j.dim() {
+            IndexLess::new(vec![i.rep, j.rep])
+        } else {
+            panic!("Not same dimension for ID")
+        }
+    }
+}
 
 impl<R: RepName> std::fmt::Display for IndexLess<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -382,6 +372,30 @@ pub struct IndexlessNamedStructure<Name = String, Args = usize, R: RepName = Lib
     pub additional_args: Option<Args>,
 }
 
+impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for IndexlessNamedStructure<N, A, R> {
+    type Id = Self;
+    type IdSlot = Slot<R>;
+    type Permuted = (
+        IndexlessNamedStructure<N, A, LibraryRep>,
+        Vec<IndexlessNamedStructure<N, A, LibraryRep>>,
+    );
+
+    fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
+        Self {
+            structure: IndexLess::id(i, j),
+            global_name: Some(N::id()),
+            additional_args: None,
+        }
+    }
+
+    fn permute(self, permutation: &Permutation) -> Self::Permuted {
+        todo!()
+    }
+
+    fn permute_reps(self, ind_perm: &Permutation, rep_perm: &Permutation) -> Self::Permuted {
+        todo!()
+    }
+}
 // impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for IndexlessNamedStructure<N, A, R> {
 //     type Id = NamedStructure<N, A, R>;
 //     type IdSlot = Slot<R>;

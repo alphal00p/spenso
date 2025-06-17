@@ -10,8 +10,8 @@ use crate::{
         permuted::PermuteTensor,
         representation::RepName,
         slot::Slot,
-        CastStructure, HasName, HasStructure, OrderedStructure, PermutedStructure, ScalarStructure,
-        ScalarTensor, StructureContract, TensorStructure, TracksCount,
+        CastStructure, HasName, HasStructure, IndexLess, OrderedStructure, PermutedStructure,
+        ScalarStructure, ScalarTensor, StructureContract, TensorStructure, TracksCount,
     },
 };
 
@@ -361,7 +361,7 @@ where
     }
 }
 
-impl<T: Clone, S: Clone + Into<OrderedStructure<R>>, R: RepName<Dual = R>> PermuteTensor
+impl<T: Clone, S: Clone + Into<IndexLess<R>>, R: RepName<Dual = R>> PermuteTensor
     for DataTensor<T, S>
 where
     S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,

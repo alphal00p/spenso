@@ -6,7 +6,7 @@ use crate::{
     contraction::{Contract, ContractionError},
     network::{
         library::{
-            symbolic::{ExplicitKey, TensorLibrary},
+            symbolic::{ExplicitKey, LibraryKey, TensorLibrary},
             TensorLibraryData,
         },
         parsing::ShadowedStructure,
@@ -106,11 +106,15 @@ impl PermuteTensor for SymbolicTensor {
         }
 
         let mut ids = Atom::one();
+        let mut new_true_structure = vec![];
         for s in idstructures.iter() {
             let o = s.external_structure();
-
+            new_true_structure.push(o[1]);
             ids *= Self::id(o[0], o[1]).expression;
         }
+        let strct = OrderedStructure::new(new_true_structure);
+
+        self.structure = strct.structure;
 
         self.expression *= ids;
 

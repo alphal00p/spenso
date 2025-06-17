@@ -30,7 +30,10 @@ pub trait Library<S> {
     type Value: Clone;
     // type Structure: TensorStructure;
 
-    fn key_for_structure(&self, structure: &S) -> Result<Self::Key, LibraryError<Self::Key>>
+    fn key_for_structure(
+        &self,
+        structure: &PermutedStructure<S>,
+    ) -> Result<Self::Key, LibraryError<Self::Key>>
     where
         S: TensorStructure;
     fn get<'a>(&'a self, key: &Self::Key) -> Result<Cow<'a, Self::Value>, LibraryError<Self::Key>>;
@@ -82,12 +85,15 @@ impl Display for DummyKey {
 
 impl<K: Display + Clone, V: Clone, S> Library<S> for DummyLibrary<V, K> {
     type Key = K;
-    type Value = DummyLibraryTensor<V>;
+    type Value = PermutedStructure<DummyLibraryTensor<V>>;
     fn get<'a>(&'a self, key: &Self::Key) -> Result<Cow<'a, Self::Value>, LibraryError<Self::Key>> {
         Err(LibraryError::NotFound(key.clone()))
     }
 
-    fn key_for_structure(&self, _structure: &S) -> Result<Self::Key, LibraryError<Self::Key>>
+    fn key_for_structure(
+        &self,
+        _structure: &PermutedStructure<S>,
+    ) -> Result<Self::Key, LibraryError<Self::Key>>
     where
         S: TensorStructure,
     {

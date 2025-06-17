@@ -1,5 +1,5 @@
 use std::{
-    fmt::Display,
+    fmt::{Debug, Display},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
@@ -22,12 +22,16 @@ use thiserror::Error;
 
 use crate::structure::{
     abstract_index::AbstractIndex,
+    permuted::{Perm, PermuteTensor},
     representation::{LibrarySlot, RepName},
     slot::{DualSlotTo, IsAbstractSlot},
-    TensorStructure,
+    PermutedStructure, TensorStructure,
 };
 
-use super::TensorNetworkError;
+use super::{
+    library::{Library, LibraryTensor},
+    TensorNetworkError,
+};
 
 #[derive(
     Debug,
@@ -92,7 +96,9 @@ impl NetworkEdge {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Encode, bincode_trait_derive::Decode, Serialize, Deserialize,
+)]
 pub enum NetworkNode<LibKey> {
     Leaf(NetworkLeaf<LibKey>),
     Op(NetworkOp),
@@ -143,10 +149,12 @@ impl Display for NetworkOp {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Encode, bincode_trait_derive::Decode, Serialize, Deserialize,
+)]
 pub enum NetworkLeaf<K> {
     LocalTensor(usize),
-    LibraryKey(K),
+    LibraryKey(PermutedStructure<K>),
     Scalar(usize),
 }
 
@@ -261,6 +269,32 @@ impl<K> NetworkGraph<K> {
         perm.apply_slice_in_place(&mut slots);
         // println!("Inds:{:?}", slots);
         slots
+    }
+
+    pub fn get_lib_data<
+        S,
+        LT: LibraryTensor + Clone,
+        L: Library<S, Key = K, Value = PermutedStructure<LT>>,
+    >(
+        &self,
+        lib: &L,
+        nodeid: NodeIndex,
+    ) -> Option<LT::WithIndices>
+    where
+        K: Display + Debug,
+        LT::WithIndices: PermuteTensor<Permuted = LT::WithIndices>,
+    {
+        let mut inds = self.inds(nodeid);
+
+        if let NetworkNode::Leaf(NetworkLeaf::LibraryKey(k)) = &self.graph[nodeid] {
+            let libt = lib.get(&k.structure).unwrap();
+            let mappingperm = libt.permutation.inverse().compose(&k.permutation);
+
+            mappingperm.apply_slice_in_place(&mut inds);
+            Some(libt.structure.with_indices(&inds).unwrap().permute())
+        } else {
+            None
+        }
     }
 
     pub fn splice_descendents_of(&mut self, replacement: Self)
@@ -599,7 +633,9 @@ impl<K> NetworkGraph<K> {
             },
             &|n| match n {
                 NetworkNode::Leaf(l) => match l {
-                    NetworkLeaf::LibraryKey(l) => Some(format!("label= \"L:{}\"", library_disp(l))),
+                    NetworkLeaf::LibraryKey(l) => {
+                        Some(format!("label= \"L:{}\"", library_disp(&l.structure)))
+                    }
                     NetworkLeaf::LocalTensor(l) => {
                         Some(format!("label = \"T:{}\"", tensor_disp(*l)))
                     }
@@ -681,11 +717,12 @@ impl<K> NetworkGraph<K> {
         graph.into()
     }
 
-    pub fn key(key: K) -> Self
+    pub fn key(key: PermutedStructure<K>) -> Self
     where
         K: TensorStructure,
     {
         let slots = key
+            .structure
             .external_structure_iter()
             .map(|a| a.to_lib())
             .collect::<Vec<_>>();
@@ -796,7 +833,9 @@ impl<K> NetworkGraph<K> {
         self.graph.n_nodes()
     }
 
-    pub fn result(&self) -> Result<(&NetworkNode<K>, Vec<LibrarySlot>), TensorNetworkError<K>>
+    pub fn result(
+        &self,
+    ) -> Result<(&NetworkNode<K>, NodeIndex, Vec<LibrarySlot>), TensorNetworkError<K>>
     where
         K: Display,
     {
@@ -823,7 +862,7 @@ impl<K> NetworkGraph<K> {
                     }
                 }
 
-                Ok((&self.graph[root_node], slots))
+                Ok((&self.graph[root_node], root_node, slots))
             }
             _ => Err(TensorNetworkError::MoreThanOneNode),
         }

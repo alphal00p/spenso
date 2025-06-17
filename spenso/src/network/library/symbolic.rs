@@ -2,6 +2,10 @@ use std::sync::LazyLock;
 
 use super::*;
 use ahash::AHashMap;
+use linnet::{
+    half_edge::tree::SimpleTraversalTree,
+    permutation::{self, Permutation},
+};
 use symbolica::{
     atom::{Atom, Symbol},
     symbol,
@@ -13,6 +17,7 @@ use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         named::{IdentityName, ID_NAME},
+        permuted::{Perm, PermuteTensor},
         representation::{LibraryRep, RepName, REPS},
         HasName, IndexlessNamedStructure, TensorShell,
     },
@@ -20,19 +25,47 @@ use crate::{
 };
 
 pub type ExplicitKey = IndexlessNamedStructure<Symbol, Vec<Atom>, LibraryRep>;
-
+pub type LibraryKey = PermutedStructure<ExplicitKey>;
 impl ExplicitKey {
     pub fn from_structure<S: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs>>(
-        structure: &S,
+        structure: &PermutedStructure<S>,
     ) -> Option<Self> {
+        let rep_structure: Vec<_> = structure
+            .structure
+            .reps()
+            .into_iter()
+            .map(|r| r.to_lib())
+            .collect();
+
         Some(
             IndexlessNamedStructure::from_iter(
-                structure.reps().into_iter().map(|r| r.to_lib()),
-                structure.name()?.ref_into_symbol(),
-                structure.args().map(|a| a.args()),
+                rep_structure,
+                structure.structure.name()?.ref_into_symbol(),
+                structure.structure.args().map(|a| a.args()),
             )
             .structure,
         )
+    }
+}
+impl LibraryKey {
+    pub fn from_structure<S: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs>>(
+        structure: &PermutedStructure<S>,
+    ) -> Option<Self> {
+        let mut rep_structure: Vec<_> = structure
+            .structure
+            .reps()
+            .into_iter()
+            .map(|r| r.to_lib())
+            .collect();
+
+        structure
+            .permutation
+            .apply_slice_in_place_inv(&mut rep_structure);
+        Some(IndexlessNamedStructure::from_iter(
+            rep_structure,
+            structure.structure.name()?.ref_into_symbol(),
+            structure.structure.args().map(|a| a.args()),
+        ))
     }
 }
 
@@ -174,7 +207,7 @@ impl From<ExplicitKey> for GenericKey {
 
 #[allow(clippy::type_complexity)]
 pub struct TensorLibrary<T: HasStructure<Structure = ExplicitKey>> {
-    explicit_dimension: AHashMap<ExplicitKey, T>,
+    explicit_dimension: AHashMap<ExplicitKey, PermutedStructure<T>>,
     generic_dimension: AHashMap<GenericKey, fn(ExplicitKey) -> T>,
 }
 
@@ -228,7 +261,7 @@ impl<
     > Library<S> for TensorLibrary<T>
 {
     type Key = ExplicitKey;
-    type Value = T;
+    type Value = PermutedStructure<T>;
     // type Structure = ExplicitKey;
 
     fn get<'a>(&'a self, key: &Self::Key) -> Result<Cow<'a, Self::Value>, LibraryError<Self::Key>> {
@@ -237,14 +270,21 @@ impl<
             // println!("found explicit");
             Ok(Cow::Borrowed(tensor))
         } else if let Some(builder) = self.generic_dimension.get(&key.clone().into()) {
+            let permutation = PermutedStructure {
+                structure: builder(key.clone()),
+                permutation: Permutation::id(key.order()),
+            };
             // println!("found generic");
-            Ok(Cow::Owned(builder(key.clone())))
+            Ok(Cow::Owned(permutation))
         } else {
             Err(LibraryError::NotFound(key.clone()))
         }
     }
 
-    fn key_for_structure(&self, structure: &S) -> Result<Self::Key, LibraryError<Self::Key>>
+    fn key_for_structure(
+        &self,
+        structure: &PermutedStructure<S>,
+    ) -> Result<Self::Key, LibraryError<Self::Key>>
     where
         S: TensorStructure,
     {
@@ -261,8 +301,13 @@ impl<
     }
 }
 
-impl<T: HasStructure<Structure = ExplicitKey> + SetTensorData + Clone + LibraryTensor>
-    TensorLibrary<T>
+impl<
+        T: HasStructure<Structure = ExplicitKey>
+            + SetTensorData
+            + Clone
+            + LibraryTensor
+            + PermuteTensor<Permuted = T>,
+    > TensorLibrary<T>
 {
     pub fn metric_key(rep: LibraryRep) -> ExplicitKey {
         ExplicitKey::from_iter(
@@ -333,24 +378,41 @@ impl<T: HasStructure<Structure = ExplicitKey> + SetTensorData + Clone + LibraryT
         tensor.into()
     }
 
-    pub fn insert_explicit(&mut self, data: T) {
-        let key = data.structure().clone();
+    pub fn insert_explicit(&mut self, data: PermutedStructure<T>) {
+        let key = data.structure.structure().clone();
         self.explicit_dimension.insert(key, data);
     }
 
-    pub fn insert_explicit_dense(&mut self, key: ExplicitKey, data: Vec<T::Data>) -> Result<()> {
-        let tensor = T::from_dense(key.clone(), data)?;
-        self.explicit_dimension.insert(key, tensor);
+    pub fn insert_explicit_dense(
+        &mut self,
+        key: PermutedStructure<ExplicitKey>,
+        data: Vec<T::Data>,
+    ) -> Result<()> {
+        let tensor = T::from_dense(key.structure.clone(), data)?;
+        let perm_tensor = PermutedStructure {
+            permutation: key.permutation,
+            structure: tensor,
+        };
+
+        self.explicit_dimension
+            .insert(key.structure, perm_tensor.permute_wrapped());
         Ok(())
     }
 
     pub fn insert_explicit_sparse(
         &mut self,
-        key: ExplicitKey,
+        key: PermutedStructure<ExplicitKey>,
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, T::Data)>,
     ) -> Result<()> {
-        let tensor = T::from_sparse(key.clone(), data)?;
-        self.explicit_dimension.insert(key, tensor);
+        let tensor = T::from_sparse(key.structure.clone(), data)?;
+
+        let perm_tensor = PermutedStructure {
+            permutation: key.permutation.clone(),
+            structure: tensor,
+        };
+
+        self.explicit_dimension
+            .insert(key.structure, perm_tensor.permute_wrapped());
         Ok(())
     }
 
@@ -365,7 +427,7 @@ impl<T: HasStructure<Structure = ExplicitKey> + SetTensorData + Clone + LibraryT
         // println!("Trying:{}", key);
 
         if let Some(tensor) = self.explicit_dimension.get(key) {
-            Ok(Cow::Borrowed(tensor))
+            Ok(Cow::Borrowed(&tensor.structure))
         } else if let Some(builder) = self.generic_dimension.get(&key.clone().into()) {
             Ok(Cow::Owned(builder(key.clone())))
         } else {
@@ -388,6 +450,7 @@ mod test {
             representation::{Euclidean, Minkowski},
             ToSymbolic,
         },
+        tensors::data::SparseOrDense,
     };
 
     use super::*;
@@ -409,11 +472,11 @@ mod test {
         println!("{}", key.permutation);
 
         let one = ConcreteOrParam::Concrete(RealOrComplex::Real(1.));
-        lib.insert_explicit_sparse((*key).clone(), [(vec![0, 0, 1], one)])
+        lib.insert_explicit_sparse((key).clone(), [(vec![0, 0, 1], one)])
             .unwrap();
 
-        lib.get(&key).unwrap();
-        let indexed = key.clone().reindex([0, 1, 2]).unwrap().structure.structure;
+        lib.get(&key.structure).unwrap();
+        let indexed = key.clone().reindex([0, 1, 2]).unwrap().structure;
         let expr = indexed.to_symbolic(None).unwrap();
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
@@ -430,7 +493,8 @@ mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
         println!(
             "{}",
             net.dot_display_impl(
@@ -439,18 +503,75 @@ mod test {
                 |a| a.name().map(|a| a.to_string()).unwrap_or("".to_owned())
             )
         );
+    }
+    #[test]
+    fn libperm() {
+        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let key = ExplicitKey::from_iter(
+            [
+                LibraryRep::from(Minkowski {}).new_rep(2),
+                Euclidean {}.new_rep(2).cast(),
+                Euclidean {}.new_rep(2).cast(),
+            ],
+            symbol!("gamma"),
+            None,
+        );
 
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Key {
-            key: res_key,
-            graph_slots,
-        }) = net.result().unwrap()
-        {
-            // println!("YaY:{a}");
-            assert_eq!(graph_slots, indexed.structure.external_structure());
-            assert_eq!(&key.structure, res_key);
-        } else {
-            panic!("Not Key")
-        }
+        println!("{}", key.structure);
+        println!("{}", key.permutation);
+
+        let tensor = MixedTensor::Param(
+            ParamTensor::from_sparse(
+                key.structure.clone(),
+                [
+                    (vec![0, 0, 0], parse!("a").into()),
+                    (vec![0, 0, 1], parse!("b").into()),
+                    (vec![0, 1, 0], parse!("c").into()),
+                    (vec![0, 1, 1], parse!("d").into()),
+                    (vec![1, 0, 0], parse!("e").into()),
+                    (vec![1, 0, 1], parse!("f").into()),
+                    (vec![1, 1, 0], parse!("g").into()),
+                    (vec![1, 1, 1], parse!("h").into()),
+                ],
+            )
+            .unwrap()
+            .to_dense(),
+        );
+
+        lib.insert_explicit(PermutedStructure {
+            structure: tensor,
+            permutation: key.permutation.clone(),
+        });
+
+        lib.get(&key.structure).unwrap();
+        let indexed = key.clone().reindex([0, 1, 2]).unwrap().structure;
+        let expr = indexed.to_symbolic(None).unwrap();
+        let mut net = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            _,
+        >::try_from_view(
+            parse!("gamma(euc(2,2),euc(2,1),mink(2,0))-gamma(mink(2,0),euc(2,2),euc(2,1))")
+                .as_view(),
+            &lib,
+        )
+        .unwrap();
+
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
+
+        print!("One {}", net.result_tensor(&lib).unwrap());
+        let mut net = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            _,
+        >::try_from_view(
+            parse!("gamma(mink(2,0),euc(2,2),euc(2,1))").as_view(), &lib
+        )
+        .unwrap();
+
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
+
+        print!("Two{}", net.result_tensor(&lib).unwrap())
     }
 
     #[test]
@@ -458,15 +579,15 @@ mod test {
         let lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         let key = ExplicitKey::from_iter(
             [
-                LibraryRep::from(Minkowski {}).new_rep(4),
                 Euclidean {}.new_rep(4).cast(),
+                LibraryRep::from(Minkowski {}).new_rep(4),
                 Euclidean {}.new_rep(4).cast(),
             ],
             symbol!("gamma"),
             None,
         );
 
-        let indexed = key.reindex([0, 1, 2]).unwrap().structure.structure;
+        let indexed = key.reindex([0, 1, 2]).unwrap().structure;
         let expr = indexed.to_symbolic(None).unwrap();
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
@@ -483,7 +604,8 @@ mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
         println!(
             "{}",
             net.dot_display_impl(
@@ -497,7 +619,7 @@ mod test {
             net.result().unwrap()
         {
             // println!("YaY:{a}");
-
+            println!("{tensor}");
             assert_eq!(tensor, &indexed.to_shell().concretize(None));
         } else {
             panic!("Not Key")
@@ -525,7 +647,8 @@ mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
         println!(
             "{}",
             net.dot_display_impl(
@@ -570,7 +693,8 @@ mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
 
         if let Ok(ExecutionResult::Val(v)) = net.result_scalar() {
             println!("Hi{}", v)
@@ -610,7 +734,8 @@ mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _>(&lib).unwrap();
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
 
         if let Ok(ExecutionResult::Val(v)) = net.result_tensor(&lib) {
             println!("{}", v)
@@ -631,7 +756,7 @@ mod test {
             Network::one() * Network::from_scalar(Atom::var(symbol!("x")));
 
         // a.merge_ops();
-        a.execute::<Sequential, SmallestDegree, _>(&DummyLibrary::default())
+        a.execute::<Sequential, SmallestDegree, _, _>(&DummyLibrary::default())
             .unwrap();
 
         let res = a.result_scalar();

@@ -1,7 +1,9 @@
-use std::{f64::consts::LN_2, ops::Deref};
+use std::{f64::consts::LN_2, fmt::Display, ops::Deref};
 
+use bincode_trait_derive::{Decode, Encode};
 use linnet::permutation::Permutation;
 use num::one;
+use serde::{Deserialize, Serialize};
 
 use super::{
     abstract_index::AbstractIndex,
@@ -10,17 +12,15 @@ use super::{
     OrderedStructure, StructureError, TensorStructure,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Encode, Decode)]
 pub struct PermutedStructure<S> {
     pub structure: S,
     pub permutation: Permutation,
 }
 
-impl<S> Deref for PermutedStructure<S> {
-    type Target = S;
-
-    fn deref(&self) -> &Self::Target {
-        &self.structure
+impl<S: Display> Display for PermutedStructure<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.permutation, self.structure)
     }
 }
 
@@ -35,23 +35,24 @@ impl<S> PermutedStructure<S> {
     pub fn reindex<I: IntoIterator<Item: Into<AbstractIndex>>>(
         self,
         indices: I,
-    ) -> Result<PermutedStructure<PermutedStructure<S::Indexed>>, StructureError>
+    ) -> Result<PermutedStructure<S::Indexed>, StructureError>
     where
         S: TensorStructure,
     {
-        let indices = indices.into_iter().map(|i| i.into()).collect::<Vec<_>>();
+        let mut indices = indices.into_iter().map(|i| i.into()).collect::<Vec<_>>();
+
+        self.permutation.apply_slice_in_place_inv(&mut indices);
         let structure = self.structure.reindex(&indices)?;
-        println!("Og:{}", self.permutation);
-        println!("New:{}", structure.permutation);
-        Ok(PermutedStructure {
-            structure: structure,
-            permutation: self.permutation,
-        })
+        println!("Rep:{}", self.permutation);
+        println!("Ind:{}", structure.permutation);
+        Ok(structure)
     }
 }
-pub trait Perm {
+pub trait Perm: Sized {
     type Permuted;
+    type Wrapped<P>;
     fn permute(self) -> Self::Permuted;
+    fn permute_wrapped(self) -> Self::Wrapped<Self::Permuted>;
 }
 
 impl<S> Perm for PermutedStructure<PermutedStructure<S>>
@@ -59,10 +60,23 @@ where
     S: PermuteTensor,
 {
     type Permuted = S::Permuted;
+    type Wrapped<P> = PermutedStructure<PermutedStructure<P>>;
     fn permute(self) -> Self::Permuted {
         self.structure
             .structure
-            .permute_reps(&self.permutation, &self.structure.permutation)
+            .permute_reps(&self.structure.permutation, &self.permutation)
+    }
+    fn permute_wrapped(self) -> Self::Wrapped<Self::Permuted> {
+        PermutedStructure {
+            structure: PermutedStructure {
+                structure: self
+                    .structure
+                    .structure
+                    .permute_reps(&self.structure.permutation, &self.permutation),
+                permutation: self.structure.permutation,
+            },
+            permutation: self.permutation,
+        }
     }
 }
 
@@ -70,9 +84,18 @@ impl<S> Perm for PermutedStructure<S>
 where
     S: PermuteTensor,
 {
+    type Wrapped<P> = PermutedStructure<P>;
     type Permuted = S::Permuted;
     fn permute(self) -> Self::Permuted {
         self.structure.permute(&self.permutation)
+    }
+    fn permute_wrapped(self) -> Self::Wrapped<Self::Permuted> {
+        PermutedStructure {
+            structure: self
+                .structure
+                .permute_reps(&self.permutation, &self.permutation),
+            permutation: self.permutation,
+        }
     }
 }
 

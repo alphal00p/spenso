@@ -5,11 +5,11 @@ use std::{
     io::Cursor,
 };
 
-use crate::structure::slot::IsAbstractSlot;
 use crate::structure::StructureError;
 use crate::structure::{abstract_index::AbstractIndex, PermutedStructure};
 use crate::structure::{dimension::Dimension, representation::RepName};
 use crate::structure::{permuted::PermuteTensor, representation::Representation};
+use crate::structure::{slot::IsAbstractSlot, IndexLess};
 use ahash::HashMap;
 use delegate::delegate;
 
@@ -301,7 +301,7 @@ pub mod mul_assign;
 pub mod neg;
 pub mod scalar_mul;
 
-impl<S: Clone + Into<OrderedStructure<R>>, R: RepName<Dual = R>> PermuteTensor for ParamTensor<S>
+impl<S: Clone + Into<IndexLess<R>>, R: RepName<Dual = R>> PermuteTensor for ParamTensor<S>
 where
     S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
 {
@@ -1174,7 +1174,7 @@ where
 
 impl<
         C: PermuteTensor<Id = C, Permuted = C>,
-        S: Clone + Into<OrderedStructure<R>>,
+        S: Clone + Into<IndexLess<R>>,
         R: RepName<Dual = R>,
     > PermuteTensor for ParamOrConcrete<C, S>
 where

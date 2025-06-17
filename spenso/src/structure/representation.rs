@@ -421,7 +421,6 @@ pub struct Representation<T: RepName> {
 impl<T: RepName> Ord for Representation<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         if self.rep.is_dummy() && other.rep.is_dummy() {
-            // self.dim.cmp(&other.dim)
             Ordering::Equal
         } else {
             self.dim.cmp(&other.dim).then(self.rep.cmp(&other.rep))
@@ -690,7 +689,7 @@ impl ExtendibleReps {
         if let Some(rep) = self.name_map.get(name) {
             match rep {
                 LibraryRep::SelfDual(_) | LibraryRep::Dualizable(_) | LibraryRep::Dummy => {
-                    return Err(RepLibraryError::AlreadyExistsDifferentType(name.into()))
+                    return Err(RepLibraryError::AlreadyExistsDifferentType(name.into()));
                 }
                 LibraryRep::InlineMetric(a) => {
                     if INLINE_METRIC[*a as usize].1.metric_data == metric_fn {
@@ -916,6 +915,10 @@ impl RepName for LibraryRep {
         } else {
             false
         }
+    }
+
+    fn is_dummy(self) -> bool {
+        matches!(self, LibraryRep::Dummy)
     }
 
     #[cfg(feature = "shadowing")]

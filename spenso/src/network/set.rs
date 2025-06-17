@@ -1,10 +1,17 @@
 #[cfg(feature = "shadowing")]
 use anyhow::anyhow;
 use bincode::{Decode, Encode};
+use indexmap::map::Keys;
 use serde::{Deserialize, Serialize};
 
-use crate::algebra::algebraic_traits::{One, Zero};
-use std::{borrow::Cow, fmt::Display};
+use crate::{
+    algebra::algebraic_traits::{One, Zero},
+    structure::{permuted::PermuteTensor, PermutedStructure},
+};
+use std::{
+    borrow::Cow,
+    fmt::{Debug, Display},
+};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -35,6 +42,7 @@ use crate::{
 };
 
 use super::{
+    library::LibraryTensor,
     store::{NetworkStore, TensorScalarStore},
     ExecutionResult,
 };
@@ -107,16 +115,19 @@ pub struct SharedTensorNetworkSet<
     pub len: usize,
 }
 
-impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scalar = S>>
+impl<T: TensorStructure, S, K: Display + Debug, Str: TensorScalarStore<Tensor = T, Scalar = S>>
     TensorNetworkSet<Str, K>
 {
     pub fn result(
         &self,
-    ) -> Result<Vec<ExecutionResult<TensorOrScalarOrKey<&T, &S, &K>>>, TensorNetworkError<K>> {
+    ) -> Result<
+        Vec<ExecutionResult<TensorOrScalarOrKey<&T, &S, &PermutedStructure<K>>>>,
+        TensorNetworkError<K>,
+    > {
         self.networks.iter().map(|n| n.result()).collect()
     }
 
-    pub fn result_tensor<'a, L: Library<T::Structure, Key = K>>(
+    pub fn result_tensor<'a, LT, L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>>(
         &'a self,
         lib: &L,
     ) -> Result<Vec<ExecutionResult<Cow<'a, T>>>, TensorNetworkError<K>>
@@ -125,7 +136,8 @@ impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scala
         T: Clone + ScalarTensor + HasStructure,
         T::Scalar: One + Zero,
         for<'b> &'b S: Into<T::Scalar>,
-        L::Value: TensorStructure<Indexed = T> + Clone,
+        LT: TensorStructure<Indexed = T> + Clone + LibraryTensor<WithIndices = T>,
+        T: PermuteTensor<Permuted = T>,
     {
         self.networks.iter().map(|n| n.result_tensor(lib)).collect()
     }

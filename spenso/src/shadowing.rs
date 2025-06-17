@@ -638,6 +638,7 @@ pub mod test {
     use once_cell::sync::Lazy;
     use symbolica::atom::Symbol;
 
+    use crate::network::library::symbolic::LibraryKey;
     use crate::network::library::{symbolic::ExplicitKey, symbolic::TensorLibrary, symbolic::ETS};
 
     pub static EXPLICIT_TENSOR_MAP: Lazy<RwLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>>> =
@@ -647,7 +648,7 @@ pub mod test {
             RwLock::new(lib)
         });
 
-    use crate::structure::OrderedStructure;
+    use crate::structure::{OrderedStructure, PermutedStructure};
     use crate::{
         contraction::Contract,
         structure::{
@@ -666,12 +667,12 @@ pub mod test {
         for rep in LibraryRep::all_representations() {
             let structure = [rep.new_rep(4), rep.new_rep(4).dual()];
 
-            let idstructure: IndexlessNamedStructure<Symbol, (), LibraryRep> =
-                IndexlessNamedStructure::from_iter(structure, ETS.id, None).structure;
+            let idstructure: PermutedStructure<IndexlessNamedStructure<Symbol, (), LibraryRep>> =
+                IndexlessNamedStructure::from_iter(structure, ETS.id, None);
 
-            let idkey = ExplicitKey::from_structure(&idstructure).unwrap();
+            let idkey = LibraryKey::from_structure(&idstructure).unwrap();
 
-            let id = tensor_library.get(&idkey).unwrap().into_owned();
+            let id = tensor_library.get(&idkey.structure).unwrap().into_owned();
 
             let trace_structure: OrderedStructure = OrderedStructure::from_iter([
                 rep.new_rep(4).slot(3),

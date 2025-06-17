@@ -3,7 +3,7 @@ use crate::structure::dimension::Dimension;
 use crate::structure::permuted::PermuteTensor;
 use crate::structure::representation::{RepName, Representation};
 use crate::structure::slot::{IsAbstractSlot, Slot};
-use crate::structure::{PermutedStructure, StructureError};
+use crate::structure::{IndexLess, PermutedStructure, StructureError};
 use crate::{
     algebra::algebraic_traits::IsZero,
     algebra::complex::Complex,
@@ -69,7 +69,7 @@ impl<T, S> crate::network::Ref for SparseTensor<T, S> {
     }
 }
 
-impl<T: Clone, S: Clone + Into<OrderedStructure<R>>, R: RepName<Dual = R>> PermuteTensor
+impl<T: Clone, S: Clone + Into<IndexLess<R>>, R: RepName<Dual = R>> PermuteTensor
     for SparseTensor<T, S>
 where
     S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
@@ -93,7 +93,7 @@ where
     }
 
     fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
-        let mut permuteds: OrderedStructure<R> = self.structure.clone().into();
+        let mut permuteds: IndexLess<R> = self.structure.clone().into();
         permutation.apply_slice_in_place(&mut permuteds.structure);
 
         let mut permuted = self.clone();

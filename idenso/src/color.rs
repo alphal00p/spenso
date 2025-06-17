@@ -450,13 +450,14 @@ mod test {
             .clone()
             .reindex([4, 3, 2])
             .unwrap()
-            .map_structure(|a| a.map_structure(|a| SymbolicTensor::from_named(&a).unwrap()));
+            .map_structure(|a| SymbolicTensor::from_named(&a).unwrap());
 
         let f_s = f.structure.structure.clone();
+
         let f_p = f.permute();
 
         println!(
-            "{}\n{}\n{}\n{}",
+            "Structure:{}\nPermuted:{}\nPermuted Structure{}\nMetric simplified{}",
             f_s,
             f_p,
             f_p.structure,
@@ -467,7 +468,7 @@ mod test {
             .clone()
             .reindex([4, 2, 3])
             .unwrap()
-            .map_structure(|a| a.map_structure(|a| SymbolicTensor::from_named(&a).unwrap()))
+            .map_structure(|a| SymbolicTensor::from_named(&a).unwrap())
             .permute();
 
         println!("{t}")

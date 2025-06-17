@@ -9,7 +9,7 @@ use crate::utils::MergeOrdered;
 #[cfg(feature = "shadowing")]
 use crate::{
     shadowing::symbolica_utils::IntoSymbol,
-    structure::{ExpandedCoefficent, FlatIndex, ToSymbolic, AIND_SYMBOLS},
+    structure::{AIND_SYMBOLS, ExpandedCoefficent, FlatIndex, ToSymbolic},
     tensors::{data::DenseTensor, parametric::TensorCoefficient},
 };
 
@@ -18,18 +18,18 @@ use anyhow::Result;
 
 #[cfg(feature = "shadowing")]
 use symbolica::atom::{
-    representation::{FunView, MulView},
     Atom, AtomView, FunctionBuilder, Symbol,
+    representation::{FunView, MulView},
 };
 
 use super::{
+    MergeInfo, NamedStructure, PermutedStructure, ScalarStructure, SmartShadowStructure,
+    StructureContract, StructureError, TensorStructure,
     abstract_index::AbstractIndex,
     dimension::Dimension,
     permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
     slot::{ConstructibleSlot, DualSlotTo, IsAbstractSlot, Slot, SlotError},
-    MergeInfo, NamedStructure, PermutedStructure, ScalarStructure, SmartShadowStructure,
-    StructureContract, StructureError, TensorStructure,
 };
 use anyhow::anyhow;
 use delegate::delegate;
@@ -93,13 +93,15 @@ impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
         if rep_perm.is_identity() {
             return self.permute(ind_perm);
         }
-        for s in rep_perm.iter_slice(&self.structure) {
+        println!("{rep_perm}");
+        for s in rep_perm.iter_slice_inv(&self.structure) {
             og_reps.push(s.rep.to_lib());
             let d = s.to_dummy();
+            println!("{d}");
             dummy_structure.push(d);
         }
 
-        for (i, s) in ind_perm.iter_slice(&self.structure).enumerate() {
+        for (i, s) in ind_perm.iter_slice_inv(&self.structure).enumerate() {
             let d = dummy_structure[i];
             let new_slot = og_reps[i].slot(s.aind);
             println!("{new_slot}");

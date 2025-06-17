@@ -10,8 +10,8 @@ use crate::{
         permuted::PermuteTensor,
         representation::RepName,
         slot::Slot,
-        CastStructure, HasName, HasStructure, OrderedStructure, PermutedStructure, ScalarStructure,
-        ScalarTensor, StructureContract, TensorStructure, TracksCount,
+        CastStructure, HasName, HasStructure, IndexLess, OrderedStructure, PermutedStructure,
+        ScalarStructure, ScalarTensor, StructureContract, TensorStructure, TracksCount,
     },
 };
 
@@ -69,7 +69,7 @@ impl<T, S> crate::network::Ref for DenseTensor<T, S> {
     }
 }
 
-impl<T: Clone, S: Clone + Into<OrderedStructure<R>>, R: RepName<Dual = R>> PermuteTensor
+impl<T: Clone, S: Clone + Into<IndexLess<R>>, R: RepName<Dual = R>> PermuteTensor
     for DenseTensor<T, S>
 where
     S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
@@ -90,7 +90,7 @@ where
     }
 
     fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
-        let mut permuteds: OrderedStructure<R> = self.structure.clone().into();
+        let mut permuteds: IndexLess<R> = self.structure.clone().into();
         permutation.apply_slice_in_place(&mut permuteds.structure);
 
         let mut permuted = self.clone();

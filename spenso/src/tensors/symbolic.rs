@@ -90,29 +90,24 @@ impl PermuteTensor for SymbolicTensor {
     }
 
     fn permute_reps(
-        self,
+        mut self,
         ind_perm: &linnet::permutation::Permutation,
         rep_perm: &linnet::permutation::Permutation,
     ) -> Self::Permuted {
-        let (n, idstructures) = self.structure.clone().permute_reps(ind_perm, rep_perm);
+        let (new_structure, idstructures) = self.structure.clone().permute_reps(ind_perm, rep_perm);
 
-        if rep_perm.is_identity() {
-            return self.permute(ind_perm);
-        }
-        let mut dummy_structure = Vec::new();
-        let mut og_reps = Vec::new();
-        let mut ids = Vec::new();
-
-        for s in rep_perm.iter_slice(&self.structure) {
-            self.expression = self
-                .expression
-                .replace(s.to_atom())
-                .with(s.to_dummy().to_atom());
+        for (o, n) in self
+            .structure
+            .structure
+            .iter()
+            .zip(new_structure.structure.iter())
+        {
+            self.expression = self.expression.replace(o.to_atom()).with(n.to_atom());
         }
 
         let mut ids = Atom::one();
-        for i in idstructures {
-            let o = i.external_structure();
+        for s in idstructures.iter() {
+            let o = s.external_structure();
 
             ids *= Self::id(o[0], o[1]).expression;
         }

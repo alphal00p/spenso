@@ -105,7 +105,8 @@ impl<R: RepName> From<Vec<Representation<R>>> for PermutedStructure<IndexLess<R>
         permutation.apply_slice_in_place(&mut structure);
 
         PermutedStructure {
-            permutation,
+            rep_permutation: permutation,
+            index_permutation: Permutation::id(structure.len()),
             structure: IndexLess { structure },
         }
     }
@@ -450,12 +451,13 @@ impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructu
         let res = self.structure.reindex(indices)?;
 
         Ok(PermutedStructure {
+            rep_permutation: Permutation::id(res.structure.order()),
             structure: NamedStructure {
                 global_name: self.global_name,
                 additional_args: self.additional_args,
                 structure: res.structure,
             },
-            permutation: res.permutation,
+            index_permutation: res.index_permutation,
         })
     }
 

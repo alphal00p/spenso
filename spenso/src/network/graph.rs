@@ -288,7 +288,7 @@ impl<K> NetworkGraph<K> {
 
         if let NetworkNode::Leaf(NetworkLeaf::LibraryKey(k)) = &self.graph[nodeid] {
             let libt = lib.get(&k.structure).unwrap();
-            let mappingperm = libt.permutation.inverse().compose(&k.permutation);
+            let mappingperm = &k.index_permutation;
 
             mappingperm.apply_slice_in_place(&mut inds);
             Some(libt.structure.with_indices(&inds).unwrap().permute())

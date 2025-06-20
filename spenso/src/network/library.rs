@@ -350,7 +350,8 @@ impl<D: Clone + Default, S: TensorStructure + Clone> LibraryTensor for RealOrCom
                     <DataTensor<D, S> as LibraryTensor>::with_indices(&real_tensor, indices)?;
                 Ok(PermutedStructure {
                     structure: RealOrComplexTensor::Real(new_real_tensor.structure),
-                    permutation: new_real_tensor.permutation,
+                    rep_permutation: new_real_tensor.rep_permutation,
+                    index_permutation: new_real_tensor.index_permutation,
                 })
             }
             RealOrComplexTensor::Complex(complex_tensor) => {
@@ -361,7 +362,8 @@ impl<D: Clone + Default, S: TensorStructure + Clone> LibraryTensor for RealOrCom
                     )?;
                 Ok(PermutedStructure {
                     structure: RealOrComplexTensor::Complex(new_complex_tensor.structure),
-                    permutation: new_complex_tensor.permutation,
+                    index_permutation: new_complex_tensor.index_permutation,
+                    rep_permutation: new_complex_tensor.rep_permutation,
                 })
             }
         }

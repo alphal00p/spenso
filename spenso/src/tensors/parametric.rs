@@ -353,7 +353,8 @@ where
                 tensor: res.structure,
                 param_type: self.param_type,
             },
-            permutation: res.permutation,
+            rep_permutation: res.rep_permutation,
+            index_permutation: res.index_permutation,
         })
     }
 
@@ -1228,14 +1229,16 @@ where
             ParamOrConcrete::Concrete(c) => {
                 let res = c.reindex(indices)?;
                 PermutedStructure {
-                    permutation: res.permutation,
+                    rep_permutation: res.rep_permutation,
+                    index_permutation: res.index_permutation,
                     structure: ParamOrConcrete::Concrete(res.structure),
                 }
             }
             ParamOrConcrete::Param(p) => {
                 let res = p.reindex(indices)?;
                 PermutedStructure {
-                    permutation: res.permutation,
+                    rep_permutation: res.rep_permutation,
+                    index_permutation: res.index_permutation,
                     structure: ParamOrConcrete::Param(res.structure),
                 }
             }
@@ -2376,7 +2379,8 @@ where
                 indexmap: self.indexmap,
                 structure: res.structure,
             },
-            permutation: res.permutation,
+            rep_permutation: res.rep_permutation,
+            index_permutation: res.index_permutation,
         })
     }
 

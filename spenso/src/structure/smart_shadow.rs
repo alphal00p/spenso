@@ -81,7 +81,8 @@ impl<Name, Args, R: RepName> SmartShadowStructure<Name, Args, R> {
                 additional_args: args,
                 contractions: 0,
             },
-            permutation: res.permutation,
+            rep_permutation: res.rep_permutation,
+            index_permutation: res.index_permutation,
         }
     }
 }
@@ -162,7 +163,7 @@ impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for SmartShadowStru
             ids.push(SmartShadowStructure::id(d, ogs));
         }
         let strct = OrderedStructure::new(dummy_structure);
-        if !strct.permutation.is_identity() {
+        if !strct.index_permutation.is_identity() {
             panic!("should be identity")
         }
 
@@ -198,7 +199,7 @@ impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for SmartShadowStru
             ids.push(SmartShadowStructure::id(d, new_slot));
         }
         let strct = OrderedStructure::new(dummy_structure);
-        if !strct.permutation.is_identity() {
+        if !strct.index_permutation.is_identity() {
             panic!("should be identity")
         }
         (
@@ -230,7 +231,8 @@ impl<N, A, R: RepName<Dual = R>> TensorStructure for SmartShadowStructure<N, A, 
                 additional_args: self.additional_args,
                 structure: res.structure,
             },
-            permutation: res.permutation,
+            rep_permutation: res.rep_permutation,
+            index_permutation: res.index_permutation,
         })
     }
     // type R = PhysicalReps;

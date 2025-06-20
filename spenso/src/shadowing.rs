@@ -670,9 +670,9 @@ pub mod test {
             let idstructure: PermutedStructure<IndexlessNamedStructure<Symbol, (), LibraryRep>> =
                 IndexlessNamedStructure::from_iter(structure, ETS.id, None);
 
-            let idkey = LibraryKey::from_structure(&idstructure).unwrap();
+            let idkey = ExplicitKey::from_structure(&idstructure).unwrap();
 
-            let id = tensor_library.get(&idkey.structure).unwrap().into_owned();
+            let id = tensor_library.get(&idkey).unwrap().into_owned();
 
             let trace_structure: OrderedStructure = OrderedStructure::from_iter([
                 rep.new_rep(4).slot(3),

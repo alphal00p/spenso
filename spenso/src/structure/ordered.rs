@@ -9,7 +9,7 @@ use crate::utils::MergeOrdered;
 #[cfg(feature = "shadowing")]
 use crate::{
     shadowing::symbolica_utils::IntoSymbol,
-    structure::{AIND_SYMBOLS, ExpandedCoefficent, FlatIndex, ToSymbolic},
+    structure::{ExpandedCoefficent, FlatIndex, ToSymbolic, AIND_SYMBOLS},
     tensors::{data::DenseTensor, parametric::TensorCoefficient},
 };
 
@@ -18,18 +18,18 @@ use anyhow::Result;
 
 #[cfg(feature = "shadowing")]
 use symbolica::atom::{
-    Atom, AtomView, FunctionBuilder, Symbol,
     representation::{FunView, MulView},
+    Atom, AtomView, FunctionBuilder, Symbol,
 };
 
 use super::{
-    MergeInfo, NamedStructure, PermutedStructure, ScalarStructure, SmartShadowStructure,
-    StructureContract, StructureError, TensorStructure,
     abstract_index::AbstractIndex,
     dimension::Dimension,
     permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
     slot::{ConstructibleSlot, DualSlotTo, IsAbstractSlot, Slot, SlotError},
+    MergeInfo, NamedStructure, PermutedStructure, ScalarStructure, SmartShadowStructure,
+    StructureContract, StructureError, TensorStructure,
 };
 use anyhow::anyhow;
 use delegate::delegate;
@@ -79,7 +79,7 @@ impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
             ids.push(OrderedStructure::id(d, ogs));
         }
         let strct = OrderedStructure::new(dummy_structure);
-        if !strct.permutation.is_identity() {
+        if !strct.index_permutation.is_identity() {
             panic!("should be identity")
         }
         (strct.structure, ids)
@@ -109,7 +109,7 @@ impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
             ids.push(OrderedStructure::id(d, new_slot));
         }
         let strct = OrderedStructure::new(dummy_structure);
-        if !strct.permutation.is_identity() {
+        if !strct.index_permutation.is_identity() {
             panic!("should be identity")
         }
         (strct.structure, ids)
@@ -235,13 +235,15 @@ impl<S: RepName, R: From<S> + RepName> FromIterator<Slot<S>>
 
 impl<R: RepName> From<Vec<Slot<R>>> for PermutedStructure<OrderedStructure<R>> {
     fn from(mut structure: Vec<Slot<R>>) -> Self {
-        let permutation = Permutation::sort(&structure);
-
-        permutation.apply_slice_in_place(&mut structure);
+        let rep_permutation = Permutation::sort_by_key(&structure, |a| a.rep);
+        rep_permutation.apply_slice_in_place(&mut structure);
+        let index_permutation = Permutation::sort(&structure);
+        index_permutation.apply_slice_in_place(&mut structure);
 
         PermutedStructure {
             structure: OrderedStructure { structure },
-            permutation,
+            rep_permutation,
+            index_permutation,
         }
     }
 }

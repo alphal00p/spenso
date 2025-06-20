@@ -135,7 +135,8 @@ where
                 structure: res.structure,
                 data: self.data,
             },
-            permutation: res.permutation,
+            rep_permutation: res.rep_permutation,
+            index_permutation: res.index_permutation,
         })
     }
 

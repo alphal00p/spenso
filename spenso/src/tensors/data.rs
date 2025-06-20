@@ -410,14 +410,16 @@ where
                 let res = d.reindex(indices)?;
                 PermutedStructure {
                     structure: DataTensor::Dense(res.structure),
-                    permutation: res.permutation,
+                    index_permutation: res.index_permutation,
+                    rep_permutation: res.rep_permutation,
                 }
             }
             DataTensor::Sparse(d) => {
                 let res = d.reindex(indices)?;
                 PermutedStructure {
                     structure: DataTensor::Sparse(res.structure),
-                    permutation: res.permutation,
+                    index_permutation: res.index_permutation,
+                    rep_permutation: res.rep_permutation,
                 }
             }
         })

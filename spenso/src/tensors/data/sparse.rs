@@ -138,7 +138,8 @@ where
                 structure: res.structure,
                 elements: self.elements,
             },
-            permutation: res.permutation,
+            rep_permutation: res.rep_permutation,
+            index_permutation: res.index_permutation,
         })
     }
 

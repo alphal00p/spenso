@@ -839,7 +839,8 @@ where
             structure: TensorShell {
                 structure: res.structure,
             },
-            permutation: res.permutation,
+            index_permutation: res.index_permutation,
+            rep_permutation: res.rep_permutation,
         })
     }
 

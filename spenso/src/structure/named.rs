@@ -174,7 +174,7 @@ impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for NamedStructure<
             ids.push(NamedStructure::id(d, ogs));
         }
         let strct = OrderedStructure::new(dummy_structure);
-        if !strct.permutation.is_identity() {
+        if !strct.index_permutation.is_identity() {
             panic!("should be identity")
         }
 
@@ -209,7 +209,7 @@ impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for NamedStructure<
             ids.push(NamedStructure::id(d, new_slot));
         }
         let strct = OrderedStructure::new(dummy_structure);
-        if !strct.permutation.is_identity() {
+        if !strct.index_permutation.is_identity() {
             panic!("should be identity")
         }
         (
@@ -243,12 +243,13 @@ impl<N, A, R: RepName<Dual = R>> TensorStructure for NamedStructure<N, A, R> {
         let res = self.structure.reindex(indices)?;
 
         Ok(PermutedStructure {
+            rep_permutation: res.rep_permutation,
             structure: Self {
                 global_name: self.global_name,
                 additional_args: self.additional_args,
                 structure: res.structure,
             },
-            permutation: res.permutation,
+            index_permutation: res.index_permutation,
         })
     }
 

@@ -417,14 +417,16 @@ where
                 let res = d.reindex(indices)?;
                 PermutedStructure {
                     structure: RealOrComplexTensor::Complex(res.structure),
-                    permutation: res.permutation,
+                    rep_permutation: res.rep_permutation,
+                    index_permutation: res.index_permutation,
                 }
             }
             RealOrComplexTensor::Real(d) => {
                 let res = d.reindex(indices)?;
                 PermutedStructure {
                     structure: RealOrComplexTensor::Real(res.structure),
-                    permutation: res.permutation,
+                    rep_permutation: res.rep_permutation,
+                    index_permutation: res.index_permutation,
                 }
             }
         })

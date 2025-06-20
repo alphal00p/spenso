@@ -137,7 +137,8 @@ impl TensorStructure for SymbolicTensor {
                 structure: res.structure,
                 expression: self.expression,
             },
-            permutation: res.permutation,
+            rep_permutation: res.rep_permutation,
+            index_permutation: res.index_permutation,
         })
     }
 
@@ -264,7 +265,7 @@ impl SymbolicTensor {
     {
         let permuted_structure = PermutedStructure::from(structure.external_structure());
         Some(SymbolicTensor {
-            expression: structure.to_symbolic(Some(permuted_structure.permutation))?,
+            expression: structure.to_symbolic(Some(permuted_structure.index_permutation))?,
             structure: permuted_structure.structure,
         })
     }
@@ -280,7 +281,7 @@ impl SymbolicTensor {
         Some(SymbolicTensor {
             expression: structure
                 .structure
-                .to_symbolic(Some(structure.permutation.clone()))?,
+                .to_symbolic(Some(structure.index_permutation.clone()))?,
             structure: permuted_structure.structure,
         })
     }

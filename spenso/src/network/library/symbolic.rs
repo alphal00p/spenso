@@ -47,27 +47,6 @@ impl ExplicitKey {
         )
     }
 }
-impl LibraryKey {
-    pub fn from_structure<S: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs>>(
-        structure: &PermutedStructure<S>,
-    ) -> Option<Self> {
-        let mut rep_structure: Vec<_> = structure
-            .structure
-            .reps()
-            .into_iter()
-            .map(|r| r.to_lib())
-            .collect();
-
-        structure
-            .permutation
-            .apply_slice_in_place_inv(&mut rep_structure);
-        Some(IndexlessNamedStructure::from_iter(
-            rep_structure,
-            structure.structure.name()?.ref_into_symbol(),
-            structure.structure.args().map(|a| a.args()),
-        ))
-    }
-}
 
 // pub struct DataStoreRefTensor<'a, T, S> {
 //     data: &'a T,
@@ -107,7 +86,8 @@ impl<S: TensorStructure + Clone> LibraryTensor for ParamTensor<S> {
                 tensor: new_tensor.structure,
                 param_type: self.param_type,
             },
-            permutation: new_tensor.permutation,
+            rep_permutation: new_tensor.rep_permutation,
+            index_permutation: new_tensor.index_permutation,
         })
     }
 }
@@ -164,14 +144,16 @@ impl<D: Default + Clone, S: TensorStructure + Clone> LibraryTensor for MixedTens
                 let strct = <RealOrComplexTensor<D, S> as LibraryTensor>::with_indices(c, indices)?;
                 PermutedStructure {
                     structure: ParamOrConcrete::Concrete(strct.structure),
-                    permutation: strct.permutation,
+                    rep_permutation: strct.rep_permutation,
+                    index_permutation: strct.index_permutation,
                 }
             }
             ParamOrConcrete::Param(p) => {
                 let strct = <ParamTensor<S> as LibraryTensor>::with_indices(p, indices)?;
                 PermutedStructure {
                     structure: ParamOrConcrete::Param(strct.structure),
-                    permutation: strct.permutation,
+                    rep_permutation: strct.rep_permutation,
+                    index_permutation: strct.index_permutation,
                 }
             }
         })
@@ -272,7 +254,8 @@ impl<
         } else if let Some(builder) = self.generic_dimension.get(&key.clone().into()) {
             let permutation = PermutedStructure {
                 structure: builder(key.clone()),
-                permutation: Permutation::id(key.order()),
+                rep_permutation: Permutation::id(key.order()),
+                index_permutation: Permutation::id(key.order()),
             };
             // println!("found generic");
             Ok(Cow::Owned(permutation))
@@ -339,15 +322,19 @@ impl<
     where
         T::SetData: TensorLibraryData,
     {
-        for rep in REPS.read().unwrap().reps() {
-            self.insert_generic(Self::id(*rep), Self::checked_identity);
-            if rep.dual() == *rep {
-                let id_metric = GenericKey::new(ETS.metric, None, vec![*rep, rep.dual()]);
-                self.insert_generic(id_metric, Self::checked_identity);
-                self.insert_generic(Self::id(rep.dual()), Self::checked_identity);
-                let id_metric = GenericKey::new(ETS.metric, None, vec![rep.dual(), *rep]);
-                self.insert_generic(id_metric, Self::checked_identity);
-            }
+        for r in LibraryRep::all_dualizables() {
+            self.insert_generic(Self::id(*r), Self::checked_identity);
+            println!("{r}");
+        }
+
+        for r in LibraryRep::all_self_duals().chain(LibraryRep::all_inline_metrics()) {
+            println!("{r}");
+            self.insert_generic(Self::id(*r), Self::checked_identity);
+            let id_metric = GenericKey::new(ETS.metric, None, vec![*r, r.dual()]);
+            self.insert_generic(id_metric, Self::checked_identity);
+            self.insert_generic(Self::id(r.dual()), Self::checked_identity);
+            let id_metric = GenericKey::new(ETS.metric, None, vec![r.dual(), *r]);
+            self.insert_generic(id_metric, Self::checked_identity);
         }
     }
 
@@ -390,7 +377,8 @@ impl<
     ) -> Result<()> {
         let tensor = T::from_dense(key.structure.clone(), data)?;
         let perm_tensor = PermutedStructure {
-            permutation: key.permutation,
+            rep_permutation: key.rep_permutation,
+            index_permutation: key.index_permutation,
             structure: tensor,
         };
 
@@ -407,7 +395,8 @@ impl<
         let tensor = T::from_sparse(key.structure.clone(), data)?;
 
         let perm_tensor = PermutedStructure {
-            permutation: key.permutation.clone(),
+            rep_permutation: key.rep_permutation.clone(),
+            index_permutation: key.index_permutation.clone(),
             structure: tensor,
         };
 
@@ -469,7 +458,7 @@ mod test {
         );
 
         println!("{}", key.structure);
-        println!("{}", key.permutation);
+        println!("{}", key.rep_permutation);
 
         let one = ConcreteOrParam::Concrete(RealOrComplex::Real(1.));
         lib.insert_explicit_sparse((key).clone(), [(vec![0, 0, 1], one)])
@@ -509,16 +498,16 @@ mod test {
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         let key = ExplicitKey::from_iter(
             [
+                Euclidean {}.new_rep(2).cast(),
+                Euclidean {}.new_rep(2).cast(),
                 LibraryRep::from(Minkowski {}).new_rep(2),
-                Euclidean {}.new_rep(2).cast(),
-                Euclidean {}.new_rep(2).cast(),
             ],
             symbol!("gamma"),
             None,
         );
 
         println!("{}", key.structure);
-        println!("{}", key.permutation);
+        println!("{}", key.rep_permutation);
 
         let tensor = MixedTensor::Param(
             ParamTensor::from_sparse(
@@ -540,7 +529,8 @@ mod test {
 
         lib.insert_explicit(PermutedStructure {
             structure: tensor,
-            permutation: key.permutation.clone(),
+            rep_permutation: key.rep_permutation.clone(),
+            index_permutation: key.index_permutation.clone(),
         });
 
         lib.get(&key.structure).unwrap();
@@ -550,7 +540,7 @@ mod test {
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
         >::try_from_view(
-            parse!("gamma(euc(2,2),euc(2,1),mink(2,0))-gamma(mink(2,0),euc(2,2),euc(2,1))")
+            parse!("gamma(euc(2,1),euc(2,2),mink(2,0))-gamma(mink(2,0),euc(2,2),euc(2,1))")
                 .as_view(),
             &lib,
         )

@@ -85,8 +85,10 @@ impl<'a> TryFrom<FunView<'a>> for PermutedStructure<ShadowedStructure> {
                                     let internal_s = Self::try_from(f);
 
                                     if let Ok(s) = internal_s {
-                                        let p = s.permutation;
+                                        let p = s.index_permutation;
                                         let mut v = s.structure.structure.structure;
+                                        p.apply_slice_in_place_inv(&mut v); //undo sorting
+                                        let p = s.rep_permutation;
                                         p.apply_slice_in_place_inv(&mut v); //undo sorting
                                         slots.extend(v);
                                         is_structure = None;
@@ -188,14 +190,15 @@ where
                         &s.structure,
                         PermutedStructure {
                             structure: key,
-                            permutation: s.permutation,
+                            rep_permutation: s.rep_permutation,
+                            index_permutation: s.index_permutation,
                         },
                     ))
                 }
                 Err(_) => Ok(Self::from_tensor(
                     s.structure
                         .to_shell()
-                        .concretize(Some(s.permutation.inverse())),
+                        .concretize(Some(s.index_permutation.inverse())),
                 )),
             }
         } else {

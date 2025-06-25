@@ -79,23 +79,6 @@ impl<Name, Args, R: RepName> NamedStructure<Name, Args, R> {
             })
     }
 }
-
-impl<N, A, R: RepName<Dual = R>> NamedStructure<N, Vec<A>, R> {
-    pub fn extend(&mut self, other: Self) {
-        let result = match (self.additional_args.take(), other.additional_args) {
-            (Some(mut v1), Some(v2)) => {
-                v1.extend(v2);
-                Some(v1)
-            }
-            (None, Some(v2)) => Some(v2),
-            (Some(v1), None) => Some(v1),
-            (None, None) => None,
-        };
-        self.additional_args = result;
-        self.structure.concat(other.structure);
-    }
-}
-
 impl<N, A, R: RepName> From<OrderedStructure<R>> for NamedStructure<N, A, R> {
     fn from(value: OrderedStructure<R>) -> Self {
         Self {
@@ -299,10 +282,6 @@ impl<N, A, R: RepName<Dual = R>> StructureContract for NamedStructure<N, A, R> {
             fn trace(&mut self, i: usize, j: usize);
 
         }
-    }
-
-    fn concat(&mut self, other: Self) {
-        self.structure.concat(other.structure)
     }
 
     fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError> {

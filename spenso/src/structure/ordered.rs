@@ -430,11 +430,6 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
         assert_eq!(a, b);
     }
 
-    fn concat(&mut self, other: Self) {
-        self.structure.extend(other.structure.iter().cloned());
-        self.structure.sort();
-    }
-
     fn trace_out(&mut self) {
         let mut positions = IndexMap::new();
 

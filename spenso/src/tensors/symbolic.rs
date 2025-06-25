@@ -224,11 +224,6 @@ impl HasStructure for SymbolicTensor {
 }
 
 impl StructureContract for SymbolicTensor {
-    fn concat(&mut self, other: Self) {
-        self.structure.concat(other.structure);
-        self.expression = &other.expression * &self.expression;
-    }
-
     fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError> {
         let expression = &other.expression * &self.expression;
         let (structure, pos_self, pos_other, mergeinfo) = self.structure.merge(&other.structure)?;

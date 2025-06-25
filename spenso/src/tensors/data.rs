@@ -695,9 +695,7 @@ impl<T, S: TensorStructure + StructureContract + Clone> DenseTensor<DenseTensor<
         // }
 
         // Concatenate the outer and inner structures
-        let mut combined_structure = self.structure;
-
-        combined_structure.concat(first_inner_structure.clone());
+        let combined_structure = self.structure.merge(&first_inner_structure)?.0;
 
         // Flatten the data by concatenating inner tensors' data
         let data = self

@@ -744,7 +744,7 @@ pub trait StructureContract: Sized {
     ///
     fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError>;
 
-    fn concat(&mut self, other: Self);
+    // fn concat(&mut self, other: Self);
 
     // #[must_use]
     // fn merge_at(&self, other: &Self, positions: (usize, usize)) -> Self;

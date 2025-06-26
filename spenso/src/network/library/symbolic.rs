@@ -8,7 +8,7 @@ use linnet::{
 };
 use symbolica::{
     atom::{Atom, Symbol},
-    symbol,
+    hide_namespace, symbol,
 };
 
 use anyhow::anyhow;
@@ -292,6 +292,22 @@ impl<
             + PermuteTensor<Permuted = T>,
     > TensorLibrary<T>
 {
+    pub fn get_key_from_name(
+        &self,
+        name: Symbol,
+    ) -> Result<ExplicitKey, LibraryError<ExplicitKey>> {
+        let keys: Vec<_> = self
+            .explicit_dimension
+            .keys()
+            .filter(|k| k.name().unwrap() == name)
+            .collect();
+
+        match keys.len() {
+            0 => Err(LibraryError::InvalidKey),
+            1 => Ok(keys[0].clone()),
+            _ => Err(LibraryError::MultipleKeys(name.to_string())),
+        }
+    }
     pub fn metric_key(rep: LibraryRep) -> ExplicitKey {
         ExplicitKey::from_iter(
             [rep.new_rep(4), rep.new_rep(4)],

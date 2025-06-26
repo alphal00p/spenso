@@ -30,6 +30,17 @@ impl<S: Display> Display for PermutedStructure<S> {
 }
 
 impl<S> PermutedStructure<S> {
+    pub fn identity(structure: S) -> Self
+    where
+        S: TensorStructure,
+    {
+        let size = structure.order();
+        PermutedStructure {
+            structure,
+            rep_permutation: Permutation::id(size),
+            index_permutation: Permutation::id(size),
+        }
+    }
     pub fn map_structure<U>(self, f: impl FnOnce(S) -> U) -> PermutedStructure<U> {
         PermutedStructure {
             structure: f(self.structure),

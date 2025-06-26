@@ -1,11 +1,14 @@
 use std::sync::LazyLock;
 
 use spenso::{
-    network::library::symbolic::ETS,
-    structure::representation::{Minkowski, RepName},
+    network::library::symbolic::{ETS, ExplicitKey},
+    structure::{
+        dimension::Dimension,
+        representation::{LibraryRep, Minkowski, RepName},
+    },
 };
 use symbolica::{
-    atom::{Atom, AtomCore, AtomView, FunctionBuilder, Symbol},
+    atom::{Atom, AtomCore, AtomOrView, AtomView, FunctionBuilder, Symbol},
     function,
     id::{Context, Replacement},
     symbol,
@@ -158,6 +161,67 @@ pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
     gamma5: symbol!("spenso::gamma5"),
     sigma: symbol!("spenso::sigma"),
 });
+
+impl GammaLibrary {
+    pub fn projp<'a, 'b>(
+        &self,
+        a: impl Into<AtomOrView<'a>>,
+        b: impl Into<AtomOrView<'b>>,
+    ) -> Atom {
+        function!(self.projp, a.into().as_view(), b.into().as_view())
+    }
+    pub fn projm<'a, 'b>(
+        &self,
+        a: impl Into<AtomOrView<'a>>,
+        b: impl Into<AtomOrView<'b>>,
+    ) -> Atom {
+        function!(self.projm, a.into().as_view(), b.into().as_view())
+    }
+
+    pub fn gamma_strct(&self, dim: impl Into<Dimension>) -> ExplicitKey {
+        let gamma = ExplicitKey::from_iter(
+            [
+                LibraryRep::from(Minkowski {}).new_rep(dim),
+                Bispinor {}.new_rep(4).cast(),
+                Bispinor {}.new_rep(4).cast(),
+            ],
+            self.gamma,
+            None,
+        );
+        gamma.structure
+    }
+
+    pub fn gamma5_strct(&self, dim: impl Into<Dimension>) -> ExplicitKey {
+        let dim = dim.into();
+        let gamma5 = ExplicitKey::from_iter(
+            [Bispinor {}.new_rep(dim), Bispinor {}.new_rep(dim)],
+            self.gamma5,
+            None,
+        );
+        gamma5.structure
+    }
+
+    pub fn projm_strct(&self, dim: impl Into<Dimension>) -> ExplicitKey {
+        let dim = dim.into();
+        let projm = ExplicitKey::from_iter(
+            [Bispinor {}.new_rep(dim), Bispinor {}.new_rep(dim)],
+            self.projm,
+            None,
+        );
+        projm.structure
+    }
+
+    pub fn projp_strct(&self, dim: impl Into<Dimension>) -> ExplicitKey {
+        let dim = dim.into();
+        let projp_strct = ExplicitKey::from_iter(
+            [Bispinor {}.new_rep(dim), Bispinor {}.new_rep(dim)],
+            self.projm,
+            None,
+        );
+
+        projp_strct.structure
+    }
+}
 
 pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
     let mink = Minkowski {};

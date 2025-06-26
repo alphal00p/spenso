@@ -17,10 +17,13 @@ use anyhow::Result;
 
 use thiserror::Error;
 
-#[derive(Debug, Clone, Copy, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum LibraryError<Key: Display> {
     #[error("Not found {0}")]
     NotFound(Key),
+    #[error("Multiple keys with the same name:{0}")]
+    MultipleKeys(String),
+
     #[error("Invalid key")]
     InvalidKey,
 }

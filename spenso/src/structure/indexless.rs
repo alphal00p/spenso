@@ -484,6 +484,16 @@ impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructu
     }
 }
 
+impl<N, A, T: RepName<Dual = T>> ScalarStructure for IndexlessNamedStructure<N, A, T> {
+    fn scalar_structure() -> Self {
+        IndexlessNamedStructure {
+            structure: IndexLess::scalar_structure(),
+            global_name: None,
+            additional_args: None,
+        }
+    }
+}
+
 impl<Name, Args, R: RepName> IndexlessNamedStructure<Name, Args, R> {
     #[must_use]
     pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> PermutedStructure<Self>
@@ -528,6 +538,16 @@ impl<N, A, R: RepName> From<IndexLess<R>> for IndexlessNamedStructure<N, A, R> {
             structure: value,
             global_name: None,
             additional_args: None,
+        }
+    }
+}
+
+impl<N, A, R: RepName> From<NamedStructure<N, A, R>> for IndexlessNamedStructure<N, A, R> {
+    fn from(value: NamedStructure<N, A, R>) -> Self {
+        IndexlessNamedStructure {
+            structure: value.structure.into(),
+            global_name: value.global_name,
+            additional_args: value.additional_args,
         }
     }
 }

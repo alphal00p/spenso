@@ -161,7 +161,7 @@ where
 {
     type Output = DataTensor<Out, I>;
     fn sub_fallible(&self, rhs: &DataTensor<T, I>) -> Option<Self::Output> {
-        println!("sub_fallible");
+        // println!("sub_fallible");
         match (self, rhs) {
             (DataTensor::Dense(a), DataTensor::Dense(b)) => {
                 Some(DataTensor::Dense(a.sub_fallible(b)?))

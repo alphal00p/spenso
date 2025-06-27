@@ -338,13 +338,12 @@ impl<
     where
         T::SetData: TensorLibraryData,
     {
+        REPS.read().unwrap();
         for r in LibraryRep::all_dualizables() {
             self.insert_generic(Self::id(*r), Self::checked_identity);
-            println!("{r}");
         }
 
         for r in LibraryRep::all_self_duals().chain(LibraryRep::all_inline_metrics()) {
-            println!("{r}");
             self.insert_generic(Self::id(*r), Self::checked_identity);
             let id_metric = GenericKey::new(ETS.metric, None, vec![*r, r.dual()]);
             self.insert_generic(id_metric, Self::checked_identity);
@@ -678,11 +677,11 @@ mod test {
 
     #[test]
     fn big_expr() {
-        let _ = ETS.id;
+        REPS.read().unwrap();
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         lib.update_ids();
 
-        let expr = parse!(" -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))");
+        let expr = parse!(" -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -717,7 +716,7 @@ mod test {
 
     #[test]
     fn small_expr() {
-        let _ = ETS.id;
+        REPS.read().unwrap();
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         lib.update_ids();
 

@@ -1,9 +1,10 @@
 use linnet::permutation::Permutation;
+use tabled::{builder::Builder, settings::Style};
 
 use super::{
     abstract_index::AbstractIndex,
     dimension::Dimension,
-    named::IdentityName,
+    named::{ArgDisplay, IdentityName},
     permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
     slot::{IsAbstractSlot, Slot},
@@ -32,14 +33,7 @@ use serde::{Deserialize, Serialize};
 use symbolica::atom::{Atom, FunctionBuilder, Symbol};
 
 #[derive(
-    Clone,
-    PartialEq,
-    Eq,
-    Debug,
-    Default,
-    Hash,
-    bincode_trait_derive::Encode,
-    bincode_trait_derive::Decode,
+    Clone, PartialEq, Eq, Default, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
 )]
 #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 #[cfg_attr(
@@ -75,23 +69,34 @@ impl<R: RepName<Dual = R>> PermuteTensor for IndexLess<R> {
 
 impl<R: RepName> std::fmt::Display for IndexLess<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut table = Builder::new();
+
+        table.push_record(&["".to_string()]);
         for (index, item) in self.structure.iter().enumerate() {
-            if index != 0 {
-                // To avoid a newline at the start
-                writeln!(f)?;
-            }
-            write!(
-                f,
-                "({})",
-                // IDPRINTER
-                //     .encode_string(usize::from(item.index) as u64)
-                //     .unwrap(),
-                item
-            )?;
+            table.push_record(&[item.rep.to_string(), item.dim.to_string()]);
         }
-        Ok(())
+        writeln!(f)?;
+        table.build().with(Style::rounded()).fmt(f)
     }
 }
+
+impl<R: RepName> std::fmt::Debug for IndexLess<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut table = Builder::new();
+
+        table.push_record(&["IndexLess".to_string()]);
+        for (index, item) in self.structure.iter().enumerate() {
+            table.push_record(&[
+                index.to_string(),
+                format!("{:?}", item.rep),
+                format!("{:?}", item.dim),
+            ]);
+        }
+        writeln!(f)?;
+        write!(f, "{}", format!("{}", table.build().with(Style::rounded())))
+    }
+}
+
 impl<R: RepName> FromIterator<Representation<R>> for PermutedStructure<IndexLess<R>> {
     fn from_iter<I: IntoIterator<Item = Representation<R>>>(iter: I) -> Self {
         let structure: Vec<_> = iter.into_iter().collect();
@@ -353,14 +358,7 @@ impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {
 }
 
 #[derive(
-    Clone,
-    PartialEq,
-    Eq,
-    Debug,
-    Default,
-    Hash,
-    bincode_trait_derive::Encode,
-    bincode_trait_derive::Decode,
+    Clone, PartialEq, Eq, Default, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
 )]
 #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 #[cfg_attr(
@@ -552,20 +550,53 @@ impl<N, A, R: RepName> From<NamedStructure<N, A, R>> for IndexlessNamedStructure
     }
 }
 
-#[cfg(feature = "shadowing")]
-impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for IndexlessNamedStructure<N, A, R> {
+impl<N: std::fmt::Display, A: ArgDisplay, R: RepName> std::fmt::Display
+    for IndexlessNamedStructure<N, A, R>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(ref name) = self.global_name {
-            write!(f, "{}", name.ref_into_symbol())?;
-        }
-        write!(f, "(")?;
-        if let Some(ref args) = self.additional_args {
-            let args: Vec<std::string::String> =
-                args.ref_into_args().map(|s| s.to_string()).collect();
-            write!(f, "{},", args.join(","))?
-        }
+        let mut table = Builder::new();
 
-        write!(f, "{})", self.structure)?;
-        Result::Ok(())
+        table.push_record(&[
+            self.global_name
+                .as_ref()
+                .map(|a| format!("{}", a))
+                .unwrap_or("NO NAME".to_string()),
+            self.additional_args
+                .as_ref()
+                .map(|a| a.arg_display())
+                .unwrap_or("".to_string()),
+        ]);
+        for (index, item) in self.structure.structure.iter().enumerate() {
+            table.push_record(&[item.rep.to_string(), item.dim.to_string()]);
+        }
+        writeln!(f)?;
+        table.build().with(Style::rounded()).fmt(f)
+    }
+}
+impl<N: std::fmt::Debug, A: ArgDisplay, R: RepName> std::fmt::Debug
+    for IndexlessNamedStructure<N, A, R>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut table = Builder::new();
+
+        table.push_record(&[
+            self.global_name
+                .as_ref()
+                .map(|a| format!("{:?}", a))
+                .unwrap_or("NO NAME".to_string()),
+            self.additional_args
+                .as_ref()
+                .map(|a| a.arg_debug())
+                .unwrap_or("".to_string()),
+        ]);
+        for (index, item) in self.structure.structure.iter().enumerate() {
+            table.push_record(&[
+                index.to_string(),
+                format!("{:?}", item.rep),
+                format!("{:?}", item.dim),
+            ]);
+        }
+        writeln!(f)?;
+        write!(f, "{}", format!("{}", table.build().with(Style::rounded())))
     }
 }

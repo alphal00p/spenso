@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use indexmap::IndexMap;
 use linnet::permutation::Permutation;
+use tabled::{builder::Builder, settings::Style};
 
 use super::{
     abstract_index::AbstractIndex,
@@ -38,14 +39,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// It is useful when you want to shadow tensors, to nest tensor network contraction operations.
 #[derive(
-    Clone,
-    PartialEq,
-    Eq,
-    Debug,
-    Default,
-    Hash,
-    bincode_trait_derive::Encode,
-    bincode_trait_derive::Decode,
+    Clone, PartialEq, Eq, Default, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
 )]
 #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 #[cfg_attr(
@@ -258,21 +252,114 @@ impl<N, A, R: RepName<Dual = R>> TensorStructure for NamedStructure<N, A, R> {
     }
 }
 
-#[cfg(feature = "shadowing")]
-impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for NamedStructure<N, A, R> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(ref name) = self.global_name {
-            write!(f, "{}", name.ref_into_symbol())?
-        }
-        write!(f, "(")?;
-        if let Some(ref args) = self.additional_args {
-            let args: Vec<std::string::String> =
-                args.ref_into_args().map(|s| s.to_string()).collect();
-            write!(f, "{},", args.join(","))?
-        }
+pub trait ArgDisplay {
+    fn arg_display(&self) -> String;
 
-        write!(f, "{})", self.structure)?;
-        Result::Ok(())
+    fn arg_debug(&self) -> String;
+}
+
+pub trait ArgDisplayMarker {}
+
+impl<T: std::fmt::Display + ArgDisplayMarker + std::fmt::Debug> ArgDisplay for T {
+    fn arg_display(&self) -> String {
+        self.to_string()
+    }
+
+    fn arg_debug(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl ArgDisplayMarker for () {}
+impl ArgDisplayMarker for usize {}
+impl ArgDisplayMarker for isize {}
+impl ArgDisplayMarker for f64 {}
+impl ArgDisplayMarker for f32 {}
+impl ArgDisplayMarker for i8 {}
+impl ArgDisplayMarker for i16 {}
+impl ArgDisplayMarker for i32 {}
+impl ArgDisplayMarker for i64 {}
+
+impl ArgDisplayMarker for u8 {}
+impl ArgDisplayMarker for u16 {}
+impl ArgDisplayMarker for u32 {}
+impl ArgDisplayMarker for u64 {}
+
+#[cfg(feature = "shadowing")]
+impl ArgDisplayMarker for symbolica::atom::Atom {}
+#[cfg(feature = "shadowing")]
+impl ArgDisplayMarker for symbolica::atom::Symbol {}
+
+#[cfg(feature = "shadowing")]
+impl ArgDisplay for Vec<symbolica::atom::Atom> {
+    fn arg_display(&self) -> String {
+        self.iter()
+            .map(|a| a.arg_display())
+            .collect::<Vec<String>>()
+            .join(", ")
+    }
+
+    fn arg_debug(&self) -> String {
+        self.iter()
+            .map(|a| a.arg_debug())
+            .collect::<Vec<String>>()
+            .join(", ")
+    }
+}
+
+impl<N: std::fmt::Display, A: ArgDisplay, R: RepName> std::fmt::Display
+    for NamedStructure<N, A, R>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut table = Builder::new();
+
+        table.push_record(&[
+            self.global_name
+                .as_ref()
+                .map(|a| format!("{a}"))
+                .unwrap_or("NO NAME".to_string()),
+            self.additional_args
+                .as_ref()
+                .map(|a| a.arg_display())
+                .unwrap_or("".to_string()),
+        ]);
+        for (index, item) in self.structure.structure.iter().enumerate() {
+            if item.rep.rep.is_self_dual() {
+                table.push_record(&[item.rep.to_string(), format!("{}", item.aind)]);
+            } else if item.rep.rep.is_base() {
+                table.push_record(&[item.rep.to_string(), format!("{:+}", item.aind)]);
+            } else {
+                table.push_record(&[item.rep.to_string(), format!("{:-}", item.aind)]);
+            }
+        }
+        writeln!(f)?;
+        table.build().with(Style::rounded()).fmt(f)
+    }
+}
+impl<N: std::fmt::Debug, A: ArgDisplay, R: RepName> std::fmt::Debug for NamedStructure<N, A, R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut table = Builder::new();
+
+        table.push_record(&[
+            self.global_name
+                .as_ref()
+                .map(|a| format!("{:?}", a))
+                .unwrap_or("NO NAME".to_string()),
+            self.additional_args
+                .as_ref()
+                .map(|a| a.arg_debug())
+                .unwrap_or("".to_string()),
+        ]);
+        for (index, item) in self.structure.structure.iter().enumerate() {
+            table.push_record(&[
+                index.to_string(),
+                format!("{:?}", item.rep.rep),
+                format!("{:?}", item.rep.dim),
+                format!("{:?}", item.aind),
+            ]);
+        }
+        writeln!(f)?;
+        write!(f, "{}", format!("{}", table.build().with(Style::rounded())))
     }
 }
 impl<N, A, R: RepName<Dual = R>> StructureContract for NamedStructure<N, A, R> {

@@ -85,12 +85,12 @@ impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
                 ids,
             );
         }
-        println!("{}", permutation);
+        // println!("{}", permutation);
         for s in permutation.iter_slice(&self.structure) {
             let d = s.to_dummy();
             let ogs = s.to_lib();
-            println!("{ogs}");
-            println!("{d}");
+            // println!("{ogs}");
+            // println!("{d}");
             dummy_structure.push(d);
             ids.push(OrderedStructure::id(d, ogs));
         }
@@ -109,19 +109,19 @@ impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
         if rep_perm.is_identity() {
             return self.permute(ind_perm);
         }
-        println!("{rep_perm}");
+        // println!("{rep_perm}");
         for s in rep_perm.iter_slice_inv(&self.structure) {
             og_reps.push(s.rep.to_lib());
             let d = s.to_dummy();
-            println!("{d}");
+            // println!("{d}");
             dummy_structure.push(d);
         }
 
         for (i, s) in ind_perm.iter_slice_inv(&self.structure).enumerate() {
             let d = dummy_structure[i];
             let new_slot = og_reps[i].slot(s.aind);
-            println!("{new_slot}");
-            println!("{d}");
+            // println!("{new_slot}");
+            // println!("{d}");
             ids.push(OrderedStructure::id(d, new_slot));
         }
         let strct = OrderedStructure::new(dummy_structure);

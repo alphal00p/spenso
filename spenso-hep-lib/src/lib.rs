@@ -495,9 +495,12 @@ mod tests {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&*HEP_LIB)
+        net.execute::<Steps<19>, SmallestDegree, _, _>(&*HEP_LIB)
             .unwrap();
-
+        net.execute::<Steps<12>, SingleSmallestDegree<false>, _, _>(&*HEP_LIB)
+            .unwrap();
+        net.execute::<Steps<1>, SingleSmallestDegree<true>, _, _>(&*HEP_LIB)
+            .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
@@ -508,11 +511,7 @@ mod tests {
             net.dot_display_impl(
                 |a| a.to_string(),
                 |_| None,
-                |a| a
-                    .structure()
-                    .global_name
-                    .map(|a| a.to_string())
-                    .unwrap_or("".to_string())
+                |a| a.structure().to_string().replace('\n', "\\n")
             )
         );
         // if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =

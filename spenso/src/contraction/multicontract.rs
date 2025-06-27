@@ -310,8 +310,7 @@ where
     ) -> Result<Self::LCM, ContractionError> {
         // Assume we're contracting the first positions for now - this needs to be updated
         let zero = self.data[0].try_upgrade().unwrap().into_owned().ref_zero();
-
-        // Initialize result tensor with default values
+        // println!("Interleaving dense dense multi"); // Initialize result tensor with default values
         let mut result_data = vec![zero.clone(); resulting_structure.size()?];
 
         let self_fiber_class = Fiber::from(&resulting_partition, &resulting_structure); //We use the partition as a filter here, for indices that belong to self, vs those that belong to other
@@ -338,7 +337,7 @@ where
                         .enumerate()
                         .partition(|(i, _)| resulting_partition[*i]);
 
-                // println!("expa: {:?}", expa);
+                // println!("expa: {:?}", expb);
                 for (i, v) in pos_self.iter_ones().zip(expa) {
                     exp_self.indices[i] = v;
                 }

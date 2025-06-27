@@ -259,16 +259,44 @@ impl AddAssign<AbstractIndex> for AbstractIndex {
 impl std::fmt::Display for AbstractIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AbstractIndex::Normal(v) => write!(f, "{}", to_subscript(*v as isize)),
-            AbstractIndex::Dualize(v) => {
-                write!(f, "{}", to_superscript(*v as isize))
+            AbstractIndex::Normal(v) | AbstractIndex::Dualize(v) => {
+                if f.sign_minus() {
+                    write!(f, "{}", to_subscript(*v as isize))
+                } else if f.sign_plus() {
+                    write!(f, "{}", to_superscript(*v as isize))
+                } else {
+                    write!(f, "{}", v)
+                }
             }
-            AbstractIndex::Dummy(v) => write!(f, "d{}", to_subscript(*v as isize)),
+
+            AbstractIndex::Dummy(v) => {
+                if f.sign_minus() {
+                    write!(f, "d{}", to_subscript(*v as isize))
+                } else if f.sign_plus() {
+                    write!(f, "d{}", to_superscript(*v as isize))
+                } else {
+                    write!(f, "d{}", v)
+                }
+            }
             AbstractIndex::Added(v) => {
-                write!(f, "+{}", to_subscript(*v as isize))
+                if f.sign_minus() {
+                    write!(f, "(+){}", to_subscript(*v as isize))
+                } else if f.sign_plus() {
+                    write!(f, "(+){}", to_superscript(*v as isize))
+                } else {
+                    write!(f, "(+){}", v)
+                }
             }
             #[cfg(feature = "shadowing")]
-            AbstractIndex::Symbol(v) => write!(f, "{}", v),
+            AbstractIndex::Symbol(v) => {
+                if f.sign_minus() {
+                    write!(f, "_{}", v)
+                } else if f.sign_plus() {
+                    write!(f, "^{}", v)
+                } else {
+                    write!(f, "-{}", v)
+                }
+            }
         }
     }
 }

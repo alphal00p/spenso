@@ -9,8 +9,11 @@ use crate::structure::dimension::Dimension;
 use bincode::{Decode, Encode};
 // #[cfg(feature = "shadowing")]
 use serde::{Deserialize, Serialize};
-use std::fmt::{Debug, Display};
 use std::hash::Hash;
+use std::{
+    cmp::Ordering,
+    fmt::{Debug, Display},
+};
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView, ListIterator, Symbol},
@@ -273,6 +276,8 @@ pub trait DualSlotTo: IsAbstractSlot {
     type Dual: IsAbstractSlot;
     fn dual(&self) -> Self::Dual;
     fn matches(&self, other: &Self::Dual) -> bool;
+
+    fn match_cmp(&self, other: &Self::Dual) -> Ordering;
 }
 
 impl<T: RepName> IsAbstractSlot for Slot<T> {
@@ -338,6 +343,12 @@ impl<T: RepName> DualSlotTo for Slot<T> {
     }
     fn matches(&self, other: &Self::Dual) -> bool {
         self.rep.matches(&other.rep) && self.aind() == other.aind()
+    }
+
+    fn match_cmp(&self, other: &Self::Dual) -> Ordering {
+        self.rep
+            .match_cmp(&other.rep)
+            .then(self.aind.cmp(&other.aind))
     }
 }
 

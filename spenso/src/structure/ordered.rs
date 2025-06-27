@@ -1,10 +1,11 @@
-use std::ops::Deref;
+use std::{cmp::Ordering, ops::Deref, usize};
 
 use bitvec::vec::BitVec;
 use indexmap::IndexMap;
 use linnet::permutation::Permutation;
+use tabled::{builder::Builder, settings::Style};
 
-use crate::utils::MergeOrdered;
+use crate::utils::{to_subscript, to_superscript, MergeOrdered};
 
 #[cfg(feature = "shadowing")]
 use crate::{
@@ -36,9 +37,7 @@ use delegate::delegate;
 #[cfg(not(feature = "shadowing"))]
 use serde::{Deserialize, Serialize};
 
-#[derive(
-    Clone, PartialEq, Eq, Debug, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
-)]
+#[derive(Clone, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode)]
 #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 #[cfg_attr(
     feature = "shadowing",
@@ -46,8 +45,23 @@ use serde::{Deserialize, Serialize};
 )]
 pub struct OrderedStructure<R: RepName = LibraryRep> {
     pub(crate) structure: Vec<Slot<R>>,
+    dual_start: usize,
+    base_start: usize,
     // permutation: Option<Permutation>,
 }
+
+impl<R: PartialEq + RepName> PartialEq for OrderedStructure<R> {
+    fn eq(&self, other: &Self) -> bool {
+        let len = self.structure.len();
+
+        self.structure == other.structure
+            && ((self.dual_start >= len && other.dual_start >= len)
+                || (self.dual_start == other.dual_start))
+            && ((self.base_start >= len && other.base_start >= len)
+                || (self.base_start == other.base_start))
+    }
+}
+impl<R: Eq + RepName> Eq for OrderedStructure<R> {}
 
 impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
     type Id = Self;
@@ -65,6 +79,8 @@ impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
             return (
                 OrderedStructure {
                     structure: self.structure.into_iter().map(|s| s.to_lib()).collect(),
+                    dual_start: self.dual_start,
+                    base_start: self.base_start,
                 },
                 ids,
             );
@@ -202,7 +218,11 @@ impl<R: RepName<Dual = R>> TensorStructure for OrderedStructure<R> {
 
 impl<R: RepName> Default for OrderedStructure<R> {
     fn default() -> Self {
-        Self { structure: vec![] }
+        Self {
+            structure: vec![],
+            base_start: usize::MAX,
+            dual_start: usize::MAX,
+        }
     }
 }
 
@@ -213,6 +233,58 @@ impl<R: RepName> Default for OrderedStructure<R> {
 // }
 
 impl<R: RepName> OrderedStructure<R> {
+    pub fn dual_slice(&self) -> &[Slot<R>] {
+        if self.dual_start >= self.structure.len() {
+            &self.structure[0..0]
+        } else {
+            &self.structure[self.dual_start..]
+        }
+    }
+
+    pub fn base_slice(&self) -> &[Slot<R>] {
+        if self.base_start >= self.structure.len() {
+            &self.structure[0..0]
+        } else if self.dual_start >= self.structure.len() {
+            &self.structure[self.base_start..]
+        } else {
+            &self.structure[self.base_start..self.dual_start]
+        }
+    }
+
+    pub fn self_dual_slice(&self) -> &[Slot<R>] {
+        if self.base_start >= self.structure.len() {
+            &self.structure[..]
+        } else {
+            &self.structure[self.base_start..]
+        }
+    }
+
+    pub fn n_self_dual(&self) -> usize {
+        if self.base_start >= self.structure.len() {
+            self.structure.len()
+        } else {
+            self.base_start
+        }
+    }
+
+    pub fn n_base(&self) -> usize {
+        if self.base_start >= self.structure.len() {
+            0
+        } else if self.dual_start >= self.structure.len() {
+            self.structure.len() - self.base_start
+        } else {
+            self.dual_start - self.base_start
+        }
+    }
+
+    pub fn n_dual(&self) -> usize {
+        if self.dual_start >= self.structure.len() {
+            0
+        } else {
+            self.structure.len() - self.dual_start
+        }
+    }
+
     pub fn from_iter<S: RepName, T: IntoIterator<Item = Slot<S>>>(
         iter: T,
     ) -> PermutedStructure<Self>
@@ -237,11 +309,43 @@ impl<R: RepName> From<Vec<Slot<R>>> for PermutedStructure<OrderedStructure<R>> {
     fn from(mut structure: Vec<Slot<R>>) -> Self {
         let rep_permutation = Permutation::sort_by_key(&structure, |a| a.rep);
         rep_permutation.apply_slice_in_place(&mut structure);
+
+        let mut base_start =
+            if structure[0].rep.rep.is_base() && !structure[0].rep.rep.is_self_dual() {
+                0
+            } else {
+                usize::MAX
+            };
+        let mut dual_start =
+            if structure[0].rep.rep.is_dual() && !structure[0].rep.rep.is_self_dual() {
+                base_start = 0;
+                0
+            } else {
+                usize::MAX
+            };
+
+        for i in 0..(structure.len() - 1) {
+            if structure[i].rep.rep.is_self_dual() && !structure[i + 1].rep.rep.is_self_dual() {
+                base_start = i + 1;
+            }
+
+            if structure[i].rep.rep.is_base()
+                && !structure[i + 1].rep.rep.is_self_dual()
+                && structure[i + 1].rep.rep.is_dual()
+            {
+                dual_start = i + 1;
+            }
+        }
+
         let index_permutation = Permutation::sort(&structure);
         index_permutation.apply_slice_in_place(&mut structure);
 
         PermutedStructure {
-            structure: OrderedStructure { structure },
+            structure: OrderedStructure {
+                structure,
+                base_start,
+                dual_start,
+            },
             rep_permutation,
             index_permutation,
         }
@@ -277,16 +381,6 @@ impl<R: RepName> OrderedStructure<R> {
     /// Returns a tuple struct of a the permutation that was used to sort the vector as well as the ordered structure itself
     pub fn new(structure: Vec<Slot<R>>) -> PermutedStructure<Self> {
         PermutedStructure::from(structure)
-    }
-
-    pub fn push(&mut self, item: Slot<R>) {
-        self.structure.push(item)
-    }
-
-    pub fn sort(&mut self) -> Permutation {
-        let permutation = Permutation::sort(&self.structure);
-        permutation.apply_slice_in_place(&mut self.structure);
-        permutation
     }
 
     fn extend(&mut self, other: Self) {
@@ -328,22 +422,42 @@ impl<R: RepName> From<OrderedStructure<R>> for Vec<Slot<R>> {
 
 impl<R: RepName> std::fmt::Display for OrderedStructure<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut table = Builder::new();
+
+        table.push_record(&["".to_string()]);
         for (index, item) in self.structure.iter().enumerate() {
-            if index != 0 {
-                // To avoid a newline at the start
-                writeln!(f)?;
+            if item.rep.rep.is_self_dual() {
+                table.push_record(&[item.rep.to_string(), format!("{}", item.aind)]);
+            } else if item.rep.rep.is_base() {
+                table.push_record(&[item.rep.to_string(), format!("{:+}", item.aind)]);
+            } else {
+                table.push_record(&[item.rep.to_string(), format!("{:-}", item.aind)]);
             }
-            write!(
-                f,
-                "{:<3} ({})",
-                item.aind(),
-                // IDPRINTER
-                //     .encode_string(usize::from(item.index) as u64)
-                //     .unwrap(),
-                item.rep()
-            )?;
         }
-        Ok(())
+        writeln!(f)?;
+        table.build().with(Style::rounded()).fmt(f)
+    }
+}
+
+impl<R: RepName> std::fmt::Debug for OrderedStructure<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut table = Builder::new();
+
+        table.push_record(&[
+            "OrderedStructure".to_string(),
+            format!("base_start:{}", self.base_start),
+            format!("dual_start:{}", self.dual_start),
+        ]);
+        for (index, item) in self.structure.iter().enumerate() {
+            table.push_record(&[
+                index.to_string(),
+                format!("{:?}", item.rep.rep),
+                format!("{:?}", item.rep.dim),
+                format!("{:?}", item.aind),
+            ]);
+        }
+        writeln!(f)?;
+        write!(f, "{}", format!("{}", table.build().with(Style::rounded())))
     }
 }
 
@@ -453,23 +567,313 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
     }
 
     fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError> {
-        // println!("self\n{}", self);
-        // println!("other\n{}", other);
-        let (structure, pos_self, pos_other, mergeinfo) = self
-            .structure
-            .merge_ordered_ref_with_comparison_and_matching(
-                &other.structure,
-                |a, b| a.cmp(b),
-                |a, b| {
-                    // println!("Does {a} match {b}?");
-                    let a = a.matches(b);
-                    // println!("{a}");
-                    a
-                },
-            )?;
-        // println!("{:?}", structure);
+        debug_assert!(
+            self.self_dual_slice().windows(3).all(|w| w[0] <= w[1]
+                && w[1] <= w[2]
+                && !(w[0].matches(&w[1]) && w[1].matches(&w[2]))),
+            "Input vector 'self' to merge must be sorted in self dual part: {:?}",
+            self.self_dual_slice()
+        );
+        debug_assert!(
+            self.dual_slice().windows(2).all(|w| w[0] < w[1]),
+            "Input vector 'self' to merge must be sorted in dual part: {:?}",
+            self.dual_slice()
+        );
+        debug_assert!(
+            self.base_slice().windows(2).all(|w| w[0] < w[1]),
+            "Input vector 'self' to merge must be sorted in base part: {:?}",
+            self.base_slice()
+        );
 
-        Ok((Self { structure }, pos_self, pos_other, mergeinfo))
+        debug_assert!(
+            other.self_dual_slice().windows(3).all(|w| w[0] <= w[1]
+                && w[1] <= w[2]
+                && !(w[0].matches(&w[1]) && w[1].matches(&w[2]))),
+            "Input vector 'other' to merge must be sorted in self dual part: {:?}",
+            other.self_dual_slice()
+        );
+        debug_assert!(
+            other.dual_slice().windows(2).all(|w| w[0] < w[1]),
+            "Input vector 'other' to merge must be sorted in dual part: {:?}",
+            other.dual_slice()
+        );
+        debug_assert!(
+            other.base_slice().windows(2).all(|w| w[0] < w[1]),
+            "Input vector 'other' to merge must be sorted in base part: {:?}",
+            other.base_slice()
+        );
+
+        let mut common_indices_self = BitVec::with_capacity(self.order()); // BitVec for common slots in self
+        common_indices_self.resize(self.order(), false);
+        let mut common_indices_other = BitVec::with_capacity(other.order()); // BitVec for common slots in other
+        common_indices_other.resize(other.order(), false);
+
+        if self.is_scalar() || other.is_scalar() {
+            // If either is empty, there are no common slots
+            if self.is_scalar() {
+                return Ok((
+                    other.clone(),
+                    common_indices_self,
+                    common_indices_other,
+                    MergeInfo::SecondBeforeFirst,
+                ));
+            } else {
+                return Ok((
+                    self.clone(),
+                    common_indices_self,
+                    common_indices_other,
+                    MergeInfo::FirstBeforeSecond,
+                ));
+            }
+        }
+
+        let mut partition = BitVec::new(); // For interleaved mergeinfo
+        partition.reserve(self.order() + other.order());
+
+        let mut i = 0;
+        let mut j = 0;
+
+        // Merge self dual parts:
+
+        let mut resulting_structure = Vec::new();
+
+        while i < self.n_self_dual() && j < other.n_self_dual() {
+            match self.structure[i].cmp(&other.structure[j]) {
+                std::cmp::Ordering::Less => {
+                    resulting_structure.push(self.structure[i].clone());
+                    partition.push(true);
+                    i += 1;
+                }
+                std::cmp::Ordering::Greater => {
+                    resulting_structure.push(other.structure[j].clone());
+                    partition.push(false);
+                    j += 1;
+                }
+                std::cmp::Ordering::Equal => {
+                    if self.structure[i].matches(&other.structure[j]) {
+                        // Common item
+                        common_indices_self.set(i, true); // Set bit for index in first vector
+                        common_indices_other.set(j, true); // Set bit for index in second vector
+                        i += 1;
+                        j += 1;
+                        continue; // Skip transition check for common items since they're not added to result_non_common
+                    } else {
+                        panic!("Matching and equal items must be identical")
+                    }
+                }
+            }
+        }
+
+        while i < self.n_self_dual() {
+            resulting_structure.push(self.structure[i].clone());
+            partition.push(true);
+            i += 1;
+        }
+
+        while j < other.n_self_dual() {
+            resulting_structure.push(other.structure[j].clone());
+            partition.push(false);
+            j += 1;
+        }
+
+        let base_start = partition.len();
+
+        //Merge base with dual
+
+        let mut ibase = 0;
+        let mut idual = 0;
+        let mut jbase = 0;
+        let mut jdual = 0;
+
+        let snbase = self.n_base();
+        let onbase = other.n_base();
+
+        let find_match_in_duals = |base_slot: &Slot<R>,
+                                   base_slot_index: usize,
+                                   common_indices_base: &mut BitVec,
+                                   dual_structure: &Self,
+                                   dual_cursor: &mut usize,
+                                   common_indices_dual: &mut BitVec,
+                                   dual_offset: usize|
+         -> bool {
+            let mut found_match = false;
+            let dual_count = dual_structure.n_dual();
+
+            // println!("dual_count: {}", dual_count);
+            // println!("dual_cursor: {}", dual_cursor);
+            while *dual_cursor < dual_count {
+                let dual_slot_index = dual_offset + *dual_cursor;
+                let dual_slot = &dual_structure.structure[dual_slot_index];
+                // println!("{}vs{}", base_slot, dual_slot);
+                match base_slot.match_cmp(dual_slot) {
+                    std::cmp::Ordering::Less => {
+                        // print!("less");
+                        break;
+                    }
+                    std::cmp::Ordering::Greater => {
+                        // print!("more");
+                        *dual_cursor += 1;
+                    }
+                    std::cmp::Ordering::Equal => {
+                        if base_slot.matches(dual_slot) {
+                            common_indices_base.set(base_slot_index, true);
+                            common_indices_dual.set(dual_slot_index, true);
+                            found_match = true;
+                            *dual_cursor += 1;
+                            break;
+                        } else {
+                            panic!("Matching and equal items must be identical");
+                        }
+                    }
+                }
+            }
+            found_match
+        };
+
+        while ibase < snbase && jbase < onbase {
+            match self.structure[i + ibase].cmp(&other.structure[j + jbase]) {
+                std::cmp::Ordering::Less => {
+                    let base_slot = &self.structure[i + ibase];
+                    let found_match = find_match_in_duals(
+                        base_slot,
+                        i + ibase,
+                        &mut common_indices_self,
+                        other,
+                        &mut jdual,
+                        &mut common_indices_other,
+                        j + onbase,
+                    );
+                    if !found_match {
+                        resulting_structure.push(base_slot.clone());
+                        partition.push(true);
+                    }
+                    ibase += 1;
+                }
+                std::cmp::Ordering::Greater => {
+                    let base_slot = &other.structure[j + jbase];
+                    let found_match = find_match_in_duals(
+                        base_slot,
+                        j + jbase,
+                        &mut common_indices_other,
+                        self,
+                        &mut idual,
+                        &mut common_indices_self,
+                        i + snbase,
+                    );
+                    if !found_match {
+                        resulting_structure.push(base_slot.clone());
+                        partition.push(false);
+                    }
+                    jbase += 1;
+                }
+                std::cmp::Ordering::Equal => {
+                    panic!("Cannot have equal bases")
+                }
+            }
+        }
+
+        while ibase < snbase {
+            let base_slot = &self.structure[i + ibase];
+            let found_match = find_match_in_duals(
+                base_slot,
+                i + ibase,
+                &mut common_indices_self,
+                other,
+                &mut jdual,
+                &mut common_indices_other,
+                j + onbase,
+            );
+            if !found_match {
+                resulting_structure.push(base_slot.clone());
+                partition.push(true);
+            }
+            ibase += 1;
+        }
+
+        while jbase < onbase {
+            let base_slot = &other.structure[j + jbase];
+            let found_match = find_match_in_duals(
+                base_slot,
+                j + jbase,
+                &mut common_indices_other,
+                self,
+                &mut idual,
+                &mut common_indices_self,
+                i + snbase,
+            );
+            if !found_match {
+                resulting_structure.push(base_slot.clone());
+                partition.push(false);
+            }
+            jbase += 1;
+        }
+
+        let dual_start = partition.len();
+
+        let mut idual = 0;
+        let mut jdual = 0;
+
+        while idual < self.n_dual() && jdual < other.n_dual() {
+            match self.structure[i + ibase + idual].cmp(&other.structure[j + jbase + jdual]) {
+                Ordering::Less => {
+                    if !common_indices_self[i + ibase + idual] {
+                        resulting_structure.push(self.structure[i + ibase + idual].clone());
+                        partition.push(false);
+                    }
+                    idual += 1;
+                }
+                Ordering::Greater => {
+                    if !common_indices_other[j + jbase + jdual] {
+                        resulting_structure.push(other.structure[j + jbase + jdual].clone());
+                        partition.push(false);
+                    }
+                    jdual += 1;
+                }
+                Ordering::Equal => {
+                    panic!("Cannot have equal duals")
+                }
+            }
+        }
+
+        while idual < self.n_dual() {
+            if !common_indices_self[i + ibase + idual] {
+                resulting_structure.push(self.structure[i + ibase + idual].clone());
+                partition.push(false);
+            }
+            idual += 1;
+        }
+
+        while jdual < other.n_dual() {
+            if !common_indices_other[j + jbase + jdual] {
+                resulting_structure.push(other.structure[j + jbase + jdual].clone());
+                partition.push(false);
+            }
+            jdual += 1;
+        }
+
+        assert!(
+            Permutation::sort(&resulting_structure).is_identity(),
+            "Permutation is not identity for  {}\n{:?}\nself:{:?}\n other:{:?}",
+            Permutation::sort(&resulting_structure),
+            OrderedStructure {
+                structure: resulting_structure,
+                dual_start,
+                base_start,
+            },
+            self,
+            other
+        );
+
+        Ok((
+            OrderedStructure {
+                structure: resulting_structure,
+                dual_start,
+                base_start,
+            },
+            common_indices_self,
+            common_indices_other,
+            partition.into(),
+        ))
     }
 
     // fn merge_at(&self, other: &Self, positions: (usize, usize)) -> Self {
@@ -487,7 +891,7 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
 pub mod test {
     use crate::structure::{
         representation::{Euclidean, LibraryRep, Lorentz, Minkowski, RepName},
-        slot::IsAbstractSlot,
+        slot::{DualSlotTo, IsAbstractSlot},
         StructureContract, TensorStructure,
     };
 
@@ -495,10 +899,25 @@ pub mod test {
 
     #[test]
     fn orderedmerge() {
-        let a: OrderedStructure<LibraryRep> =
-            OrderedStructure::from_iter([Lorentz {}.new_slot(3, 3).to_lib()]).structure;
-        let b = a.clone().dual();
+        let a: OrderedStructure<LibraryRep> = OrderedStructure::from_iter([
+            Lorentz {}.new_slot(3, 2).to_lib(),
+            Minkowski {}.new_slot(4, 2).to_lib(),
+            Lorentz {}.new_slot(7, 1).to_lib(),
+            Euclidean {}.new_slot(4, 2).to_lib(),
+            Euclidean {}.new_slot(2, 3).to_lib(),
+        ])
+        .structure;
+        let b: OrderedStructure<LibraryRep> = OrderedStructure::from_iter([
+            Euclidean {}.new_slot(4, 2).to_lib(),
+            Minkowski {}.new_slot(4, 11).to_lib(),
+            Lorentz {}.new_slot(7, 1).dual().to_lib(),
+        ])
+        .structure;
 
+        println!("{:?}", a);
+        assert_eq!(a.n_base(), 2);
+        println!("{:?}", b);
         println!("{}", a.merge(&b).unwrap().0);
+        println!("{}", b.merge(&a).unwrap().0);
     }
 }

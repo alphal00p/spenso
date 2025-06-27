@@ -728,6 +728,34 @@ pub enum MergeInfo {
     Interleaved(BitVec),
 }
 
+impl From<BitVec> for MergeInfo {
+    fn from(bitvec: BitVec) -> Self {
+        let mut n_transitions = 0;
+        if bitvec.len() == 0 {
+            return MergeInfo::FirstBeforeSecond;
+        }
+        for i in 0..(bitvec.len() - 1) {
+            if bitvec[i] != bitvec[i + 1] {
+                n_transitions += 1;
+            }
+
+            if n_transitions > 1 {
+                return MergeInfo::Interleaved(bitvec);
+            }
+        }
+
+        if let Some(first) = bitvec.first() {
+            if *first {
+                MergeInfo::FirstBeforeSecond
+            } else {
+                MergeInfo::SecondBeforeFirst
+            }
+        } else {
+            MergeInfo::FirstBeforeSecond
+        }
+    }
+}
+
 /// A trait for a structure that can be traced and merged, during a contraction.
 pub trait StructureContract: Sized {
     fn trace(&mut self, i: usize, j: usize);

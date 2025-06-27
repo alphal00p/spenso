@@ -73,6 +73,7 @@ linnet = { version = "0.7.1", features = ["serde", "bincode"] }
 spenso-macros = { path = "../spenso-macros" }
 features = "0.10.0"
 rayon = "1.10.0"
+tabled = "0.20.0"
 
 [features]
 shadowing = ["dep:symbolica", "spenso-macros/shadowing"]

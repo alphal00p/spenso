@@ -127,7 +127,16 @@ pub trait RepName:
     fn is_dual(self) -> bool;
     fn base(&self) -> Self::Base;
     fn is_base(&self) -> bool;
+    fn is_self_dual(&self) -> bool {
+        self.is_base() && self.is_dual()
+    }
+
     fn matches(&self, other: &Self::Dual) -> bool;
+
+    fn match_cmp(&self, _other: &Self::Dual) -> Ordering {
+        Ordering::Equal
+    }
+
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError> {
         Self::from_library_rep(LibraryRep::try_from_symbol(sym, aind)?)
@@ -414,8 +423,8 @@ impl BaseRepName for Dummy {
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
 pub struct Representation<T: RepName> {
-    pub dim: Dimension,
     pub rep: T,
+    pub dim: Dimension,
 }
 
 impl<T: RepName> Ord for Representation<T> {
@@ -423,7 +432,7 @@ impl<T: RepName> Ord for Representation<T> {
         if self.rep.is_dummy() && other.rep.is_dummy() {
             Ordering::Equal
         } else {
-            self.dim.cmp(&other.dim).then(self.rep.cmp(&other.rep))
+            self.rep.cmp(&other.rep).then(self.dim.cmp(&other.dim))
         }
     }
 }
@@ -492,16 +501,26 @@ impl Ord for LibraryRep {
             (LibraryRep::SelfDual(a), LibraryRep::SelfDual(b)) => a.cmp(b),
             (LibraryRep::InlineMetric(a), LibraryRep::InlineMetric(b)) => a.cmp(b),
             (LibraryRep::Dualizable(a), LibraryRep::Dualizable(b)) => {
-                // println!("a{a}b{b}");
-                // match
-                a.cmp(&b)
+                if *a < 0 {
+                    if *b < 0 {
+                        a.abs().cmp(&b.abs())
+                    } else {
+                        Ordering::Greater
+                    }
+                } else {
+                    if *b < 0 {
+                        Ordering::Less
+                    } else {
+                        a.cmp(&b)
+                    }
+                }
             }
             (LibraryRep::SelfDual(_), LibraryRep::Dualizable(_))
             | (LibraryRep::SelfDual(_), LibraryRep::InlineMetric(_))
-            | (LibraryRep::InlineMetric(_), LibraryRep::Dualizable(_)) => Ordering::Greater,
+            | (LibraryRep::InlineMetric(_), LibraryRep::Dualizable(_)) => Ordering::Less,
             (LibraryRep::Dualizable(_), LibraryRep::SelfDual(_))
             | (LibraryRep::InlineMetric(_), LibraryRep::SelfDual(_))
-            | (LibraryRep::Dualizable(_), LibraryRep::InlineMetric(_)) => Ordering::Less,
+            | (LibraryRep::Dualizable(_), LibraryRep::InlineMetric(_)) => Ordering::Greater,
             (LibraryRep::Dummy, LibraryRep::Dummy) => Ordering::Equal,
             (LibraryRep::Dummy, _) => Ordering::Less,
             (_, LibraryRep::Dummy) => Ordering::Greater,
@@ -843,6 +862,13 @@ impl RepName for LibraryRep {
         }
     }
 
+    fn is_self_dual(&self) -> bool {
+        match self {
+            Self::Dualizable(_) => false,
+            _ => true,
+        }
+    }
+
     #[inline]
     fn base(&self) -> Self::Base {
         match self {
@@ -858,6 +884,15 @@ impl RepName for LibraryRep {
             (Self::Dualizable(s), Self::Dualizable(o)) => *s == -o,
             (Self::InlineMetric(s), Self::InlineMetric(o)) => s == o,
             _ => false,
+        }
+    }
+
+    fn match_cmp(&self, other: &Self::Dual) -> Ordering {
+        match (self, other) {
+            (Self::SelfDual(s), Self::SelfDual(o))
+            | (Self::InlineMetric(s), Self::InlineMetric(o)) => s.cmp(o),
+            (Self::Dualizable(s), Self::Dualizable(o)) => s.abs().cmp(&o.abs()),
+            _ => self.cmp(other),
         }
     }
 
@@ -1008,6 +1043,13 @@ impl<T: RepName> Representation<T> {
     pub fn matches(&self, other: &Representation<T::Dual>) -> bool {
         self.dim == other.dim && self.rep.matches(&other.rep)
     }
+
+    pub fn match_cmp(&self, other: &Representation<T::Dual>) -> Ordering {
+        self.dim
+            .cmp(&other.dim)
+            .then(self.rep.match_cmp(&other.rep))
+    }
+
     #[cfg(feature = "shadowing")]
     /// yields a function builder for the representation, adding a first variable: the dimension.
     ///
@@ -1125,7 +1167,32 @@ impl<'a, T: RepName> FromIterator<&'a Representation<T>> for Vec<Dimension> {
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+    use linnet::permutation::Permutation;
+
+    use crate::structure::representation::{RepName, Representation};
+
+    use super::{Euclidean, LibraryRep, Lorentz, Minkowski};
+
+    #[test]
+    fn ordering() {
+        let reps: Vec<LibraryRep> = vec![
+            Euclidean {}.into(),
+            Minkowski {}.into(),
+            Lorentz {}.into(),
+            Lorentz {}.dual().into(),
+        ];
+
+        assert!(Permutation::sort(&reps).is_identity());
+        let reps: Vec<Representation<LibraryRep>> = vec![
+            Euclidean {}.new_rep(3).cast(),
+            Minkowski {}.new_rep(2).cast(),
+            Lorentz {}.new_rep(1).cast(),
+        ];
+
+        assert!(Permutation::sort(&reps).is_identity())
+    }
+}
 
 #[cfg(test)]
 #[cfg(feature = "shadowing")]

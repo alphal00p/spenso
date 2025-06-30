@@ -497,14 +497,16 @@ mod tests {
 
         net.execute::<Steps<19>, SmallestDegree, _, _>(&*HEP_LIB)
             .unwrap();
-        net.execute::<Steps<12>, SingleSmallestDegree<false>, _, _>(&*HEP_LIB)
+        net.execute::<Steps<14>, SingleSmallestDegree<false>, _, _>(&*HEP_LIB)
             .unwrap();
         net.execute::<Steps<1>, SingleSmallestDegree<true>, _, _>(&*HEP_LIB)
             .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
+        net.execute::<Sequential, SmallestDegree, _, _>(&*HEP_LIB)
+            .unwrap();
+        // println!(
+        //     "{}",
+        //     net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        // );
 
         println!(
             "{}",

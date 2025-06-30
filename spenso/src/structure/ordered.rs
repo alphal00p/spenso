@@ -567,6 +567,7 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
     }
 
     fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError> {
+        // println!("Merge called with self: {} and other: {}", self, other);
         debug_assert!(
             self.self_dual_slice().windows(3).all(|w| w[0] <= w[1]
                 && w[1] <= w[2]
@@ -863,6 +864,21 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
             self,
             other
         );
+
+        // println!(
+        //     "Merged structure: {}",
+        //     OrderedStructure {
+        //         structure: resulting_structure.clone(),
+        //         dual_start,
+        //         base_start,
+        //     }
+        // );
+
+        // println!(
+        //     "Common indices self: {:?}\nCommon indices other: {:?}",
+        //     common_indices_self, common_indices_other
+        // );
+        // println!("Partition: {:?}", partition);
 
         Ok((
             OrderedStructure {

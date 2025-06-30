@@ -337,21 +337,18 @@ where
                         .enumerate()
                         .partition(|(i, _)| resulting_partition[*i]);
 
-                // println!("expa: {:?}", expb);
-                for (i, v) in pos_self.iter_ones().zip(expa) {
+                for (i, v) in pos_self.iter_zeros().zip(expa) {
                     exp_self.indices[i] = v;
                 }
 
-                for (i, v) in pos_other.iter_ones().zip(expb) {
+                for (i, v) in pos_other.iter_zeros().zip(expb) {
                     exp_other.indices[i] = v;
                 }
-
-                // println!("exp_self: {:?}", exp_self);
-                // println!("exp_other: {:?}", exp_other);
-                // println!("")
                 // And now we flatten
                 let shift_a = self.structure().flat_index(&exp_self).unwrap();
                 let shift_b = other.structure().flat_index(&exp_other).unwrap();
+
+                // println!("shift_a: {:?}, shift_b: {:?}", shift_a, shift_b);
 
                 // we shift the fiber start by the flattened indices. This also resets the iterator
                 iter_self.shift(shift_a.into());
@@ -430,11 +427,11 @@ where
                         .partition(|(i, _)| resulting_partition[*i]);
 
                 // println!("expa: {:?}", expa);
-                for (i, v) in pos_self.iter_ones().zip(expa) {
+                for (i, v) in pos_self.iter_zeros().zip(expa) {
                     exp_self.indices[i] = v;
                 }
 
-                for (i, v) in pos_other.iter_ones().zip(expb) {
+                for (i, v) in pos_other.iter_zeros().zip(expb) {
                     exp_other.indices[i] = v;
                 }
 
@@ -519,11 +516,11 @@ where
                         .partition(|(i, _)| resulting_partition[*i]);
 
                 // println!("expa: {:?}", expa);
-                for (i, v) in pos_self.iter_ones().zip(expa) {
+                for (i, v) in pos_self.iter_zeros().zip(expa) {
                     exp_self.indices[i] = v;
                 }
 
-                for (i, v) in pos_other.iter_ones().zip(expb) {
+                for (i, v) in pos_other.iter_zeros().zip(expb) {
                     exp_other.indices[i] = v;
                 }
 
@@ -609,11 +606,11 @@ where
                             .partition(|(i, _)| resulting_partition[*i]);
 
                     // println!("expa: {:?}", expa);
-                    for (i, v) in pos_self.iter_ones().zip(expa) {
+                    for (i, v) in pos_self.iter_zeros().zip(expa) {
                         exp_self.indices[i] = v;
                     }
 
-                    for (i, v) in pos_other.iter_ones().zip(expb) {
+                    for (i, v) in pos_other.iter_zeros().zip(expb) {
                         exp_other.indices[i] = v;
                     }
 

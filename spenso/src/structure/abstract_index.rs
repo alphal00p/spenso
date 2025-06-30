@@ -294,7 +294,7 @@ impl std::fmt::Display for AbstractIndex {
                 } else if f.sign_plus() {
                     write!(f, "^{}", v)
                 } else {
-                    write!(f, "-{}", v)
+                    write!(f, "{}", v)
                 }
             }
         }

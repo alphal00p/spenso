@@ -130,6 +130,11 @@ where
     type Item = (&'a T, It::OtherData);
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|x| {
+            // println!(
+            //     "DenseTensor: flat_idx: {}, size: {:?}",
+            //     x.flat_idx(),
+            //     self.fiber.structure.size()
+            // );
             if let Some(t) = self.fiber.structure.get_ref_linear(x.flat_idx()) {
                 (t, x.other_data())
             } else {
@@ -392,5 +397,38 @@ impl<'a, S: TensorStructure + 'a, I: IteratesAlongFibers<<S::Slot as IsAbstractS
         self.fiber_iter.reset();
         self.fiber_iter.shift(shift.into());
         Some(&mut self.fiber_iter)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::structure::{
+        representation::{Euclidean, Minkowski},
+        OrderedStructure,
+    };
+
+    use super::*;
+
+    #[test]
+    fn weaved_iterator() {
+        let strct: DenseTensor<u32, OrderedStructure<Euclidean>> = DenseTensor::zero(
+            OrderedStructure::from_iter([
+                Euclidean {}.new_slot(4, 1),
+                Euclidean {}.new_slot(4, 2),
+                Euclidean {}.new_slot(4, 3),
+                Euclidean {}.new_slot(4, 4),
+            ])
+            .structure,
+        );
+
+        let fiber_spec = [true, false, true, false];
+        let self_fiber_class = Fiber::from(fiber_spec.as_slice(), &strct.structure); //We use the partition as a filter here, for indices that belong to self, vs those that belong to other
+        let (mut self_fiber_class_iter, mut other_fiber_class_iter) =
+            CoreFlatFiberIterator::new_paired_conjugates(&self_fiber_class); // these are iterators over the open indices of self and other, except expressed in the flat indices of the resulting structure
+
+        for i in self_fiber_class_iter {
+            println!("{}-> {:?}", i, strct.expanded_index(i))
+        }
     }
 }

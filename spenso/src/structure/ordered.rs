@@ -310,6 +310,18 @@ impl<R: RepName> From<Vec<Slot<R>>> for PermutedStructure<OrderedStructure<R>> {
         let rep_permutation = Permutation::sort_by_key(&structure, |a| a.rep);
         rep_permutation.apply_slice_in_place(&mut structure);
 
+        if structure.is_empty() {
+            return PermutedStructure {
+                structure: OrderedStructure {
+                    structure,
+                    base_start: usize::MAX,
+                    dual_start: usize::MAX,
+                },
+                rep_permutation,
+                index_permutation: Permutation::id(0),
+            };
+        }
+
         let mut base_start =
             if structure[0].rep.rep.is_base() && !structure[0].rep.rep.is_self_dual() {
                 0

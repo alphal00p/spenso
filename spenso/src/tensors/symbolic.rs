@@ -65,36 +65,8 @@ impl PermuteTensor for SymbolicTensor {
         Self::from_named(&NamedStructure::<Symbol, (), LibraryRep>::id(i, j)).unwrap()
     }
 
-    fn permute(mut self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
-        let (n, idstructures) = self.structure.clone().permute(permutation);
-
-        let mut ids = Atom::one();
-        if permutation.is_identity() {
-            return self;
-        }
-
-        for (i, idstructure) in permutation.iter_slice_inv(&idstructures).enumerate() {
-            let ogo = idstructure.external_structure();
-            let o = idstructures[i].external_structure();
-
-            ids *= Self::id(o[0], o[1]).expression;
-            self.expression = self
-                .expression
-                .replace(ogo[1].to_atom())
-                .with(o[0].to_atom())
-        }
-
-        self.expression *= ids;
-
-        self
-    }
-
-    fn permute_reps(
-        mut self,
-        ind_perm: &linnet::permutation::Permutation,
-        rep_perm: &linnet::permutation::Permutation,
-    ) -> Self::Permuted {
-        let (new_structure, idstructures) = self.structure.clone().permute_reps(ind_perm, rep_perm);
+    fn permute_inds(mut self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+        let (new_structure, idstructures) = self.structure.clone().permute_inds(permutation);
 
         for (o, n) in self
             .structure
@@ -106,15 +78,32 @@ impl PermuteTensor for SymbolicTensor {
         }
 
         let mut ids = Atom::one();
-        let mut new_true_structure = vec![];
         for s in idstructures.iter() {
             let o = s.external_structure();
-            new_true_structure.push(o[1]);
             ids *= Self::id(o[0], o[1]).expression;
         }
-        let strct = OrderedStructure::new(new_true_structure);
+        self.expression *= ids;
 
-        self.structure = strct.structure;
+        self
+    }
+
+    fn permute_reps(mut self, rep_perm: &linnet::permutation::Permutation) -> Self::Permuted {
+        let (new_structure, idstructures) = self.structure.clone().permute_reps(rep_perm);
+
+        for (o, n) in self
+            .structure
+            .structure
+            .iter()
+            .zip(new_structure.structure.iter())
+        {
+            self.expression = self.expression.replace(o.to_atom()).with(n.to_atom());
+        }
+
+        let mut ids = Atom::one();
+        for s in idstructures.iter() {
+            let o = s.external_structure();
+            ids *= Self::id(o[0], o[1]).expression;
+        }
 
         self.expression *= ids;
 
@@ -429,8 +418,15 @@ impl std::fmt::Display for SymbolicTensor {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::network::library::symbolic::ETS;
-    use symbolica::parse;
+    use crate::{
+        network::library::symbolic::ETS,
+        structure::{
+            permuted::Perm,
+            representation::{Lorentz, RepName},
+            IndexlessNamedStructure,
+        },
+    };
+    use symbolica::{parse, symbol};
 
     #[test]
     fn parse() {

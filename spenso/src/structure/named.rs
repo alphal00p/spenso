@@ -140,12 +140,12 @@ impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for NamedStructure<
         }
     }
 
-    fn permute(self, permutation: &Permutation) -> Self::Permuted {
+    fn permute_inds(self, permutation: &Permutation) -> Self::Permuted {
         let mut dummy_structure = Vec::new();
         let mut ids = Vec::new();
 
         for s in permutation.iter_slice_inv(&self.structure.structure) {
-            let d = s.to_dummy();
+            let d = s.to_dummy_rep();
             let ogs = s.to_lib();
             dummy_structure.push(d);
             ids.push(NamedStructure::id(d, ogs));
@@ -165,21 +165,31 @@ impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for NamedStructure<
         )
     }
 
-    fn permute_reps(self, ind_perm: &Permutation, rep_perm: &Permutation) -> Self::Permuted {
+    fn permute_reps(self, rep_perm: &Permutation) -> Self::Permuted {
         let mut dummy_structure = Vec::new();
         let mut og_reps = Vec::new();
         let mut ids = Vec::new();
 
         if rep_perm.is_identity() {
-            return self.permute(ind_perm);
+            return (
+                NamedStructure {
+                    global_name: self.global_name,
+                    additional_args: self.additional_args,
+                    structure: OrderedStructure::from_iter(
+                        self.structure.into_iter().map(|s| s.to_lib()),
+                    )
+                    .structure,
+                },
+                vec![],
+            );
         }
         for s in rep_perm.iter_slice(&self.structure.structure) {
             og_reps.push(s.rep.to_lib());
-            let d = s.to_dummy();
+            let d = s.to_dummy_rep();
             dummy_structure.push(d);
         }
 
-        for (i, s) in ind_perm.iter_slice(&self.structure.structure).enumerate() {
+        for (i, s) in rep_perm.iter_slice(&self.structure.structure).enumerate() {
             let d = dummy_structure[i];
             let new_slot = og_reps[i].slot(s.aind);
 

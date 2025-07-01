@@ -316,20 +316,16 @@ where
         }
     }
 
-    fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+    fn permute_inds(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
         ParamTensor {
-            tensor: self.tensor.permute(permutation),
+            tensor: self.tensor.permute_inds(permutation),
             param_type: self.param_type,
         }
     }
 
-    fn permute_reps(
-        self,
-        ind_perm: &linnet::permutation::Permutation,
-        rep_perm: &linnet::permutation::Permutation,
-    ) -> Self::Permuted {
+    fn permute_reps(self, rep_perm: &linnet::permutation::Permutation) -> Self::Permuted {
         ParamTensor {
-            tensor: self.tensor.permute_reps(ind_perm, rep_perm),
+            tensor: self.tensor.permute_reps(rep_perm),
             param_type: self.param_type,
         }
     }
@@ -1190,23 +1186,17 @@ where
         ParamOrConcrete::Concrete(C::id(i, j))
     }
 
-    fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+    fn permute_inds(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
         match self {
-            ParamOrConcrete::Param(d) => ParamOrConcrete::Param(d.permute(permutation)),
-            ParamOrConcrete::Concrete(s) => ParamOrConcrete::Concrete(s.permute(permutation)),
+            ParamOrConcrete::Param(d) => ParamOrConcrete::Param(d.permute_inds(permutation)),
+            ParamOrConcrete::Concrete(s) => ParamOrConcrete::Concrete(s.permute_inds(permutation)),
         }
     }
 
-    fn permute_reps(
-        self,
-        ind_perm: &linnet::permutation::Permutation,
-        rep_perm: &linnet::permutation::Permutation,
-    ) -> Self::Permuted {
+    fn permute_reps(self, rep_perm: &linnet::permutation::Permutation) -> Self::Permuted {
         match self {
-            ParamOrConcrete::Param(d) => ParamOrConcrete::Param(d.permute_reps(ind_perm, rep_perm)),
-            ParamOrConcrete::Concrete(s) => {
-                ParamOrConcrete::Concrete(s.permute_reps(ind_perm, rep_perm))
-            }
+            ParamOrConcrete::Param(d) => ParamOrConcrete::Param(d.permute_reps(rep_perm)),
+            ParamOrConcrete::Concrete(s) => ParamOrConcrete::Concrete(s.permute_reps(rep_perm)),
         }
     }
 }

@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 use spenso::{
     network::library::symbolic::{ETS, ExplicitKey},
     structure::{
+        IndexlessNamedStructure, PermutedStructure,
         dimension::Dimension,
         representation::{LibraryRep, Minkowski, RepName},
     },
@@ -494,18 +495,54 @@ macro_rules! id {
     }};
 }
 
+static GG: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> = LazyLock::new(|| {
+    IndexlessNamedStructure::from_iter(
+        [
+            Minkowski {}.new_rep(4).cast(),
+            Bispinor {}.new_rep(4).to_lib(),
+            Bispinor {}.new_rep(4).cast(),
+        ],
+        AGS.gamma,
+        None,
+    )
+});
+
 #[cfg(test)]
 mod test {
 
     use super::*;
 
     use crate::id;
+    use spenso::{structure::permuted::Perm, tensors::symbolic::SymbolicTensor};
     use symbolica::{
         atom::{Atom, AtomCore},
         parse_lit,
     };
 
     use crate::representations::initialize;
+
+    #[test]
+    fn gamma_construct() {
+        let mut f = GG
+            .clone()
+            .reindex([4, 3, 2])
+            .unwrap()
+            .map_structure(|a| SymbolicTensor::from_named(&a).unwrap());
+
+        let f_s = f.structure.structure.clone();
+
+        // f.rep_permutation = f.rep_permutation.inverse();
+
+        let f_p = f.permute_reps_wrapped().permute_inds();
+
+        println!(
+            "Structure:{}\nPermuted:{}\nPermuted Structure{}\nMetric simplified{}",
+            f_s,
+            f_p,
+            f_p.structure,
+            f_p.expression.simplify_metrics()
+        );
+    }
 
     #[test]
     fn gamma_alg() {
@@ -627,7 +664,7 @@ mod test {
         )
         .simplify_gamma();
         assert_eq!(
-            expr,
+            expr.expand(),
             parse_lit!(
                 8 * p(mink(dim, nu1))
                     ^ 2 - 4 * dim * p(mink(dim, nu1))
@@ -635,16 +672,16 @@ mod test {
                         - 4 * dim * p(mink(dim, nu1)) * q(mink(dim, nu1)),
                 "spenso"
             ),
-            "got {:#}",
+            "got {}",
             expr
         );
 
         let expr = parse_lit!(
-            symbolica_community::p(mink(dim, nu1))
-                * symbolica_community::q(mink(dim, nu2))
-                * (symbolica_community::p(mink(dim, nu3)) + symbolica_community::q(mink(dim, nu3)))
-                * symbolica_community::q(mink(dim, nu4))
-                * spenso::gamma_chain(
+            p(mink(dim, nu1))
+                * q(mink(dim, nu2))
+                * (p(mink(dim, nu3)) + q(mink(dim, nu3)))
+                * q(mink(dim, nu4))
+                * gamma_chain(
                     mink(dim, nu1),
                     mink(dim, nu4),
                     mink(dim, nu3),
@@ -658,7 +695,10 @@ mod test {
         .to_dots();
         assert_eq!(
             expr,
-            parse_lit!(8 * dot(p, q) ^ 2 - 4 * dot(p, p) * dot(q, q) + 4 * dot(p, q) * dot(q, q)),
+            parse_lit!(
+                8 * dot(p, q) ^ 2 - 4 * dot(p, p) * dot(q, q) + 4 * dot(p, q) * dot(q, q),
+                "spenso"
+            ),
             "got {}",
             expr
         );

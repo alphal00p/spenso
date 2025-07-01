@@ -407,7 +407,9 @@ static CF: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> = La
     IndexlessNamedStructure::from_iter(
         [
             ColorAdjoint {}.new_rep(8),
-            ColorAdjoint {}.new_rep(3),
+            ColorAdjoint {}.new_rep(2),
+            ColorAdjoint {}.new_rep(2),
+            ColorAdjoint {}.new_rep(4),
             ColorAdjoint {}.new_rep(2),
         ],
         CS.f,
@@ -430,13 +432,14 @@ static CT: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> = La
 #[cfg(test)]
 mod test {
     use spenso::{
+        network::parsing::ShadowedStructure,
         structure::{
-            TensorStructure,
+            NamedStructure, TensorStructure,
             permuted::{Perm, PermuteTensor},
         },
         tensors::symbolic::SymbolicTensor,
     };
-    use symbolica::{parse, parse_lit};
+    use symbolica::{atom::representation::FunView, parse, parse_lit};
 
     use crate::{
         IndexTooling, gamma::GammaSimplifier, metric::MetricSimplifier, representations::initialize,
@@ -446,15 +449,45 @@ mod test {
 
     #[test]
     fn test_color_structures() {
-        let f = CF
-            .clone()
-            .reindex([4, 3, 2])
-            .unwrap()
-            .map_structure(|a| SymbolicTensor::from_named(&a).unwrap());
+        let f = IndexlessNamedStructure::<Symbol, ()>::from_iter(
+            [
+                ColorAdjoint {}.new_rep(8),
+                ColorAdjoint {}.new_rep(2),
+                ColorAdjoint {}.new_rep(2),
+                ColorAdjoint {}.new_rep(4),
+                ColorAdjoint {}.new_rep(2),
+                ColorAdjoint {}.new_rep(7),
+            ],
+            symbol!("test"),
+            None,
+        )
+        .clone()
+        .reindex([5, 4, 2, 3, 1, 0])
+        .unwrap()
+        .map_structure(|a| SymbolicTensor::from_named(&a).unwrap());
 
         let f_s = f.structure.structure.clone();
 
-        let f_p = f.permute();
+        let f_p = f.clone().permute_inds();
+
+        let f_parsed =
+            PermutedStructure::<ShadowedStructure>::try_from(&f_p.expression.simplify_metrics())
+                .unwrap();
+
+        assert_eq!(f.index_permutation, f_parsed.index_permutation);
+        assert!(f_parsed.rep_permutation.is_identity());
+
+        let f_p = f.clone().permute_reps_wrapped().permute_inds();
+
+        let f_parsed =
+            PermutedStructure::<ShadowedStructure>::try_from(&f_p.expression.simplify_metrics())
+                .unwrap();
+
+        assert_eq!(f.index_permutation, f_parsed.index_permutation);
+        assert_eq!(f.rep_permutation, f_parsed.rep_permutation);
+
+        println!("Parsed: {}", f_parsed.index_permutation);
+        println!("OG: {}", f.index_permutation);
 
         println!(
             "Structure:{}\nPermuted:{}\nPermuted Structure{}\nMetric simplified{}",
@@ -469,7 +502,7 @@ mod test {
             .reindex([4, 2, 3])
             .unwrap()
             .map_structure(|a| SymbolicTensor::from_named(&a).unwrap())
-            .permute();
+            .permute_inds();
 
         println!("{t}")
     }

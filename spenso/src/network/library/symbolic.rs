@@ -398,7 +398,7 @@ impl<
         };
 
         self.explicit_dimension
-            .insert(key.structure, perm_tensor.permute_wrapped());
+            .insert(key.structure, perm_tensor.permute_inds_wrapped());
         Ok(())
     }
 
@@ -416,7 +416,7 @@ impl<
         };
 
         self.explicit_dimension
-            .insert(key.structure, perm_tensor.permute_wrapped());
+            .insert(key.structure, perm_tensor.permute_inds_wrapped());
         Ok(())
     }
 

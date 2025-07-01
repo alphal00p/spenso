@@ -1,16 +1,14 @@
-use std::{cmp::Ordering, ops::Deref, usize};
+use std::cmp::Ordering;
 
 use bitvec::vec::BitVec;
 use indexmap::IndexMap;
 use linnet::permutation::Permutation;
 use tabled::{builder::Builder, settings::Style};
 
-use crate::utils::{to_subscript, to_superscript, MergeOrdered};
-
 #[cfg(feature = "shadowing")]
 use crate::{
     shadowing::symbolica_utils::IntoSymbol,
-    structure::{ExpandedCoefficent, FlatIndex, ToSymbolic, AIND_SYMBOLS},
+    structure::{ExpandedCoefficent, FlatIndex, ToSymbolic},
     tensors::{data::DenseTensor, parametric::TensorCoefficient},
 };
 
@@ -18,22 +16,17 @@ use crate::{
 use anyhow::Result;
 
 #[cfg(feature = "shadowing")]
-use symbolica::atom::{
-    representation::{FunView, MulView},
-    Atom, AtomView, FunctionBuilder, Symbol,
-};
+use symbolica::atom::{Atom, FunctionBuilder, Symbol};
 
 use super::{
     abstract_index::AbstractIndex,
     dimension::Dimension,
     permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
-    slot::{ConstructibleSlot, DualSlotTo, IsAbstractSlot, Slot, SlotError},
+    slot::{DualSlotTo, IsAbstractSlot, Slot},
     MergeInfo, NamedStructure, PermutedStructure, ScalarStructure, SmartShadowStructure,
     StructureContract, StructureError, TensorStructure,
 };
-use anyhow::anyhow;
-use delegate::delegate;
 #[cfg(not(feature = "shadowing"))]
 use serde::{Deserialize, Serialize};
 
@@ -71,7 +64,7 @@ impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
     );
     type IdSlot = Slot<R>;
 
-    fn permute(self, permutation: &Permutation) -> Self::Permuted {
+    fn permute_inds(self, permutation: &Permutation) -> Self::Permuted {
         let mut dummy_structure = Vec::new();
         let mut ids = Vec::new();
 
@@ -87,46 +80,59 @@ impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
         }
         // println!("{}", permutation);
         for s in permutation.iter_slice(&self.structure) {
-            let d = s.to_dummy();
+            let d = s.to_dummy_ind();
             let ogs = s.to_lib();
             // println!("{ogs}");
             // println!("{d}");
             dummy_structure.push(d);
-            ids.push(OrderedStructure::id(d, ogs));
+            ids.push(OrderedStructure::id(d.dual(), ogs));
         }
         let strct = OrderedStructure::new(dummy_structure);
-        if !strct.index_permutation.is_identity() {
-            panic!("should be identity")
-        }
+        debug_assert!(
+            strct.index_permutation.is_identity(),
+            "should be identity but is: {}",
+            strct.index_permutation
+        );
+
         (strct.structure, ids)
     }
 
-    fn permute_reps(self, ind_perm: &Permutation, rep_perm: &Permutation) -> Self::Permuted {
+    fn permute_reps(self, rep_perm: &Permutation) -> Self::Permuted {
         let mut dummy_structure = Vec::new();
         let mut og_reps = Vec::new();
         let mut ids = Vec::new();
 
         if rep_perm.is_identity() {
-            return self.permute(ind_perm);
+            return (
+                OrderedStructure {
+                    structure: self.structure.into_iter().map(|s| s.to_lib()).collect(),
+                    dual_start: self.dual_start,
+                    base_start: self.base_start,
+                },
+                ids,
+            );
         }
         // println!("{rep_perm}");
-        for s in rep_perm.iter_slice_inv(&self.structure) {
+        for s in rep_perm.iter_slice(&self.structure) {
             og_reps.push(s.rep.to_lib());
-            let d = s.to_dummy();
+            let d = s.to_dummy_rep().to_dummy_ind();
             // println!("{d}");
             dummy_structure.push(d);
         }
 
-        for (i, s) in ind_perm.iter_slice_inv(&self.structure).enumerate() {
+        for (i, s) in rep_perm.iter_slice(&self.structure).enumerate() {
             let d = dummy_structure[i];
             let new_slot = og_reps[i].slot(s.aind);
             // println!("{new_slot}");
             // println!("{d}");
-            ids.push(OrderedStructure::id(d, new_slot));
+            ids.push(OrderedStructure::id(d.dual(), new_slot));
         }
         let strct = OrderedStructure::new(dummy_structure);
         if !strct.index_permutation.is_identity() {
-            panic!("should be identity")
+            panic!(
+                "should be identity but is: {} for {}",
+                strct.index_permutation, strct.structure
+            );
         }
         (strct.structure, ids)
     }

@@ -377,24 +377,20 @@ where
         RealOrComplexTensor::Real(DataTensor::id(i, j))
     }
 
-    fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+    fn permute_inds(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
         match self {
-            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.permute(permutation)),
-            RealOrComplexTensor::Complex(s) => RealOrComplexTensor::Complex(s.permute(permutation)),
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.permute_inds(permutation)),
+            RealOrComplexTensor::Complex(s) => {
+                RealOrComplexTensor::Complex(s.permute_inds(permutation))
+            }
         }
     }
 
-    fn permute_reps(
-        self,
-        ind_perm: &linnet::permutation::Permutation,
-        rep_perm: &linnet::permutation::Permutation,
-    ) -> Self::Permuted {
+    fn permute_reps(self, rep_perm: &linnet::permutation::Permutation) -> Self::Permuted {
         match self {
-            RealOrComplexTensor::Real(d) => {
-                RealOrComplexTensor::Real(d.permute_reps(ind_perm, rep_perm))
-            }
+            RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.permute_reps(rep_perm)),
             RealOrComplexTensor::Complex(s) => {
-                RealOrComplexTensor::Complex(s.permute_reps(ind_perm, rep_perm))
+                RealOrComplexTensor::Complex(s.permute_reps(rep_perm))
             }
         }
     }

@@ -620,6 +620,15 @@ mod test {
 
     use super::*;
 
+    use spenso::{
+        network::parsing::ShadowedStructure,
+        structure::{
+            IndexlessNamedStructure, PermutedStructure,
+            permuted::Perm,
+            representation::{Euclidean, Lorentz},
+        },
+        tensors::symbolic::SymbolicTensor,
+    };
     use symbolica::{parse, parse_lit};
 
     #[test]
@@ -630,6 +639,46 @@ mod test {
                 .simplify_metrics();
 
         assert_eq!(expr, parse_lit!(p(spenso::mink(4, 0))), "got {:#}", expr);
+    }
+
+    #[test]
+    fn permute() {
+        initialize();
+        let f = IndexlessNamedStructure::<Symbol, ()>::from_iter(
+            [
+                Lorentz {}.new_rep(8).to_lib(),
+                Lorentz {}.new_rep(2).cast(),
+                Lorentz {}.new_rep(2).cast(),
+                Euclidean {}.new_rep(2).cast(),
+                Lorentz {}.new_rep(4).cast(),
+                Lorentz {}.new_rep(2).cast(),
+                Lorentz {}.new_rep(7).cast(),
+            ],
+            symbol!("test"),
+            None,
+        )
+        .clone()
+        .reindex([6, 4, 5, 2, 3, 1, 0])
+        .unwrap()
+        .map_structure(|a| SymbolicTensor::from_named(&a).unwrap());
+
+        let f_p = f.clone().permute_inds();
+
+        let f_parsed =
+            PermutedStructure::<ShadowedStructure>::try_from(&f_p.expression.simplify_metrics())
+                .unwrap();
+
+        assert_eq!(f.index_permutation, f_parsed.index_permutation);
+        assert!(f_parsed.rep_permutation.is_identity());
+
+        let f_p = f.clone().permute_reps_wrapped().permute_inds();
+
+        let f_parsed =
+            PermutedStructure::<ShadowedStructure>::try_from(&f_p.expression.simplify_metrics())
+                .unwrap();
+
+        assert_eq!(f.index_permutation, f_parsed.index_permutation);
+        assert_eq!(f.rep_permutation, f_parsed.rep_permutation);
     }
 
     #[test]

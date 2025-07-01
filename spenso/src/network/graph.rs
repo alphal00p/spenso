@@ -291,7 +291,7 @@ impl<K> NetworkGraph<K> {
             let mappingperm = &k.index_permutation;
 
             mappingperm.apply_slice_in_place(&mut inds);
-            Some(libt.structure.with_indices(&inds).unwrap().permute())
+            Some(libt.structure.with_indices(&inds).unwrap().permute_inds())
         } else {
             None
         }

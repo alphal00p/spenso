@@ -374,21 +374,17 @@ where
         DataTensor::Sparse(SparseTensor::id(i, j))
     }
 
-    fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+    fn permute_inds(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
         match self {
-            DataTensor::Dense(d) => DataTensor::Dense(d.permute(permutation)),
-            DataTensor::Sparse(s) => DataTensor::Sparse(s.permute(permutation)),
+            DataTensor::Dense(d) => DataTensor::Dense(d.permute_inds(permutation)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.permute_inds(permutation)),
         }
     }
 
-    fn permute_reps(
-        self,
-        ind_perm: &linnet::permutation::Permutation,
-        rep_perm: &linnet::permutation::Permutation,
-    ) -> Self::Permuted {
+    fn permute_reps(self, rep_perm: &linnet::permutation::Permutation) -> Self::Permuted {
         match self {
-            DataTensor::Dense(d) => DataTensor::Dense(d.permute_reps(ind_perm, rep_perm)),
-            DataTensor::Sparse(s) => DataTensor::Sparse(s.permute_reps(ind_perm, rep_perm)),
+            DataTensor::Dense(d) => DataTensor::Dense(d.permute_reps(rep_perm)),
+            DataTensor::Sparse(s) => DataTensor::Sparse(s.permute_reps(rep_perm)),
         }
     }
 }

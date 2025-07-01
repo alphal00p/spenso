@@ -1,6 +1,6 @@
 use spenso::structure::{
     abstract_index::AIND_SYMBOLS,
-    representation::{Euclidean, Minkowski, RepName},
+    representation::{Euclidean, Lorentz, Minkowski, RepName},
 };
 use spenso_macros::SimpleRepresentation;
 use symbolica::atom::Atom;
@@ -28,28 +28,6 @@ use super::{color::CS, gamma::AGS, metric::MS, rep_symbols::RS};
 )]
 #[representation(name = "spf", dual_name = "SpinAntiFundamental")] // Specify the dual name
 pub struct SpinFundamental {}
-
-#[rustfmt::skip]
-#[derive(SimpleRepresentation)]
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    Default,
-)]
-#[cfg_attr(
-    feature = "bincode",
-    derive(bincode_trait_derive::Encode),
-    derive(bincode_trait_derive::Decode),
-    derive(bincode_trait_derive::BorrowDecodeFromDecode),
-)]
-#[representation(name = "lor", dual_name = "LorentzUp")] // Specify the dual name
-pub struct Lorentz {}
 
 #[rustfmt::skip]
 #[derive(SimpleRepresentation)]

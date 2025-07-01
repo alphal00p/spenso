@@ -89,7 +89,7 @@ where
         DenseTensor { data, structure: s }
     }
 
-    fn permute(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
+    fn permute_inds(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
         let mut permuteds: IndexLess<R> = self.structure.clone().into();
         permutation.apply_slice_in_place(&mut permuteds.structure);
 
@@ -107,11 +107,7 @@ where
         permuted
     }
 
-    fn permute_reps(
-        self,
-        ind_perm: &linnet::permutation::Permutation,
-        rep_perm: &linnet::permutation::Permutation,
-    ) -> Self::Permuted {
+    fn permute_reps(self, rep_perm: &linnet::permutation::Permutation) -> Self::Permuted {
         todo!()
     }
 }

@@ -50,11 +50,11 @@ impl<R: RepName<Dual = R>> PermuteTensor for IndexLess<R> {
     type Permuted = (IndexLess<LibraryRep>, Vec<IndexLess<LibraryRep>>);
     type IdSlot = Slot<R>;
 
-    fn permute(self, permutation: &Permutation) -> Self::Permuted {
+    fn permute_inds(self, permutation: &Permutation) -> Self::Permuted {
         todo!()
     }
 
-    fn permute_reps(self, ind_perm: &Permutation, rep_perm: &Permutation) -> Self::Permuted {
+    fn permute_reps(self, rep_perm: &Permutation) -> Self::Permuted {
         todo!()
     }
 
@@ -387,11 +387,11 @@ impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for IndexlessNamedS
         }
     }
 
-    fn permute(self, permutation: &Permutation) -> Self::Permuted {
+    fn permute_inds(self, permutation: &Permutation) -> Self::Permuted {
         todo!()
     }
 
-    fn permute_reps(self, ind_perm: &Permutation, rep_perm: &Permutation) -> Self::Permuted {
+    fn permute_reps(self, rep_perm: &Permutation) -> Self::Permuted {
         todo!()
     }
 }

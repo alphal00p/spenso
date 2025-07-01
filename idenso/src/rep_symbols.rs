@@ -15,6 +15,7 @@ pub struct RepSymbols {
     pub g_: Symbol,
     pub h_: Symbol,
     pub i_: Symbol,
+    pub j_: Symbol,
 
     pub x__: Symbol,
     pub y__: Symbol,
@@ -28,6 +29,7 @@ pub struct RepSymbols {
     pub g__: Symbol,
     pub h__: Symbol,
     pub i__: Symbol,
+    pub j__: Symbol,
 
     pub x___: Symbol,
     pub y___: Symbol,
@@ -41,6 +43,7 @@ pub struct RepSymbols {
     pub g___: Symbol,
     pub h___: Symbol,
     pub i___: Symbol,
+    pub j___: Symbol,
 }
 
 pub static RS: LazyLock<RepSymbols> = LazyLock::new(|| RepSymbols {
@@ -56,6 +59,7 @@ pub static RS: LazyLock<RepSymbols> = LazyLock::new(|| RepSymbols {
     g_: symbol!("g_"),
     h_: symbol!("h_"),
     i_: symbol!("i_"),
+    j_: symbol!("j_"),
     x__: symbol!("x__"),
     y__: symbol!("y__"),
     z__: symbol!("z__"),
@@ -68,6 +72,8 @@ pub static RS: LazyLock<RepSymbols> = LazyLock::new(|| RepSymbols {
     g__: symbol!("g__"),
     h__: symbol!("h__"),
     i__: symbol!("i__"),
+
+    j__: symbol!("j__"),
     x___: symbol!("x___"),
     y___: symbol!("y___"),
     z___: symbol!("z___"),
@@ -80,4 +86,6 @@ pub static RS: LazyLock<RepSymbols> = LazyLock::new(|| RepSymbols {
     g___: symbol!("g___"),
     h___: symbol!("h___"),
     i___: symbol!("i___"),
+
+    j___: symbol!("j___"),
 });

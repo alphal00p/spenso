@@ -25,8 +25,8 @@ use crate::{network::library::symbolic::ETS, structure::slot::SlotError};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{Atom, AtomCore, FunctionBuilder, Symbol},
-    {function, symbol},
+    atom::{Atom, AtomCore, AtomOrView, FunctionBuilder, Symbol},
+    function, symbol,
 };
 
 use thiserror::Error;
@@ -160,9 +160,38 @@ pub trait RepName:
     #[cfg(feature = "shadowing")]
     /// yields a function builder for the representation, adding a first variable: the dimension.
     ///
-    fn to_symbolic<It: Into<Atom>>(&self, args: impl IntoIterator<Item = It>) -> Atom {
+    fn to_symbolic<'a, It: Into<AtomOrView<'a>>>(
+        &self,
+        args: impl IntoIterator<Item = It>,
+    ) -> Atom {
         let librep: LibraryRep = (*self).into();
         librep.to_symbolic(args)
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    #[cfg(feature = "shadowing")]
+    /// yields a function builder for the representation, adding a first variable: the dimension.
+    ///
+    fn id_atom<'a, It: Into<AtomOrView<'a>>>(
+        &self,
+        a: impl IntoIterator<Item = It>,
+        b: impl IntoIterator<Item = It>,
+    ) -> Atom {
+        let librep: LibraryRep = (*self).into();
+        function!(ETS.id, librep.dual().to_symbolic(a), librep.to_symbolic(b))
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    #[cfg(feature = "shadowing")]
+    /// yields a function builder for the representation, adding a first variable: the dimension.
+    ///
+    fn metric_atom<'a, It: Into<AtomOrView<'a>>>(
+        &self,
+        a: impl IntoIterator<Item = It>,
+        b: impl IntoIterator<Item = It>,
+    ) -> Atom {
+        let librep: LibraryRep = (*self).into();
+        function!(ETS.metric, librep.to_symbolic(a), librep.to_symbolic(b))
     }
 
     fn new_slot<D: Into<Dimension>, A: Into<AbstractIndex>>(self, dim: D, aind: A) -> Slot<Self>
@@ -452,6 +481,26 @@ impl<T: RepName> PartialEq for Representation<T> {
 impl<T: RepName> Eq for Representation<T> {}
 
 impl<T: RepName> Representation<T> {
+    #[allow(clippy::cast_possible_wrap)]
+    #[cfg(feature = "shadowing")]
+    /// yields a function builder for the representation, adding a first variable: the dimension.
+    ///
+    pub fn id<'a, It: Into<AtomOrView<'a>>>(&self, a: It, b: It) -> Atom {
+        let a: AtomOrView<'a> = a.into();
+        let b: AtomOrView<'a> = b.into();
+        function!(ETS.id, self.dual().pattern(a), self.pattern(b))
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    #[cfg(feature = "shadowing")]
+    /// yields a function builder for the representation, adding a first variable: the dimension.
+    ///
+    pub fn g<'a, It: Into<AtomOrView<'a>>>(&self, a: It, b: It) -> Atom {
+        let a: AtomOrView<'a> = a.into();
+        let b: AtomOrView<'a> = b.into();
+        function!(ETS.metric, self.pattern(a), self.pattern(b))
+    }
+
     pub fn to_lib(self) -> Representation<LibraryRep> {
         let rep: LibraryRep = self.rep.into();
         Representation { dim: self.dim, rep }
@@ -960,12 +1009,15 @@ impl RepName for LibraryRep {
     /// yields a function builder for the representation, adding a first variable: the dimension.
     ///
 
-    fn to_symbolic<It: Into<Atom>>(&self, args: impl IntoIterator<Item = It>) -> Atom {
+    fn to_symbolic<'a, It: Into<AtomOrView<'a>>>(
+        &self,
+        args: impl IntoIterator<Item = It>,
+    ) -> Atom {
         use crate::structure::abstract_index::AIND_SYMBOLS;
 
         let mut fun = FunctionBuilder::new(REPS.read().unwrap()[*self].symbol);
         for a in args {
-            fun = fun.add_arg(&a.into());
+            fun = fun.add_arg(a);
         }
         let inner = fun.finish();
 

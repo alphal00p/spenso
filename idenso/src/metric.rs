@@ -662,8 +662,12 @@ mod test {
         .unwrap()
         .map_structure(|a| SymbolicTensor::from_named(&a).unwrap());
 
+        println!("{}\n", f.structure.expression);
+
         let f_p = f.clone().permute_inds();
 
+        println!("{}\n", f_p.expression);
+        println!("{}\n", f_p.expression.simplify_metrics());
         let f_parsed =
             PermutedStructure::<ShadowedStructure>::try_from(&f_p.expression.simplify_metrics())
                 .unwrap();
@@ -677,6 +681,8 @@ mod test {
             PermutedStructure::<ShadowedStructure>::try_from(&f_p.expression.simplify_metrics())
                 .unwrap();
 
+        println!("{}\n", f_p.expression);
+        println!("{}\n", f_p.expression.simplify_metrics());
         assert_eq!(f.index_permutation, f_parsed.index_permutation);
         assert_eq!(f.rep_permutation, f_parsed.rep_permutation);
     }

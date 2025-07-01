@@ -1,12 +1,12 @@
 #![allow(uncommon_codepoints)]
 use color::color_conj_impl;
-use gamma::{factor_conj_impl, gamma_conj_impl, pol_conj_impl};
+use gamma::{gamma_conj_impl, pol_conj_impl};
 use metric::{
     CookingError, cook_function_view, cook_indices_impl, list_dangling_impl, wrap_dummies_impl,
     wrap_indices_impl,
 };
 
-use symbolica::atom::{Atom, AtomView, Symbol};
+use symbolica::atom::{Atom, AtomCore, AtomView, Symbol};
 
 pub mod color;
 pub mod gamma;
@@ -110,9 +110,9 @@ impl IndexTooling for Atom {
 
 impl<'a> IndexTooling for AtomView<'a> {
     fn conj(&self) -> Atom {
-        factor_conj_impl(
-            pol_conj_impl(gamma_conj_impl(color_conj_impl(*self).as_view()).as_view()).as_view(),
-        )
+        pol_conj_impl(gamma_conj_impl(color_conj_impl(*self).as_view()).as_view())
+            .as_view()
+            .conjugate()
     }
 
     fn cook_function(&self) -> Result<Atom, CookingError> {

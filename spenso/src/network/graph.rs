@@ -291,9 +291,9 @@ impl<K> NetworkGraph<K> {
             let libt = lib.get(&k.structure).unwrap();
             let mappingperm = &k.index_permutation;
 
-            println!("Mapping perm: {mappingperm}");
+            // println!("Mapping perm: {mappingperm}");
             mappingperm.apply_slice_in_place_inv(&mut inds);
-            println!("Inds: {inds:?}");
+            // println!("Inds: {inds:?}");
             let libt_with_indices = libt.structure.with_indices(&inds).unwrap();
             // libt_with_indices.index_permutation = k.index_permutation.clone();
 

@@ -232,6 +232,10 @@ impl<T: TensorLibraryData> TensorLibraryData for ConcreteOrParam<T> {
         ConcreteOrParam::Concrete(T::one())
     }
 
+    fn minus_one() -> Self {
+        ConcreteOrParam::Concrete(T::minus_one())
+    }
+
     fn zero() -> Self {
         ConcreteOrParam::Concrete(T::zero())
     }
@@ -343,13 +347,16 @@ impl<
             self.insert_generic(Self::id(*r), Self::checked_identity);
         }
 
-        for r in LibraryRep::all_self_duals().chain(LibraryRep::all_inline_metrics()) {
+        for r in LibraryRep::all_self_duals() {
             self.insert_generic(Self::id(*r), Self::checked_identity);
-            let id_metric = GenericKey::new(ETS.metric, None, vec![*r, r.dual()]);
+            let id_metric = GenericKey::new(ETS.metric, None, vec![*r, *r]);
             self.insert_generic(id_metric, Self::checked_identity);
-            self.insert_generic(Self::id(r.dual()), Self::checked_identity);
-            let id_metric = GenericKey::new(ETS.metric, None, vec![r.dual(), *r]);
-            self.insert_generic(id_metric, Self::checked_identity);
+        }
+
+        for r in LibraryRep::all_inline_metrics() {
+            self.insert_generic(Self::id(*r), Self::checked_identity);
+            let id_metric = GenericKey::new(ETS.metric, None, vec![*r, *r]);
+            self.insert_generic(id_metric, Self::diag_unimodular_metric);
         }
     }
 
@@ -376,6 +383,24 @@ impl<
 
         for i in 0..dim {
             tensor.set(&[i, i], T::SetData::one()).unwrap();
+        }
+        tensor.into()
+    }
+
+    pub fn diag_unimodular_metric(key: ExplicitKey) -> T
+    where
+        T::SetData: TensorLibraryData,
+    {
+        let dim: usize = key.get_dim(0).unwrap().try_into().unwrap();
+        let rep = key.get_rep(0).unwrap();
+        let mut tensor = T::empty(key);
+
+        for i in 0..dim {
+            if rep.is_neg(i) {
+                tensor.set(&[i, i], T::SetData::minus_one()).unwrap();
+            } else {
+                tensor.set(&[i, i], T::SetData::one()).unwrap();
+            }
         }
         tensor.into()
     }
@@ -442,7 +467,7 @@ impl<
 
 #[cfg(test)]
 mod test {
-    use symbolica::parse;
+    use symbolica::{function, parse};
 
     use crate::{
         network::{
@@ -769,6 +794,47 @@ mod test {
             println!("Hi{}", v)
         } else {
             // panic!("AAAAA{}", a.dot())
+        }
+    }
+
+    #[test]
+    fn transposition() {
+        REPS.read().unwrap();
+        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        lib.update_ids();
+
+        let key = ExplicitKey::from_iter(
+            [Euclidean {}.new_rep(4), Euclidean {}.new_rep(4)],
+            symbol!("A"),
+            None,
+        )
+        .structure;
+
+        let mut a: DataTensor<_, _> = DenseTensor::fill(key.clone(), Atom::num(1)).into();
+        a.set(&[3, 0], parse!("a")).unwrap();
+        let a = PermutedStructure::identity(MixedTensor::<f64, ExplicitKey>::param(a));
+
+        lib.insert_explicit(a);
+
+        fn A(i: impl Into<AbstractIndex>, j: impl Into<AbstractIndex>) -> Atom {
+            let euc = Euclidean {}.new_rep(4);
+            function!(symbol!("A"), euc.slot(i).to_atom(), euc.slot(j).to_atom())
+        }
+
+        let expr = A(0, 1) - A(1, 0);
+
+        let mut net = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            _,
+        >::try_from_view(expr.as_view(), &lib)
+        .map_err(|a| a.to_string())
+        .unwrap();
+
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
+
+        if let Ok(ExecutionResult::Val(v)) = net.result_tensor(&lib) {
+            println!("{}", v)
         }
     }
 }

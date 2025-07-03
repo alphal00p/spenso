@@ -390,7 +390,7 @@ pub fn hep_lib<T: TensorLibraryData + Clone + Default>(
 
     let gamma_key = gamma4D_strct(AGS.gamma)
         .map_structure(|a| gamma_data_weyl(a, one.clone(), zero.clone()).into());
-    println!("permutation{}", gamma_key.rep_permutation);
+    // println!("permutation{}", gamma_key.rep_permutation);
     weyl.insert_explicit(gamma_key);
 
     let gamma5_key = gamma5_strct(AGS.gamma5)
@@ -583,30 +583,31 @@ mod tests {
 
         let simplified = expr.simplify_gamma();
 
-        let mut net2 =
-            Network::<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, _>::try_from_view(
-                simplified.as_view(),
-                &*HEP_LIB,
-            )
-            .unwrap();
+        println!("Simplified to {}", simplified);
+        let mut net_simplified = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>,
+            _,
+        >::try_from_view(simplified.as_view(), &*HEP_LIB)
+        .unwrap();
 
         net.execute::<Sequential, SmallestDegree, _, _>(&*HEP_LIB)
             .unwrap();
-        net2.execute::<Sequential, SmallestDegree, _, _>(&*HEP_LIB)
+        net_simplified
+            .execute::<Sequential, SmallestDegree, _, _>(&*HEP_LIB)
             .unwrap();
 
         let function_map = HashMap::new();
 
         if let ExecutionResult::Val(v) = net.result_tensor(&*HEP_LIB).unwrap() {
-            if let ExecutionResult::Val(v2) = net2.result_tensor(&*HEP_LIB).unwrap() {
+            if let ExecutionResult::Val(v2) = net_simplified.result_tensor(&*HEP_LIB).unwrap() {
                 let mut res = v.into_owned();
-                let mut res2 = v2.into_owned();
+                let mut res_simplified = v2.into_owned();
                 res.evaluate_complex(|c| c.into(), &const_map, &function_map);
-                res2.evaluate_complex(|c| c.into(), &const_map, &function_map);
+                res_simplified.evaluate_complex(|c| c.into(), &const_map, &function_map);
                 res = res.to_dense();
-                res2 = res2.to_dense();
+                res_simplified = res_simplified.to_dense();
 
-                let mut sub = res.sub_fallible(&res2).unwrap();
+                let mut sub = res.sub_fallible(&res_simplified).unwrap();
                 sub.to_param();
                 let sub = sub.try_into_parametric().unwrap();
                 let zero = sub
@@ -616,11 +617,13 @@ mod tests {
 
                 match zero {
                     ConditionResult::False => panic!(
-                        "Should be zero but \n{}\n minus \n{}\n is \n{}",
-                        res, res2, sub
+                        "Should be zero but \n{}\n minus simplified\n{}\n is \n{}",
+                        res, res_simplified, sub
                     ),
                     ConditionResult::Inconclusive => panic!("Inconclusive"),
-                    _ => {}
+                    _ => {
+                        println!("Works:res\n{}res_simplified\n{}", res, res_simplified)
+                    }
                 }
             } else {
                 panic!("Expected tensor result");
@@ -731,13 +734,13 @@ mod tests {
         fn p(m: impl Into<AbstractIndex>) -> Atom {
             let m_atom: AbstractIndex = m.into();
             let m_atom: Atom = m_atom.into();
-            let mink = Minkowski {}.new_rep(2);
+            let mink = Minkowski {}.new_rep(4);
             function!(symbol!("spenso::p"), mink.to_symbolic([m_atom]))
         }
         fn q(m: impl Into<AbstractIndex>) -> Atom {
             let m_atom: AbstractIndex = m.into();
             let m_atom: Atom = m_atom.into();
-            let mink = Minkowski {}.new_rep(2);
+            let mink = Minkowski {}.new_rep(4);
             function!(symbol!("spenso::q"), mink.to_symbolic([m_atom]))
         }
 
@@ -751,7 +754,7 @@ mod tests {
             * gamma(3, 4, 3)
             * gamma(4, 1, 4));
 
-        // validate_gamma(expr, const_map.clone());
+        validate_gamma(expr, const_map.clone());
         let expr = p(1) * p(1);
 
         let bis = Bispinor {}.new_rep(2);
@@ -768,15 +771,15 @@ mod tests {
             mink.slot(2).to_atom()
         );
 
-        let expr = gamma(1, 2, 1) * gamma(2, 3, 1);
+        let expr = gamma(1, 2, 1) * gamma(2, 1, 1);
         validate_gamma(expr, const_map.clone());
+        let expr = gamma(1, 2, 2) * gamma(2, 1, 1) + gamma(1, 2, 1) * gamma(2, 1, 2);
+        validate_gamma(expr, const_map.clone());
+
+        // // + gamma(1, 2, 1) * gamma(2, 1, 1);
+
+        // // let expr = A(1, 2, 0) * B(2, 1, 3);
         // validate_gamma(expr, const_map.clone());
-        let expr = gamma(1, 2, 1) * gamma(2, 1, 2) + gamma(1, 2, 2) * gamma(2, 1, 1);
-
-        // + gamma(1, 2, 1) * gamma(2, 1, 1);
-
-        // let expr = A(1, 2, 0) * B(2, 1, 3);
-        validate_gamma(expr, const_map.clone());
         // let expr = gamma(1, 2, 1);
 
         // validate_gamma(expr, const_map.clone());
@@ -785,19 +788,19 @@ mod tests {
         // validate_gamma(expr, const_map.clone());
         // assert_eq!(pt, qt);
 
-        let a: DataTensor<_, _> = DenseTensor::fill(
-            OrderedStructure::<Bispinor>::from_iter([Bispinor {}.new_slot(2, 2)]).structure,
-            Complex::new(-1., 0.),
-        )
-        .into();
-        let b: DataTensor<_, _> = DenseTensor::fill(
-            OrderedStructure::<Bispinor>::from_iter([Bispinor {}.new_slot(2, 2)]).structure,
-            Complex::new(1., 0.),
-        )
-        .into();
-        assert_eq!(
-            ParamOrConcrete::<_, OrderedStructure<Bispinor>>::Concrete(a),
-            ParamOrConcrete::<_, OrderedStructure<Bispinor>>::Concrete(b)
-        );
+        // let a: DataTensor<_, _> = DenseTensor::fill(
+        //     OrderedStructure::<Bispinor>::from_iter([Bispinor {}.new_slot(2, 2)]).structure,
+        //     Complex::new(-1., 0.),
+        // )
+        // .into();
+        // let b: DataTensor<_, _> = DenseTensor::fill(
+        //     OrderedStructure::<Bispinor>::from_iter([Bispinor {}.new_slot(2, 2)]).structure,
+        //     Complex::new(1., 0.),
+        // )
+        // .into();
+        // assert_eq!(
+        //     ParamOrConcrete::<_, OrderedStructure<Bispinor>>::Concrete(a),
+        //     ParamOrConcrete::<_, OrderedStructure<Bispinor>>::Concrete(b)
+        // );
     }
 }

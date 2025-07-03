@@ -172,13 +172,11 @@
 
         # Additional dev-shell environment variables can be set directly
         # MY_CUSTOM_DEVELOPMENT_VAR = "something else";
-        RUSTFLAGS = "-C target-cpu=native -Clink-arg=-fuse-ld=${pkgs.mold}/bin/mold";
+        # RUSTFLAGS = "-C target-cpu=native -Clink-arg=-fuse-ld=${pkgs.mold}/bin/mold";
 
         # Extra inputs can be added here; cargo and rustc are provided by default.
         packages = [
           pkgs.cargo-insta
-          pkgs.git
-          # pkgs.ripgrep
           pkgs.quarto
           pkgs.nodejs
           pkgs.uv
@@ -186,8 +184,9 @@
           pkgs.python313
           pkgs.deno
           pkgs.asciinema
-          pkgs.jujutsu
           pkgs.nixd
+          pkgs.nil
+          pkgs.nixfmt
           pkgs.bfg-repo-cleaner
         ];
       };

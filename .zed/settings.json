@@ -1,8 +1,4 @@
 {
-  "ui_font_family": "Zed Plex Mono",
-  "buffer_font_family": "Zed Plex Mono",
-  "buffer_font_weight": 800,
-
   "soft_wrap": "preferred_line_length",
   "lsp": {
     "rust-analyzer": {

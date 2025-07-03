@@ -180,11 +180,11 @@ where
         let s: Result<PermutedStructure<S>, _> = value.try_into();
 
         if let Ok(s) = s {
-            println!("Perm:{}", s.index_permutation);
+            // println!("Perm:{}", s.index_permutation);
             // let s = s;
             match library.key_for_structure(&s) {
                 Ok(key) => {
-                    println!("Adding lib");
+                    // println!("Adding lib");
                     // let t = library.get(&key).unwrap();
                     Ok(Self::library_tensor(
                         &s.structure,

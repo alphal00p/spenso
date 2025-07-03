@@ -378,6 +378,7 @@ pub mod symbolic;
 
 pub trait TensorLibraryData: Neg<Output = Self> {
     fn one() -> Self;
+    fn minus_one() -> Self;
     fn zero() -> Self;
 }
 macro_rules! impl_tensor_library_data {
@@ -392,6 +393,12 @@ macro_rules! impl_tensor_library_data {
             #[inline]
             fn zero() -> Self {
                 $zero_val
+            }
+
+            /// Returns the additive inverse element (minus one) of this type.
+            #[inline]
+            fn minus_one() -> Self {
+                -Self::one()
             }
 
             /// Returns the multiplicative identity element (one) of this type.
@@ -417,6 +424,10 @@ impl_tensor_library_data!(
 impl<T: TensorLibraryData> TensorLibraryData for RealOrComplex<T> {
     fn zero() -> Self {
         RealOrComplex::Real(T::zero())
+    }
+
+    fn minus_one() -> Self {
+        RealOrComplex::Real(T::minus_one())
     }
 
     fn one() -> Self {

@@ -259,15 +259,16 @@ impl<K> NetworkGraph<K> {
             for n in self.graph.iter_crown(nodeid) {
                 if let NetworkEdge::Slot(s) = self.graph[[&n]] {
                     slots.push(s.aind);
-                    ord.push(self.slot_order[n.0]);
+                    // ord.push(self.slot_order[n.0]);
+                    ord.push(s);
                 }
             }
         }
 
-        let perm = Permutation::sort(ord);
-
+        let perm = Permutation::sort(&ord);
+        // perm.apply_slice_in_place(&mut ord);
+        // println!("Inds:{:?}", ord);
         perm.apply_slice_in_place(&mut slots);
-        // println!("Inds:{:?}", slots);
         slots
     }
 
@@ -290,8 +291,13 @@ impl<K> NetworkGraph<K> {
             let libt = lib.get(&k.structure).unwrap();
             let mappingperm = &k.index_permutation;
 
-            mappingperm.apply_slice_in_place(&mut inds);
-            Some(libt.structure.with_indices(&inds).unwrap().permute_inds())
+            println!("Mapping perm: {mappingperm}");
+            mappingperm.apply_slice_in_place_inv(&mut inds);
+            println!("Inds: {inds:?}");
+            let libt_with_indices = libt.structure.with_indices(&inds).unwrap();
+            // libt_with_indices.index_permutation = k.index_permutation.clone();
+
+            Some(libt_with_indices.permute_inds())
         } else {
             None
         }

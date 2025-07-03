@@ -812,6 +812,25 @@ pub trait HasName {
             args: self.args(),
         }
     }
+    #[cfg(feature = "shadowing")]
+    fn expanded_coef_perm(
+        &self,
+        id: FlatIndex,
+        permutation: &Permutation,
+    ) -> ExpandedCoefficent<Self::Args>
+    where
+        Self: TensorStructure,
+        Self::Name: IntoSymbol,
+        Self::Args: IntoArgs,
+    {
+        let mut index = self.co_expanded_index(id).unwrap();
+        index.permute(permutation);
+        ExpandedCoefficent {
+            name: self.name().map(|n| n.ref_into_symbol()),
+            index,
+            args: self.args(),
+        }
+    }
 
     #[cfg(feature = "shadowing")]
     fn flat_coef(&self, id: FlatIndex) -> FlatCoefficent<Self::Args>

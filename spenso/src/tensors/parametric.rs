@@ -16,6 +16,7 @@ use delegate::delegate;
 use anyhow::anyhow;
 use anyhow::{Error, Result};
 
+use approx_derive::AbsDiffEq;
 use atomcore::{ReplaceBuilderGeneric, TensorAtomMaps};
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
@@ -841,6 +842,7 @@ where
 #[trait_decode(trait = symbolica::state::HasStateMap)]
 pub enum ParamOrConcrete<C, S> {
     Concrete(C),
+
     Param(ParamTensor<S>),
 }
 
@@ -1554,65 +1556,6 @@ where
 
 pub type MixedTensor<T = f64, S = NamedStructure<Symbol, Vec<Atom>>> =
     ParamOrConcrete<RealOrComplexTensor<T, S>, S>;
-
-impl<T: Clone, S: TensorStructure + Clone> PartialEq<MixedTensor<T, S>> for MixedTensor<T, S> {
-    fn eq(&self, other: &MixedTensor<T, S>) -> bool {
-        matches!(
-            (self, other),
-            (
-                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
-                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
-            ) | (
-                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
-                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
-            ) | (MixedTensor::Param(_), MixedTensor::Param(_))
-        )
-    }
-}
-
-impl<T: Clone, S: TensorStructure + Clone> Eq for MixedTensor<T, S> {}
-
-impl<T: Clone, S: TensorStructure + Clone> PartialOrd<MixedTensor<T, S>> for MixedTensor<T, S> {
-    fn partial_cmp(&self, other: &MixedTensor<T, S>) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<T: Clone, S: TensorStructure + Clone> Ord for MixedTensor<T, S> {
-    fn cmp(&self, other: &MixedTensor<T, S>) -> std::cmp::Ordering {
-        match (self, other) {
-            (
-                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
-                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
-            ) => std::cmp::Ordering::Equal,
-            (
-                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
-                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
-            ) => std::cmp::Ordering::Less,
-            (MixedTensor::Concrete(RealOrComplexTensor::Real(_)), MixedTensor::Param(_)) => {
-                std::cmp::Ordering::Less
-            }
-            (
-                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
-                MixedTensor::Concrete(RealOrComplexTensor::Real(_)),
-            ) => std::cmp::Ordering::Greater,
-            (
-                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
-                MixedTensor::Concrete(RealOrComplexTensor::Complex(_)),
-            ) => std::cmp::Ordering::Equal,
-            (MixedTensor::Concrete(RealOrComplexTensor::Complex(_)), MixedTensor::Param(_)) => {
-                std::cmp::Ordering::Less
-            }
-            (MixedTensor::Param(_), MixedTensor::Concrete(RealOrComplexTensor::Real(_))) => {
-                std::cmp::Ordering::Greater
-            }
-            (MixedTensor::Param(_), MixedTensor::Concrete(RealOrComplexTensor::Complex(_))) => {
-                std::cmp::Ordering::Greater
-            }
-            (MixedTensor::Param(_), MixedTensor::Param(_)) => std::cmp::Ordering::Equal,
-        }
-    }
-}
 
 impl<'a, I: TensorStructure + Clone + 'a, T: Clone> MixedTensor<T, I> {
     pub fn evaluate_real<A: AtomCore + KeyLookup, F: Fn(&Rational) -> T + Copy>(

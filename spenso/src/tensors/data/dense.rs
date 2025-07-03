@@ -22,6 +22,8 @@ use crate::structure::slot::IsAbstractSlot;
 use crate::structure::StructureError;
 use delegate::delegate;
 
+use approx_derive::AbsDiffEq;
+
 #[cfg(feature = "shadowing")]
 use crate::{
     shadowing::symbolica_utils::{atomic_expanded_label_id, IntoArgs, IntoSymbol},

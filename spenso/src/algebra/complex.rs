@@ -7,8 +7,9 @@ use crate::{
     network::Ref,
     tensors::data::{SparseTensor, StorageTensor},
 };
-use anyhow::{Result, anyhow};
-use approx::{AbsDiffEq, RelativeEq, UlpsEq};
+use anyhow::{anyhow, Result};
+
+use approx_derive::{AbsDiffEq, RelativeEq};
 use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
 use num::{Float, One, Zero};
@@ -24,11 +25,11 @@ use symbolica::{
     evaluate::FunctionMap,
 };
 
-use crate::structure::StructureError;
 use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
 use crate::structure::representation::Representation;
 use crate::structure::slot::IsAbstractSlot;
+use crate::structure::StructureError;
 use delegate::delegate;
 
 #[cfg(feature = "shadowing")]
@@ -46,9 +47,9 @@ use crate::{
     contraction::{Contract, ContractableWith, ContractionError, Trace},
     iterators::IteratableTensor,
     structure::{
+        concrete_index::{ExpandedIndex, FlatIndex},
         CastStructure, HasName, HasStructure, ScalarStructure, ScalarTensor, StructureContract,
         TensorStructure, TracksCount,
-        concrete_index::{ExpandedIndex, FlatIndex},
     },
     tensors::data::{DataTensor, GetTensorData, HasTensorData, SetTensorData, SparseOrDense},
 };
@@ -126,49 +127,6 @@ pub mod sub_assign;
 
 #[cfg(feature = "shadowing")]
 pub mod symbolica_traits;
-
-impl<T: AbsDiffEq> AbsDiffEq for Complex<T>
-where
-    T::Epsilon: Copy,
-{
-    type Epsilon = T::Epsilon;
-
-    fn default_epsilon() -> T::Epsilon {
-        T::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: T::Epsilon) -> bool {
-        T::abs_diff_eq(&self.re, &other.re, epsilon) && T::abs_diff_eq(&self.im, &other.im, epsilon)
-    }
-}
-
-impl<T: RelativeEq> RelativeEq for Complex<T>
-where
-    T::Epsilon: Copy,
-{
-    fn default_max_relative() -> T::Epsilon {
-        T::default_max_relative()
-    }
-
-    fn relative_eq(&self, other: &Self, epsilon: T::Epsilon, max_relative: T::Epsilon) -> bool {
-        T::relative_eq(&self.re, &other.re, epsilon, max_relative)
-            && T::relative_eq(&self.im, &other.im, epsilon, max_relative)
-    }
-}
-
-impl<T: UlpsEq> UlpsEq for Complex<T>
-where
-    T::Epsilon: Copy,
-{
-    fn default_max_ulps() -> u32 {
-        T::default_max_ulps()
-    }
-
-    fn ulps_eq(&self, other: &Self, epsilon: T::Epsilon, max_ulps: u32) -> bool {
-        T::ulps_eq(&self.re, &other.re, epsilon, max_ulps)
-            && T::ulps_eq(&self.im, &other.im, epsilon, max_ulps)
-    }
-}
 
 #[cfg(feature = "shadowing")]
 impl RefZero for Rational {

@@ -13,7 +13,6 @@ use crate::{
     tensors::data::{SparseTensor, StorageTensor},
 };
 use anyhow::{anyhow, Result};
-use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
 use num::{Float, One, Zero};
@@ -60,7 +59,13 @@ use crate::{
 };
 
 #[derive(
-    Clone, Debug, EnumTryAsInner, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+    Clone,
+    Debug,
+    EnumTryAsInner,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+    PartialEq,
+    Eq,
 )]
 #[cfg_attr(
 feature = "shadowing",

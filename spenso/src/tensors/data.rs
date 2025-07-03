@@ -28,6 +28,7 @@ use crate::{
     shadowing::{ShadowMapping, Shadowable},
     tensors::parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
 };
+use approx_derive::AbsDiffEq;
 
 use anyhow::{anyhow, Result};
 

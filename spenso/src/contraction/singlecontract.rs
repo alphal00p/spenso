@@ -555,6 +555,7 @@ where
         i: usize,
         j: usize,
     ) -> Result<Self::LCM, ContractionError> {
+        println!("single contract sparse sparse interleaved");
         let mut result_data = HashMap::default();
         if let Some((_, s)) = self.flat_iter().next() {
             let zero = s.try_upgrade().unwrap().as_ref().ref_zero();

@@ -35,7 +35,7 @@ ahash = { version = "0.8.11", features = ["serde"] }
 bincode-trait-derive = { version = "0.1.0" }
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 append-only-vec = "0.1.6"
-approx = "0.5.1"
+approxim = "0.6.6"
 # auto_enums = "0.8.6"
 bincode = { version = "2.0.1", features = ["serde"] }
 # bincode = "2"
@@ -74,6 +74,7 @@ spenso-macros = { path = "../spenso-macros" }
 features = "0.10.0"
 rayon = "1.10.0"
 tabled = "0.20.0"
+approx-derive = "0.2.6"
 
 [features]
 shadowing = ["dep:symbolica", "spenso-macros/shadowing"]

@@ -995,6 +995,7 @@ impl RepName for LibraryRep {
 
     fn is_neg(self, i: usize) -> bool {
         if let LibraryRep::InlineMetric(a) = self {
+            println!("isneg");
             (INLINE_METRIC[a as usize].1.metric_data)(i)
         } else {
             false

@@ -26,6 +26,12 @@ pub trait Shadowable:
     fn expanded_shadow(&self) -> Result<DenseTensor<Atom, Self::Structure>> {
         self.shadow(Self::Structure::expanded_coef)
     }
+    fn expanded_shadow_perm(
+        &self,
+        perm: &Permutation,
+    ) -> Result<DenseTensor<Atom, Self::Structure>> {
+        self.shadow(|a, id| Self::Structure::expanded_coef_perm(a, id, perm))
+    }
 
     fn flat_shadow(&self) -> Result<DenseTensor<Atom, Self::Structure>> {
         self.shadow(Self::Structure::flat_coef)
@@ -68,7 +74,11 @@ impl<S: Shadowable> Concretize<DenseTensor<Atom, S::Structure>> for S {
     fn concretize(self, perm: Option<Permutation>) -> DenseTensor<Atom, S::Structure> {
         // self.flat_s
         // todo!()
-        self.expanded_shadow().unwrap()
+        if let Some(perm) = perm {
+            self.expanded_shadow_perm(&perm).unwrap()
+        } else {
+            self.expanded_shadow().unwrap()
+        }
     }
 }
 

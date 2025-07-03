@@ -12,3 +12,7 @@ spenso = { path = "../spenso", features = ["shadowing"] }
 symbolica = { version = "0.17.0" }
 spenso-macros = { path = "../spenso-macros" }
 idenso = { path = "../idenso" }
+
+
+ahash = { version = "0.8.11", features = ["serde"] }
+xpct = "0.5.1"

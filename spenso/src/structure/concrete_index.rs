@@ -82,6 +82,12 @@ impl Deref for DualConciousExpandedIndex {
     }
 }
 
+impl DualConciousExpandedIndex {
+    pub fn permute(&mut self, perm: &Permutation) {
+        perm.apply_slice_in_place(&mut self.indices);
+    }
+}
+
 #[cfg(feature = "shadowing")]
 impl From<DualConciousExpandedIndex> for Atom {
     fn from(value: DualConciousExpandedIndex) -> Self {

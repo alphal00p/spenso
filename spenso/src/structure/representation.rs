@@ -168,17 +168,21 @@ pub trait RepName:
         librep.to_symbolic(args)
     }
 
-    #[allow(clippy::cast_possible_wrap)]
     #[cfg(feature = "shadowing")]
-    /// yields a function builder for the representation, adding a first variable: the dimension.
-    ///
+    /// An atom representing the identity function for that representation.
+    /// a is dualized
+    /// b is not
     fn id_atom<'a, It: Into<AtomOrView<'a>>>(
         &self,
         a: impl IntoIterator<Item = It>,
         b: impl IntoIterator<Item = It>,
     ) -> Atom {
         let librep: LibraryRep = (*self).into();
-        function!(ETS.id, librep.dual().to_symbolic(a), librep.to_symbolic(b))
+        function!(
+            ETS.metric,
+            librep.dual().to_symbolic(a),
+            librep.to_symbolic(b)
+        )
     }
 
     #[allow(clippy::cast_possible_wrap)]
@@ -488,7 +492,7 @@ impl<T: RepName> Representation<T> {
     pub fn id<'a, It: Into<AtomOrView<'a>>>(&self, a: It, b: It) -> Atom {
         let a: AtomOrView<'a> = a.into();
         let b: AtomOrView<'a> = b.into();
-        function!(ETS.id, self.dual().pattern(a), self.pattern(b))
+        function!(ETS.metric, self.dual().pattern(a), self.pattern(b))
     }
 
     #[allow(clippy::cast_possible_wrap)]
@@ -521,10 +525,10 @@ impl<T: RepName> Representation<T> {
     }
 
     #[cfg(feature = "shadowing")]
-    pub fn pattern<A: AtomCore>(&self, aind: A) -> Atom {
-        let mut atom = Atom::new();
-        atom.set_from_view(&aind.as_atom_view());
-        self.rep.to_symbolic([self.dim.to_symbolic(), atom])
+    pub fn pattern<'a, A: Into<AtomOrView<'a>>>(&self, aind: A) -> Atom {
+        let dim = AtomOrView::Atom(self.dim.to_symbolic());
+        let a = aind.into();
+        self.rep.to_symbolic([dim, a])
     }
 
     #[cfg(feature = "shadowing")]
@@ -820,7 +824,7 @@ impl ExtendibleReps {
         };
 
         #[cfg(feature = "shadowing")]
-        ETS.id;
+        ETS.metric;
         new.new_self_dual(Euclidean::NAME).unwrap();
         fn mink_is_neg(id: ConcreteIndex) -> bool {
             Minkowski {}.is_neg(id)

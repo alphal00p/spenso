@@ -4,11 +4,15 @@ use std::{
 };
 
 use spenso::{
-    network::library::symbolic::ETS,
+    network::library::symbolic::{ETS, ExplicitKey},
+    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
+        HasName, PermutedStructure, TensorStructure, ToSymbolic,
         abstract_index::AIND_SYMBOLS,
-        representation::{LibraryRep, RepName},
+        permuted::Perm,
+        representation::{LibraryRep, LibrarySlot, RepName},
     },
+    tensors::symbolic::SymbolicTensor,
 };
 use symbolica::{
     atom::{Atom, AtomCore, AtomType, AtomView, Symbol, representation::FunView},
@@ -345,155 +349,79 @@ pub fn wrap_dummies_impl(view: AtomView, header: Symbol) -> Atom {
 pub fn simplify_metrics_impl(view: AtomView) -> Atom {
     let mut reps = vec![];
 
-    for i in LibraryRep::all_self_duals().chain(LibraryRep::all_inline_metrics()) {
-        reps.extend(
-            [
-                (
-                    function!(
-                        ETS.id,
-                        i.to_symbolic([RS.a__]),
-                        LibraryRep::Dummy.to_symbolic([RS.i__])
-                    ) * function!(
-                        RS.f_,
-                        RS.a___,
-                        LibraryRep::Dummy.to_symbolic([RS.i__]),
-                        RS.b___
-                    ),
-                    function!(RS.f_, RS.a___, i.to_symbolic([RS.a__]), RS.b___),
-                ),
-                (
-                    function!(ETS.id, i.to_symbolic([RS.a__]), i.to_symbolic([RS.i__]))
-                        * function!(RS.f_, RS.a___, i.to_symbolic([RS.i__]), RS.b___),
-                    function!(RS.f_, RS.a___, i.to_symbolic([RS.a__]), RS.b___),
-                ),
-                (
-                    function!(ETS.metric, i.to_symbolic([RS.a__]), i.to_symbolic([RS.i__]))
-                        * function!(RS.f_, RS.a___, i.to_symbolic([RS.i__]), RS.b___),
-                    function!(RS.f_, RS.a___, i.to_symbolic([RS.a__]), RS.b___),
-                ),
-                (
-                    function!(
-                        ETS.metric,
-                        i.to_symbolic([RS.d_, RS.i_]),
-                        i.to_symbolic([RS.d_, RS.a_])
-                    )
+    reps.push((
+        function!(ETS.metric, RS.a_, LibraryRep::Dummy.to_symbolic([RS.i__]))
+            * function!(
+                RS.f_,
+                RS.a___,
+                LibraryRep::Dummy.to_symbolic([RS.i__]),
+                RS.b___
+            ),
+        function!(RS.f_, RS.a___, RS.a_, RS.b___),
+    ));
+
+    for i in LibraryRep::all_representations() {
+        reps.extend([(i.id_atom([RS.d_, RS.i_], [RS.d_, RS.i_]), Atom::var(RS.d_))]);
+    }
+
+    // You can only really simplify kroneckers when the metric is the identity or when you have the concept of dualizability
+
+    // The metric acts like the identity when there is no dual
+    for i in LibraryRep::all_inline_metrics().chain(LibraryRep::all_self_duals()) {
+        reps.extend([
+            (
+                i.metric_atom([RS.a__], [RS.i__])
+                    * function!(RS.f_, RS.a___, i.to_symbolic([RS.i__]), RS.b___),
+                function!(RS.f_, RS.a___, i.to_symbolic([RS.a__]), RS.b___),
+            ),
+            //Only when the you have no concept of dualizability is a squared metric acceptable
+            (
+                i.metric_atom([RS.d_, RS.i_], [RS.d_, RS.a_])
                     .pow(Atom::num(2)),
-                    Atom::var(RS.d_),
-                ),
-                (
-                    function!(
-                        ETS.metric,
-                        i.to_symbolic([RS.d_, RS.i_]),
-                        i.to_symbolic([RS.d_, RS.i_])
-                    ),
-                    Atom::var(RS.d_),
-                ),
-                (
-                    function!(
-                        ETS.id,
-                        i.to_symbolic([RS.d_, RS.i_]),
-                        i.to_symbolic([RS.d_, RS.a_])
-                    )
-                    .pow(Atom::num(2)),
-                    Atom::var(RS.d_),
-                ),
-                (
-                    function!(
-                        ETS.id,
-                        i.to_symbolic([RS.d_, RS.i_]),
-                        i.to_symbolic([RS.d_, RS.i_])
-                    ),
-                    Atom::var(RS.d_),
-                ),
-            ]
-            .into_iter()
-            .map(|(p, r)| Replacement::new(p.to_pattern(), r)),
-        );
+                Atom::var(RS.d_),
+            ),
+        ]);
     }
 
     for i in LibraryRep::all_dualizables() {
         let di = i.dual();
 
-        reps.extend(
-            [
-                (
-                    function!(
-                        ETS.id,
-                        i.to_symbolic([RS.a__]),
-                        LibraryRep::Dummy.to_symbolic([RS.i__])
-                    ) * function!(
-                        RS.f_,
-                        RS.a___,
-                        LibraryRep::Dummy.to_symbolic([RS.i__]),
-                        RS.b___
-                    ),
-                    function!(RS.f_, RS.a___, i.to_symbolic([RS.a__]), RS.b___),
-                ),
-                (
-                    function!(
-                        ETS.id,
-                        di.to_symbolic([RS.a__]),
-                        LibraryRep::Dummy.to_symbolic([RS.i__])
-                    ) * function!(
-                        RS.f_,
-                        RS.a___,
-                        LibraryRep::Dummy.to_symbolic([RS.i__]),
-                        RS.b___
-                    ),
-                    function!(RS.f_, RS.a___, di.to_symbolic([RS.a__]), RS.b___),
-                ),
-                (
-                    function!(ETS.id, i.to_symbolic([RS.a__]), di.to_symbolic([RS.i__]))
-                        * function!(RS.f_, RS.a___, i.to_symbolic([RS.i__]), RS.b___),
-                    function!(RS.f_, RS.a___, i.to_symbolic([RS.a__]), RS.b___),
-                ),
-                (
-                    function!(
-                        ETS.id,
-                        i.to_symbolic([RS.d_, RS.i_]),
-                        di.to_symbolic([RS.d_, RS.i_])
-                    ),
-                    Atom::var(RS.d_),
-                ),
-                (
-                    function!(
-                        ETS.metric,
-                        i.to_symbolic([RS.d_, RS.i_]),
-                        di.to_symbolic([RS.d_, RS.i_])
-                    ),
-                    Atom::var(RS.d_),
-                ),
-                (
-                    function!(ETS.id, di.to_symbolic([RS.a__]), i.to_symbolic([RS.i__]))
-                        * function!(RS.f_, RS.a___, di.to_symbolic([RS.i__]), RS.b___),
-                    function!(RS.f_, RS.a___, di.to_symbolic([RS.a__]), RS.b___),
-                ),
-                (
-                    function!(ETS.metric, i.to_symbolic([RS.a__]), i.to_symbolic([RS.i__]))
-                        * function!(RS.f_, RS.a___, di.to_symbolic([RS.i__]), RS.b___),
-                    function!(RS.f_, RS.a___, i.to_symbolic([RS.a__]), RS.b___),
-                ),
-                (
-                    function!(
-                        ETS.metric,
-                        di.to_symbolic([RS.a__]),
-                        di.to_symbolic([RS.i__])
-                    ) * function!(RS.f_, RS.a___, i.to_symbolic([RS.i__]), RS.b___),
-                    function!(RS.f_, RS.a___, di.to_symbolic([RS.a__]), RS.b___),
-                ),
-                (
-                    function!(
-                        ETS.metric,
-                        di.to_symbolic([RS.a__]),
-                        di.to_symbolic([RS.i__])
-                    ) * function!(ETS.metric, i.to_symbolic([RS.i__]), i.to_symbolic([RS.b__])),
-                    function!(ETS.id, di.to_symbolic([RS.a__]), i.to_symbolic([RS.b__])),
-                ),
-            ]
-            .into_iter()
-            .map(|(p, r)| Replacement::new(p.to_pattern(), r)),
-        );
+        reps.extend([
+            (
+                i.id_atom([RS.d_, RS.i_], [RS.d_, RS.a_]).pow(Atom::num(2)),
+                Atom::var(RS.d_),
+            ),
+            (
+                di.id_atom([RS.a__], [RS.i__])
+                    * function!(RS.f_, RS.a___, i.to_symbolic([RS.i__]), RS.b___),
+                function!(RS.f_, RS.a___, i.to_symbolic([RS.a__]), RS.b___),
+            ),
+            (
+                i.id_atom([RS.a__], [RS.i__])
+                    * function!(RS.f_, RS.a___, di.to_symbolic([RS.i__]), RS.b___),
+                function!(RS.f_, RS.a___, di.to_symbolic([RS.a__]), RS.b___),
+            ),
+            (
+                i.metric_atom([RS.a__], [RS.i__])
+                    * function!(RS.f_, RS.a___, di.to_symbolic([RS.i__]), RS.b___),
+                function!(RS.f_, RS.a___, i.to_symbolic([RS.a__]), RS.b___),
+            ),
+            (
+                di.metric_atom([RS.a__], [RS.i__])
+                    * function!(RS.f_, RS.a___, i.to_symbolic([RS.i__]), RS.b___),
+                function!(RS.f_, RS.a___, di.to_symbolic([RS.a__]), RS.b___),
+            ),
+        ]);
     }
+
+    let reps: Vec<_> = reps
+        .into_iter()
+        .map(|(lhs, rhs)| Replacement::new(lhs.to_pattern(), rhs.to_pattern()))
+        .collect();
+
+    // for rep in &reps {
+    //     println!("{}", rep)
+    // }
 
     let mut atom = Atom::new();
     let mut expr = view.to_owned();
@@ -605,6 +533,24 @@ impl MetricSimplifier for Atom {
     }
 }
 
+pub trait PermuteWithMetric {
+    fn permute_with_metric(self) -> Atom;
+}
+
+impl<N> PermuteWithMetric for PermutedStructure<N>
+where
+    N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot>,
+    N::Name: IntoSymbol + Clone,
+    N::Args: IntoArgs,
+{
+    fn permute_with_metric(self) -> Atom {
+        self.map_structure(|a| SymbolicTensor::from_named(&a).unwrap())
+            .permute_inds()
+            .expression
+            .simplify_metrics()
+    }
+}
+
 impl<'a> MetricSimplifier for AtomView<'a> {
     fn to_dots(&self) -> Atom {
         to_dots_impl(*self)
@@ -616,7 +562,7 @@ impl<'a> MetricSimplifier for AtomView<'a> {
 #[cfg(test)]
 mod test {
 
-    use crate::representations::initialize;
+    use crate::representations::{Bispinor, initialize};
 
     use super::*;
 
@@ -690,9 +636,10 @@ mod test {
     #[test]
     fn id_trace() {
         initialize();
-        let expr = parse!("spenso::𝟙(spenso::bis(4,python::l(0)),spenso::bis(4,python::l(0)))")
-            .simplify_metrics();
+        let bis = Bispinor {}.new_rep(symbol!("dim"));
 
-        assert_eq!(expr, Atom::num(4), "got {:#}", expr);
+        let expr = bis.g(9, 9).simplify_metrics();
+
+        assert_eq!(expr, Atom::var(symbol!("dim")), "got {:#}", expr);
     }
 }

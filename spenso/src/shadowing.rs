@@ -678,7 +678,7 @@ pub mod test {
             let structure = [rep.new_rep(4), rep.new_rep(4).dual()];
 
             let idstructure: PermutedStructure<IndexlessNamedStructure<Symbol, (), LibraryRep>> =
-                IndexlessNamedStructure::from_iter(structure, ETS.id, None);
+                IndexlessNamedStructure::from_iter(structure, ETS.metric, None);
 
             let idkey = ExplicitKey::from_structure(&idstructure).unwrap();
 

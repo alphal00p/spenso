@@ -95,15 +95,6 @@ impl<T: RepName> Slot<T> {
             },
         }
     }
-    #[cfg(feature = "shadowing")]
-    pub fn kroneker_atom(&self, other: &Slot<T::Dual>) -> Atom {
-        function!(ETS.id, self.to_atom(), other.to_atom())
-    }
-
-    #[cfg(feature = "shadowing")]
-    pub fn metric_atom(&self, other: &Slot<T>) -> Atom {
-        function!(ETS.metric, self.to_atom(), other.to_atom())
-    }
 }
 
 #[derive(Error, Debug)]

@@ -16,7 +16,7 @@ use anyhow::anyhow;
 use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
-        named::{IdentityName, ID_NAME},
+        named::{IdentityName, METRIC_NAME},
         permuted::{Perm, PermuteTensor},
         representation::{LibraryRep, RepName, REPS},
         HasName, IndexlessNamedStructure, TensorShell,
@@ -194,24 +194,23 @@ pub struct TensorLibrary<T: HasStructure<Structure = ExplicitKey>> {
 }
 
 pub struct ExplicitTensorSymbols {
-    pub id: Symbol,
+    pub flat: Symbol,
     pub metric: Symbol,
 }
 
 pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTensorSymbols {
-    id: Symbol::id(),
-    metric: symbol!(TensorLibrary::<TensorShell<ExplicitKey>>::METRIC_NAME;Symmetric),
+    flat: symbol!("♭";Symmetric),
+    // sharp: symbol!("♯";Symmetric),
+    metric: Symbol::id(),
 });
 
 impl IdentityName for Symbol {
     fn id() -> Self {
-        symbol!(ID_NAME;Symmetric)
+        symbol!(METRIC_NAME;Symmetric)
     }
 }
 
 impl<T: HasStructure<Structure = ExplicitKey>> TensorLibrary<T> {
-    pub const METRIC_NAME: &'static str = "g";
-
     pub fn new() -> Self {
         Self {
             explicit_dimension: AHashMap::new(),
@@ -313,12 +312,7 @@ impl<
         }
     }
     pub fn metric_key(rep: LibraryRep) -> ExplicitKey {
-        ExplicitKey::from_iter(
-            [rep.new_rep(4), rep.new_rep(4)],
-            symbol!(Self::METRIC_NAME),
-            None,
-        )
-        .structure
+        ExplicitKey::from_iter([rep.new_rep(4), rep.new_rep(4)], ETS.metric, None).structure
     }
 
     pub fn generic_mink_metric(key: ExplicitKey) -> T
@@ -361,7 +355,7 @@ impl<
     }
 
     pub fn id(rep: LibraryRep) -> GenericKey {
-        GenericKey::new(ETS.id, None, vec![rep, rep.dual()])
+        GenericKey::new(ETS.metric, None, vec![rep, rep.dual()])
     }
 
     pub fn checked_identity(key: ExplicitKey) -> T
@@ -822,6 +816,30 @@ mod test {
         }
 
         let expr = A(0, 1) - A(1, 0);
+
+        let mut net = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            _,
+        >::try_from_view(expr.as_view(), &lib)
+        .map_err(|a| a.to_string())
+        .unwrap();
+
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
+
+        if let Ok(ExecutionResult::Val(v)) = net.result_tensor(&lib) {
+            println!("{}", v)
+        }
+    }
+    #[test]
+    fn trace_metric_kron() {
+        REPS.read().unwrap();
+        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        lib.update_ids();
+
+        let mink = Minkowski {}.new_rep(4);
+
+        let expr = mink.id(1, 0) * mink.id(0, 1);
 
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,

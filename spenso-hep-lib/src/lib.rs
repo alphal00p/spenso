@@ -316,7 +316,7 @@ where
 // pub fn id_impl(rep: SpensoRepresentation) -> Self {
 //     ExplicitKey::from_iter(
 //         [rep.representation, rep.representation.dual()],
-//         ETS.id,
+//         ETS.metric,
 //         None,
 //     )
 //     .structure
@@ -415,7 +415,10 @@ pub static HEP_LIB: LazyLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>> =
 mod tests {
     use std::borrow::Borrow;
 
-    use idenso::{gamma::GammaSimplifier, metric::MetricSimplifier};
+    use idenso::{
+        gamma::GammaSimplifier,
+        metric::{MetricSimplifier, PermuteWithMetric},
+    };
     use spenso::{
         algebra::upgrading_arithmetic::{FallibleAdd, FallibleSub},
         iterators::IteratableTensor,
@@ -443,7 +446,7 @@ mod tests {
 
     #[test]
     fn simple_scalar() {
-        let _ = ETS.id;
+        let _ = ETS.metric;
         let a = HEP_LIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
 
         let expr = parse!("gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_4))*gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
@@ -516,7 +519,7 @@ mod tests {
 
     #[test]
     fn parse_problem() {
-        let _ = ETS.id;
+        let _ = ETS.metric;
         let a = HEP_LIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
 
         let expr = parse!("((N(4,mink(4,l_2))*P(4,mink(4,r_2))+N(4,mink(4,r_2))*P(4,mink(4,l_2)))*N(4,mink(4,dummy_ss_4_1))*P(4,mink(4,dummy_ss_4_1))+-1*N(4,mink(4,dummy_ss_4_2))^2*P(4,mink(4,l_2))*P(4,mink(4,r_2))+-1*N(4,mink(4,dummy_ss_4_3))*N(4,mink(4,dummy_ss_4_4))*P(4,mink(4,dummy_ss_4_3))*P(4,mink(4,dummy_ss_4_4))*g(mink(4,l_2),mink(4,r_2)))*((N(5,mink(4,l_3))*P(5,mink(4,r_3))+N(5,mink(4,r_3))*P(5,mink(4,l_3)))*N(5,mink(4,dummy_ss_5_1))*P(5,mink(4,dummy_ss_5_1))+-1*N(5,mink(4,dummy_ss_5_2))^2*P(5,mink(4,l_3))*P(5,mink(4,r_3))+-1*N(5,mink(4,dummy_ss_5_3))*N(5,mink(4,dummy_ss_5_4))*P(5,mink(4,dummy_ss_5_3))*P(5,mink(4,dummy_ss_5_4))*g(mink(4,l_3),mink(4,r_3)))*(-1*G^2*P(0,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5))+G^2*P(2,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5)))*(-1*P(2,mink(4,l_20))+P(0,mink(4,l_20)))*-1*G^2*P(2,mink(4,dummy_2_0))*P(3,mink(4,dummy_3_1))*𝑖*𝟙(bis(4,l_0),bis(4,l_7))*𝟙(bis(4,l_1),bis(4,l_4))*𝟙(mink(4,l_2),mink(4,l_5))*𝟙(mink(4,l_3),mink(4,l_4))*gamma(bis(4,l_1),bis(4,r_1),mink(4,dummy_3_1))*gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_20))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))*gamma(bis(4,r_0),bis(4,l_0),mink(4,dummy_2_0))
@@ -725,10 +728,7 @@ mod tests {
             gamma_strct
                 .reindex([i.into(), j.into(), mu.into()])
                 .unwrap()
-                .map_structure(|a| SymbolicTensor::from_named(&a).unwrap())
-                .permute_inds()
-                .expression
-                .simplify_metrics()
+                .permute_with_metric()
         }
 
         fn p(m: impl Into<AbstractIndex>) -> Atom {

@@ -180,7 +180,7 @@ fn g_concrete(mu: usize, nu: usize) -> RealOrComplexTensor<f64, ShadowedStructur
     let _ = AIND_SYMBOLS.dind;
     let mink = LibraryRep::from(Minkowski {}).rep(4);
 
-    NamedStructure::<_, (), LibraryRep>::from_iter([mink.slot(mu), mink.slot(nu)], ETS.id, None)
+    NamedStructure::<_, (), LibraryRep>::from_iter([mink.slot(mu), mink.slot(nu)], ETS.metric, None)
         .to_shell()
         .to_explicit(&EXPLICIT_TENSOR_MAP.read().unwrap())
         .unwrap()

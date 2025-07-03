@@ -430,7 +430,7 @@ pub mod test {
 
     #[test]
     fn parse() {
-        let _ = ETS.id;
+        let _ = ETS.metric;
         let expr = parse!("g(mink(4,6),mink(4,7))");
 
         let structure = SymbolicTensor::from_permuted(

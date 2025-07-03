@@ -117,10 +117,10 @@ impl<N, A, R: RepName> ScalarStructure for NamedStructure<N, A, R> {
 pub trait IdentityName {
     fn id() -> Self;
 }
-pub const ID_NAME: &'static str = "𝟙";
+pub const METRIC_NAME: &'static str = "g";
 impl IdentityName for String {
     fn id() -> Self {
-        ID_NAME.to_string()
+        METRIC_NAME.to_string()
     }
 }
 

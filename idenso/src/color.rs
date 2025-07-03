@@ -2,20 +2,25 @@ use std::{collections::HashSet, sync::LazyLock};
 
 use itertools::Itertools;
 use spenso::{
-    network::library::symbolic::ETS,
+    network::library::symbolic::{ETS, ExplicitKey},
     structure::{
-        IndexlessNamedStructure, PermutedStructure,
+        IndexlessNamedStructure, PermutedStructure, TensorStructure,
+        abstract_index::AbstractIndex,
+        dimension::Dimension,
+        permuted::Perm,
         representation::{LibraryRep, Minkowski, RepName},
+        slot::IsAbstractSlot,
     },
+    tensors::symbolic::SymbolicTensor,
 };
 use symbolica::{
-    atom::{Atom, AtomCore, AtomView, Symbol},
+    atom::{Atom, AtomCore, AtomOrView, AtomView, Symbol},
     function,
     id::{MatchSettings, Pattern, Replacement},
     symbol,
 };
 
-use crate::representations::ColorAntiFundamental;
+use crate::{metric::PermuteWithMetric, representations::ColorAntiFundamental};
 
 use super::{
     metric::MetricSimplifier,
@@ -29,15 +34,82 @@ pub enum ColorError {
 }
 
 pub struct ColorSymbols {
+    pub nc_: Symbol,
+    pub adj_: Symbol,
     pub t: Symbol,
     pub f: Symbol,
     pub tr: Symbol,
     pub nc: Symbol,
 }
 
+impl ColorSymbols {
+    // Generator for the adjoint representation of SU(N)
+    pub fn t_strct(
+        &self,
+        fundimd: impl Into<Dimension>,
+        adim: impl Into<Dimension>,
+    ) -> ExplicitKey {
+        let nc = fundimd.into();
+        let res = ExplicitKey::from_iter(
+            [
+                ColorAdjoint {}.new_rep(adim).cast(),
+                ColorFundamental {}.new_rep(nc).to_lib(),
+                ColorAntiFundamental {}.new_rep(nc).cast(),
+            ],
+            self.t,
+            None,
+        );
+        debug_assert!(res.rep_permutation.is_identity());
+        res.structure
+    }
+    pub fn t_pattern(
+        &self,
+        fundimd: impl Into<Dimension>,
+        adim: impl Into<Dimension>,
+        a: impl Into<AbstractIndex>,
+        i: impl Into<AbstractIndex>,
+        j: impl Into<AbstractIndex>,
+    ) -> Atom {
+        self.t_strct(fundimd, adim)
+            .reindex(&[a.into(), i.into(), j.into()])
+            .unwrap()
+            .permute_with_metric()
+    }
+
+    pub fn f_strct(&self, adim: impl Into<Dimension>) -> ExplicitKey {
+        let adim = adim.into();
+        let res = ExplicitKey::from_iter(
+            [
+                ColorAdjoint {}.new_rep(adim),
+                ColorAdjoint {}.new_rep(adim),
+                ColorAdjoint {}.new_rep(adim),
+            ],
+            self.f,
+            None,
+        );
+        debug_assert!(res.rep_permutation.is_identity());
+        res.structure
+    }
+
+    pub fn f_pattern(
+        &self,
+        adim: impl Into<Dimension>,
+        a: impl Into<AbstractIndex>,
+        b: impl Into<AbstractIndex>,
+        c: impl Into<AbstractIndex>,
+    ) -> Atom {
+        self.f_strct(adim)
+            .reindex(&[a.into(), b.into(), c.into()])
+            .unwrap()
+            .permute_with_metric()
+    }
+}
+
 pub static CS: LazyLock<ColorSymbols> = LazyLock::new(|| ColorSymbols {
     t: symbol!("spenso::t"),
     f: symbol!("spenso::f"),
+    adj_: symbol!("adj_"),
+    nc_: symbol!("nc_"),
     tr: symbol!("spenso::TR"),
     nc: symbol!("spenso::Nc"),
 });
@@ -80,7 +152,7 @@ pub trait SelectiveExpand {
     fn expand_in_patterns(&self, pats: &[Pattern]) -> Atom;
     fn expand_metrics(&self) -> Atom {
         let metric_pat = function!(ETS.metric, RS.a__).to_pattern();
-        let id_pat = function!(ETS.id, RS.a__).to_pattern();
+        let id_pat = function!(ETS.metric, RS.a__).to_pattern();
 
         self.expand_in_patterns(&[metric_pat, id_pat])
     }
@@ -151,175 +223,100 @@ impl<'a> SelectiveExpand for AtomView<'a> {
 }
 
 pub fn color_simplify_impl(expression: AtomView) -> Result<Atom, ColorError> {
-    let cof = ColorFundamental {};
-    let coaf = ColorFundamental {}.dual();
-    let coad = ColorAdjoint {};
     let tr = Atom::var(CS.tr);
-    let nc = Atom::var(CS.nc);
+
+    fn t(
+        a: impl Into<AbstractIndex>,
+        i: impl Into<AbstractIndex>,
+        j: impl Into<AbstractIndex>,
+    ) -> Atom {
+        CS.t_pattern(CS.nc_, CS.adj_, a, i, j)
+    }
+
+    fn f(
+        a: impl Into<AbstractIndex>,
+        b: impl Into<AbstractIndex>,
+        c: impl Into<AbstractIndex>,
+    ) -> Atom {
+        fn t(
+            a: impl Into<AbstractIndex>,
+            i: impl Into<AbstractIndex>,
+            j: impl Into<AbstractIndex>,
+        ) -> Atom {
+            CS.t_pattern(CS.nc_, CS.adj_, a, i, j)
+        }
+        CS.f_pattern(CS.adj_, a, b, c)
+    }
+
+    let coad = ColorAdjoint {}.new_rep(CS.adj_);
+    let cof = ColorFundamental {}.new_rep(CS.nc_);
+    let coaf = cof.dual();
+
     let reps = vec![
+        (t(RS.a_, RS.b_, RS.b_), Atom::num(0)),
         (
-            function!(RS.f_, RS.a___, cof.to_symbolic([RS.b__]), RS.c___)
-                * function!(
-                    ETS.id,
-                    coaf.to_symbolic([RS.b__]),
-                    cof.to_symbolic([RS.c__])
-                ),
-            function!(RS.f_, RS.a___, cof.to_symbolic([RS.c__]), RS.c___),
+            t(RS.a_, RS.i_, RS.j_) * t(RS.b_, RS.j_, RS.i_),
+            &tr * coad.g(RS.a_, RS.b_),
         ),
         (
-            function!(RS.f_, RS.a___, coaf.to_symbolic([RS.b__]), RS.c___)
-                * function!(
-                    ETS.id,
-                    cof.to_symbolic([RS.b__]),
-                    coaf.to_symbolic([RS.c__])
-                ),
-            function!(RS.f_, RS.a___, coaf.to_symbolic([RS.c__]), RS.c___),
+            t(RS.a_, RS.i_, RS.j_).pow(Atom::num(2)),
+            &tr * coad.g(RS.a_, RS.a_),
         ),
         (
-            function!(RS.f_, RS.a___, coad.to_symbolic([RS.b__]), RS.c___)
-                * function!(
-                    ETS.id,
-                    coad.to_symbolic([RS.b__]),
-                    coad.to_symbolic([RS.a__])
-                ),
-            function!(RS.f_, RS.a___, coad.to_symbolic([RS.a__]), RS.c___),
+            t(RS.e_, RS.a_, RS.b_) * t(RS.e_, RS.c_, RS.d_),
+            &tr * (coaf.id(RS.a_, RS.d_) * coaf.id(RS.c_, RS.b_)
+                - (coaf.id(RS.a_, RS.b_) * coaf.id(RS.c_, RS.d_) / CS.nc_)),
         ),
         (
-            function!(RS.f_, RS.a___, coad.to_symbolic([RS.a__]), RS.c___)
-                * function!(
-                    ETS.id,
-                    coad.to_symbolic([RS.b__]),
-                    coad.to_symbolic([RS.a__])
-                ),
-            function!(RS.f_, RS.a___, coad.to_symbolic([RS.b__]), RS.c___),
+            t(RS.i_, RS.a_, RS.b_) * t(RS.e_, RS.b_, RS.c_) * t(RS.i_, RS.c_, RS.d_),
+            -(&tr / Atom::var(CS.nc_)) * t(RS.e_, RS.a_, RS.d_),
         ),
-        (
-            function!(
-                ETS.id,
-                coaf.to_symbolic([RS.a__]),
-                cof.to_symbolic([RS.a__])
-            ),
-            nc.clone(),
-        ),
-        (
-            function!(
-                ETS.id,
-                cof.to_symbolic([RS.a__]),
-                coaf.to_symbolic([RS.a__])
-            ),
-            nc.clone(),
-        ),
-        (
-            function!(
-                ETS.id,
-                coad.to_symbolic([RS.a__]),
-                coad.to_symbolic([RS.a__])
-            ),
-            (&nc * &nc) - 1,
-        ),
-        (
-            function!(
-                CS.t,
-                RS.a_,
-                cof.to_symbolic([RS.b__]),
-                coaf.to_symbolic([RS.b__])
-            ),
-            Atom::num(0),
-        ),
-        (
-            function!(
-                CS.t,
-                RS.a_,
-                cof.to_symbolic([RS.c__]),
-                coaf.to_symbolic([RS.e__])
-            ) * function!(
-                CS.t,
-                RS.b_,
-                cof.to_symbolic([RS.e__]),
-                coaf.to_symbolic([RS.c__])
-            ),
-            &tr * function!(ETS.id, RS.a_, RS.b_),
-        ),
-        (
-            function!(
-                CS.t,
-                RS.a_,
-                cof.to_symbolic([RS.c__]),
-                coaf.to_symbolic([RS.e__])
-            )
-            .pow(Atom::num(2)),
-            &tr * function!(ETS.id, RS.a_, RS.a_),
-        ),
-        (
-            function!(CS.t, RS.e_, RS.a_, RS.b_) * function!(CS.t, RS.e_, RS.c_, RS.d_),
-            &tr * (function!(ETS.id, RS.a_, RS.d_) * function!(ETS.id, RS.c_, RS.b_)
-                - (function!(ETS.id, RS.a_, RS.b_) * function!(ETS.id, RS.c_, RS.d_) / &nc)),
-        ),
-        (
-            function!(CS.t, RS.i_, RS.a_, coaf.to_symbolic([RS.b__]))
-                * function!(
-                    CS.t,
-                    RS.e_,
-                    cof.to_symbolic([RS.b__]),
-                    coaf.to_symbolic([RS.c__])
-                )
-                * function!(CS.t, RS.i_, cof.to_symbolic([RS.c__]), RS.d_),
-            -(&tr / &nc) * function!(CS.t, RS.e_, RS.a_, RS.d_),
-        ),
-        (
-            function!(
-                CS.f,
-                coad.to_symbolic([RS.a__]),
-                coad.to_symbolic([RS.b__]),
-                coad.to_symbolic([RS.c__])
-            )
-            .pow(Atom::num(2)),
-            &nc * (&nc * &nc - 1),
-        ),
+        (f(RS.a_, RS.b_, RS.c_).pow(Atom::num(2)), CS.nc * CS.adj_),
     ];
 
     let i = symbol!("i");
     let j = symbol!("j");
     let k = symbol!("k");
 
-    let frep = [Replacement::new(
+    fn ta<'a>(
+        a: impl Into<AbstractIndex>,
+        i: impl Into<AtomOrView<'a>>,
+        j: impl Into<AtomOrView<'a>>,
+    ) -> Atom {
         function!(
-            CS.f,
-            coad.to_symbolic([RS.d_, RS.a_]),
-            coad.to_symbolic([RS.d_, RS.b_]),
-            coad.to_symbolic([RS.d_, RS.c_])
+            CS.t,
+            ColorAdjoint {}.new_rep(CS.adj_).slot(a).to_atom(),
+            ColorFundamental {}.new_rep(CS.nc).pattern(i),
+            ColorAntiFundamental {}.new_rep(CS.nc).pattern(j)
         )
-        .to_pattern(),
-        (((function!(
-            CS.t,
-            coad.to_symbolic([RS.d_, RS.a_]),
-            cof.to_symbolic([Atom::num(3), function!(i, RS.a_, RS.b_, RS.c_)]),
-            coaf.to_symbolic([Atom::num(3), function!(j, RS.a_, RS.b_, RS.c_)])
-        ) * function!(
-            CS.t,
-            coad.to_symbolic([RS.d_, RS.b_]),
-            cof.to_symbolic([Atom::num(3), function!(j, RS.a_, RS.b_, RS.c_)]),
-            coaf.to_symbolic([Atom::num(3), function!(k, RS.a_, RS.b_, RS.c_)])
-        ) * function!(
-            CS.t,
-            coad.to_symbolic([RS.d_, RS.c_]),
-            cof.to_symbolic([Atom::num(3), function!(k, RS.a_, RS.b_, RS.c_)]),
-            coaf.to_symbolic([Atom::num(3), function!(i, RS.a_, RS.b_, RS.c_)])
-        ) - function!(
-            CS.t,
-            coad.to_symbolic([RS.d_, RS.a_]),
-            cof.to_symbolic([Atom::num(3), function!(i, RS.a_, RS.b_, RS.c_)]),
-            coaf.to_symbolic([Atom::num(3), function!(j, RS.a_, RS.b_, RS.c_)])
-        ) * function!(
-            CS.t,
-            coad.to_symbolic([RS.d_, RS.c_]),
-            cof.to_symbolic([Atom::num(3), function!(j, RS.a_, RS.b_, RS.c_)]),
-            coaf.to_symbolic([Atom::num(3), function!(k, RS.a_, RS.b_, RS.c_)])
-        ) * function!(
-            CS.t,
-            coad.to_symbolic([RS.d_, RS.b_]),
-            cof.to_symbolic([Atom::num(3), function!(k, RS.a_, RS.b_, RS.c_)]),
-            coaf.to_symbolic([Atom::num(3), function!(i, RS.a_, RS.b_, RS.c_)])
+    }
+
+    let frep = [Replacement::new(
+        f(RS.a_, RS.b_, RS.c_).to_pattern(),
+        (((ta(
+            RS.a_,
+            function!(i, RS.a_, RS.b_, RS.c_),
+            function!(j, RS.a_, RS.b_, RS.c_),
+        ) * ta(
+            RS.b_,
+            function!(j, RS.a_, RS.b_, RS.c_),
+            function!(k, RS.a_, RS.b_, RS.c_),
+        ) * ta(
+            RS.c_,
+            function!(k, RS.a_, RS.b_, RS.c_),
+            function!(i, RS.a_, RS.b_, RS.c_),
+        ) - ta(
+            RS.a_,
+            function!(i, RS.a_, RS.b_, RS.c_),
+            function!(j, RS.a_, RS.b_, RS.c_),
+        ) * ta(
+            RS.c_,
+            function!(j, RS.a_, RS.b_, RS.c_),
+            function!(k, RS.a_, RS.b_, RS.c_),
+        ) * ta(
+            RS.b_,
+            function!(k, RS.a_, RS.b_, RS.c_),
+            function!(i, RS.a_, RS.b_, RS.c_),
         )) / &tr)
             * -Atom::i())
         .to_pattern(),
@@ -337,10 +334,12 @@ pub fn color_simplify_impl(expression: AtomView) -> Result<Atom, ColorError> {
         .collect();
 
     let mut atom = Atom::num(0);
-    // for r in &replacements {
-    //     println!("{r}")
-    // }
-
+    for r in &replacements {
+        println!("{r}")
+    }
+    for f in &frep {
+        println!("{f}")
+    }
     let mut expression = expression.to_owned();
     let mut first = true;
     while first || expression.replace_multiple_into(&replacements, &mut atom) {
@@ -531,16 +530,16 @@ mod test {
             *g(mink(D,4),mink(D,7))
             *t(coad(Nc^2-1,6),cof(Nc,5),dind(cof(Nc,4)))
             *f(coad(Nc^2-1,7),coad(Nc^2-1,8),coad(Nc^2-1,9))
-            *𝟙(bis(D,0),bis(D,5))
-            *𝟙(bis(D,1),bis(D,4))
-            *𝟙(mink(D,2),mink(D,5))
-            *𝟙(mink(D,3),mink(D,6))
-            *𝟙(coad(Nc^2-1,2),coad(Nc^2-1,7))
-            *𝟙(coad(Nc^2-1,3),coad(Nc^2-1,8))
-            *𝟙(coad(Nc^2-1,6),coad(Nc^2-1,9))
-            *𝟙(cof(Nc,0),dind(cof(Nc,5)))
-            *𝟙(cof(Nc,4),dind(cof(Nc,1)))
-            *gamma(mink(D,4),bis(D,5),bis(D,4))
+            *g(bis(D,0),bis(D,5))
+            *g(bis(D,1),bis(D,4))
+            *g(mink(D,2),mink(D,5))
+            *g(mink(D,3),mink(D,6))
+            *g(coad(Nc^2-1,2),coad(Nc^2-1,7))
+            *g(coad(Nc^2-1,3),coad(Nc^2-1,8))
+            *g(coad(Nc^2-1,6),coad(Nc^2-1,9))
+            *g(cof(Nc,0),dind(cof(Nc,5)))
+            *g(cof(Nc,4),dind(cof(Nc,1)))
+            *gamma(bis(D,5),bis(D,4),mink(D,4))
             *vbar(1,bis(D,1))
             *u(0,bis(D,0))
             *ϵbar(2,mink(D,2))
@@ -548,66 +547,44 @@ mod test {
                 "spenso"
             ),
             parse_lit!(
-                -12 * spenso::TR
-                    ^ 2 * spenso::Nc
-                    ^ -1 * spenso::G
-                    ^ 4 * (spenso::D - 2)
-                    ^ -2 * (-2 * spenso::Nc + spenso::Nc ^ 3 + 3)
-                        * (-2 * dot(spenso::Q(0), spenso::Q(1)) * dot(spenso::Q(2), spenso::Q(2))
-                            + dot(spenso::Q(0), spenso::Q(1)) * dot(spenso::Q(2), spenso::Q(3))
-                            - 3 * dot(spenso::Q(0), spenso::Q(1))
-                                * dot(spenso::Q(2), spenso::Q(4))
-                            - 2 * dot(spenso::Q(0), spenso::Q(1))
-                                * dot(spenso::Q(3), spenso::Q(3))
-                            - 3 * dot(spenso::Q(0), spenso::Q(1))
-                                * dot(spenso::Q(3), spenso::Q(4))
-                            - 3 * dot(spenso::Q(0), spenso::Q(1))
-                                * dot(spenso::Q(4), spenso::Q(4))
-                            + 2 * dot(spenso::Q(0), spenso::Q(2))
-                                * dot(spenso::Q(1), spenso::Q(2))
-                            - dot(spenso::Q(0), spenso::Q(2)) * dot(spenso::Q(1), spenso::Q(3))
-                            + dot(spenso::Q(0), spenso::Q(2)) * dot(spenso::Q(1), spenso::Q(4))
-                            - dot(spenso::Q(0), spenso::Q(3)) * dot(spenso::Q(1), spenso::Q(2))
-                            + 2 * dot(spenso::Q(0), spenso::Q(3))
-                                * dot(spenso::Q(1), spenso::Q(3))
-                            + dot(spenso::Q(0), spenso::Q(3)) * dot(spenso::Q(1), spenso::Q(4))
-                            + dot(spenso::Q(0), spenso::Q(4)) * dot(spenso::Q(1), spenso::Q(2))
-                            + dot(spenso::Q(0), spenso::Q(4)) * dot(spenso::Q(1), spenso::Q(3))
-                            + 2 * dot(spenso::Q(0), spenso::Q(4))
-                                * dot(spenso::Q(1), spenso::Q(4))
-                            + spenso::D
-                                * dot(spenso::Q(0), spenso::Q(1))
-                                * dot(spenso::Q(2), spenso::Q(2))
-                            - spenso::D
-                                * dot(spenso::Q(0), spenso::Q(1))
-                                * dot(spenso::Q(2), spenso::Q(3))
-                            + spenso::D
-                                * dot(spenso::Q(0), spenso::Q(1))
-                                * dot(spenso::Q(2), spenso::Q(4))
-                            + spenso::D
-                                * dot(spenso::Q(0), spenso::Q(1))
-                                * dot(spenso::Q(3), spenso::Q(3))
-                            + spenso::D
-                                * dot(spenso::Q(0), spenso::Q(1))
-                                * dot(spenso::Q(3), spenso::Q(4))
-                            + spenso::D
-                                * dot(spenso::Q(0), spenso::Q(1))
-                                * dot(spenso::Q(4), spenso::Q(4))
-                            - spenso::D
-                                * dot(spenso::Q(0), spenso::Q(2))
-                                * dot(spenso::Q(1), spenso::Q(2))
-                            + spenso::D
-                                * dot(spenso::Q(0), spenso::Q(2))
-                                * dot(spenso::Q(1), spenso::Q(3))
-                            + spenso::D
-                                * dot(spenso::Q(0), spenso::Q(3))
-                                * dot(spenso::Q(1), spenso::Q(2))
-                            - spenso::D
-                                * dot(spenso::Q(0), spenso::Q(3))
-                                * dot(spenso::Q(1), spenso::Q(3))),
-                "symbolica_community"
+                -4 * TR
+                    ^ 2 * Nc * G
+                    ^ 4 * (Nc - 1) * (Nc + 1) * (D - 2)
+                    ^ -2 * (-2 * dot(Q(0), Q(1)) * dot(Q(2), Q(2))
+                        + dot(Q(0), Q(1)) * dot(Q(2), Q(3))
+                        - 3 * dot(Q(0), Q(1)) * dot(Q(2), Q(4))
+                        - 2 * dot(Q(0), Q(1)) * dot(Q(3), Q(3))
+                        - 3 * dot(Q(0), Q(1)) * dot(Q(3), Q(4))
+                        - 3 * dot(Q(0), Q(1)) * dot(Q(4), Q(4))
+                        + 2 * dot(Q(0), Q(2)) * dot(Q(1), Q(2))
+                        - dot(Q(0), Q(2)) * dot(Q(1), Q(3))
+                        + dot(Q(0), Q(2)) * dot(Q(1), Q(4))
+                        - dot(Q(0), Q(3)) * dot(Q(1), Q(2))
+                        + 2 * dot(Q(0), Q(3)) * dot(Q(1), Q(3))
+                        + dot(Q(0), Q(3)) * dot(Q(1), Q(4))
+                        + dot(Q(0), Q(4)) * dot(Q(1), Q(2))
+                        + dot(Q(0), Q(4)) * dot(Q(1), Q(3))
+                        + 2 * dot(Q(0), Q(4)) * dot(Q(1), Q(4))
+                        + D * dot(Q(0), Q(1)) * dot(Q(2), Q(2))
+                        - D * dot(Q(0), Q(1)) * dot(Q(2), Q(3))
+                        + D * dot(Q(0), Q(1)) * dot(Q(2), Q(4))
+                        + D * dot(Q(0), Q(1)) * dot(Q(3), Q(3))
+                        + D * dot(Q(0), Q(1)) * dot(Q(3), Q(4))
+                        + D * dot(Q(0), Q(1)) * dot(Q(4), Q(4))
+                        - D * dot(Q(0), Q(2)) * dot(Q(1), Q(2))
+                        + D * dot(Q(0), Q(2)) * dot(Q(1), Q(3))
+                        + D * dot(Q(0), Q(3)) * dot(Q(1), Q(2))
+                        - D * dot(Q(0), Q(3)) * dot(Q(1), Q(3))),
+                "spenso"
             ),
         )
+    }
+
+    #[test]
+    fn t_structure() {
+        println!("{}", CS.t_strct(3, 8));
+
+        Atom::Zero.simplify_metrics();
     }
 
     #[test]
@@ -615,10 +592,10 @@ mod test {
         initialize();
         let spin_sum_rule = parse!(
             "
-            𝟙(coad(Nc^2-1, left(3)), coad(Nc^2-1, right(3)))
-                * 𝟙(coad(Nc^2-1, left(2)), coad(Nc^2-1, right(2)))
-                * 𝟙(cof(Nc, right(0)), dind(cof(Nc, left(0))))
-                * 𝟙(cof(Nc, left(1)), dind(cof(Nc, right(1))))",
+            g(coad(Nc^2-1, left(3)), coad(Nc^2-1, right(3)))
+                * g(coad(Nc^2-1, left(2)), coad(Nc^2-1, right(2)))
+                * g(cof(Nc, right(0)), dind(cof(Nc, left(0))))
+                * g(cof(Nc, left(1)), dind(cof(Nc, right(1))))",
             "spenso"
         );
 
@@ -626,11 +603,11 @@ mod test {
             "
             t(coad(Nc^2-1, 6), cof(Nc, 5), dind(cof(Nc, 4)))
                 * f(coad(Nc^2-1, 7), coad(Nc^2-1, 8), coad(Nc^2-1, 9))
-                * 𝟙(coad(Nc^2-1, 2), coad(Nc^2-1, 7))
-                * 𝟙(coad(Nc^2-1, 3), coad(Nc^2-1, 8))
-                * 𝟙(coad(Nc^2-1, 6), coad(Nc^2-1, 9))
-                * 𝟙(cof(Nc, 0), dind(cof(Nc, 5)))
-                * 𝟙(cof(Nc, 4), dind(cof(Nc, 1)))",
+                * g(coad(Nc^2-1, 2), coad(Nc^2-1, 7))
+                * g(coad(Nc^2-1, 3), coad(Nc^2-1, 8))
+                * g(coad(Nc^2-1, 6), coad(Nc^2-1, 9))
+                * g(cof(Nc, 0), dind(cof(Nc, 5)))
+                * g(cof(Nc, 4), dind(cof(Nc, 1)))",
             "spenso"
         );
         let amplitude_color_left = amplitude_color.wrap_indices(symbol!("spenso::left"));
@@ -669,16 +646,16 @@ mod test {
             "
             1/4*1/(D-2)^2*
             (
-                (-1) * gamma(mink(D,1337),bis(D,left(1)),bis(D,right(1)))*Q(1,mink(D,1337))
-                * gamma(mink(D,1338),bis(D,right(0)),bis(D,left(0)))*Q(0,mink(D,1338))
+                (-1) * gamma(bis(D,left(1)),bis(D,right(1)),mink(D,1337))*Q(1,mink(D,1337))
+                * gamma(bis(D,right(0)),bis(D,left(0)),mink(D,1338))*Q(0,mink(D,1338))
                 * (-1) * g(mink(D,left(2)),mink(D,right(2)))
                 * (-1) * g(mink(D,left(3)),mink(D,right(3)))
                 )
                 * (
-                    𝟙(coad(Nc^2-1, left(3)), coad(Nc^2-1, right(3)))
-                    * 𝟙(coad(Nc^2-1, left(2)), coad(Nc^2-1, right(2)))
-                    * 𝟙(cof(Nc, right(0)), dind(cof(Nc, left(0))))
-                    * 𝟙(cof(Nc, left(1)), dind(cof(Nc, right(1))))
+                    g(coad(Nc^2-1, left(3)), coad(Nc^2-1, right(3)))
+                    * g(coad(Nc^2-1, left(2)), coad(Nc^2-1, right(2)))
+                    * g(cof(Nc, right(0)), dind(cof(Nc, left(0))))
+                    * g(cof(Nc, left(1)), dind(cof(Nc, right(1))))
                 )",
             "spenso"
         );
@@ -766,8 +743,8 @@ mod test {
             "
             1/4*1/(D-2)^2*
             (
-                (-1) * gamma(mink(D,1337),bis(D,left(1)),bis(D,right(1)))*Q(1,mink(D,1337))
-                * gamma(mink(D,1338),bis(D,right(0)),bis(D,left(0)))*Q(0,mink(D,1338))
+                (-1) * gamma(bis(D,left(1)),bis(D,right(1)),mink(D,1337))*Q(1,mink(D,1337))
+                * gamma(bis(D,right(0)),bis(D,left(0)),mink(D,1338))*Q(0,mink(D,1338))
                 * (-1) * g(mink(D,left(2)),mink(D,right(2)))
                 * (-1) * g(mink(D,left(3)),mink(D,right(3)))
                 )
@@ -790,7 +767,7 @@ mod test {
         println!("Amplitude squared:\n{}", amp_squared.factor());
 
         let _spin_sum_pat = parse!(
-            "gamma(mink(D,1337),bis(D,left(1)),bis(D,right(1)))",
+            "gamma(bis(D,left(1)),bis(D,right(1)),mink(D,1337))",
             "spenso"
         )
         .to_pattern();

@@ -539,7 +539,7 @@ impl<'a> GammaSimplifier for AtomView<'a> {
 }
 
 pub fn id_atom(i: impl Into<Atom>, j: impl Into<Atom>) -> Atom {
-    function!(ETS.id, i.into(), j.into())
+    function!(ETS.metric, i.into(), j.into())
 }
 
 #[macro_export]
@@ -637,7 +637,9 @@ mod test {
             "spenso"
         )
         .simplify_gamma()
-        .expand();
+        .expand()
+        .replace(symbol!("spenso::nu3"))
+        .with(symbol!("spenso::nu1"));
         assert_eq!(
             expr,
             parse_lit!(
@@ -648,7 +650,7 @@ mod test {
                         - 4 * g(mink(4, mu), mink(4, nu)) * p(mink(4, nu1)) * q(mink(4, nu1)),
                 "spenso"
             ),
-            "got {:#}",
+            "got \n{:>}",
             expr
         );
 
@@ -680,7 +682,9 @@ mod test {
                 ),
             "spenso"
         )
-        .simplify_gamma();
+        .simplify_gamma()
+        .replace(symbol!("spenso::nu3"))
+        .with(symbol!("spenso::nu1"));
         assert_eq!(
             expr,
             parse_lit!(
@@ -689,7 +693,7 @@ mod test {
                         + 4 * g(mink(4, mu), mink(4, nu)) * p(mink(4, nu1)) * q(mink(4, nu1)),
                 "spenso"
             ),
-            "got {:#}",
+            "got \n{:>+}",
             expr
         );
 
@@ -706,11 +710,13 @@ mod test {
                 ),
             "spenso"
         )
-        .simplify_gamma();
+        .simplify_gamma()
+        .replace(symbol!("spenso::nu1"))
+        .with(symbol!("spenso::nu3"));
         assert_eq!(
             expr,
             parse_lit!(
-                4 * dim * p(mink(dim, nu1)) ^ 2 + 4 * dim * p(mink(dim, nu1)) * q(mink(dim, nu1)),
+                4 * dim * p(mink(dim, nu3)) ^ 2 + 4 * dim * p(mink(dim, nu3)) * q(mink(dim, nu3)),
                 "spenso"
             ),
             "got {:#}",
@@ -730,14 +736,16 @@ mod test {
                 ),
             "spenso"
         )
-        .simplify_gamma();
+        .simplify_gamma()
+        .replace(symbol!("spenso::nu1"))
+        .with(symbol!("spenso::nu3"));
         assert_eq!(
             expr.expand(),
             parse_lit!(
-                8 * p(mink(dim, nu1))
-                    ^ 2 - 4 * dim * p(mink(dim, nu1))
-                    ^ 2 + 8 * p(mink(dim, nu1)) * q(mink(dim, nu1))
-                        - 4 * dim * p(mink(dim, nu1)) * q(mink(dim, nu1)),
+                8 * p(mink(dim, nu3))
+                    ^ 2 - 4 * dim * p(mink(dim, nu3))
+                    ^ 2 + 8 * p(mink(dim, nu3)) * q(mink(dim, nu3))
+                        - 4 * dim * p(mink(dim, nu3)) * q(mink(dim, nu3)),
                 "spenso"
             ),
             "got {}",
@@ -847,13 +855,22 @@ mod test {
             * gamma(3, 4, 3)
             * gamma(4, 1, 4))
         .simplify_gamma()
-        .expand();
+        .expand()
+        .replace(mink.pattern(3))
+        .with(mink.pattern(1));
         assert_eq!(
             expr,
             mink.g(2, 4) * p(1).npow(2) * -4 + p(2) * p(4) * 8 + p(2) * q(4) * 4 + p(4) * q(2) * 4
                 - mink.g(2, 4) * p(1) * q(1) * 4,
-            "got {:#}",
-            expr
+            "got \n{:>+} diff:{}",
+            expr,
+            (&expr
+                - (mink.g(2, 4) * p(1).npow(2) * -4
+                    + p(2) * p(4) * 8
+                    + p(2) * q(4) * 4
+                    + p(4) * q(2) * 4
+                    - mink.g(2, 4) * p(1) * q(1) * 4))
+                .expand()
         );
 
         let expr = (mink.g(5, 6)
@@ -870,7 +887,9 @@ mod test {
             * gamma(2, 3, 2)
             * gamma(3, 4, 4)
             * gamma(4, 1, 3))
-        .simplify_gamma();
+        .simplify_gamma()
+        .replace(mink.pattern(3))
+        .with(mink.pattern(1));
         assert_eq!(
             expr,
             mink.g(2, 4) * p(1).npow(2) * 4 + p(2) * q(4) * 4 - q(2) * p(4) * 4
@@ -887,7 +906,9 @@ mod test {
             * gamma(2, 3, 2)
             * gamma(3, 4, 2)
             * gamma(4, 1, 3))
-        .simplify_gamma();
+        .simplify_gamma()
+        .replace(mink.pattern(3))
+        .with(mink.pattern(1));
 
         assert_eq!(
             expr,

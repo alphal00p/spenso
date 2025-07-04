@@ -412,7 +412,6 @@ pub static HEP_LIB: LazyLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>> =
 
 #[cfg(test)]
 mod tests {
-    
 
     use idenso::{
         gamma::GammaSimplifier,
@@ -422,14 +421,13 @@ mod tests {
         algebra::upgrading_arithmetic::FallibleSub,
         iterators::IteratableTensor,
         network::{
-            ExecutionResult, Network, Sequential, SingleSmallestDegree,
-            SmallestDegree, SmallestDegreeIter, Steps,
-            library::symbolic::ETS, parsing::ShadowedStructure, store::NetworkStore,
+            ExecutionResult, Network, Sequential, SingleSmallestDegree, SmallestDegree,
+            SmallestDegreeIter, Steps, parsing::ShadowedStructure, store::NetworkStore,
         },
         shadowing::Concretize,
         structure::{
-            HasStructure, IndexlessNamedStructure,
-            abstract_index::AbstractIndex, permuted::Perm, slot::IsAbstractSlot,
+            HasStructure, IndexlessNamedStructure, abstract_index::AbstractIndex, permuted::Perm,
+            slot::IsAbstractSlot,
         },
         tensors::{
             data::{DenseTensor, SparseOrDense},
@@ -438,15 +436,14 @@ mod tests {
         },
     };
     use symbolica::{atom::Atom, function, id::ConditionResult, parse};
-    
 
     use super::*;
     use ahash::{HashMap, HashMapExt};
 
     #[test]
     fn simple_scalar() {
-        let _ = ETS.metric;
-        let a = HEP_LIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
+        initialize();
+        let _a = HEP_LIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
 
         let expr = parse!("gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_4))*gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
             ","spenso");
@@ -518,8 +515,8 @@ mod tests {
 
     #[test]
     fn parse_problem() {
-        let _ = ETS.metric;
-        let a = HEP_LIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
+        initialize();
+        let _a = HEP_LIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
 
         let expr = parse!("((N(4,mink(4,l_2))*P(4,mink(4,r_2))+N(4,mink(4,r_2))*P(4,mink(4,l_2)))*N(4,mink(4,dummy_ss_4_1))*P(4,mink(4,dummy_ss_4_1))+-1*N(4,mink(4,dummy_ss_4_2))^2*P(4,mink(4,l_2))*P(4,mink(4,r_2))+-1*N(4,mink(4,dummy_ss_4_3))*N(4,mink(4,dummy_ss_4_4))*P(4,mink(4,dummy_ss_4_3))*P(4,mink(4,dummy_ss_4_4))*g(mink(4,l_2),mink(4,r_2)))*((N(5,mink(4,l_3))*P(5,mink(4,r_3))+N(5,mink(4,r_3))*P(5,mink(4,l_3)))*N(5,mink(4,dummy_ss_5_1))*P(5,mink(4,dummy_ss_5_1))+-1*N(5,mink(4,dummy_ss_5_2))^2*P(5,mink(4,l_3))*P(5,mink(4,r_3))+-1*N(5,mink(4,dummy_ss_5_3))*N(5,mink(4,dummy_ss_5_4))*P(5,mink(4,dummy_ss_5_3))*P(5,mink(4,dummy_ss_5_4))*g(mink(4,l_3),mink(4,r_3)))*(-1*G^2*P(0,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5))+G^2*P(2,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5)))*(-1*P(2,mink(4,l_20))+P(0,mink(4,l_20)))*-1*G^2*P(2,mink(4,dummy_2_0))*P(3,mink(4,dummy_3_1))*𝑖*𝟙(bis(4,l_0),bis(4,l_7))*𝟙(bis(4,l_1),bis(4,l_4))*𝟙(mink(4,l_2),mink(4,l_5))*𝟙(mink(4,l_3),mink(4,l_4))*gamma(bis(4,l_1),bis(4,r_1),mink(4,dummy_3_1))*gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_20))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))*gamma(bis(4,r_0),bis(4,l_0),mink(4,dummy_2_0))
             ","spenso");
@@ -615,7 +612,7 @@ mod tests {
                 let zero = sub
                     .zero_test(10, 0.01)
                     .iter_flat()
-                    .fold(ConditionResult::True, |a, (i, b)| a & *b);
+                    .fold(ConditionResult::True, |a, (_, b)| a & *b);
 
                 match zero {
                     ConditionResult::False => panic!(
@@ -665,6 +662,8 @@ mod tests {
         }
         initialize();
 
+        #[allow(non_snake_case)]
+        #[allow(unused)]
         fn A(
             i: impl Into<AbstractIndex>,
             j: impl Into<AbstractIndex>,
@@ -687,6 +686,8 @@ mod tests {
                 .expression
                 .simplify_metrics()
         }
+        #[allow(unused)]
+        #[allow(non_snake_case)]
         fn B(
             i: impl Into<AbstractIndex>,
             j: impl Into<AbstractIndex>,
@@ -743,7 +744,6 @@ mod tests {
             function!(symbol!("spenso::q"), mink.to_symbolic([m_atom]))
         }
 
-        let mink = Minkowski {}.new_rep(symbol!("spenso::dim"));
         // gamma.reindex([1,2,3]).unwrap().map_structure(|a|)
 
         let expr = p(1)
@@ -754,11 +754,11 @@ mod tests {
             * gamma(4, 1, 4);
 
         validate_gamma(expr, const_map.clone());
-        let expr = p(1) * p(1);
+        let _expr = p(1) * p(1);
 
         let bis = Bispinor {}.new_rep(2);
         let mink = Minkowski {}.new_rep(2);
-        let expr = function!(
+        let _expr = function!(
             symbol!("A"),
             bis.slot(1).to_atom(),
             bis.slot(2).to_atom(),

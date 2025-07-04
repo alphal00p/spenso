@@ -339,13 +339,15 @@ impl<
         }
 
         for r in LibraryRep::all_self_duals() {
-            self.insert_generic(Self::id(*r), Self::checked_identity);
             let id_metric = GenericKey::new(ETS.metric, None, vec![*r, *r]);
             self.insert_generic(id_metric, Self::checked_identity);
         }
 
         for r in LibraryRep::all_inline_metrics() {
-            self.insert_generic(Self::id(*r), Self::checked_identity);
+            self.insert_generic(
+                GenericKey::new(ETS.flat, None, vec![*r, *r]),
+                Self::checked_identity,
+            );
             let id_metric = GenericKey::new(ETS.metric, None, vec![*r, *r]);
             self.insert_generic(id_metric, Self::diag_unimodular_metric);
         }
@@ -642,6 +644,45 @@ mod test {
             assert_eq!(tensor, &indexed.to_shell().concretize(None));
         } else {
             panic!("Not Key")
+        }
+    }
+
+    #[test]
+    fn flat() {
+        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        lib.update_ids();
+        fn p(m: impl Into<AbstractIndex>) -> Atom {
+            let m_atom: AbstractIndex = m.into();
+            let m_atom: Atom = m_atom.into();
+            let mink = Minkowski {}.new_rep(4);
+            function!(symbol!("spenso::p"), mink.to_symbolic([m_atom]))
+        }
+
+        let mink = Minkowski {}.new_rep(4);
+
+        let a = mink.flat(1, 2) * p(2);
+
+        let mut net = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            _,
+        >::try_from_view(a.as_view(), &lib)
+        .map_err(|a| a.to_string())
+        .unwrap();
+
+        println!(
+            "{}",
+            net.dot_display_impl(
+                |a| a.to_string(),
+                |_| None,
+                |a| a.name().map(|a| a.to_string()).unwrap_or("".to_owned())
+            )
+        );
+
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
+
+        if let Ok(ExecutionResult::Val(v)) = net.result_tensor(&lib) {
+            println!("{}", v)
         }
     }
 

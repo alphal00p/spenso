@@ -1,5 +1,5 @@
 use super::{
-    abstract_index::{AbstractIndex, AbstractIndexError, AIND_SYMBOLS},
+    abstract_index::{AbstractIndex, AbstractIndexError},
     concrete_index::ConcreteIndex,
     dimension::{Dimension, DimensionError},
     slot::Slot,
@@ -21,7 +21,10 @@ use std::{hash::Hash, ops::Index};
 use bincode::{Decode, Encode};
 
 #[cfg(feature = "shadowing")]
-use crate::{network::library::symbolic::ETS, structure::slot::SlotError};
+use crate::{
+    network::library::symbolic::ETS, structure::abstract_index::AIND_SYMBOLS,
+    structure::slot::SlotError,
+};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
@@ -487,7 +490,8 @@ impl<T: RepName> Eq for Representation<T> {}
 impl<T: RepName> Representation<T> {
     #[allow(clippy::cast_possible_wrap)]
     #[cfg(feature = "shadowing")]
-    /// yields a function builder for the representation, adding a first variable: the dimension.
+    /// An atom representing the identity tensor with aind a, and b.
+    /// a is dualized, b is not.
     ///
     pub fn id<'a, It: Into<AtomOrView<'a>>>(&self, a: It, b: It) -> Atom {
         let a: AtomOrView<'a> = a.into();
@@ -497,12 +501,18 @@ impl<T: RepName> Representation<T> {
 
     #[allow(clippy::cast_possible_wrap)]
     #[cfg(feature = "shadowing")]
-    /// yields a function builder for the representation, adding a first variable: the dimension.
-    ///
+    /// An atom representing the metric tensor with aind a, and b.
     pub fn g<'a, It: Into<AtomOrView<'a>>>(&self, a: It, b: It) -> Atom {
         let a: AtomOrView<'a> = a.into();
         let b: AtomOrView<'a> = b.into();
         function!(ETS.metric, self.pattern(a), self.pattern(b))
+    }
+    #[cfg(feature = "shadowing")]
+    /// An atom representing the musical isomorphism tensor with aind a, and b.
+    pub fn flat<'a, It: Into<AtomOrView<'a>>>(&self, a: It, b: It) -> Atom {
+        let a: AtomOrView<'a> = a.into();
+        let b: AtomOrView<'a> = b.into();
+        function!(ETS.flat, self.pattern(a), self.pattern(b))
     }
 
     pub fn to_lib(self) -> Representation<LibraryRep> {
@@ -823,6 +833,9 @@ impl ExtendibleReps {
 
         #[cfg(feature = "shadowing")]
         ETS.metric;
+
+        #[cfg(feature = "shadowing")]
+        AIND_SYMBOLS.aind;
         new.new_self_dual(Euclidean::NAME).unwrap();
         fn mink_is_neg(id: ConcreteIndex) -> bool {
             Minkowski {}.is_neg(id)
@@ -863,7 +876,6 @@ impl Display for LibraryRep {
 }
 
 pub fn initialize() {
-    let _ = AIND_SYMBOLS.dind;
     let _ = LibraryRep::from(Minkowski {}).to_string();
 }
 

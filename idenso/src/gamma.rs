@@ -3,7 +3,6 @@ use std::sync::LazyLock;
 use spenso::{
     network::library::symbolic::{ETS, ExplicitKey},
     structure::{
-        IndexlessNamedStructure, PermutedStructure,
         dimension::Dimension,
         representation::{LibraryRep, Minkowski, RepName},
     },
@@ -549,21 +548,24 @@ macro_rules! id {
         id_atom(i, j)
     }};
 }
-
-static GG: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> = LazyLock::new(|| {
-    IndexlessNamedStructure::from_iter(
-        [
-            Bispinor {}.new_rep(4).to_lib(),
-            Bispinor {}.new_rep(4).cast(),
-            Minkowski {}.new_rep(4).cast(),
-        ],
-        AGS.gamma,
-        None,
-    )
-});
-
 #[cfg(test)]
 mod test {
+
+    use spenso::structure::IndexlessNamedStructure;
+    use spenso::structure::PermutedStructure;
+
+    static GG: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> =
+        LazyLock::new(|| {
+            IndexlessNamedStructure::from_iter(
+                [
+                    Bispinor {}.new_rep(4).to_lib(),
+                    Bispinor {}.new_rep(4).cast(),
+                    Minkowski {}.new_rep(4).cast(),
+                ],
+                AGS.gamma,
+                None,
+            )
+        });
 
     use super::*;
 

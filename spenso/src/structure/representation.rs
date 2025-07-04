@@ -1,5 +1,5 @@
 use super::{
-    abstract_index::{AbstractIndex, AbstractIndexError},
+    abstract_index::{AbstractIndex, AbstractIndexError, AIND_SYMBOLS},
     concrete_index::ConcreteIndex,
     dimension::{Dimension, DimensionError},
     slot::Slot,
@@ -860,6 +860,11 @@ impl Display for LibraryRep {
             }
         }
     }
+}
+
+pub fn initialize() {
+    let _ = AIND_SYMBOLS.dind;
+    let _ = LibraryRep::from(Minkowski {}).to_string();
 }
 
 impl RepName for LibraryRep {

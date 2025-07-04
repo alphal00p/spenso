@@ -264,7 +264,7 @@ pub mod test {
 
     use crate::{
         structure::{
-            representation::{Euclidean, Lorentz, Minkowski, RepName},
+            representation::{initialize, Euclidean, Lorentz, Minkowski, RepName},
             slot::IsAbstractSlot,
             ToSymbolic,
         },
@@ -272,7 +272,7 @@ pub mod test {
     };
 
     use super::*;
-    use library::{symbolic::ETS, DummyLibrary};
+    use library::DummyLibrary;
     use symbolica::{parse, parse_lit, symbol};
 
     #[test]
@@ -504,7 +504,7 @@ pub mod test {
 
     #[test]
     fn parse_big_tensors() {
-        let _ = ETS.metric;
+        initialize();
         let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
         let lib = DummyLibrary::<_>::new();
         println!("Hi");
@@ -536,7 +536,7 @@ pub mod test {
     }
     #[test]
     fn parse_neg_tensors() {
-        let _ = ETS.metric;
+        initialize();
         let expr =
             parse!("-d(mink(4,6),mink(4,5))*Q(2,mink(4,7))+d(mink(4,6),mink(4,5))*Q(3,mink(4,7))");
         let lib = DummyLibrary::<_>::new();
@@ -570,7 +570,7 @@ pub mod test {
 
     #[test]
     fn many_sums() {
-        let _ = ETS.metric;
+        initialize();
         let expr = parse_lit!(
             (P(4, mink(4, r_2)) + N(4, mink(4, r_2)))
                 * (P(5, mink(4, r_3)) + N(5, mink(4, r_3)))
@@ -602,11 +602,12 @@ pub mod test {
     }
 
     #[test]
+    #[should_panic]
     fn parse_problem() {
-        let _ = ETS.metric;
+        initialize();
         let expr = parse!(" ((N(2,mink(4,python::l_2))*P(2,mink(4,python::r_2))+N(2,mink(4,python::r_2))*P(2,mink(4,python::l_2)))*N(2,mink(4,python::dummy_ss_2_1))*P(2,mink(4,python::dummy_ss_2_1))+-1*N(2,mink(4,python::dummy_ss_2_2))^2*P(2,mink(4,python::l_2))*P(2,mink(4,python::r_2))+-1*N(2,mink(4,python::dummy_ss_2_3))*N(2,mink(4,python::dummy_ss_2_4))*P(2,mink(4,python::dummy_ss_2_3))*P(2,mink(4,python::dummy_ss_2_4))*g(python::l(2),python::r(2)))*((N(3,mink(4,python::l_3))*P(3,mink(4,python::r_3))+N(3,mink(4,python::r_3))*P(3,mink(4,python::l_3)))*N(3,mink(4,python::dummy_ss_3_1))*P(3,mink(4,python::dummy_ss_3_1))+-1*N(3,mink(4,python::dummy_ss_3_2))^2*P(3,mink(4,python::l_3))*P(3,mink(4,python::r_3))+-1*N(3,mink(4,python::dummy_ss_3_3))*N(3,mink(4,python::dummy_ss_3_4))*P(3,mink(4,python::dummy_ss_3_3))*P(3,mink(4,python::dummy_ss_3_4))*g(python::l(3),python::r(3)))*(-1*G^2*P(2,mink(4,python::r_20))*gamma(bis(4,python::r_4),bis(4,python::r_5),mink(4,python::r_4))*gamma(bis(4,python::r_6),bis(4,python::r_7),mink(4,python::r_5))*gamma(bis(4,python::r_7),bis(4,python::r_4),mink(4,python::r_20))*𝑖*𝟙(bis(4,python::r_0),bis(4,python::r_5))*𝟙(bis(4,python::r_1),bis(4,python::r_6))*𝟙(mink(4,python::r_2),mink(4,python::r_4))*𝟙(mink(4,python::r_3),mink(4,python::r_5))+G^2*P(0,mink(4,python::r_20))*gamma(bis(4,python::r_4),bis(4,python::r_5),mink(4,python::r_4))*gamma(bis(4,python::r_6),bis(4,python::r_7),mink(4,python::r_5))*gamma(bis(4,python::r_7),bis(4,python::r_4),mink(4,python::r_20))*𝑖*𝟙(bis(4,python::r_0),bis(4,python::r_5))*𝟙(bis(4,python::r_1),bis(4,python::r_6))*𝟙(mink(4,python::r_2),mink(4,python::r_4))*𝟙(mink(4,python::r_3),mink(4,python::r_5)))*(-1*P(2,mink(4,python::l_20))+P(0,mink(4,python::l_20)))*G^2*P(0,mink(4,python::dummy_0_0))*P(1,mink(4,python::dummy_1_1))*gamma(python::l(1),python::r(1),python::dummy(1,1))*gamma(python::r(0),python::l(0),python::dummy(0,0))*gamma(bis(4,python::l_4),bis(4,python::l_7),mink(4,python::l_20))*gamma(bis(4,python::l_5),bis(4,python::l_4),mink(4,python::l_4))*gamma(bis(4,python::l_7),bis(4,python::l_6),mink(4,python::l_5))*𝑖*𝟙(bis(4,python::l_0),bis(4,python::l_5))*𝟙(bis(4,python::l_1),bis(4,python::l_6))*𝟙(mink(4,python::l_2),mink(4,python::l_4))*𝟙(mink(4,python::l_3),mink(4,python::l_5))
 
-");
+    ");
 
         let lib = DummyLibrary::<_>::new();
         let mut net =

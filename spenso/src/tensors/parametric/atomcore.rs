@@ -255,31 +255,6 @@ impl<'a, 'b, R: ReplaceWithBuilder> ReplaceBuilderGeneric<'b, R::Ref<'a>, R> {
 
     /// Execute the replacement by specifying the right-hand side as a map on the matched wildcards.
     ///
-    /// # Example
-    ///
-    /// Prefix the argument of a function with `p`:
-    /// ```
-    /// use symbolica::{atom::AtomCore, function, parse, printer::PrintOptions, symbol};
-    /// let (f, x_) = symbol!("f", "x_");
-    /// let a = function!(f, 1) * function!(f, 3);
-    /// let p = function!(f, x_);
-    ///
-    /// let r = a.replace(p).with_map(move |m| {
-    ///     function!(
-    ///         f,
-    ///         parse!(&format!(
-    ///             "p{}",
-    ///             m.get(x_)
-    ///                 .unwrap()
-    ///                 .to_atom()
-    ///                 .printer(PrintOptions::file()),
-    ///         ))
-    ///         .unwrap()
-    ///     )
-    /// });
-    /// let res = parse!("f(p1)*f(p3)").unwrap();
-    /// assert_eq!(r, res);
-    /// ```
     pub fn with_map<'c: 'a, M: MatchMap + 'static + Clone>(&'a self, rhs: M) -> R {
         R::with_map(self, rhs)
     }

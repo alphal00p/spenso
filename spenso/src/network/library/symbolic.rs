@@ -15,7 +15,7 @@ use crate::{
     structure::{
         named::{IdentityName, METRIC_NAME},
         permuted::{Perm, PermuteTensor},
-        representation::{LibraryRep, RepName, REPS},
+        representation::{initialize, LibraryRep, RepName},
         HasName, IndexlessNamedStructure,
     },
     tensors::parametric::{ConcreteOrParam, MixedTensor, ParamOrConcrete, ParamTensor},
@@ -333,7 +333,7 @@ impl<
     where
         T::SetData: TensorLibraryData,
     {
-        let _n = REPS.read().unwrap();
+        initialize();
         for r in LibraryRep::all_dualizables() {
             self.insert_generic(Self::id(*r), Self::checked_identity);
         }
@@ -691,11 +691,11 @@ mod test {
 
     #[test]
     fn big_expr() {
-        let _n = REPS.read().unwrap();
+        initialize();
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         lib.update_ids();
 
-        let expr = parse!(" -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*𝟙(euc(4,0),euc(4,5))*𝟙(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
+        let expr = parse!(" -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*g(mink(4,2),mink(4,5))*g(mink(4,3),mink(4,6))*g(euc(4,0),euc(4,5))*g(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -730,12 +730,12 @@ mod test {
 
     #[test]
     fn small_expr() {
-        let _n = REPS.read().unwrap();
+        initialize();
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         lib.update_ids();
 
         let expr =
-            parse!("(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7)))*𝟙(mink(4,2),mink(4,5))*𝟙(mink(4,3),mink(4,6))*g(mink(4,4),mink(4,7))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))")
+            parse!("(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7)))*g(mink(4,2),mink(4,5))*g(mink(4,3),mink(4,6))*g(mink(4,4),mink(4,7))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))")
                 ;
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
@@ -788,7 +788,7 @@ mod test {
 
     #[test]
     fn transposition() {
-        let _n = REPS.read().unwrap();
+        initialize();
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         lib.update_ids();
 
@@ -804,7 +804,6 @@ mod test {
         let a = PermutedStructure::identity(MixedTensor::<f64, ExplicitKey>::param(a));
 
         lib.insert_explicit(a);
-
         #[allow(non_snake_case)]
         fn A(i: impl Into<AbstractIndex>, j: impl Into<AbstractIndex>) -> Atom {
             let euc = Euclidean {}.new_rep(4);
@@ -829,7 +828,7 @@ mod test {
     }
     #[test]
     fn trace_metric_kron() {
-        let _n = REPS.read().unwrap();
+        initialize();
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         lib.update_ids();
 

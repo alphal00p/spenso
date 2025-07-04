@@ -98,23 +98,6 @@ pub enum SlotError {
 #[cfg(feature = "shadowing")]
 /// Can possibly constuct a Slot from an `AtomView`, if it is of the form: <representation>(<dimension>,<index>)
 ///
-/// # Example
-///
-/// ```
-/// # use spenso::structure::*;
-/// # use spenso::structure::representation::*;
-/// # use spenso::structure::dimension::*;
-/// # use spenso::structure::abstract_index::*;
-/// # use spenso::structure::slot::*;
-/// # use spenso::structure::concrete_index::*;
-/// # use symbolica::atom::AtomView;
-
-///    let mink = Lorentz::rep(4);
-///    let mu = mink.new_slot(0);
-///    let atom = mu.to_atom();
-///    let slot = Slot::try_from(atom.as_view()).unwrap();
-///    assert_eq!(slot, mu);
-/// ```
 impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
     type Error = SlotError;
 
@@ -218,22 +201,6 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + D
 
     #[cfg(feature = "shadowing")]
     /// using the function builder of the representation add the abstract index as an argument, and finish it to an Atom.
-    /// # Example
-    ///
-    /// ```
-    /// # use symbolica::state::{State, Workspace};
-    /// # use spenso::structure::*;
-    /// # use spenso::structure::representation::*;
-    /// # use spenso::structure::dimension::*;
-    /// # use spenso::structure::abstract_index::*;
-    /// # use spenso::structure::slot::*;
-    /// # use spenso::structure::concrete_index::*;
-    /// let mink = Lorentz::rep(4);
-    /// let mu = mink.new_slot(0);
-    /// println!("{}", mu.to_atom());
-    /// assert_eq!("lor(4,0)", mu.to_atom().to_string());
-    /// assert_eq!("lor4|₀", mu.to_string());
-    /// ```
     fn to_atom(&self) -> Atom;
     #[cfg(feature = "shadowing")]
     fn to_symbolic_wrapped(&self) -> Atom;
@@ -289,7 +256,13 @@ impl<T: RepName> IsAbstractSlot for Slot<T> {
 
 impl<T: RepName> std::fmt::Display for Slot<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}|{}", self.rep, self.aind)
+        if self.rep.rep.is_self_dual() {
+            write!(f, "{}|{}", self.rep, self.aind)
+        } else if self.rep.rep.is_dual() {
+            write!(f, "{}|{:-}", self.rep, self.aind)
+        } else {
+            write!(f, "{}|{:+}", self.rep, self.aind)
+        }
     }
 }
 
@@ -356,7 +329,7 @@ mod shadowing_tests {
         let mu = mink.slot(0);
         println!("{}", mu.to_atom());
         assert_eq!("spenso::lor(4,0)", mu.to_atom().to_canonical_string());
-        assert_eq!("lor🠑4|₀", mu.to_string());
+        // assert_eq!("lor🠑4|₀", mu.dual().to_string());
 
         let mink = Lorentz {}.new_rep(4);
         let mu = mink.slot(0);

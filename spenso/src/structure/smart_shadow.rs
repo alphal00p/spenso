@@ -8,7 +8,7 @@ use super::{
     named::IdentityName,
     permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
-    slot::{IsAbstractSlot, Slot},
+    slot::{AbsInd, DummyAind, IsAbstractSlot, Slot},
     HasName, MergeInfo, NamedStructure, OrderedStructure, PermutedStructure, ScalarStructure,
     StructureContract, StructureError, TensorStructure, TracksCount,
 };
@@ -32,17 +32,22 @@ feature = "shadowing",
 trait_decode(trait = symbolica::state::HasStateMap),
 )]
 
-pub struct SmartShadowStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
-    pub structure: OrderedStructure<R>,
+pub struct SmartShadowStructure<
+    Name = String,
+    Args = usize,
+    R: RepName = LibraryRep,
+    Aind: AbsInd = AbstractIndex,
+> {
+    pub structure: OrderedStructure<R, Aind>,
     pub contractions: usize,
     pub global_name: Option<Name>,
     additional_args: Option<Args>,
 }
 
-impl<Name, Args, R: RepName> SmartShadowStructure<Name, Args, R> {
+impl<Name, Args, R: RepName, Aind: AbsInd> SmartShadowStructure<Name, Args, R, Aind> {
     pub fn map_underlying_structure(
         self,
-        mut f: impl FnMut(OrderedStructure<R>) -> OrderedStructure<R>,
+        mut f: impl FnMut(OrderedStructure<R, Aind>) -> OrderedStructure<R, Aind>,
     ) -> Self {
         Self {
             structure: f(self.structure),
@@ -60,7 +65,7 @@ impl<Name, Args, R: RepName> SmartShadowStructure<Name, Args, R> {
         args: Option<Args>,
     ) -> PermutedStructure<Self>
     where
-        I: Into<Slot<R>>,
+        I: Into<Slot<R, Aind>>,
         T: IntoIterator<Item = I>,
     {
         let res = iter
@@ -80,7 +85,7 @@ impl<Name, Args, R: RepName> SmartShadowStructure<Name, Args, R> {
     }
 }
 
-impl<N, A, R: RepName> HasName for SmartShadowStructure<N, A, R>
+impl<N, A, R: RepName, Aind: AbsInd> HasName for SmartShadowStructure<N, A, R, Aind>
 where
     N: Clone,
     A: Clone,
@@ -100,7 +105,9 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<N: IntoSymbol, A: IntoArgs, R: RepName> std::fmt::Display for SmartShadowStructure<N, A, R> {
+impl<N: IntoSymbol, A: IntoArgs, R: RepName, Aind: AbsInd> std::fmt::Display
+    for SmartShadowStructure<N, A, R, Aind>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(ref name) = self.global_name {
             write!(f, "{}", name.ref_into_symbol())?
@@ -117,7 +124,7 @@ impl<N: IntoSymbol, A: IntoArgs, R: RepName> std::fmt::Display for SmartShadowSt
     }
 }
 
-impl<N, A, R: RepName> ScalarStructure for SmartShadowStructure<N, A, R> {
+impl<N, A, R: RepName, Aind: AbsInd> ScalarStructure for SmartShadowStructure<N, A, R, Aind> {
     fn scalar_structure() -> Self {
         SmartShadowStructure {
             structure: OrderedStructure::default(),
@@ -128,12 +135,14 @@ impl<N, A, R: RepName> ScalarStructure for SmartShadowStructure<N, A, R> {
     }
 }
 
-impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for SmartShadowStructure<N, A, R> {
+impl<N: IdentityName, A, R: RepName<Dual = R>, Aind: AbsInd + DummyAind> PermuteTensor
+    for SmartShadowStructure<N, A, R, Aind>
+{
     type Id = Self;
-    type IdSlot = Slot<R>;
+    type IdSlot = Slot<R, Aind>;
     type Permuted = (
-        SmartShadowStructure<N, A, LibraryRep>,
-        Vec<SmartShadowStructure<N, A, LibraryRep>>,
+        SmartShadowStructure<N, A, LibraryRep, Aind>,
+        Vec<SmartShadowStructure<N, A, LibraryRep, Aind>>,
     );
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {

@@ -123,7 +123,8 @@ impl<
         T: HasStructure + TensorStructure,
         K: Clone + Display + Debug,
         Str: TensorScalarStore<Tensor = T, Scalar = Sc> + Clone,
-    > Network<Str, K>
+        Aind: AbsInd,
+    > Network<Str, K, Aind>
 where
     Sc: for<'r> TryFrom<AtomView<'r>> + Clone,
     TensorNetworkError<K>: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
@@ -135,7 +136,8 @@ where
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
-
+        S::Slot: IsAbstractSlot<Aind = Aind>,
+        T::Slot: IsAbstractSlot<Aind = Aind>,
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         match value {
@@ -154,7 +156,8 @@ where
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
-
+        S::Slot: IsAbstractSlot<Aind = Aind>,
+        T::Slot: IsAbstractSlot<Aind = Aind>,
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         let mut iter = value.iter();
@@ -173,7 +176,8 @@ where
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
-
+        S::Slot: IsAbstractSlot<Aind = Aind>,
+        T::Slot: IsAbstractSlot<Aind = Aind>,
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         let s: Result<PermutedStructure<S>, _> = value.try_into();
@@ -214,7 +218,8 @@ where
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
-
+        S::Slot: IsAbstractSlot<Aind = Aind>,
+        T::Slot: IsAbstractSlot<Aind = Aind>,
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         let (base, exp) = value.get_base_exp();
@@ -245,7 +250,8 @@ where
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
-
+        S::Slot: IsAbstractSlot<Aind = Aind>,
+        T::Slot: IsAbstractSlot<Aind = Aind>,
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         let mut iter = value.iter();

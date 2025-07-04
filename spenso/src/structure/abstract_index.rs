@@ -24,6 +24,9 @@ use crate::utils::{to_subscript, to_superscript};
 
 use thiserror::Error;
 
+use super::slot::AbsInd;
+use super::slot::DummyAind;
+
 pub const ABSTRACTIND: &str = "aind";
 
 pub const UPIND: &str = "uind";
@@ -170,14 +173,17 @@ static DUMMYCOUNTER: AtomicUsize = AtomicUsize::new(0);
 pub enum AbstractIndex {
     Normal(usize),
     Dualize(usize),
+    Double(u16, u16),
     Dummy(usize),
     Added(usize),
     #[cfg(feature = "shadowing")]
     Symbol(SerializableSymbol),
 }
 
-impl AbstractIndex {
-    pub fn new_dummy() -> Self {
+impl AbsInd for AbstractIndex {}
+
+impl DummyAind for AbstractIndex {
+    fn new_dummy() -> Self {
         AbstractIndex::Dummy(DUMMYCOUNTER.fetch_add(1, Ordering::Relaxed))
     }
 }
@@ -209,6 +215,7 @@ impl std::ops::Add<AbstractIndex> for AbstractIndex {
                 AbstractIndex::Dualize(r) => AbstractIndex::Added(l + r),
                 AbstractIndex::Added(r) => AbstractIndex::Added(l + r),
                 AbstractIndex::Dummy(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Double(_, _) => panic!("cannot add double"),
                 #[cfg(feature = "shadowing")]
                 AbstractIndex::Symbol(r) => AbstractIndex::Added(l + r.get_id() as usize),
             },
@@ -217,6 +224,7 @@ impl std::ops::Add<AbstractIndex> for AbstractIndex {
                 AbstractIndex::Dualize(r) => AbstractIndex::Added(l + r),
                 AbstractIndex::Added(r) => AbstractIndex::Added(l + r),
                 AbstractIndex::Dummy(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Double(_, _) => panic!("cannot add double"),
                 #[cfg(feature = "shadowing")]
                 AbstractIndex::Symbol(r) => AbstractIndex::Added(l + r.get_id() as usize),
             },
@@ -225,6 +233,7 @@ impl std::ops::Add<AbstractIndex> for AbstractIndex {
                 AbstractIndex::Dualize(r) => AbstractIndex::Added(l + r),
                 AbstractIndex::Added(r) => AbstractIndex::Added(l + r),
                 AbstractIndex::Dummy(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Double(_, _) => panic!("cannot add double"),
                 #[cfg(feature = "shadowing")]
                 AbstractIndex::Symbol(r) => AbstractIndex::Added(l + r.get_id() as usize),
             },
@@ -233,15 +242,19 @@ impl std::ops::Add<AbstractIndex> for AbstractIndex {
                 AbstractIndex::Dualize(r) => AbstractIndex::Added(l + r),
                 AbstractIndex::Added(r) => AbstractIndex::Added(l + r),
                 AbstractIndex::Dummy(r) => AbstractIndex::Added(l + r),
+                AbstractIndex::Double(_, _) => panic!("cannot add double"),
                 #[cfg(feature = "shadowing")]
                 AbstractIndex::Symbol(r) => AbstractIndex::Added(l + r.get_id() as usize),
             },
+            AbstractIndex::Double(_, _) => panic!("cannot add double"),
+
             #[cfg(feature = "shadowing")]
             AbstractIndex::Symbol(l) => match rhs {
                 AbstractIndex::Normal(r) => AbstractIndex::Added(l.get_id() as usize + r),
                 AbstractIndex::Dualize(r) => AbstractIndex::Added(l.get_id() as usize + r),
                 AbstractIndex::Added(r) => AbstractIndex::Added(l.get_id() as usize + r),
                 AbstractIndex::Dummy(r) => AbstractIndex::Added(l.get_id() as usize + r),
+                AbstractIndex::Double(_, _) => panic!("cannot add double"),
                 AbstractIndex::Symbol(r) => {
                     AbstractIndex::Added(l.get_id() as usize + r.get_id() as usize)
                 }
@@ -266,6 +279,25 @@ impl std::fmt::Display for AbstractIndex {
                     write!(f, "{}", to_superscript(*v as isize))
                 } else {
                     write!(f, "{}", v)
+                }
+            }
+            AbstractIndex::Double(i, j) => {
+                if f.sign_minus() {
+                    write!(
+                        f,
+                        "{}.{}",
+                        to_subscript(*i as isize),
+                        to_subscript(*j as isize)
+                    )
+                } else if f.sign_plus() {
+                    write!(
+                        f,
+                        "{}'{}",
+                        to_superscript(*i as isize),
+                        to_superscript(*j as isize)
+                    )
+                } else {
+                    write!(f, "{}-{}", i, j)
                 }
             }
 
@@ -311,6 +343,7 @@ impl From<usize> for AbstractIndex {
 impl From<AbstractIndex> for Atom {
     fn from(value: AbstractIndex) -> Self {
         match value {
+            AbstractIndex::Double(i, j) => Atom::num((i as i64, j as i64)),
             AbstractIndex::Normal(v) => Atom::num(v as i64),
             AbstractIndex::Dualize(v) => Atom::num(-(v as i64)),
             AbstractIndex::Added(v) => Atom::num(v as i64),
@@ -319,9 +352,16 @@ impl From<AbstractIndex> for Atom {
         }
     }
 }
+#[cfg(feature = "shadowing")]
+impl<'a> From<AbstractIndex> for symbolica::atom::AtomOrView<'a> {
+    fn from(value: AbstractIndex) -> Self {
+        symbolica::atom::AtomOrView::Atom(Atom::from(value))
+    }
+}
 impl From<AbstractIndex> for usize {
     fn from(value: AbstractIndex) -> Self {
         match value {
+            AbstractIndex::Double(i, j) => i as usize * u16::MAX as usize + j as usize,
             AbstractIndex::Dualize(v) => v,
             AbstractIndex::Normal(v) => v,
             AbstractIndex::Added(v) => v,
@@ -368,12 +408,13 @@ impl TryFrom<AtomView<'_>> for AbstractIndex {
 
     fn try_from(view: AtomView<'_>) -> Result<Self, Self::Error> {
         match view {
-            AtomView::Num(n) => {
-                if let CoefficientView::Natural(n, 1, _, _) = n.get_coeff_view() {
-                    return Ok(AbstractIndex::from(n as i32));
+            AtomView::Num(n) => match n.get_coeff_view() {
+                CoefficientView::Natural(n, 1, _, _) => Ok(AbstractIndex::from(n as i32)),
+                CoefficientView::Natural(n, d, _, _) => {
+                    Ok(AbstractIndex::Double(n as u16, d as u16))
                 }
-                Err(AbstractIndexError::NotNatural)
-            }
+                _ => Err(AbstractIndexError::NotNatural),
+            },
             AtomView::Var(v) => Ok(AbstractIndex::Symbol(v.get_symbol().into())),
             _ => Err(AbstractIndexError::NotIndex(view.to_string())),
         }

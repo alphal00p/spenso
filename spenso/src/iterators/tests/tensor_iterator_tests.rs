@@ -10,7 +10,7 @@ use crate::{
     structure::{
         concrete_index::{ExpandedIndex, FlatIndex},
         representation::{Euclidean, RepName},
-        OrderedStructure,
+        OrderedStructure, PermutedStructure,
     },
     tensors::data::{DenseTensor, SetTensorData, SparseTensor},
 };
@@ -19,7 +19,8 @@ use std::collections::HashSet;
 #[test]
 fn test_dense_tensor_iterators() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
+    let structure: OrderedStructure<Euclidean> =
+        OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
 
     // Create a dense tensor with values 0...5
     let mut tensor = DenseTensor::<i32, _>::zero(structure);
@@ -58,7 +59,8 @@ fn test_dense_tensor_iterators() {
 #[test]
 fn test_sparse_tensor_iterators() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
+    let structure: OrderedStructure<Euclidean> =
+        OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
 
     // Create a sparse tensor with a few values
     let mut tensor = SparseTensor::<i32, _>::empty(structure);
@@ -94,7 +96,8 @@ fn test_sparse_tensor_iterators() {
 #[test]
 fn test_fiber_iterators() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
+    let structure: PermutedStructure<OrderedStructure<Euclidean>> =
+        OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
 
     let mut tensor = DenseTensor::<i32, _>::zero((structure.structure).clone());
     for i in 0..6 {
@@ -116,7 +119,8 @@ fn test_fiber_iterators() {
 #[test]
 fn test_fiber_class_iterators() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
+    let structure: PermutedStructure<OrderedStructure<Euclidean>> =
+        OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]);
 
     let mut tensor = DenseTensor::<i32, _>::zero((structure.structure).clone());
     for i in 0..6 {
@@ -148,7 +152,8 @@ fn test_fiber_class_iterators() {
 #[test]
 fn test_tensor_structure_index_iterator() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
+    let structure: OrderedStructure<Euclidean> =
+        OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
 
     // Create an index iterator
     let index_iter = TensorStructureIndexIterator::new(&structure);

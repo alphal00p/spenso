@@ -32,7 +32,7 @@ insta = { version = "1.38.0", features = ["yaml", "json", "ron", "toml"] }
 ahash = { version = "0.8.11", features = ["serde"] }
 # ambassador = "0.3.6"
 #
-bincode-trait-derive = { version = "0.1.0" }
+bincode-trait-derive = { version = "0.1.1" }
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 append-only-vec = "0.1.6"
 approxim = "0.6.6"

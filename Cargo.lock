@@ -200,9 +200,9 @@ dependencies = [
 
 [[package]]
 name = "bincode-trait-derive"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3ed5a3b740a8e59f639add3a58050e4a84b51c78283bb0c7bd596fc13816d8b"
+checksum = "c1f425dc6064b77d777fdecf6d1b374ae29e0be056b5ba8308a798d381e82632"
 dependencies = [
  "bincode",
  "proc-macro2",
@@ -940,10 +940,10 @@ checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 [[package]]
 name = "linnet"
 version = "0.7.1"
-source = "git+https://github.com/alphal00p/linnet?rev=85c1b8f7bee575a8cc5dc7e5595b3ef7c880204f#85c1b8f7bee575a8cc5dc7e5595b3ef7c880204f"
 dependencies = [
  "ahash",
  "bincode",
+ "bincode-trait-derive",
  "bitvec",
  "by_address",
  "derive_more",

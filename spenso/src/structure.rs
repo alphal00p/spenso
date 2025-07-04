@@ -2,6 +2,7 @@ use abstract_index::AbstractIndex;
 use ahash::AHashMap;
 
 use anyhow::{anyhow, Result};
+use approxim::AbsDiffEq;
 use bitvec::vec::BitVec;
 use concrete_index::ConcreteIndex;
 use concrete_index::DualConciousExpandedIndex;
@@ -11,6 +12,7 @@ use concrete_index::FlatIndex;
 use delegate::delegate;
 use dimension::Dimension;
 
+use slot::AbsInd;
 use thiserror::Error;
 
 use crate::utils::DuplicateItemError;
@@ -59,6 +61,7 @@ pub trait HasStructure {
     type Store<S>: HasStructure<Structure = S>
     where
         S: TensorStructure;
+
     type Structure: TensorStructure;
     type Scalar;
     type ScalarRef<'a>
@@ -110,6 +113,7 @@ impl<T: HasName> ToSymbolic for PermutedStructure<T>
 where
     T: TensorStructure,
     T::Name: IntoSymbol,
+    Atom: From<<T::Slot as IsAbstractSlot>::Aind>,
     T::Args: IntoArgs,
 {
     fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
@@ -194,6 +198,7 @@ where
 impl<T: HasName> ToSymbolic for T
 where
     T: TensorStructure,
+    Atom: From<<T::Slot as IsAbstractSlot>::Aind>,
     T::Name: IntoSymbol,
     T::Args: IntoArgs,
 {
@@ -336,13 +341,13 @@ pub trait ScalarStructure {
 }
 pub trait TensorStructure {
     type Slot: IsAbstractSlot + DualSlotTo<Dual = Self::Slot>;
-    type Indexed: TensorStructure<Indexed = Self::Indexed>;
+    type Indexed: TensorStructure<Indexed = Self::Indexed, Slot = Self::Slot>;
     // type R: Rep;
     //
 
     fn reindex(
         self,
-        indices: &[AbstractIndex],
+        indices: &[<Self::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::Indexed>, StructureError>;
     fn dual(self) -> Self;
 
@@ -359,8 +364,8 @@ pub trait TensorStructure {
         &self,
     ) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
 
-    fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
-    fn get_aind(&self, i: usize) -> Option<AbstractIndex>;
+    fn external_indices_iter(&self) -> impl Iterator<Item = <Self::Slot as IsAbstractSlot>::Aind>;
+    fn get_aind(&self, i: usize) -> Option<<Self::Slot as IsAbstractSlot>::Aind>;
     fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
     fn get_dim(&self, i: usize) -> Option<Dimension>;
     fn get_slot(&self, i: usize) -> Option<Self::Slot>;
@@ -386,7 +391,7 @@ pub trait TensorStructure {
         self.external_reps_iter().collect()
     }
 
-    fn external_indices(&self) -> Vec<AbstractIndex> {
+    fn external_indices(&self) -> Vec<<Self::Slot as IsAbstractSlot>::Aind> {
         self.external_indices_iter().collect()
     }
 
@@ -810,6 +815,7 @@ pub trait HasName {
     ) -> ExpandedCoefficent<Self::Args>
     where
         Self: TensorStructure,
+
         Self::Name: IntoSymbol,
         Self::Args: IntoArgs,
     {
@@ -869,7 +875,7 @@ where
 
     fn reindex(
         self,
-        indices: &[AbstractIndex],
+        indices: &[<Self::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         let res = self.structure.reindex(indices)?;
         Ok(PermutedStructure {
@@ -888,13 +894,13 @@ where
     delegate! {
         to self.structure() {
             fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = <Self::Slot as IsAbstractSlot>::Aind>;
             fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
             fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
             fn get_slot(&self, i: usize)-> Option<Self::Slot>;
             fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn get_dim(&self, i: usize)-> Option<Dimension>;
-            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn get_aind(&self, i: usize)-> Option<<Self::Slot as IsAbstractSlot>::Aind>;
             fn order(&self)-> usize;
         }
     }

@@ -6,7 +6,7 @@ use super::{
     dimension::Dimension,
     permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
-    slot::{IsAbstractSlot, Slot},
+    slot::{AbsInd, DummyAind, IsAbstractSlot, Slot},
     HasName, MergeInfo, OrderedStructure, PermutedStructure, ScalarStructure, StructureContract,
     StructureError, TensorStructure,
 };
@@ -31,22 +31,27 @@ use serde::{Deserialize, Serialize};
     feature = "shadowing",
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-pub struct NamedStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
-    pub structure: OrderedStructure<R>,
+pub struct NamedStructure<
+    Name = String,
+    Args = usize,
+    R: RepName = LibraryRep,
+    Aind = AbstractIndex,
+> {
+    pub structure: OrderedStructure<R, Aind>,
     pub global_name: Option<Name>,
     pub additional_args: Option<Args>,
 }
 
 #[cfg(feature = "shadowing")]
-pub type AtomStructure<R> = NamedStructure<SerializableSymbol, Vec<SerializableAtom>, R>;
+pub type AtomStructure<R, A> = NamedStructure<SerializableSymbol, Vec<SerializableAtom>, R, A>;
 
-impl<Name, Args, R: RepName> NamedStructure<Name, Args, R> {
+impl<Name, Args, R: RepName, Aind: AbsInd> NamedStructure<Name, Args, R, Aind> {
     #[must_use]
     pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> PermutedStructure<Self>
     where
         R: From<I>,
         I: RepName,
-        T: IntoIterator<Item = Slot<I>>,
+        T: IntoIterator<Item = Slot<I, Aind>>,
     {
         iter.into_iter()
             .map(|a| a.cast())
@@ -58,8 +63,10 @@ impl<Name, Args, R: RepName> NamedStructure<Name, Args, R> {
             })
     }
 }
-impl<N, A, R: RepName> From<OrderedStructure<R>> for NamedStructure<N, A, R> {
-    fn from(value: OrderedStructure<R>) -> Self {
+impl<N, A, R: RepName, Aind: AbsInd> From<OrderedStructure<R, Aind>>
+    for NamedStructure<N, A, R, Aind>
+{
+    fn from(value: OrderedStructure<R, Aind>) -> Self {
         Self {
             structure: value,
             global_name: None,
@@ -70,7 +77,7 @@ impl<N, A, R: RepName> From<OrderedStructure<R>> for NamedStructure<N, A, R> {
 
 /// A trait for a structure that has a name
 
-impl<N, A, R: RepName> HasName for NamedStructure<N, A, R>
+impl<N, A, R: RepName, Aind: AbsInd> HasName for NamedStructure<N, A, R, Aind>
 where
     N: Clone,
     A: Clone,
@@ -89,7 +96,11 @@ where
     }
 }
 
-impl<N, A, R: RepName> ScalarStructure for NamedStructure<N, A, R> {
+impl<N, A, R: RepName, Aind: AbsInd> ScalarStructure for NamedStructure<N, A, R, Aind>
+where
+    N: Clone,
+    A: Clone,
+{
     fn scalar_structure() -> Self {
         NamedStructure {
             structure: OrderedStructure::default(),
@@ -109,12 +120,14 @@ impl IdentityName for String {
     }
 }
 
-impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for NamedStructure<N, A, R> {
+impl<N: IdentityName, A, R: RepName<Dual = R>, Aind: AbsInd + DummyAind> PermuteTensor
+    for NamedStructure<N, A, R, Aind>
+{
     type Id = Self;
-    type IdSlot = Slot<R>;
+    type IdSlot = Slot<R, Aind>;
     type Permuted = (
-        NamedStructure<N, A, LibraryRep>,
-        Vec<NamedStructure<N, A, LibraryRep>>,
+        NamedStructure<N, A, LibraryRep, Aind>,
+        Vec<NamedStructure<N, A, LibraryRep, Aind>>,
     );
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
@@ -195,8 +208,8 @@ impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for NamedStructure<
     }
 }
 
-impl<N, A, R: RepName<Dual = R>> TensorStructure for NamedStructure<N, A, R> {
-    type Slot = Slot<R>;
+impl<N, A, R: RepName<Dual = R>, Aind: AbsInd> TensorStructure for NamedStructure<N, A, R, Aind> {
+    type Slot = Slot<R, Aind>;
     // type R = PhysicalReps;
     type Indexed = Self;
 
@@ -208,10 +221,7 @@ impl<N, A, R: RepName<Dual = R>> TensorStructure for NamedStructure<N, A, R> {
     //     }
     // }
 
-    fn reindex(
-        self,
-        indices: &[AbstractIndex],
-    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+    fn reindex(self, indices: &[Aind]) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         let res = self.structure.reindex(indices)?;
 
         Ok(PermutedStructure {
@@ -235,13 +245,13 @@ impl<N, A, R: RepName<Dual = R>> TensorStructure for NamedStructure<N, A, R> {
     delegate! {
         to self.structure{
             fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = Aind>;
             fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
             fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
             fn order(&self) -> usize;
             fn get_slot(&self, i: usize) -> Option<Self::Slot>;
             fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn get_aind(&self,i:usize)->Option<AbstractIndex>;
+            fn get_aind(&self,i:usize)->Option<Aind>;
             fn get_dim(&self, i: usize) -> Option<Dimension>;
         }
     }

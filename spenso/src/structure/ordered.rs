@@ -23,7 +23,7 @@ use super::{
     dimension::Dimension,
     permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
-    slot::{DualSlotTo, IsAbstractSlot, Slot},
+    slot::{AbsInd, DualSlotTo, DummyAind, IsAbstractSlot, Slot},
     MergeInfo, NamedStructure, PermutedStructure, ScalarStructure, SmartShadowStructure,
     StructureContract, StructureError, TensorStructure,
 };
@@ -36,14 +36,14 @@ use serde::{Deserialize, Serialize};
     feature = "shadowing",
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-pub struct OrderedStructure<R: RepName = LibraryRep> {
-    pub(crate) structure: Vec<Slot<R>>,
+pub struct OrderedStructure<R: RepName = LibraryRep, Aind = AbstractIndex> {
+    pub(crate) structure: Vec<Slot<R, Aind>>,
     dual_start: usize,
     base_start: usize,
     // permutation: Option<Permutation>,
 }
 
-impl<R: PartialEq + RepName> PartialEq for OrderedStructure<R> {
+impl<R: PartialEq + RepName, Aind: PartialEq> PartialEq for OrderedStructure<R, Aind> {
     fn eq(&self, other: &Self) -> bool {
         let len = self.structure.len();
 
@@ -54,15 +54,15 @@ impl<R: PartialEq + RepName> PartialEq for OrderedStructure<R> {
                 || (self.base_start == other.base_start))
     }
 }
-impl<R: Eq + RepName> Eq for OrderedStructure<R> {}
+impl<R: Eq + RepName, Aind: Eq> Eq for OrderedStructure<R, Aind> {}
 
-impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
+impl<R: RepName<Dual = R>, Aind: AbsInd + DummyAind> PermuteTensor for OrderedStructure<R, Aind> {
     type Id = Self;
     type Permuted = (
-        OrderedStructure<LibraryRep>,
-        Vec<OrderedStructure<LibraryRep>>,
+        OrderedStructure<LibraryRep, Aind>,
+        Vec<OrderedStructure<LibraryRep, Aind>>,
     );
-    type IdSlot = Slot<R>;
+    type IdSlot = Slot<R, Aind>;
 
     fn permute_inds(self, permutation: &Permutation) -> Self::Permuted {
         let mut dummy_structure = Vec::new();
@@ -137,7 +137,7 @@ impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
         (strct.structure, ids)
     }
 
-    fn id(i: Slot<R>, j: Slot<R>) -> Self::Id {
+    fn id(i: Slot<R, Aind>, j: Slot<R, Aind>) -> Self::Id {
         if i.dim() == j.dim() {
             OrderedStructure::new(vec![i, j]).structure
         } else {
@@ -146,8 +146,8 @@ impl<R: RepName<Dual = R>> PermuteTensor for OrderedStructure<R> {
     }
 }
 
-impl<R: RepName<Dual = R>> TensorStructure for OrderedStructure<R> {
-    type Slot = Slot<R>;
+impl<R: RepName<Dual = R>, Aind: AbsInd> TensorStructure for OrderedStructure<R, Aind> {
+    type Slot = Slot<R, Aind>;
     type Indexed = Self;
     // type R = PhysicalReps;
     //
@@ -159,10 +159,7 @@ impl<R: RepName<Dual = R>> TensorStructure for OrderedStructure<R> {
     //     }
     // }
 
-    fn reindex(
-        self,
-        indices: &[AbstractIndex],
-    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+    fn reindex(self, indices: &[Aind]) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         if self.structure.len() != indices.len() {
             return Err(StructureError::WrongNumberOfArguments(
                 self.structure.len(),
@@ -189,7 +186,7 @@ impl<R: RepName<Dual = R>> TensorStructure for OrderedStructure<R> {
         self.structure.iter().map(|s| s.rep())
     }
 
-    fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex> {
+    fn external_indices_iter(&self) -> impl Iterator<Item = Aind> {
         self.structure.iter().map(|s| s.aind())
     }
 
@@ -205,7 +202,7 @@ impl<R: RepName<Dual = R>> TensorStructure for OrderedStructure<R> {
         self.structure.len()
     }
 
-    fn get_slot(&self, i: usize) -> Option<Slot<R>> {
+    fn get_slot(&self, i: usize) -> Option<Slot<R, Aind>> {
         self.structure.get(i).cloned()
     }
 
@@ -217,12 +214,12 @@ impl<R: RepName<Dual = R>> TensorStructure for OrderedStructure<R> {
         self.structure.get(i).map(|s| s.dim())
     }
 
-    fn get_aind(&self, i: usize) -> Option<AbstractIndex> {
+    fn get_aind(&self, i: usize) -> Option<Aind> {
         self.structure.get(i).map(|s| s.aind())
     }
 }
 
-impl<R: RepName> Default for OrderedStructure<R> {
+impl<R: RepName, Aind> Default for OrderedStructure<R, Aind> {
     fn default() -> Self {
         Self {
             structure: vec![],
@@ -238,8 +235,8 @@ impl<R: RepName> Default for OrderedStructure<R> {
 //     }
 // }
 
-impl<R: RepName> OrderedStructure<R> {
-    pub fn dual_slice(&self) -> &[Slot<R>] {
+impl<R: RepName, Aind: AbsInd> OrderedStructure<R, Aind> {
+    pub fn dual_slice(&self) -> &[Slot<R, Aind>] {
         if self.dual_start >= self.structure.len() {
             &self.structure[0..0]
         } else {
@@ -247,7 +244,7 @@ impl<R: RepName> OrderedStructure<R> {
         }
     }
 
-    pub fn base_slice(&self) -> &[Slot<R>] {
+    pub fn base_slice(&self) -> &[Slot<R, Aind>] {
         if self.base_start >= self.structure.len() {
             &self.structure[0..0]
         } else if self.dual_start >= self.structure.len() {
@@ -257,7 +254,7 @@ impl<R: RepName> OrderedStructure<R> {
         }
     }
 
-    pub fn self_dual_slice(&self) -> &[Slot<R>] {
+    pub fn self_dual_slice(&self) -> &[Slot<R, Aind>] {
         if self.base_start >= self.structure.len() {
             &self.structure[..]
         } else {
@@ -291,28 +288,30 @@ impl<R: RepName> OrderedStructure<R> {
         }
     }
 
-    pub fn from_iter<S: RepName, T: IntoIterator<Item = Slot<S>>>(
+    pub fn from_iter<S: RepName, T: IntoIterator<Item = Slot<S, Aind>>>(
         iter: T,
     ) -> PermutedStructure<Self>
     where
         R: From<S>,
     {
-        let structure: Vec<Slot<R>> = iter.into_iter().map(|a| a.cast()).collect();
+        let structure: Vec<Slot<R, Aind>> = iter.into_iter().map(|a| a.cast()).collect();
         PermutedStructure::from(structure)
     }
 }
 
-impl<S: RepName, R: From<S> + RepName> FromIterator<Slot<S>>
-    for PermutedStructure<OrderedStructure<R>>
+impl<S: RepName, R: From<S> + RepName, Aind: AbsInd> FromIterator<Slot<S, Aind>>
+    for PermutedStructure<OrderedStructure<R, Aind>>
 {
-    fn from_iter<T: IntoIterator<Item = Slot<S>>>(iter: T) -> Self {
-        let structure: Vec<Slot<R>> = iter.into_iter().map(|a| a.cast()).collect();
+    fn from_iter<T: IntoIterator<Item = Slot<S, Aind>>>(iter: T) -> Self {
+        let structure: Vec<Slot<R, Aind>> = iter.into_iter().map(|a| a.cast()).collect();
         PermutedStructure::from(structure)
     }
 }
 
-impl<R: RepName> From<Vec<Slot<R>>> for PermutedStructure<OrderedStructure<R>> {
-    fn from(mut structure: Vec<Slot<R>>) -> Self {
+impl<R: RepName, Aind: AbsInd> From<Vec<Slot<R, Aind>>>
+    for PermutedStructure<OrderedStructure<R, Aind>>
+{
+    fn from(mut structure: Vec<Slot<R, Aind>>) -> Self {
         let rep_permutation = Permutation::sort_by_key(&structure, |a| a.rep);
         rep_permutation.apply_slice_in_place(&mut structure);
 
@@ -370,38 +369,38 @@ impl<R: RepName> From<Vec<Slot<R>>> for PermutedStructure<OrderedStructure<R>> {
     }
 }
 
-impl<R: RepName> IntoIterator for OrderedStructure<R> {
-    type Item = Slot<R>;
-    type IntoIter = std::vec::IntoIter<Slot<R>>;
-    fn into_iter(self) -> std::vec::IntoIter<Slot<R>> {
+impl<R: RepName, Aind> IntoIterator for OrderedStructure<R, Aind> {
+    type Item = Slot<R, Aind>;
+    type IntoIter = std::vec::IntoIter<Slot<R, Aind>>;
+    fn into_iter(self) -> std::vec::IntoIter<Slot<R, Aind>> {
         self.structure.into_iter()
     }
 }
 
-impl<'a, R: RepName> IntoIterator for &'a OrderedStructure<R> {
-    type Item = &'a Slot<R>;
-    type IntoIter = std::slice::Iter<'a, Slot<R>>;
-    fn into_iter(self) -> std::slice::Iter<'a, Slot<R>> {
+impl<'a, R: RepName, Aind> IntoIterator for &'a OrderedStructure<R, Aind> {
+    type Item = &'a Slot<R, Aind>;
+    type IntoIter = std::slice::Iter<'a, Slot<R, Aind>>;
+    fn into_iter(self) -> std::slice::Iter<'a, Slot<R, Aind>> {
         self.structure.iter()
     }
 }
 
-impl<'a, R: RepName> IntoIterator for &'a mut OrderedStructure<R> {
-    type Item = &'a mut Slot<R>;
-    type IntoIter = std::slice::IterMut<'a, Slot<R>>;
-    fn into_iter(self) -> std::slice::IterMut<'a, Slot<R>> {
+impl<'a, R: RepName, Aind> IntoIterator for &'a mut OrderedStructure<R, Aind> {
+    type Item = &'a mut Slot<R, Aind>;
+    type IntoIter = std::slice::IterMut<'a, Slot<R, Aind>>;
+    fn into_iter(self) -> std::slice::IterMut<'a, Slot<R, Aind>> {
         self.structure.iter_mut()
     }
 }
 
-impl<R: RepName> OrderedStructure<R> {
+impl<R: RepName, Aind: AbsInd> OrderedStructure<R, Aind> {
     /// Creates a new ordered structure from this unsorted list of slots.
     /// Returns a tuple struct of a the permutation that was used to sort the vector as well as the ordered structure itself
-    pub fn new(structure: Vec<Slot<R>>) -> PermutedStructure<Self> {
+    pub fn new(structure: Vec<Slot<R, Aind>>) -> PermutedStructure<Self> {
         PermutedStructure::from(structure)
     }
 
-    pub fn to_named<N, A>(self, name: N, args: Option<A>) -> NamedStructure<N, A, R> {
+    pub fn to_named<N, A>(self, name: N, args: Option<A>) -> NamedStructure<N, A, R, Aind> {
         NamedStructure {
             structure: self,
             global_name: Some(name),
@@ -414,27 +413,29 @@ impl<R: RepName> OrderedStructure<R> {
     }
 }
 
-impl<N, A, R: RepName> From<NamedStructure<N, A, R>> for OrderedStructure<R> {
-    fn from(structure: NamedStructure<N, A, R>) -> Self {
+impl<N, A, R: RepName, Aind> From<NamedStructure<N, A, R, Aind>> for OrderedStructure<R, Aind> {
+    fn from(structure: NamedStructure<N, A, R, Aind>) -> Self {
         structure.structure
     }
 }
 
-impl<N, A, R: RepName> From<SmartShadowStructure<N, A, R>> for OrderedStructure<R> {
-    fn from(structure: SmartShadowStructure<N, A, R>) -> Self {
+impl<N, A, R: RepName, Aind: AbsInd> From<SmartShadowStructure<N, A, R, Aind>>
+    for OrderedStructure<R, Aind>
+{
+    fn from(structure: SmartShadowStructure<N, A, R, Aind>) -> Self {
         structure.structure
     }
 }
 
-impl<R: RepName> From<OrderedStructure<R>> for Vec<Slot<R>> {
-    fn from(structure: OrderedStructure<R>) -> Self {
+impl<R: RepName, Aind> From<OrderedStructure<R, Aind>> for Vec<Slot<R, Aind>> {
+    fn from(structure: OrderedStructure<R, Aind>) -> Self {
         structure.structure
     }
 }
 
 // const IDPRINTER: Lazy<BlockId<char>> = Lazy::new(|| BlockId::new(Alphabet::alphanumeric(), 1, 1));
 
-impl<R: RepName> std::fmt::Display for OrderedStructure<R> {
+impl<R: RepName, Aind: AbsInd> std::fmt::Display for OrderedStructure<R, Aind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut table = Builder::new();
 
@@ -453,7 +454,7 @@ impl<R: RepName> std::fmt::Display for OrderedStructure<R> {
     }
 }
 
-impl<R: RepName> std::fmt::Debug for OrderedStructure<R> {
+impl<R: RepName, Aind: AbsInd> std::fmt::Debug for OrderedStructure<R, Aind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut table = Builder::new();
 
@@ -475,14 +476,17 @@ impl<R: RepName> std::fmt::Debug for OrderedStructure<R> {
     }
 }
 
-impl<R: RepName> ScalarStructure for OrderedStructure<R> {
+impl<R: RepName, Aind: AbsInd> ScalarStructure for OrderedStructure<R, Aind> {
     fn scalar_structure() -> Self {
         Self::default()
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl<R: RepName<Dual = R>> ToSymbolic for OrderedStructure<R> {
+impl<R: RepName<Dual = R>, Aind: AbsInd> ToSymbolic for OrderedStructure<R, Aind>
+where
+    Atom: From<Aind>,
+{
     fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
         ExpandedCoefficent {
             name: None,
@@ -547,7 +551,7 @@ impl<R: RepName<Dual = R>> ToSymbolic for OrderedStructure<R> {
     }
 }
 
-impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
+impl<R: RepName<Dual = R>, Aind: AbsInd> StructureContract for OrderedStructure<R, Aind> {
     fn trace(&mut self, i: usize, j: usize) {
         if i < j {
             self.trace(j, i);
@@ -703,7 +707,7 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
         let snbase = self.n_base();
         let onbase = other.n_base();
 
-        let find_match_in_duals = |base_slot: &Slot<R>,
+        let find_match_in_duals = |base_slot: &Slot<R, Aind>,
                                    base_slot_index: usize,
                                    common_indices_base: &mut BitVec,
                                    dual_structure: &Self,

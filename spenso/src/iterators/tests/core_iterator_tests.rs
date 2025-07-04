@@ -14,7 +14,8 @@ use linnet::permutation::Permutation;
 #[test]
 fn test_core_flat_iterator() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
+    let structure: OrderedStructure<Euclidean> =
+        OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
 
     // Create a fiber with one free index
     let mut fiber = Fiber::zeros(&structure);
@@ -75,7 +76,8 @@ fn test_core_expanded_iterator() {
 #[test]
 fn test_metric_iterator() {
     let rep = Minkowski {};
-    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(2, 1)]).structure;
+    let structure: OrderedStructure<Minkowski> =
+        OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(2, 1)]).structure;
 
     // Create a fiber with all indices free
     let mut fiber = Fiber::zeros(&structure);
@@ -102,7 +104,8 @@ fn test_metric_iterator() {
 #[test]
 fn test_permuted_iterator() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
+    let structure: OrderedStructure<Euclidean> =
+        OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
 
     // Create a fiber with all indices free
     let mut fiber = Fiber::zeros(&structure);
@@ -129,7 +132,8 @@ fn test_permuted_iterator() {
 #[test]
 fn test_paired_conjugates() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
+    let structure: OrderedStructure<Euclidean> =
+        OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
 
     // Create a fiber with specific pattern
     let mut fiber = Fiber::zeros(&structure);

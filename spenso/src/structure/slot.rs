@@ -50,13 +50,13 @@ use thiserror::Error;
 ///
 /// It can be built from a `Representation` calling one of the built in representations e.g.
 /// Or one can define custom representations{}
-pub struct Slot<T: RepName> {
+pub struct Slot<T: RepName, Aind = AbstractIndex> {
     pub(crate) rep: Representation<T>,
-    pub aind: AbstractIndex,
+    pub aind: Aind,
 }
 
-impl<T: RepName> Slot<T> {
-    pub fn cast<U: RepName + From<T>>(self) -> Slot<U> {
+impl<T: RepName, Aind> Slot<T, Aind> {
+    pub fn cast<U: RepName + From<T>>(self) -> Slot<U, Aind> {
         Slot {
             aind: self.aind,
             rep: Representation {
@@ -98,13 +98,21 @@ pub enum SlotError {
 #[cfg(feature = "shadowing")]
 /// Can possibly constuct a Slot from an `AtomView`, if it is of the form: <representation>(<dimension>,<index>)
 ///
-impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
+impl<'a, T: RepName, Aind> TryFrom<AtomView<'a>> for Slot<T, Aind>
+where
+    Aind: TryFrom<AtomView<'a>>,
+    SlotError: From<<Aind as TryFrom<AtomView<'a>>>::Error>,
+{
     type Error = SlotError;
 
-    fn try_from(value: AtomView<'_>) -> Result<Self, Self::Error> {
-        fn extract_num(iter: &mut ListIterator) -> Result<AbstractIndex, SlotError> {
+    fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
+        fn extract_num<'a, A>(iter: &'a mut ListIterator) -> Result<A, SlotError>
+        where
+            A: TryFrom<AtomView<'a>>,
+            SlotError: From<<A as TryFrom<AtomView<'a>>>::Error>,
+        {
             if let Some(a) = iter.next() {
-                Ok(AbstractIndex::try_from(a)?)
+                Ok(A::try_from(a)?)
             } else {
                 Err(SlotError::NoMoreArguments)
             }
@@ -134,9 +142,19 @@ impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
             return Err(SlotError::NoMoreArguments);
         };
 
-        let index: AbstractIndex = extract_num(&mut iter)?;
+        let index: Aind = if let Some(a) = iter.next() {
+            Ok(Aind::try_from(a)?)
+        } else {
+            Err(SlotError::NoMoreArguments)
+        }?;
 
-        if extract_num(&mut iter).is_ok() {
+        if if let Some(a) = iter.next() {
+            Ok(Aind::try_from(a)?)
+        } else {
+            Err(SlotError::NoMoreArguments)
+        }
+        .is_ok()
+        {
             return Err(SlotError::TooManyArguments);
         }
 
@@ -151,12 +169,12 @@ impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
 
 // }
 
-pub trait ConstructibleSlot<T: RepName> {
-    fn new(rep: T, dim: Dimension, aind: AbstractIndex) -> Self;
+pub trait ConstructibleSlot<T: RepName, Aind> {
+    fn new(rep: T, dim: Dimension, aind: Aind) -> Self;
 }
 
-impl<T: BaseRepName> ConstructibleSlot<T> for Slot<T> {
-    fn new(_: T, dim: Dimension, aind: AbstractIndex) -> Self {
+impl<T: BaseRepName, Aind> ConstructibleSlot<T, Aind> for Slot<T, Aind> {
+    fn new(_: T, dim: Dimension, aind: Aind) -> Self {
         Slot {
             aind,
             rep: Representation {
@@ -167,30 +185,40 @@ impl<T: BaseRepName> ConstructibleSlot<T> for Slot<T> {
     }
 }
 
+pub trait AbsInd: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + Display {}
+
+pub trait DummyAind {
+    fn new_dummy() -> Self;
+}
+
 pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + Display {
+    type Aind: AbsInd;
     type R: RepName;
 
-    fn reindex(self, id: AbstractIndex) -> Self;
+    fn reindex(self, id: Self::Aind) -> Self;
     fn dim(&self) -> Dimension;
-    fn to_dummy_rep(&self) -> LibrarySlot {
+    fn to_dummy_rep(&self) -> LibrarySlot<Self::Aind> {
         let rep = self.rep().to_dummy().to_lib();
         let aind = self.aind();
         Slot { rep, aind }
     }
 
-    fn to_dummy_ind(&self) -> LibrarySlot {
+    fn to_dummy_ind(&self) -> LibrarySlot<Self::Aind>
+    where
+        Self::Aind: DummyAind,
+    {
         Slot {
             rep: self.rep().to_lib(),
-            aind: AbstractIndex::new_dummy(),
+            aind: Self::Aind::new_dummy(),
         }
     }
 
-    fn to_lib(&self) -> LibrarySlot {
+    fn to_lib(&self) -> LibrarySlot<Self::Aind> {
         let rep: LibraryRep = self.rep_name().into();
         rep.new_slot(self.dim(), self.aind())
     }
-    fn aind(&self) -> AbstractIndex;
-    fn set_aind(&mut self, aind: AbstractIndex);
+    fn aind(&self) -> Self::Aind;
+    fn set_aind(&mut self, aind: Self::Aind);
     fn rep_name(&self) -> Self::R;
     fn rep(&self) -> Representation<Self::R> {
         Representation {
@@ -201,11 +229,18 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + D
 
     #[cfg(feature = "shadowing")]
     /// using the function builder of the representation add the abstract index as an argument, and finish it to an Atom.
-    fn to_atom(&self) -> Atom;
+    fn to_atom(&self) -> Atom
+    where
+        Atom: From<Self::Aind>;
     #[cfg(feature = "shadowing")]
-    fn to_symbolic_wrapped(&self) -> Atom;
-    #[cfg(feature = "shadowing")]
-    fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError>;
+    fn to_symbolic_wrapped(&self) -> Atom
+    where
+        Atom: From<Self::Aind>;
+    // #[cfg(feature = "shadowing")]
+    // fn try_from_view<'a>(v: AtomView<'a>) -> Result<Self, SlotError>
+    // where
+    //     Self::Aind: TryFrom<AtomView<'a>>,
+    //     SlotError: From<<Self::Aind as TryFrom<AtomView<'a>>>::Error>;
 }
 
 pub trait DualSlotTo: IsAbstractSlot {
@@ -216,45 +251,56 @@ pub trait DualSlotTo: IsAbstractSlot {
     fn match_cmp(&self, other: &Self::Dual) -> Ordering;
 }
 
-impl<T: RepName> IsAbstractSlot for Slot<T> {
+impl<T: RepName, A: AbsInd> IsAbstractSlot for Slot<T, A> {
+    type Aind = A;
     type R = T;
     // type Dual = GenSlot<T::Dual>;
     fn dim(&self) -> Dimension {
         self.rep.dim
     }
 
-    fn reindex(mut self, id: AbstractIndex) -> Self {
+    fn reindex(mut self, id: Self::Aind) -> Self {
         self.aind = id;
         self
     }
-    fn aind(&self) -> AbstractIndex {
+    fn aind(&self) -> Self::Aind {
         self.aind
     }
     fn rep_name(&self) -> Self::R {
         self.rep.rep
     }
 
-    fn set_aind(&mut self, aind: AbstractIndex) {
+    fn set_aind(&mut self, aind: Self::Aind) {
         self.aind = aind;
     }
     #[cfg(feature = "shadowing")]
-    fn to_atom(&self) -> Atom {
+    fn to_atom(&self) -> Atom
+    where
+        Atom: From<Self::Aind>,
+    {
         self.rep.to_symbolic([Atom::from(self.aind)])
     }
     #[cfg(feature = "shadowing")]
-    fn to_symbolic_wrapped(&self) -> Atom {
+    fn to_symbolic_wrapped(&self) -> Atom
+    where
+        Atom: From<Self::Aind>,
+    {
         use symbolica::function;
 
         self.rep
             .to_symbolic([function!(symbol!("indexid"), Atom::from(self.aind))])
     }
-    #[cfg(feature = "shadowing")]
-    fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError> {
-        Slot::try_from(v)
-    }
+    // #[cfg(feature = "shadowing")]
+    // fn try_from_view<'a>(v: AtomView<'a>) -> Result<Self, SlotError>
+    // where
+    //     Self::Aind: TryFrom<AtomView<'a>>,
+    //     SlotError: From<<Self::Aind as TryFrom<AtomView<'a>>>::Error>,
+    // {
+    //     Slot::try_from(v)
+    // }
 }
 
-impl<T: RepName> std::fmt::Display for Slot<T> {
+impl<T: RepName, Aind: AbsInd> std::fmt::Display for Slot<T, Aind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.rep.rep.is_self_dual() {
             write!(f, "{}|{}", self.rep, self.aind)
@@ -266,8 +312,11 @@ impl<T: RepName> std::fmt::Display for Slot<T> {
     }
 }
 
-impl<T: RepName> Slot<T> {
-    #[cfg(feature = "shadowing")]
+#[cfg(feature = "shadowing")]
+impl<T: RepName, Aind: AbsInd> Slot<T, Aind>
+where
+    Atom: From<Aind>,
+{
     pub fn to_pattern(&self, dimension: Symbol) -> Atom {
         self.rep
             .rep
@@ -275,9 +324,9 @@ impl<T: RepName> Slot<T> {
     }
 }
 
-impl<T: RepName> DualSlotTo for Slot<T> {
-    type Dual = Slot<T::Dual>;
-    fn dual(&self) -> Slot<T::Dual> {
+impl<T: RepName, Aind: AbsInd> DualSlotTo for Slot<T, Aind> {
+    type Dual = Slot<T::Dual, Aind>;
+    fn dual(&self) -> Slot<T::Dual, Aind> {
         Slot {
             rep: self.rep.dual(),
             aind: self.aind,
@@ -326,13 +375,13 @@ mod shadowing_tests {
     #[test]
     fn to_symbolic() {
         let mink = Lorentz {}.new_rep(4);
-        let mu = mink.slot(0);
+        let mu: Slot<Lorentz> = mink.slot(0);
         println!("{}", mu.to_atom());
         assert_eq!("spenso::lor(4,0)", mu.to_atom().to_canonical_string());
         // assert_eq!("lor🠑4|₀", mu.dual().to_string());
 
         let mink = Lorentz {}.new_rep(4);
-        let mu = mink.slot(0);
+        let mu: Slot<Lorentz> = mink.slot(0);
         let atom = mu.to_atom();
         let slot = Slot::try_from(atom.as_view()).unwrap();
         assert_eq!(slot, mu);

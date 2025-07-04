@@ -10,7 +10,7 @@ use crate::structure::{representation::Euclidean, OrderedStructure};
 #[test]
 fn test_fiber_creation() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![
+    let structure: OrderedStructure<Euclidean> = OrderedStructure::new(vec![
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),
@@ -49,7 +49,7 @@ fn test_fiber_creation() {
 #[test]
 fn test_fiber_modification() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![
+    let structure: OrderedStructure<Euclidean> = OrderedStructure::new(vec![
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),
@@ -90,7 +90,7 @@ fn test_fiber_modification() {
 #[test]
 fn test_fiber_class_conversion() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![
+    let structure: OrderedStructure<Euclidean> = OrderedStructure::new(vec![
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),
@@ -124,7 +124,8 @@ fn test_fiber_class_conversion() {
 #[test]
 fn test_fiber_display() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![rep.new_slot(3, 0), rep.new_slot(4, 0)]).structure;
+    let structure: OrderedStructure<Euclidean> =
+        OrderedStructure::new(vec![rep.new_slot(3, 0), rep.new_slot(4, 0)]).structure;
 
     // Create a fiber with specific pattern
     let mut fiber = Fiber::zeros(&structure);
@@ -139,7 +140,7 @@ fn test_fiber_display() {
 #[test]
 fn test_single_fiber_detection() {
     let rep = Euclidean {};
-    let structure = OrderedStructure::new(vec![
+    let structure: OrderedStructure<Euclidean> = OrderedStructure::new(vec![
         rep.new_slot(3, 0),
         rep.new_slot(4, 0),
         rep.new_slot(5, 0),

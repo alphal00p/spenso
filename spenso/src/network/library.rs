@@ -126,7 +126,7 @@ impl<T: TensorStructure> TensorStructure for DummyLibraryTensor<T> {
     type Indexed = T::Indexed;
     fn reindex(
         self,
-        _indices: &[AbstractIndex],
+        _indices: &[<Self::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         unimplemented!()
     }
@@ -146,10 +146,10 @@ impl<T: TensorStructure> TensorStructure for DummyLibraryTensor<T> {
         DummyIter::<Representation<<T::Slot as IsAbstractSlot>::R>>::None
     }
 
-    fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex> {
-        DummyIter::<AbstractIndex>::None
+    fn external_indices_iter(&self) -> impl Iterator<Item = <Self::Slot as IsAbstractSlot>::Aind> {
+        DummyIter::<<Self::Slot as IsAbstractSlot>::Aind>::None
     }
-    fn get_aind(&self, _i: usize) -> Option<AbstractIndex> {
+    fn get_aind(&self, _i: usize) -> Option<<Self::Slot as IsAbstractSlot>::Aind> {
         unimplemented!()
     }
     fn get_rep(&self, _i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>> {
@@ -251,7 +251,7 @@ impl<T: HasStructure + TensorStructure> LibraryTensor for DummyLibraryTensor<T> 
 
     fn with_indices(
         &self,
-        _indices: &[AbstractIndex],
+        _indices: &[<<<Self::WithIndices as HasStructure>::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::WithIndices>, StructureError> {
         unimplemented!()
     }
@@ -271,7 +271,7 @@ pub trait LibraryTensor: HasStructure + Sized + TensorStructure {
 
     fn with_indices(
         &self,
-        indices: &[AbstractIndex],
+        indices: &[<<<Self::WithIndices as HasStructure>::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::WithIndices>, StructureError>;
 }
 
@@ -296,7 +296,7 @@ impl<D: Clone, S: TensorStructure + Clone> LibraryTensor for DataTensor<D, S> {
 
     fn with_indices(
         &self,
-        indices: &[AbstractIndex],
+        indices: &[<<<Self::WithIndices as HasStructure>::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::WithIndices>, StructureError> {
         self.clone().reindex(indices)
         // let new_structure = self.structure().clone().reindex(indices)?;
@@ -345,7 +345,7 @@ impl<D: Clone + Default, S: TensorStructure + Clone> LibraryTensor for RealOrCom
 
     fn with_indices(
         &self,
-        indices: &[AbstractIndex],
+        indices: &[<<<Self::WithIndices as HasStructure>::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::WithIndices>, StructureError> {
         match self {
             RealOrComplexTensor::Real(real_tensor) => {

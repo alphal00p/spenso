@@ -116,7 +116,7 @@ where
 
     fn reindex(
         self,
-        indices: &[AbstractIndex],
+        indices: &[<Self::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         let res = self.structure.reindex(indices)?;
 
@@ -137,13 +137,13 @@ where
     delegate! {
         to self.structure() {
             fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = <Self::Slot as IsAbstractSlot>::Aind>;
             fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
             fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
             fn get_slot(&self, i: usize)-> Option<Self::Slot>;
             fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn get_dim(&self, i: usize)-> Option<Dimension>;
-            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn get_aind(&self, i: usize)-> Option<<Self::Slot as IsAbstractSlot>::Aind>;
             fn order(&self)-> usize;
         }
     }
@@ -192,6 +192,7 @@ where
     S: HasName + Clone,
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
+    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
 }
 
@@ -202,6 +203,7 @@ where
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
     R: From<T>,
+    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
     // fn shadow_with_map<'a, C>(
     //     &self,

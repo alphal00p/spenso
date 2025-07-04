@@ -4,7 +4,7 @@ use bincode_trait_derive::{Decode, Encode};
 use linnet::permutation::Permutation;
 use serde::{Deserialize, Serialize};
 
-use super::{abstract_index::AbstractIndex, StructureError, TensorStructure};
+use super::{abstract_index::AbstractIndex, slot::IsAbstractSlot, StructureError, TensorStructure};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Encode, Decode)]
 pub struct PermutedStructure<S> {
@@ -43,7 +43,7 @@ impl<S> PermutedStructure<S> {
         }
     }
 
-    pub fn reindex<I: IntoIterator<Item: Into<AbstractIndex>>>(
+    pub fn reindex<I: IntoIterator<Item: Into<<S::Slot as IsAbstractSlot>::Aind>>>(
         self,
         indices: I,
     ) -> Result<PermutedStructure<S::Indexed>, StructureError>

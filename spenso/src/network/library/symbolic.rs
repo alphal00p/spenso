@@ -74,7 +74,7 @@ impl<S: TensorStructure + Clone> LibraryTensor for ParamTensor<S> {
 
     fn with_indices(
         &self,
-        indices: &[AbstractIndex],
+        indices: &[<<<Self::WithIndices as HasStructure>::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::WithIndices>, StructureError> {
         let new_tensor =
             <DataTensor<Atom, S> as LibraryTensor>::with_indices(&self.tensor, indices)?;
@@ -134,7 +134,7 @@ impl<D: Default + Clone, S: TensorStructure + Clone> LibraryTensor for MixedTens
 
     fn with_indices(
         &self,
-        indices: &[AbstractIndex],
+        indices: &[<<<Self::WithIndices as HasStructure>::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::WithIndices>, StructureError> {
         Ok(match self {
             ParamOrConcrete::Concrete(c) => {

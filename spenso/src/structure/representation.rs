@@ -201,7 +201,7 @@ pub trait RepName:
         function!(ETS.metric, librep.to_symbolic(a), librep.to_symbolic(b))
     }
 
-    fn new_slot<D: Into<Dimension>, A: Into<AbstractIndex>>(self, dim: D, aind: A) -> Slot<Self>
+    fn new_slot<Aind, D: Into<Dimension>, A: Into<Aind>>(self, dim: D, aind: A) -> Slot<Self, Aind>
     where
         Self: Sized,
     {
@@ -630,7 +630,7 @@ impl PartialOrd for LibraryRep {
     }
 }
 
-pub type LibrarySlot = Slot<LibraryRep>;
+pub type LibrarySlot<Aind> = Slot<LibraryRep, Aind>;
 
 pub(crate) static REPS: Lazy<RwLock<ExtendibleReps>> =
     Lazy::new(|| RwLock::new(ExtendibleReps::new()));
@@ -1146,7 +1146,7 @@ impl<T: RepName> Representation<T> {
         self.rep.is_neg(i)
     }
 
-    pub fn slot<A: Into<AbstractIndex>>(&self, aind: A) -> Slot<T> {
+    pub fn slot<Aind, A: Into<Aind>>(&self, aind: A) -> Slot<T, Aind> {
         Slot {
             aind: aind.into(),
             rep: *self,

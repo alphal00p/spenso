@@ -4,7 +4,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     algebra::algebraic_traits::{One, Zero},
-    structure::{permuted::PermuteTensor, PermutedStructure},
+    structure::{
+        permuted::PermuteTensor,
+        slot::{AbsInd, IsAbstractSlot},
+        PermutedStructure,
+    },
 };
 use std::{
     borrow::Cow,
@@ -59,69 +63,80 @@ use super::{Library, Network, TensorNetworkError, TensorOrScalarOrKey};
     feature = "shadowing",
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-pub struct TensorNetworkSet<S, K> {
-    pub networks: Vec<Network<S, K>>,
+pub struct TensorNetworkSet<S, K, Aind> {
+    pub networks: Vec<Network<S, K, Aind>>,
 }
 
-impl<S, K> FromIterator<Network<S, K>> for TensorNetworkSet<S, K> {
-    fn from_iter<T: IntoIterator<Item = Network<S, K>>>(iter: T) -> Self {
+impl<S, K, Aind> FromIterator<Network<S, K, Aind>> for TensorNetworkSet<S, K, Aind> {
+    fn from_iter<T: IntoIterator<Item = Network<S, K, Aind>>>(iter: T) -> Self {
         Self {
             networks: Vec::from_iter(iter),
         }
     }
 }
 
-impl<S, K> TensorNetworkSet<S, K> {
+impl<S, K, Aind> TensorNetworkSet<S, K, Aind> {
     pub fn new() -> Self {
         TensorNetworkSet { networks: vec![] }
     }
 
-    pub fn push(&mut self, network: Network<S, K>) {
+    pub fn push(&mut self, network: Network<S, K, Aind>) {
         // self.scalars.push(network.scalar);
         self.networks.push(network);
     }
 }
 
-impl<S, K> Default for TensorNetworkSet<S, K> {
+impl<S, K, Aind> Default for TensorNetworkSet<S, K, Aind> {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[cfg(feature = "shadowing")]
-pub type EvalTreeTensorNetworkSet<T, S, K, Str> = SharedTensorNetworkSet<EvalTree<T>, S, K, Str>;
+pub type EvalTreeTensorNetworkSet<T, S, K, Aind, Str> =
+    SharedTensorNetworkSet<EvalTree<T>, S, K, Aind, Str>;
 
 #[cfg(feature = "shadowing")]
-pub type EvalTensorNetworkSet<T, S, K, Str> =
-    SharedTensorNetworkSet<ExpressionEvaluator<T>, S, K, Str>;
+pub type EvalTensorNetworkSet<T, S, K, Aind, Str> =
+    SharedTensorNetworkSet<ExpressionEvaluator<T>, S, K, Aind, Str>;
 
 #[cfg(feature = "shadowing")]
-pub type CompiledTensorNetworkSet<S, K, Str> = SharedTensorNetworkSet<CompiledEvaluator, S, K, Str>;
+pub type CompiledTensorNetworkSet<S, K, Aind, Str> =
+    SharedTensorNetworkSet<CompiledEvaluator, S, K, Aind, Str>;
 
 #[derive(Debug, Clone)]
 pub struct SharedTensorNetworkSet<
     D,
     S: TensorStructure,
     K,
+    Aind,
     Str: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> = NetworkStore<
         DataTensor<usize, S>,
         usize,
     >,
 > {
-    pub networks: Vec<Network<Str, K>>,
+    pub networks: Vec<Network<Str, K, Aind>>,
     pub shared_data: D,
     pub len: usize,
 }
 
-impl<T: TensorStructure, S, K: Display + Debug, Str: TensorScalarStore<Tensor = T, Scalar = S>>
-    TensorNetworkSet<Str, K>
+impl<
+        T: TensorStructure,
+        S,
+        K: Display + Debug,
+        Str: TensorScalarStore<Tensor = T, Scalar = S>,
+        Aind: AbsInd,
+    > TensorNetworkSet<Str, K, Aind>
 {
     pub fn result(
         &self,
     ) -> Result<
-        Vec<ExecutionResult<TensorOrScalarOrKey<&T, &S, &PermutedStructure<K>>>>,
+        Vec<ExecutionResult<TensorOrScalarOrKey<&T, &S, &PermutedStructure<K>, Aind>>>,
         TensorNetworkError<K>,
-    > {
+    >
+    where
+        T::Slot: IsAbstractSlot<Aind = Aind>,
+    {
         self.networks.iter().map(|n| n.result()).collect()
     }
 
@@ -136,6 +151,9 @@ impl<T: TensorStructure, S, K: Display + Debug, Str: TensorScalarStore<Tensor = 
         for<'b> &'b S: Into<T::Scalar>,
         LT: TensorStructure<Indexed = T> + Clone + LibraryTensor<WithIndices = T>,
         T: PermuteTensor<Permuted = T>,
+        <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
+            IsAbstractSlot<Aind = Aind>,
+        T::Slot: IsAbstractSlot<Aind = Aind>,
     {
         self.networks.iter().map(|n| n.result_tensor(lib)).collect()
     }
@@ -147,16 +165,18 @@ impl<T: TensorStructure, S, K: Display + Debug, Str: TensorScalarStore<Tensor = 
         T: Clone + ScalarTensor + 'a,
         T::Scalar: Into<S>,
         S: One + Zero + Clone,
+        T::Slot: IsAbstractSlot<Aind = Aind>,
     {
         self.networks.iter().map(|n| n.result_scalar()).collect()
     }
 
-    pub fn cast<U>(self) -> TensorNetworkSet<Str::Store<U, S>, K>
+    pub fn cast<U>(self) -> TensorNetworkSet<Str::Store<U, S>, K, Aind>
     where
         K: Clone,
         T: CastStructure<U> + HasStructure,
         T::Structure: TensorStructure,
         U: HasStructure,
+        T::Slot: IsAbstractSlot<Aind = Aind>,
         U::Structure: From<T::Structure> + TensorStructure<Slot = T::Slot>,
     {
         self.networks.into_iter().map(|n| n.cast()).collect()
@@ -168,7 +188,8 @@ impl<
         Store: TensorScalarStore<Tensor = ParamTensor<S>, Scalar = Atom>,
         S: TensorStructure + Clone,
         K: Clone,
-    > TensorNetworkSet<Store, K>
+        Aind: AbsInd,
+    > TensorNetworkSet<Store, K, Aind>
 {
     pub fn eval_tree(
         self,
@@ -179,6 +200,7 @@ impl<
             SymComplex<Rational>,
             S,
             K,
+            Aind,
             Store::Store<DataTensor<usize, S>, usize>,
         >,
     >
@@ -250,8 +272,9 @@ impl<
 impl<
         S: Clone + TensorStructure,
         K,
+        Aind: AbsInd,
         Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize>,
-    > EvalTreeTensorNetworkSet<SymComplex<Rational>, S, K, Store>
+    > EvalTreeTensorNetworkSet<SymComplex<Rational>, S, K, Aind, Store>
 {
     pub fn horner_scheme(&mut self) {
         self.shared_data.horner_scheme();
@@ -263,10 +286,14 @@ impl<
         T,
         S: TensorStructure + Clone,
         K: Clone,
+        Aind: AbsInd,
         Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> + Clone,
-    > EvalTreeTensorNetworkSet<T, S, K, Store>
+    > EvalTreeTensorNetworkSet<T, S, K, Aind, Store>
 {
-    pub fn map_coeff<T2, F: Fn(&T) -> T2>(&self, f: &F) -> EvalTreeTensorNetworkSet<T2, S, K, Store>
+    pub fn map_coeff<T2, F: Fn(&T) -> T2>(
+        &self,
+        f: &F,
+    ) -> EvalTreeTensorNetworkSet<T2, S, K, Aind, Store>
     where
         T: Clone + PartialEq,
     {
@@ -278,7 +305,7 @@ impl<
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self, cpe_rounds: Option<usize>) -> EvalTensorNetworkSet<T, S, K, Store>
+    pub fn linearize(self, cpe_rounds: Option<usize>) -> EvalTensorNetworkSet<T, S, K, Aind, Store>
     where
         T: Clone + Default + PartialEq,
     {
@@ -299,7 +326,7 @@ impl<
     pub fn evaluate(
         &mut self,
         params: &[T],
-    ) -> TensorNetworkSet<Store::Store<DataTensor<T, S>, T>, K>
+    ) -> TensorNetworkSet<Store::Store<DataTensor<T, S>, T>, K, Aind>
     where
         T: Real + SingleFloat,
         S: TensorStructure + Clone,
@@ -347,13 +374,14 @@ impl<
         T,
         S: TensorStructure + Clone,
         K: Clone,
+        Aind: AbsInd,
         Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> + Clone,
-    > EvalTensorNetworkSet<T, S, K, Store>
+    > EvalTensorNetworkSet<T, S, K, Aind, Store>
 {
     pub fn evaluate(
         &mut self,
         params: &[T],
-    ) -> TensorNetworkSet<Store::Store<DataTensor<T, S>, T>, K>
+    ) -> TensorNetworkSet<Store::Store<DataTensor<T, S>, T>, K, Aind>
     where
         T: Real + SingleFloat,
         S: TensorStructure + Clone,
@@ -406,7 +434,7 @@ impl<
         function_name: &str,
         include_header: bool,
         inline_asm: InlineASM,
-    ) -> Result<SharedTensorNetworkSet<ExportedCode, S, K, Store>, std::io::Error>
+    ) -> Result<SharedTensorNetworkSet<ExportedCode, S, K, Aind, Store>, std::io::Error>
     where
         T: ExportNumber + SingleFloat,
     {
@@ -424,12 +452,14 @@ impl<
 }
 
 #[cfg(feature = "shadowing")]
-impl<S: TensorStructure + Clone, K: Clone> SharedTensorNetworkSet<ExportedCode, S, K> {
+impl<S: TensorStructure + Clone, K: Clone, Aind: AbsInd>
+    SharedTensorNetworkSet<ExportedCode, S, K, Aind>
+{
     pub fn compile(
         &self,
         out: &str,
         options: CompileOptions,
-    ) -> Result<SharedTensorNetworkSet<CompiledCode, S, K>, std::io::Error> {
+    ) -> Result<SharedTensorNetworkSet<CompiledCode, S, K, Aind>, std::io::Error> {
         Ok(SharedTensorNetworkSet {
             networks: self.networks.clone(),
             shared_data: self.shared_data.compile(out, options)?,
@@ -439,8 +469,10 @@ impl<S: TensorStructure + Clone, K: Clone> SharedTensorNetworkSet<ExportedCode, 
 }
 
 #[cfg(feature = "shadowing")]
-impl<S: TensorStructure + Clone, K: Clone> SharedTensorNetworkSet<CompiledCode, S, K> {
-    pub fn load(&self) -> Result<SharedTensorNetworkSet<CompiledEvaluator, S, K>, String> {
+impl<S: TensorStructure + Clone, K: Clone, Aind: AbsInd>
+    SharedTensorNetworkSet<CompiledCode, S, K, Aind>
+{
+    pub fn load(&self) -> Result<SharedTensorNetworkSet<CompiledEvaluator, S, K, Aind>, String> {
         Ok(SharedTensorNetworkSet {
             networks: self.networks.clone(),
             shared_data: self.shared_data.load()?,
@@ -454,12 +486,13 @@ impl<
         S: TensorStructure + Clone,
         K: Clone,
         Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> + Clone,
-    > CompiledTensorNetworkSet<S, K, Store>
+        Aind: AbsInd,
+    > CompiledTensorNetworkSet<S, K, Aind, Store>
 {
     pub fn evaluate<T: symbolica::evaluate::CompiledEvaluatorFloat + Default + Clone>(
         &mut self,
         params: &[T],
-    ) -> TensorNetworkSet<Store::Store<DataTensor<T, S>, T>, K>
+    ) -> TensorNetworkSet<Store::Store<DataTensor<T, S>, T>, K, Aind>
     where
         S: TensorStructure + Clone,
     {

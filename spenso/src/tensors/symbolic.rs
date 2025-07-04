@@ -58,7 +58,7 @@ impl Ref for SymbolicTensor {
 
 impl PermuteTensor for SymbolicTensor {
     type Id = SymbolicTensor;
-    type IdSlot = LibrarySlot;
+    type IdSlot = LibrarySlot<AbstractIndex>;
     type Permuted = SymbolicTensor;
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
@@ -114,7 +114,7 @@ impl PermuteTensor for SymbolicTensor {
 impl TensorStructure for SymbolicTensor {
     // type R = <T::Structure as TensorStructure>::R;
     type Indexed = SymbolicTensor;
-    type Slot = LibrarySlot;
+    type Slot = LibrarySlot<AbstractIndex>;
 
     fn reindex(
         self,
@@ -243,7 +243,7 @@ impl StructureContract for SymbolicTensor {
 impl SymbolicTensor {
     pub fn from_named<N>(structure: &N) -> Option<Self>
     where
-        N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot>,
+        N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot<AbstractIndex>>,
         N::Name: IntoSymbol + Clone,
         N::Args: IntoArgs,
     {
@@ -256,7 +256,7 @@ impl SymbolicTensor {
 
     pub fn from_permuted<N>(structure: &PermutedStructure<N>) -> Option<Self>
     where
-        N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot>,
+        N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot<AbstractIndex>>,
         N::Name: IntoSymbol + Clone,
         N::Args: IntoArgs,
     {
@@ -298,10 +298,14 @@ impl SymbolicTensor {
         &self,
         library: &TensorLibrary<MixedTensor<f64, ExplicitKey>>,
     ) -> Result<
-        Network<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, ExplicitKey>,
+        Network<
+            NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>,
+            ExplicitKey,
+            AbstractIndex,
+        >,
         TensorNetworkError<ExplicitKey>,
     > {
-        Network::<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>,ExplicitKey>::try_from_view(
+        Network::<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, ExplicitKey, AbstractIndex>::try_from_view(
             self.expression.as_view(),
             library,
         )

@@ -340,7 +340,7 @@ where
 
     fn reindex(
         self,
-        indices: &[AbstractIndex],
+        indices: &[<Self::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         let res = self.tensor.reindex(indices)?;
         Ok(PermutedStructure {
@@ -360,13 +360,13 @@ where
     delegate! {
         to self.structure() {
             fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = <Self::Slot as IsAbstractSlot>::Aind>;
             fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
             fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
             fn get_slot(&self, i: usize)-> Option<Self::Slot>;
             fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn get_dim(&self, i: usize)-> Option<Dimension>;
-            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn get_aind(&self, i: usize)-> Option<<Self::Slot as IsAbstractSlot>::Aind>;
             fn order(&self)-> usize;
         }
     }
@@ -679,6 +679,7 @@ where
     S: HasName + Clone,
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
+    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
 }
 
@@ -687,6 +688,7 @@ where
     S: HasName + Clone,
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
+    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
     fn append_map<T>(
         &self,
@@ -909,6 +911,8 @@ impl<
         C: HasStructure<Structure = S> + Clone + Shadowable,
         S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
     > Shadowable for ParamOrConcrete<C, S>
+where
+    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
 }
 
@@ -917,6 +921,8 @@ impl<
         C: HasStructure<Structure = S> + Clone + ShadowMapping<U>,
         S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
     > ShadowMapping<U> for ParamOrConcrete<C, S>
+where
+    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
     // fn shadow_with_map<'a, T>(
     //     &'a self,
@@ -1204,8 +1210,9 @@ where
 impl<C, S> TensorStructure for ParamOrConcrete<C, S>
 where
     C: HasStructure<Structure = S> + TensorStructure,
-    C::Indexed: HasStructure<Structure = S::Indexed>,
-    S: TensorStructure,
+    C::Indexed: HasStructure<Structure = S::Indexed>
+        + TensorStructure<Slot = <S::Indexed as TensorStructure>::Slot>,
+    S: TensorStructure<Slot = C::Slot>,
 {
     // type R = <T::Structure as TensorStructure>::R;
     type Indexed = ParamOrConcrete<C::Indexed, S::Indexed>;
@@ -1213,7 +1220,7 @@ where
 
     fn reindex(
         self,
-        indices: &[AbstractIndex],
+        indices: &[<Self::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         Ok(match self {
             ParamOrConcrete::Concrete(c) => {
@@ -1242,13 +1249,13 @@ where
     delegate! {
         to self.structure() {
             fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = <Self::Slot as IsAbstractSlot>::Aind>;
             fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
             fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
             fn get_slot(&self, i: usize)-> Option<Self::Slot>;
             fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn get_dim(&self, i: usize)-> Option<Dimension>;
-            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn get_aind(&self, i: usize)-> Option<<Self::Slot as IsAbstractSlot>::Aind>;
             fn order(&self)-> usize;
         }
     }
@@ -1518,8 +1525,9 @@ impl<C: IteratableTensor + Clone, S: TensorStructure + Clone> IteratableTensor
     for ParamOrConcrete<C, S>
 where
     C: HasStructure<Structure = S> + TensorStructure,
-    C::Indexed: HasStructure<Structure = S::Indexed>,
-    S: TensorStructure,
+    C::Indexed: HasStructure<Structure = S::Indexed>
+        + TensorStructure<Slot = <S::Indexed as TensorStructure>::Slot>,
+    S: TensorStructure<Slot = C::Slot>,
 {
     type Data<'a>
         = AtomViewOrConcrete<'a, C::Data<'a>>
@@ -2301,7 +2309,7 @@ where
 
     fn reindex(
         self,
-        indices: &[AbstractIndex],
+        indices: &[<Self::Slot as IsAbstractSlot>::Aind],
     ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         let res = self.structure.reindex(indices)?;
         Ok(PermutedStructure {
@@ -2322,13 +2330,13 @@ where
     delegate! {
         to self.structure() {
             fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = <Self::Slot as IsAbstractSlot>::Aind>;
             fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
             fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
             fn get_slot(&self, i: usize)-> Option<Self::Slot>;
             fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn get_dim(&self, i: usize)-> Option<Dimension>;
-            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn get_aind(&self, i: usize)-> Option<<Self::Slot as IsAbstractSlot>::Aind>;
             fn order(&self)-> usize;
         }
     }

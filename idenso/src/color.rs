@@ -325,12 +325,12 @@ pub fn color_simplify_impl(expression: AtomView) -> Result<Atom, ColorError> {
         .collect();
 
     let mut atom = Atom::num(0);
-    for r in &replacements {
-        println!("{r}")
-    }
-    for f in &frep {
-        println!("{f}")
-    }
+    // for r in &replacements {
+    //     println!("{r}")
+    // }
+    // for f in &frep {
+    //     println!("{f}")
+    // }
     let mut expression = expression.to_owned();
     let mut first = true;
     while first || expression.replace_multiple_into(&replacements, &mut atom) {

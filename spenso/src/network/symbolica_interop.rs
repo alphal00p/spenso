@@ -28,19 +28,25 @@ use symbolica::{
 };
 
 use crate::{
-    algebra::complex::Complex,
-    algebra::upgrading_arithmetic::TrySmallestUpgrade,
+    algebra::{complex::Complex, upgrading_arithmetic::TrySmallestUpgrade},
     iterators::IteratableTensor,
-    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
-    shadowing::{ShadowMapping, Shadowable},
-    structure::{HasName, TensorStructure, ToSymbolic},
-    tensors::complex::RealOrComplexTensor,
-    tensors::data::DataTensor,
-    tensors::parametric::{
-        atomcore::{PatternReplacement, ReplaceBuilderGeneric, TensorAtomMaps, TensorAtomOps},
-        AtomViewOrConcrete, CompiledEvalTensor, EvalTensor, EvalTreeTensor, MixedTensor,
-        ParamTensor, SerializableCompiledCode, SerializableCompiledEvaluator,
-        SerializableExportedCode,
+    shadowing::{
+        symbolica_utils::{IntoArgs, IntoSymbol},
+        ShadowMapping, Shadowable,
+    },
+    structure::{
+        slot::{AbsInd, IsAbstractSlot},
+        HasName, TensorStructure, ToSymbolic,
+    },
+    tensors::{
+        complex::RealOrComplexTensor,
+        data::DataTensor,
+        parametric::{
+            atomcore::{PatternReplacement, ReplaceBuilderGeneric, TensorAtomMaps, TensorAtomOps},
+            AtomViewOrConcrete, CompiledEvalTensor, EvalTensor, EvalTreeTensor, MixedTensor,
+            ParamTensor, SerializableCompiledCode, SerializableCompiledEvaluator,
+            SerializableExportedCode,
+        },
     },
 };
 
@@ -49,8 +55,13 @@ use super::{
     Network, TensorNetworkError,
 };
 
-impl<Store: TensorScalarStore<Tensor = MixedTensor<T, S>, Scalar: AtomCore>, T, S, K>
-    Network<Store, K>
+impl<
+        Store: TensorScalarStore<Tensor = MixedTensor<T, S>, Scalar: AtomCore>,
+        T,
+        S,
+        K,
+        Aind: AbsInd,
+    > Network<Store, K, Aind>
 where
     S: TensorStructure + Clone,
     T: Clone,
@@ -65,7 +76,7 @@ where
     pub fn replace_multiple<R: BorrowReplacement>(
         &self,
         replacements: &[R],
-    ) -> Network<Store::Store<MixedTensor<T, S>, Atom>, K>
+    ) -> Network<Store::Store<MixedTensor<T, S>, Atom>, K, Aind>
     where
         K: Clone,
     {
@@ -91,16 +102,19 @@ where
     }
 }
 
-impl<Store: TensorScalarStore<Tensor = T, Scalar = S>, T, S, K: Clone> Network<Store, K>
+impl<Store: TensorScalarStore<Tensor = T, Scalar = S>, T, S, K: Clone, Aind: AbsInd>
+    Network<Store, K, Aind>
 where
     T: Shadowable + HasName<Name = Symbol, Args: IntoArgs>,
     T::Structure: Clone + ToSymbolic + TensorStructure,
+    <T::Structure as TensorStructure>::Slot: IsAbstractSlot<Aind = Aind>,
+    Atom: From<Aind>,
 {
     pub fn sym_shadow(
         &mut self,
         tensor_name: &str,
         scalar_name: &str,
-    ) -> Network<Store::Store<ParamTensor<T::Structure>, Atom>, K> {
+    ) -> Network<Store::Store<ParamTensor<T::Structure>, Atom>, K, Aind> {
         self.map_ref_mut_enumerate(
             |(i, _)| Atom::var(symbol!(format!("{}{}", scalar_name, i))),
             |(i, t)| {
@@ -113,27 +127,32 @@ where
     }
 }
 
-impl<Store: TensorScalarStore<Tensor = T, Scalar = S>, T, S, K: Clone> Network<Store, K>
+impl<Store: TensorScalarStore<Tensor = T, Scalar = S>, T, S, K: Clone, Aind: AbsInd>
+    Network<Store, K, Aind>
 where
     T: HasName<Name: IntoSymbol, Args: IntoArgs> + TensorStructure,
+    T::Slot: IsAbstractSlot<Aind = Aind>,
 {
     pub fn append_map<U>(&self, fn_map: &mut FunctionMap<U>)
     where
         T: ShadowMapping<U>,
-        T::Structure: Clone + ToSymbolic,
+        T::Structure: Clone + ToSymbolic + TensorStructure,
+        <T::Structure as TensorStructure>::Slot: IsAbstractSlot<Aind = Aind>,
         S: Clone,
+        Atom: From<Aind>,
     {
         for n in self.iter_tensors() {
             n.expanded_append_map(fn_map)
         }
     }
 
-    pub fn shadow(&self) -> Network<Store::Store<ParamTensor<T::Structure>, S>, K>
+    pub fn shadow(&self) -> Network<Store::Store<ParamTensor<T::Structure>, S>, K, Aind>
     where
         T: Shadowable,
         T::Structure: Clone + ToSymbolic + TensorStructure<Slot = T::Slot>,
         S: Clone,
         K: Clone,
+        Atom: From<Aind>,
     {
         self.map_ref(Clone::clone, |t| {
             let node = t.expanded_shadow().unwrap();
@@ -142,7 +161,8 @@ where
     }
 }
 
-impl<Store: TensorScalarStore<Tensor = T, Scalar = S>, T, S, K: Clone> Network<Store, K>
+impl<Store: TensorScalarStore<Tensor = T, Scalar = S>, T, S, K: Clone, Aind: AbsInd>
+    Network<Store, K, Aind>
 where
     T: HasName + TensorStructure,
 {
@@ -165,13 +185,17 @@ where
     }
 }
 
-impl<Store: TensorScalarStore<Tensor = P, Scalar = Atom>, P: TensorAtomMaps, K: Clone>
-    TensorAtomMaps for Network<Store, K>
+impl<
+        Store: TensorScalarStore<Tensor = P, Scalar = Atom>,
+        P: TensorAtomMaps,
+        K: Clone,
+        Aind: AbsInd,
+    > TensorAtomMaps for Network<Store, K, Aind>
 where
     P: Clone + TensorStructure,
 {
-    type ContainerData<T> = Network<Store::Store<P::ContainerData<T>, T>, K>;
-    type AtomContainer = Network<Store::Store<P::AtomContainer, Atom>, K>;
+    type ContainerData<T> = Network<Store::Store<P::ContainerData<T>, T>, K, Aind>;
+    type AtomContainer = Network<Store::Store<P::AtomContainer, Atom>, K, Aind>;
     type Ref<'a>
         = &'a Self
     where
@@ -504,8 +528,8 @@ where
     }
 }
 
-pub trait Evaluate<Str: TensorScalarStore, K, S, T> {
-    fn evaluate(&mut self, params: &[T]) -> Network<Str::Store<DataTensor<T, S>, T>, K>
+pub trait Evaluate<Str: TensorScalarStore, K, S, T, Aind> {
+    fn evaluate(&mut self, params: &[T]) -> Network<Str::Store<DataTensor<T, S>, T>, K, Aind>
     where
         S: TensorStructure + Clone;
 
@@ -525,7 +549,8 @@ impl<
         S: TensorStructure + Clone,
         Sc: AtomCore,
         K: Clone,
-    > Network<Store, K>
+        Aind: Clone + AbsInd,
+    > Network<Store, K, Aind>
 {
     pub fn eval_tree(
         &self,
@@ -535,6 +560,7 @@ impl<
         Network<
             Store::Store<EvalTreeTensor<SymComplex<Rational>, S>, EvalTree<SymComplex<Rational>>>,
             K,
+            Aind,
         >,
         String,
     >
@@ -552,7 +578,7 @@ impl<
         coeff_map: F,
         const_map: &AHashMap<A, D>,
         function_map: &HashMap<Symbol, EvaluationFn<A, D>>,
-    ) -> Result<Network<Store::Store<DataTensor<D, S>, D>, K>, String>
+    ) -> Result<Network<Store::Store<DataTensor<D, S>, D>, K, Aind>, String>
     where
         D: Clone
             + symbolica::domains::float::Real
@@ -565,11 +591,11 @@ impl<
     }
 }
 
-impl<T: Real, S: TensorStructure, K: Clone>
-    Evaluate<NetworkStore<EvalTreeTensor<T, S>, EvalTree<T>>, K, S, T>
-    for Network<NetworkStore<EvalTreeTensor<T, S>, EvalTree<T>>, K>
+impl<T: Real, S: TensorStructure, K: Clone, Aind: AbsInd>
+    Evaluate<NetworkStore<EvalTreeTensor<T, S>, EvalTree<T>>, K, S, T, Aind>
+    for Network<NetworkStore<EvalTreeTensor<T, S>, EvalTree<T>>, K, Aind>
 {
-    fn evaluate(&mut self, params: &[T]) -> Network<NetworkStore<DataTensor<T, S>, T>, K>
+    fn evaluate(&mut self, params: &[T]) -> Network<NetworkStore<DataTensor<T, S>, T>, K, Aind>
     where
         S: TensorStructure + Clone,
     {
@@ -589,12 +615,13 @@ impl<
         T,
         S: TensorStructure,
         K: Clone,
-    > Network<Store, K>
+        Aind: AbsInd,
+    > Network<Store, K, Aind>
 {
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(
         &self,
         f: &F,
-    ) -> Network<Store::Store<EvalTreeTensor<T2, S>, EvalTree<T2>>, K>
+    ) -> Network<Store::Store<EvalTreeTensor<T2, S>, EvalTree<T2>>, K, Aind>
     where
         T: Clone + PartialEq,
         S: Clone,
@@ -606,7 +633,7 @@ impl<
     pub fn linearize(
         self,
         cpe_rounds: Option<usize>,
-    ) -> Network<Store::Store<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>, K>
+    ) -> Network<Store::Store<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>, K, Aind>
     where
         T: Clone + Default + PartialEq,
         S: Clone,
@@ -627,11 +654,21 @@ impl<
     }
 }
 
-impl<T: Real, S: TensorStructure + Clone, K: Clone>
-    Evaluate<NetworkStore<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>, K, S, T>
-    for Network<NetworkStore<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>, K>
+impl<T: Real, S: TensorStructure + Clone, K: Clone, Aind: AbsInd>
+    Evaluate<
+        NetworkStore<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>,
+        K,
+        S,
+        T,
+        Aind,
+    >
+    for Network<
+        NetworkStore<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>,
+        K,
+        Aind,
+    >
 {
-    fn evaluate(&mut self, params: &[T]) -> Network<NetworkStore<DataTensor<T, S>, T>, K>
+    fn evaluate(&mut self, params: &[T]) -> Network<NetworkStore<DataTensor<T, S>, T>, K, Aind>
     where
         S: TensorStructure + Clone,
         T: Real,
@@ -656,7 +693,8 @@ impl<
         T,
         S: TensorStructure,
         K: Clone + Display,
-    > Network<Store, K>
+        Aind: AbsInd,
+    > Network<Store, K, Aind>
 {
     pub fn export_cpp(
         &self,
@@ -665,7 +703,11 @@ impl<
         include_header: bool,
         inline_asm: InlineASM,
     ) -> Result<
-        Network<Store::Store<EvalTensor<SerializableExportedCode, S>, SerializableExportedCode>, K>,
+        Network<
+            Store::Store<EvalTensor<SerializableExportedCode, S>, SerializableExportedCode>,
+            K,
+            Aind,
+        >,
         TensorNetworkError<K>,
     >
     where
@@ -704,14 +746,19 @@ impl<
         >,
         S: TensorStructure,
         K: Clone + Display,
-    > Network<Store, K>
+        Aind: AbsInd,
+    > Network<Store, K, Aind>
 {
     pub fn compile(
         &self,
         out: &str,
         options: CompileOptions,
     ) -> Result<
-        Network<Store::Store<EvalTensor<SerializableCompiledCode, S>, SerializableCompiledCode>, K>,
+        Network<
+            Store::Store<EvalTensor<SerializableCompiledCode, S>, SerializableCompiledCode>,
+            K,
+            Aind,
+        >,
         TensorNetworkError<K>,
     >
     where
@@ -740,6 +787,7 @@ impl<
                 SerializableCompiledEvaluator,
             >,
             K,
+            Aind,
         >,
         TensorNetworkError<K>,
     >
@@ -757,10 +805,11 @@ impl<
         T: symbolica::evaluate::CompiledEvaluatorFloat + Default + Clone,
         S: TensorStructure,
         K: Clone,
-    > Evaluate<NetworkStore<CompiledEvalTensor<S>, SerializableCompiledEvaluator>, K, S, T>
-    for Network<NetworkStore<CompiledEvalTensor<S>, SerializableCompiledEvaluator>, K>
+        Aind: AbsInd,
+    > Evaluate<NetworkStore<CompiledEvalTensor<S>, SerializableCompiledEvaluator>, K, S, T, Aind>
+    for Network<NetworkStore<CompiledEvalTensor<S>, SerializableCompiledEvaluator>, K, Aind>
 {
-    fn evaluate(&mut self, params: &[T]) -> Network<NetworkStore<DataTensor<T, S>, T>, K>
+    fn evaluate(&mut self, params: &[T]) -> Network<NetworkStore<DataTensor<T, S>, T>, K, Aind>
     where
         S: TensorStructure + Clone,
     {
@@ -783,7 +832,8 @@ impl<
         >,
         S: Clone + TensorStructure,
         K: Clone,
-    > Network<Store, K>
+        Aind: AbsInd,
+    > Network<Store, K, Aind>
 {
     pub fn horner_scheme(&mut self) {
         self.iter_tensors_mut().for_each(|a| a.horner_scheme());
@@ -793,8 +843,14 @@ impl<
     }
 }
 
-impl<Store: TensorScalarStore<Tensor = MixedTensor<T, S>, Scalar = Sc>, T, S, Sc: AtomCore, K>
-    Network<Store, K>
+impl<
+        Store: TensorScalarStore<Tensor = MixedTensor<T, S>, Scalar = Sc>,
+        T,
+        S,
+        Sc: AtomCore,
+        K,
+        Aind: AbsInd,
+    > Network<Store, K, Aind>
 where
     S: Clone + TensorStructure + std::fmt::Debug,
     T: Clone,
@@ -827,7 +883,7 @@ where
         }
     }
 
-    pub fn to_fully_parametric(self) -> Network<Store::Store<ParamTensor<S>, Sc>, K>
+    pub fn to_fully_parametric(self) -> Network<Store::Store<ParamTensor<S>, Sc>, K, Aind>
     where
         T: TrySmallestUpgrade<Atom, LCM = Atom>,
         Complex<T>: TrySmallestUpgrade<Atom, LCM = Atom>,

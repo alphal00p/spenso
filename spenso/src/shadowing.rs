@@ -2,11 +2,14 @@ use crate::{
     network::parsing::ShadowedStructure,
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
-        concrete_index::FlatIndex, HasName, HasStructure, TensorShell, TensorStructure, ToSymbolic,
+        concrete_index::FlatIndex, slot::IsAbstractSlot, HasName, HasStructure, TensorShell,
+        TensorStructure, ToSymbolic,
     },
-    tensors::data::{DataTensor, DenseTensor},
-    tensors::parametric::{MixedTensor, ParamTensor, TensorCoefficient},
-    tensors::symbolic::SymbolicTensor,
+    tensors::{
+        data::{DataTensor, DenseTensor},
+        parametric::{MixedTensor, ParamTensor, TensorCoefficient},
+        symbolic::SymbolicTensor,
+    },
 };
 use anyhow::Result;
 use linnet::permutation::Permutation;
@@ -21,6 +24,8 @@ pub trait Shadowable:
     HasStructure<
         Structure: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs> + Clone + Sized,
     > + Sized
+where
+    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
     // type Const;
     fn expanded_shadow(&self) -> Result<DenseTensor<Atom, Self::Structure>> {
@@ -70,7 +75,10 @@ impl Concretize<SymbolicTensor> for TensorShell<ShadowedStructure> {
     }
 }
 
-impl<S: Shadowable> Concretize<DenseTensor<Atom, S::Structure>> for S {
+impl<S: Shadowable> Concretize<DenseTensor<Atom, S::Structure>> for S
+where
+    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+{
     fn concretize(self, perm: Option<Permutation>) -> DenseTensor<Atom, S::Structure> {
         // self.flat_s
         // todo!()
@@ -82,7 +90,10 @@ impl<S: Shadowable> Concretize<DenseTensor<Atom, S::Structure>> for S {
     }
 }
 
-impl<S: Shadowable> Concretize<DataTensor<Atom, S::Structure>> for S {
+impl<S: Shadowable> Concretize<DataTensor<Atom, S::Structure>> for S
+where
+    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+{
     fn concretize(self, perm: Option<Permutation>) -> DataTensor<Atom, S::Structure> {
         // self.flat_s
         // todo!()
@@ -90,7 +101,10 @@ impl<S: Shadowable> Concretize<DataTensor<Atom, S::Structure>> for S {
     }
 }
 
-impl<S: Shadowable> Concretize<ParamTensor<S::Structure>> for S {
+impl<S: Shadowable> Concretize<ParamTensor<S::Structure>> for S
+where
+    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+{
     fn concretize(self, perm: Option<Permutation>) -> ParamTensor<S::Structure> {
         // self.flat_s
         // todo!()
@@ -100,7 +114,10 @@ impl<S: Shadowable> Concretize<ParamTensor<S::Structure>> for S {
     }
 }
 
-impl<T: Clone, S: Shadowable> Concretize<MixedTensor<T, S::Structure>> for S {
+impl<T: Clone, S: Shadowable> Concretize<MixedTensor<T, S::Structure>> for S
+where
+    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+{
     fn concretize(self, perm: Option<Permutation>) -> MixedTensor<T, S::Structure> {
         // self.flat_s
         // todo!()
@@ -573,7 +590,10 @@ impl<T: Clone, S: Shadowable> Concretize<MixedTensor<T, S::Structure>> for S {
 //     }
 // }
 
-pub trait ShadowMapping<Const>: Shadowable {
+pub trait ShadowMapping<Const>: Shadowable
+where
+    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+{
     fn expanded_shadow_with_map(
         &self,
         fn_map: &mut FunctionMap<Const>,
@@ -623,6 +643,8 @@ impl<S: TensorStructure + HasName + Clone> Shadowable for TensorShell<S>
 where
     S::Name: IntoSymbol + Clone,
     S::Args: IntoArgs,
+
+    Atom: From<<<S as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
 }
 
@@ -630,6 +652,7 @@ impl<S: TensorStructure + HasName + Clone, Const> ShadowMapping<Const> for Tenso
 where
     S::Name: IntoSymbol + Clone,
     S::Args: IntoArgs,
+    Atom: From<<<S as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
     fn append_map<T>(
         &self,

@@ -286,20 +286,18 @@ impl<T: Debug> MergeOrdered<T> for Vec<T> {
                 common_items,
                 MergeInfo::Interleaved(BitVec::new()),
             )
+        } else if partition[0] {
+            (
+                result_non_common,
+                common_items,
+                MergeInfo::FirstBeforeSecond,
+            )
         } else {
-            if partition[0] {
-                (
-                    result_non_common,
-                    common_items,
-                    MergeInfo::FirstBeforeSecond,
-                )
-            } else {
-                (
-                    result_non_common,
-                    common_items,
-                    MergeInfo::SecondBeforeFirst,
-                )
-            }
+            (
+                result_non_common,
+                common_items,
+                MergeInfo::SecondBeforeFirst,
+            )
         }
     }
 
@@ -504,20 +502,18 @@ impl<T: Debug> MergeOrdered<T> for Vec<T> {
                 common_item_flags,
                 MergeInfo::Interleaved(BitVec::new()),
             )
+        } else if partition[0] {
+            (
+                result_merged_all,
+                common_item_flags,
+                MergeInfo::FirstBeforeSecond,
+            )
         } else {
-            if partition[0] {
-                (
-                    result_merged_all,
-                    common_item_flags,
-                    MergeInfo::FirstBeforeSecond,
-                )
-            } else {
-                (
-                    result_merged_all,
-                    common_item_flags,
-                    MergeInfo::SecondBeforeFirst,
-                )
-            }
+            (
+                result_merged_all,
+                common_item_flags,
+                MergeInfo::SecondBeforeFirst,
+            )
         }
     }
 
@@ -805,22 +801,20 @@ impl<T: Debug> MergeOrdered<T> for Vec<T> {
                 common_indices_other,
                 MergeInfo::Interleaved(BitVec::new()),
             ))
+        } else if partition[0] {
+            Ok((
+                result_non_common,
+                common_indices_self,
+                common_indices_other,
+                MergeInfo::FirstBeforeSecond,
+            ))
         } else {
-            if partition[0] {
-                Ok((
-                    result_non_common,
-                    common_indices_self,
-                    common_indices_other,
-                    MergeInfo::FirstBeforeSecond,
-                ))
-            } else {
-                Ok((
-                    result_non_common,
-                    common_indices_self,
-                    common_indices_other,
-                    MergeInfo::SecondBeforeFirst,
-                ))
-            }
+            Ok((
+                result_non_common,
+                common_indices_self,
+                common_indices_other,
+                MergeInfo::SecondBeforeFirst,
+            ))
         }
     }
 }
@@ -842,7 +836,7 @@ mod tests {
         let result = first
             .merge_ordered_ref_with_comparison_and_matching(&second, compare, is_match)
             .unwrap();
-        let (merged, self_common, other_common, _) = result;
+        let (_, self_common, other_common, _) = result;
 
         // -3 matches with 3, -2 matches with 2, , -4 matches with 4
         assert_eq!(self_common.count_ones(), 3); // 4 matches in first array
@@ -875,7 +869,7 @@ mod tests {
         let result = first
             .merge_ordered_ref_with_comparison_and_matching(&second, compare, is_match)
             .unwrap();
-        let (merged, self_common, other_common, _) = result;
+        let (_, self_common, other_common, _) = result;
 
         // Only the tuple with 'b' matches
         let left: Vec<(i32, char)> = first
@@ -968,7 +962,7 @@ mod tests {
         assert!(result.is_ok());
         let (res, common_indices_a, common_indices_b, info) = result.unwrap();
         assert_eq!(res, vec![2, 4, 6]);
-        let mut expected_a: BitVec = BitVec::with_capacity(0);
+        let expected_a: BitVec = BitVec::with_capacity(0);
         // expected_a.resize(0, false);
         let mut expected_b: BitVec = BitVec::with_capacity(3);
         expected_b.resize(3, false);
@@ -984,7 +978,7 @@ mod tests {
         assert_eq!(res, vec![1, 3, 5]);
         let mut expected_a: BitVec = BitVec::with_capacity(3);
         expected_a.resize(3, false);
-        let mut expected_b: BitVec = BitVec::with_capacity(0);
+        let expected_b: BitVec = BitVec::with_capacity(0);
         // expected_b.resize(3, false);
         assert_eq!(common_indices_a, expected_a);
         assert_eq!(common_indices_b, expected_b);

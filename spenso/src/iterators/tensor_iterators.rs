@@ -3,7 +3,7 @@
 //! This module provides iterators specific to different tensor implementations,
 //! including dense, sparse, and data tensors.
 
-use std::{collections::hash_map, marker::PhantomData};
+use std::collections::hash_map;
 
 use crate::{
     algebra::algebraic_traits::RefZero,
@@ -11,16 +11,12 @@ use crate::{
     contraction::ContractableWith,
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
-        HasStructure, TensorStructure,
+        TensorStructure,
     },
     tensors::data::{DataTensor, DenseTensor, GetTensorData, SparseTensor},
 };
 
-use super::{
-    fiber::{Fiber, FiberClass, FiberClassMut, FiberMut},
-    indices::FiberData,
-    traits::IteratableTensor,
-};
+use super::traits::IteratableTensor;
 
 /// Iterator over all the elements of a sparse tensor
 ///
@@ -155,7 +151,7 @@ where
     }
 }
 
-impl<'a, T, I> Iterator for SparseTensorTraceIterator<'a, T, I>
+impl<T, I> Iterator for SparseTensorTraceIterator<'_, T, I>
 where
     T: ContractableWith<T> + FallibleAddAssign<T> + FallibleSubAssign<T> + Clone + RefZero,
     I: TensorStructure + Clone,
@@ -443,7 +439,7 @@ where
     }
 }
 
-impl<'a, T, I> Iterator for DenseTensorTraceIterator<'a, T, I>
+impl<T, I> Iterator for DenseTensorTraceIterator<'_, T, I>
 where
     T: ContractableWith<T, Out = T> + FallibleAddAssign<T> + FallibleSubAssign<T> + Clone + RefZero,
     I: TensorStructure,
@@ -656,7 +652,7 @@ pub struct TensorStructureIndexIterator<'a, I: TensorStructure> {
     current_flat_index: FlatIndex,
 }
 
-impl<'a, I: TensorStructure> Iterator for TensorStructureIndexIterator<'a, I> {
+impl<I: TensorStructure> Iterator for TensorStructureIndexIterator<'_, I> {
     type Item = ExpandedIndex;
     fn next(&mut self) -> Option<Self::Item> {
         if let Ok(indices) = self.structure.expanded_index(self.current_flat_index) {

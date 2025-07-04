@@ -4,13 +4,11 @@
 
 use crate::{
     iterators::{
-        CoreFlatFiberIterator, DenseTensorIterator, DenseTensorLinearIterator,
-        DenseTensorTraceIterator, Fiber, FiberClass, FiberClassIterator, FiberData, FiberIterator,
-        IteratableTensor, SparseTensorIterator, SparseTensorLinearIterator,
-        TensorStructureIndexIterator,
+        DenseTensorIterator, DenseTensorLinearIterator, FiberData, IteratableTensor,
+        SparseTensorIterator, SparseTensorLinearIterator, TensorStructureIndexIterator,
     },
     structure::{
-        concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
+        concrete_index::{ExpandedIndex, FlatIndex},
         representation::{Euclidean, RepName},
         OrderedStructure,
     },

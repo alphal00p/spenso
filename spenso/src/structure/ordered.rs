@@ -401,10 +401,6 @@ impl<R: RepName> OrderedStructure<R> {
         PermutedStructure::from(structure)
     }
 
-    fn extend(&mut self, other: Self) {
-        self.structure.extend(other.structure)
-    }
-
     pub fn to_named<N, A>(self, name: N, args: Option<A>) -> NamedStructure<N, A, R> {
         NamedStructure {
             structure: self,
@@ -443,7 +439,7 @@ impl<R: RepName> std::fmt::Display for OrderedStructure<R> {
         let mut table = Builder::new();
 
         table.push_record(&["".to_string()]);
-        for (index, item) in self.structure.iter().enumerate() {
+        for (_index, item) in self.structure.iter().enumerate() {
             if item.rep.rep.is_self_dual() {
                 table.push_record(&[item.rep.to_string(), format!("{}", item.aind)]);
             } else if item.rep.rep.is_base() {
@@ -659,12 +655,12 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
         while i < self.n_self_dual() && j < other.n_self_dual() {
             match self.structure[i].cmp(&other.structure[j]) {
                 std::cmp::Ordering::Less => {
-                    resulting_structure.push(self.structure[i].clone());
+                    resulting_structure.push(self.structure[i]);
                     partition.push(true);
                     i += 1;
                 }
                 std::cmp::Ordering::Greater => {
-                    resulting_structure.push(other.structure[j].clone());
+                    resulting_structure.push(other.structure[j]);
                     partition.push(false);
                     j += 1;
                 }
@@ -684,13 +680,13 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
         }
 
         while i < self.n_self_dual() {
-            resulting_structure.push(self.structure[i].clone());
+            resulting_structure.push(self.structure[i]);
             partition.push(true);
             i += 1;
         }
 
         while j < other.n_self_dual() {
-            resulting_structure.push(other.structure[j].clone());
+            resulting_structure.push(other.structure[j]);
             partition.push(false);
             j += 1;
         }
@@ -763,7 +759,7 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
                         j + onbase,
                     );
                     if !found_match {
-                        resulting_structure.push(base_slot.clone());
+                        resulting_structure.push(*base_slot);
                         partition.push(true);
                     }
                     ibase += 1;
@@ -780,7 +776,7 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
                         i + snbase,
                     );
                     if !found_match {
-                        resulting_structure.push(base_slot.clone());
+                        resulting_structure.push(*base_slot);
                         partition.push(false);
                     }
                     jbase += 1;
@@ -803,7 +799,7 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
                 j + onbase,
             );
             if !found_match {
-                resulting_structure.push(base_slot.clone());
+                resulting_structure.push(*base_slot);
                 partition.push(true);
             }
             ibase += 1;
@@ -821,7 +817,7 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
                 i + snbase,
             );
             if !found_match {
-                resulting_structure.push(base_slot.clone());
+                resulting_structure.push(*base_slot);
                 partition.push(false);
             }
             jbase += 1;
@@ -836,14 +832,14 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
             match self.structure[i + ibase + idual].cmp(&other.structure[j + jbase + jdual]) {
                 Ordering::Less => {
                     if !common_indices_self[i + ibase + idual] {
-                        resulting_structure.push(self.structure[i + ibase + idual].clone());
+                        resulting_structure.push(self.structure[i + ibase + idual]);
                         partition.push(false);
                     }
                     idual += 1;
                 }
                 Ordering::Greater => {
                     if !common_indices_other[j + jbase + jdual] {
-                        resulting_structure.push(other.structure[j + jbase + jdual].clone());
+                        resulting_structure.push(other.structure[j + jbase + jdual]);
                         partition.push(false);
                     }
                     jdual += 1;
@@ -856,7 +852,7 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
 
         while idual < self.n_dual() {
             if !common_indices_self[i + ibase + idual] {
-                resulting_structure.push(self.structure[i + ibase + idual].clone());
+                resulting_structure.push(self.structure[i + ibase + idual]);
                 partition.push(false);
             }
             idual += 1;
@@ -864,7 +860,7 @@ impl<R: RepName<Dual = R>> StructureContract for OrderedStructure<R> {
 
         while jdual < other.n_dual() {
             if !common_indices_other[j + jbase + jdual] {
-                resulting_structure.push(other.structure[j + jbase + jdual].clone());
+                resulting_structure.push(other.structure[j + jbase + jdual]);
                 partition.push(false);
             }
             jdual += 1;
@@ -926,7 +922,7 @@ pub mod test {
     use crate::structure::{
         representation::{Euclidean, LibraryRep, Lorentz, Minkowski, RepName},
         slot::{DualSlotTo, IsAbstractSlot},
-        StructureContract, TensorStructure,
+        StructureContract,
     };
 
     use super::OrderedStructure;

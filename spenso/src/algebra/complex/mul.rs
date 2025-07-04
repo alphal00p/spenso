@@ -4,7 +4,7 @@ use ref_ops::{RefAdd, RefMul, RefSub};
 
 use super::Complex;
 
-impl<'a, 'b, T> Mul<&'a Complex<T>> for &'b Complex<T>
+impl<'a, T> Mul<&'a Complex<T>> for &Complex<T>
 where
     T: for<'c> RefMul<&'c T, Output = T>
         + for<'c> RefAdd<&'c T, Output = T>
@@ -21,7 +21,7 @@ where
     }
 }
 
-impl<'a, 'b, T> Mul<&'a T> for &'b Complex<T>
+impl<'a, T> Mul<&'a T> for &Complex<T>
 where
     T: for<'c> RefMul<&'c T, Output = T> + Clone,
 {
@@ -60,7 +60,7 @@ where
     }
 }
 
-impl<'a, T> Mul<Complex<T>> for &'a Complex<T>
+impl<T> Mul<Complex<T>> for &Complex<T>
 where
     T: Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Clone,
 {
@@ -72,7 +72,7 @@ where
     }
 }
 
-impl<'b, T> Mul<T> for &'b Complex<T>
+impl<T> Mul<T> for &Complex<T>
 where
     T: RefMul<T, Output = T> + Clone,
 {

@@ -5,8 +5,7 @@
 use crate::iterators::{AbstractFiber, AbstractFiberIndex, Fiber, FiberClass, FiberIndex};
 use crate::structure::representation::RepName;
 use crate::structure::TensorStructure;
-use crate::structure::{dimension::Dimension, representation::Euclidean, OrderedStructure};
-use bitvec::vec::BitVec;
+use crate::structure::{representation::Euclidean, OrderedStructure};
 
 #[test]
 fn test_fiber_creation() {

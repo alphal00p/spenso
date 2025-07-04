@@ -14,9 +14,8 @@ use ahash::HashMap;
 use delegate::delegate;
 
 use anyhow::anyhow;
-use anyhow::{Error, Result};
+use anyhow::Result;
 
-use approx_derive::AbsDiffEq;
 use atomcore::{ReplaceBuilderGeneric, TensorAtomMaps};
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
@@ -36,10 +35,9 @@ use crate::{
     shadowing::{ShadowMapping, Shadowable},
     structure::{
         concrete_index::{ConcreteIndex, DualConciousExpandedIndex, ExpandedIndex, FlatIndex},
-        representation::LibraryRep,
         slot::Slot,
         CastStructure, HasName, HasStructure, NamedStructure, OrderedStructure, ScalarStructure,
-        ScalarTensor, StructureContract, TensorStructure, ToSymbolic, TracksCount,
+        ScalarTensor, StructureContract, TensorStructure, TracksCount,
     },
     tensors::complex::RealOrComplexTensor,
     tensors::data::{
@@ -50,7 +48,7 @@ use crate::{
 use bincode::{Decode, Encode};
 
 use symbolica::{
-    atom::{representation::FunView, Atom, AtomCore, AtomView, FunctionBuilder, KeyLookup, Symbol},
+    atom::{Atom, AtomCore, AtomView, FunctionBuilder, KeyLookup, Symbol},
     coefficient::Coefficient,
     domains::{
         float::{NumericalFloatLike, Real, SingleFloat},
@@ -63,7 +61,7 @@ use symbolica::{
         InlineASM,
     },
     id::Pattern,
-    state::{State, StateMap},
+    state::State,
     symbol,
     utils::BorrowedOrOwned,
 };
@@ -2503,7 +2501,7 @@ pub struct SerializableCompiledEvaluator {
 impl Encode for SerializableCompiledEvaluator {
     fn encode<E: bincode::enc::Encoder>(
         &self,
-        encoder: &mut E,
+        _encoder: &mut E,
     ) -> std::result::Result<(), bincode::error::EncodeError> {
         todo!()
     }
@@ -2511,7 +2509,7 @@ impl Encode for SerializableCompiledEvaluator {
 
 impl<C> Decode<C> for SerializableCompiledEvaluator {
     fn decode<D: bincode::de::Decoder<Context = C>>(
-        decoder: &mut D,
+        _decoder: &mut D,
     ) -> std::result::Result<Self, bincode::error::DecodeError> {
         todo!()
     }

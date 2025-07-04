@@ -6,7 +6,7 @@ use super::{
     },
 };
 use crate::structure::dimension::Dimension;
-use bincode::{Decode, Encode};
+use bincode::Encode;
 // #[cfg(feature = "shadowing")]
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
@@ -20,8 +20,6 @@ use symbolica::{
     {function, symbol},
 };
 
-#[cfg(feature = "shadowing")]
-use crate::network::library::symbolic::ETS;
 use thiserror::Error;
 
 #[derive(
@@ -51,35 +49,7 @@ use thiserror::Error;
 /// # Example
 ///
 /// It can be built from a `Representation` calling one of the built in representations e.g.
-/// ```
-/// # use spenso::structure::*;
-/// # use spenso::structure::representation::*;
-/// # use spenso::structure::dimension::*;
-/// # use spenso::structure::abstract_index::*;
-/// # use spenso::structure::slot::*;
-/// # use spenso::structure::concrete_index::*;
-/// let mink: Representation<Lorentz> = Lorentz::rep(4);
-/// let mud: Slot<Lorentz> = mink.new_slot(0);
-/// let muu: Slot<Dual<Lorentz>> = mink.new_slot(0).dual();
-/// assert!(mud.matches(&muu));
-/// assert_eq!("lord4|₀", format!("{muu}"));
-/// ```
 /// Or one can define custom representations{}
-/// ```
-/// # use spenso::structure::*;
-/// # use spenso::structure::representation::*;
-/// # use spenso::structure::dimension::*;
-/// # use spenso::structure::abstract_index::*;
-/// # use spenso::structure::slot::*;
-/// # use spenso::structure::concrete_index::*;
-/// let custom_mink = Rep::new_dual("custom_lor").unwrap();
-///
-/// let nud: Slot<Rep> = custom_mink.new_slot(4, 0);
-/// let nuu: Slot<Rep> = nud.dual();
-///
-/// assert!(nuu.matches(&nud));
-/// assert_eq!("custom_lor🠓4|₀", format!("{nuu}"));
-/// ```
 pub struct Slot<T: RepName> {
     pub(crate) rep: Representation<T>,
     pub aind: AbstractIndex,

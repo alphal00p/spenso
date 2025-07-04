@@ -1,10 +1,9 @@
-use symbolica::atom::{AtomCore, Symbol};
+use symbolica::atom::Symbol;
 
 use super::*;
 
 use library::Library;
 
-use crate::network::library::LibraryTensor;
 use crate::structure::abstract_index::AIND_SYMBOLS;
 // use crate::shadowing::Concretize;
 use crate::structure::slot::{Slot, SlotError};

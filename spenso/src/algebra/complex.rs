@@ -3,56 +3,20 @@ use std::{
     ops::{Add, Neg, Sub},
 };
 
-use crate::{
-    network::Ref,
-    tensors::data::{SparseTensor, StorageTensor},
-};
-use anyhow::{anyhow, Result};
+use crate::network::Ref;
 
-use approx_derive::{AbsDiffEq, RelativeEq};
 use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
 use num::{Float, One, Zero};
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "shadowing")]
-use symbolica::{
-    atom::Atom,
-    domains::{
-        float::{Complex as SymComplex, ConstructibleFloat, NumericalFloatLike, Real},
-        rational::Rational,
-    },
-    evaluate::FunctionMap,
+use symbolica::domains::{
+    float::{Complex as SymComplex, ConstructibleFloat, NumericalFloatLike, Real},
+    rational::Rational,
 };
 
-use crate::structure::abstract_index::AbstractIndex;
-use crate::structure::dimension::Dimension;
-use crate::structure::representation::Representation;
-use crate::structure::slot::IsAbstractSlot;
-use crate::structure::StructureError;
-use delegate::delegate;
-
-#[cfg(feature = "shadowing")]
-use crate::{
-    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
-    shadowing::{ShadowMapping, Shadowable},
-    structure::ToSymbolic,
-    tensors::data::{DataIterator, DenseTensor},
-    tensors::parametric::TensorCoefficient,
-};
-
-use crate::{
-    algebra::algebraic_traits::{IsZero, RefOne, RefZero},
-    algebra::upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign},
-    contraction::{Contract, ContractableWith, ContractionError, Trace},
-    iterators::IteratableTensor,
-    structure::{
-        concrete_index::{ExpandedIndex, FlatIndex},
-        CastStructure, HasName, HasStructure, ScalarStructure, ScalarTensor, StructureContract,
-        TensorStructure, TracksCount,
-    },
-    tensors::data::{DataTensor, GetTensorData, HasTensorData, SetTensorData, SparseOrDense},
-};
+use crate::algebra::algebraic_traits::{RefOne, RefZero};
 
 pub trait R {}
 duplicate! {
@@ -110,7 +74,7 @@ impl<T> Ref for Complex<T> {
         = &'a Complex<T>
     where
         Self: 'a;
-    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+    fn refer(&self) -> Self::Ref<'_> {
         self
     }
 }
@@ -488,7 +452,7 @@ impl<T> Ref for RealOrComplex<T> {
         = RealOrComplexRef<'a, T>
     where
         Self: 'a;
-    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+    fn refer(&self) -> Self::Ref<'_> {
         match self {
             RealOrComplex::Real(r) => RealOrComplexRef::Real(r),
             RealOrComplex::Complex(c) => RealOrComplexRef::Complex(c),

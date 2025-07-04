@@ -17,15 +17,13 @@ use delegate::delegate;
 
 #[cfg(feature = "shadowing")]
 use crate::{
-    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
+    shadowing::symbolica_utils::IntoSymbol,
     structure::ToSymbolic,
     tensors::parametric::{ExpandedCoefficent, TensorCoefficient},
 };
 
 #[cfg(feature = "shadowing")]
 use crate::{structure::FlatIndex, tensors::data::DenseTensor};
-#[cfg(feature = "shadowing")]
-use std::fmt::Display;
 
 #[cfg(not(feature = "shadowing"))]
 use serde::{Deserialize, Serialize};
@@ -50,11 +48,11 @@ impl<R: RepName<Dual = R>> PermuteTensor for IndexLess<R> {
     type Permuted = (IndexLess<LibraryRep>, Vec<IndexLess<LibraryRep>>);
     type IdSlot = Slot<R>;
 
-    fn permute_inds(self, permutation: &Permutation) -> Self::Permuted {
+    fn permute_inds(self, _permutation: &Permutation) -> Self::Permuted {
         todo!()
     }
 
-    fn permute_reps(self, rep_perm: &Permutation) -> Self::Permuted {
+    fn permute_reps(self, _rep_perm: &Permutation) -> Self::Permuted {
         todo!()
     }
 
@@ -72,7 +70,7 @@ impl<R: RepName> std::fmt::Display for IndexLess<R> {
         let mut table = Builder::new();
 
         table.push_record(&["".to_string()]);
-        for (index, item) in self.structure.iter().enumerate() {
+        for (_index, item) in self.structure.iter().enumerate() {
             table.push_record(&[item.rep.to_string(), item.dim.to_string()]);
         }
         writeln!(f)?;
@@ -387,11 +385,11 @@ impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for IndexlessNamedS
         }
     }
 
-    fn permute_inds(self, permutation: &Permutation) -> Self::Permuted {
+    fn permute_inds(self, _permutation: &Permutation) -> Self::Permuted {
         todo!()
     }
 
-    fn permute_reps(self, rep_perm: &Permutation) -> Self::Permuted {
+    fn permute_reps(self, _rep_perm: &Permutation) -> Self::Permuted {
         todo!()
     }
 }
@@ -566,7 +564,7 @@ impl<N: std::fmt::Display, A: ArgDisplay, R: RepName> std::fmt::Display
                 .map(|a| a.arg_display())
                 .unwrap_or("".to_string()),
         ]);
-        for (index, item) in self.structure.structure.iter().enumerate() {
+        for (_index, item) in self.structure.structure.iter().enumerate() {
             table.push_record(&[item.rep.to_string(), item.dim.to_string()]);
         }
         writeln!(f)?;

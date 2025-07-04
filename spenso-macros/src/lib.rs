@@ -175,8 +175,7 @@ fn get_filtered_derive_paths(attrs: &[Attribute]) -> Result<Vec<Path>, syn::Erro
                             // Check if the last segment of the path is "SimpleRepresentation"
                             let is_target_derive = path
                                 .segments
-                                .last()
-                                .map_or(false, |segment| segment.ident == "SimpleRepresentation");
+                                .last().is_some_and(|segment| segment.ident == "SimpleRepresentation");
 
                             if !is_target_derive {
                                 derived_traits.push(path); // Keep the original Path struct

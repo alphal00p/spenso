@@ -6,13 +6,12 @@ use crate::structure::slot::{IsAbstractSlot, Slot};
 use crate::structure::{IndexLess, PermutedStructure, StructureError};
 use crate::{
     algebra::algebraic_traits::IsZero,
-    algebra::complex::Complex,
     algebra::upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
-    iterators::{DenseTensorLinearIterator, IteratableTensor, SparseTensorLinearIterator},
+    iterators::IteratableTensor,
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
         CastStructure, HasName, HasStructure, OrderedStructure, ScalarStructure, ScalarTensor,
-        StructureContract, TensorStructure, TracksCount,
+        TensorStructure, TracksCount,
     },
 };
 use anyhow::{anyhow, Result};
@@ -26,19 +25,11 @@ use crate::{
 };
 
 use bincode::{Decode, Encode};
-use derive_more::From;
-use enum_try_as_inner::EnumTryAsInner;
 use indexmap::IndexMap;
-use num::Zero;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use std::{
-    borrow::Cow,
-    fmt::{Display, LowerExp},
-    hash::Hash,
-    ops::{Index, IndexMut},
-};
+use std::{borrow::Cow, fmt::Display, hash::Hash};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{atom::Atom, atom::Symbol};
@@ -64,7 +55,7 @@ impl<T, S> crate::network::Ref for SparseTensor<T, S> {
     where
         Self: 'a;
 
-    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+    fn refer(&self) -> Self::Ref<'_> {
         self
     }
 }
@@ -79,7 +70,7 @@ where
     type Permuted = SparseTensor<T, S>;
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
-        let (zero, i) = i;
+        let (_zero, i) = i;
         let (one, j) = j;
         let s = S::id(i, j);
         let mut elements = std::collections::HashMap::new();
@@ -110,7 +101,7 @@ where
         permuted
     }
 
-    fn permute_reps(self, rep_perm: &linnet::permutation::Permutation) -> Self::Permuted {
+    fn permute_reps(self, _rep_perm: &linnet::permutation::Permutation) -> Self::Permuted {
         todo!()
     }
 }

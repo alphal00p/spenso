@@ -1,18 +1,13 @@
-use bincode::{Decode, Encode};
-
-use graph::{
-    NAdd, NMul, NetworkEdge, NetworkGraph, NetworkLeaf, NetworkLeafWithInds, NetworkNode, NetworkOp,
-};
+use graph::{NAdd, NMul, NetworkEdge, NetworkGraph, NetworkLeaf, NetworkNode, NetworkOp};
 use linnet::half_edge::NodeIndex;
 use serde::{Deserialize, Serialize};
 
 use library::{Library, LibraryError};
 
-use crate::algebra::algebraic_traits::{One, Zero};
 use crate::algebra::ScalarMul;
 use crate::contraction::Contract;
 use crate::network::library::LibraryTensor;
-use crate::structure::permuted::{Perm, PermuteTensor};
+use crate::structure::permuted::PermuteTensor;
 // use crate::shadowing::Concretize;
 use crate::structure::representation::LibrarySlot;
 use crate::structure::{PermutedStructure, StructureError};
@@ -588,7 +583,7 @@ impl<T: TensorStructure, S, K: Display, Str: TensorScalarStore<Tensor = T, Scala
             ExecutionResult::Val(v) => ExecutionResult::Val(match v {
                 TensorOrScalarOrKey::Tensor { tensor, .. } => Cow::Borrowed(tensor),
                 TensorOrScalarOrKey::Scalar(s) => Cow::Owned(T::new_scalar(s.into())),
-                TensorOrScalarOrKey::Key { key, nodeid } => {
+                TensorOrScalarOrKey::Key { nodeid, .. } => {
                     let less = self.graph.get_lib_data(lib, nodeid).unwrap();
 
                     Cow::Owned(less)
@@ -711,10 +706,6 @@ where
 
 pub struct Sequential;
 
-pub struct Nsteps {
-    steps: usize,
-}
-
 pub struct Steps<const N: usize> {}
 pub struct StepsDebug<const N: usize> {}
 
@@ -738,13 +729,13 @@ where
                     "Extracted_graph: {}",
                     extracted_graph.dot_impl(
                         |s| s.to_string(),
-                        |s| "".to_string(),
+                        |_| "".to_string(),
                         |s| s.to_string()
                     )
                 );
                 println!(
                     "Graph: {}",
-                    graph.dot_impl(|s| s.to_string(), |s| "".to_string(), |s| s.to_string())
+                    graph.dot_impl(|s| s.to_string(), |_| "".to_string(), |s| s.to_string())
                 );
                 // execute + splice
                 let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
@@ -920,7 +911,7 @@ where
         graph.sync_order();
         match op {
             NetworkOp::Neg => {
-                let mut ops = graph.graph.iter_nodes().find(|(nid, n, d)| {
+                let ops = graph.graph.iter_nodes().find(|(_, _, d)| {
                     if let NetworkNode::Op(NetworkOp::Neg) = d {
                         true
                     } else {
@@ -934,7 +925,7 @@ where
                 for c in children {
                     if let Some(id) = graph.graph.involved_node_id(c) {
                         if let NetworkNode::Leaf(l) = &graph.graph[id] {
-                            if let Some(_) = child {
+                            if child.is_some() {
                                 return Err(TensorNetworkError::MoreThanOneNeg);
                             } else {
                                 child = Some((id, l));
@@ -951,8 +942,8 @@ where
 
                             NetworkLeaf::Scalar(pos)
                         }
-                        NetworkLeaf::LibraryKey(key) => {
-                            let mut inds = graph.get_lib_data(lib, child_id).unwrap();
+                        NetworkLeaf::LibraryKey(_) => {
+                            let inds = graph.get_lib_data(lib, child_id).unwrap();
 
                             let t = T::from(inds).neg();
                             let pos = self.tensors.len();
@@ -972,7 +963,7 @@ where
                     );
                     Ok(graph)
                 } else {
-                    return Err(TensorNetworkError::ChildlessNeg);
+                    Err(TensorNetworkError::ChildlessNeg)
                 }
             }
             NetworkOp::Product => {
@@ -980,14 +971,12 @@ where
                 Ok(graph)
             }
             NetworkOp::Sum => {
-                let mut op = None;
+                // let mut op = None;
                 let mut targets = Vec::new();
                 let mut all_nodes = Vec::new();
-                for (n, c, v) in graph.graph.iter_nodes() {
+                for (n, _, v) in graph.graph.iter_nodes() {
                     all_nodes.push(n);
-                    if let NetworkNode::Op(NetworkOp::Sum) = v {
-                        op = Some((n, c))
-                    } else if let NetworkNode::Leaf(l) = &v {
+                    if let NetworkNode::Leaf(l) = &v {
                         targets.push((n, l));
                     }
                 }
@@ -998,7 +987,7 @@ where
                     NetworkLeaf::Scalar(s) => {
                         let mut accumulator = self.scalar[*s].clone();
 
-                        for (nid, t) in &targets[1..] {
+                        for (_, t) in &targets[1..] {
                             match t {
                                 NetworkLeaf::Scalar(s) => {
                                     accumulator += self.scalar[*s].refer();
@@ -1063,7 +1052,7 @@ where
                                     NetworkLeaf::LocalTensor(t) => {
                                         accumulator += self.tensors[*t].refer();
                                     }
-                                    NetworkLeaf::LibraryKey(key) => {
+                                    NetworkLeaf::LibraryKey(_) => {
                                         let with_index = graph.get_lib_data(lib, *nid).unwrap();
 
                                         accumulator += with_index;
@@ -1077,7 +1066,7 @@ where
                             NetworkLeaf::LocalTensor(pos)
                         }
                     }
-                    NetworkLeaf::LibraryKey(key) => {
+                    NetworkLeaf::LibraryKey(_) => {
                         let inds = graph.get_lib_data(lib, *nf).unwrap();
                         let mut accumulator = T::from(inds);
                         for (nid, t) in &targets[1..] {
@@ -1088,7 +1077,7 @@ where
                                 NetworkLeaf::LocalTensor(t) => {
                                     accumulator += self.tensors[*t].refer();
                                 }
-                                NetworkLeaf::LibraryKey(key) => {
+                                NetworkLeaf::LibraryKey(_) => {
                                     let with = graph.get_lib_data(lib, *nid).unwrap();
                                     accumulator += with;
                                 }
@@ -1120,7 +1109,7 @@ pub trait Ref {
     type Ref<'a>
     where
         Self: 'a;
-    fn refer<'a>(&'a self) -> Self::Ref<'a>;
+    fn refer(&self) -> Self::Ref<'_>;
 }
 
 impl Ref for f64 {
@@ -1129,7 +1118,7 @@ impl Ref for f64 {
     where
         Self: 'a;
 
-    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+    fn refer(&self) -> Self::Ref<'_> {
         self
     }
 }
@@ -1217,7 +1206,7 @@ where
                                 executor.tensors.push(a);
                                 NetworkLeaf::LocalTensor(pos)
                             }
-                            NetworkLeaf::LibraryKey(l) => {
+                            NetworkLeaf::LibraryKey(_) => {
                                 let inds = graph.get_lib_data(lib, other).unwrap();
                                 let a = inds.scalar_mul(&acc).unwrap();
 
@@ -1470,7 +1459,7 @@ where
 
                         NetworkLeaf::LocalTensor(pos)
                     }
-                    (NetworkLeaf::LibraryKey(l1), NetworkLeaf::LocalTensor(l2)) => {
+                    (NetworkLeaf::LibraryKey(_), NetworkLeaf::LocalTensor(l2)) => {
                         let l1 = graph.get_lib_data(lib, nid1).unwrap();
                         if D {
                             let st1 = l1.structure();
@@ -1487,7 +1476,7 @@ where
                         NetworkLeaf::LocalTensor(pos)
                     }
 
-                    (NetworkLeaf::LocalTensor(l2), NetworkLeaf::LibraryKey(l1)) => {
+                    (NetworkLeaf::LocalTensor(l2), NetworkLeaf::LibraryKey(_)) => {
                         let l1 = graph.get_lib_data(lib, nid2).unwrap();
                         if D {
                             let st1 = l1.structure();
@@ -1504,7 +1493,7 @@ where
 
                         NetworkLeaf::LocalTensor(pos)
                     }
-                    (NetworkLeaf::LibraryKey(l1), NetworkLeaf::LibraryKey(l2)) => {
+                    (NetworkLeaf::LibraryKey(_), NetworkLeaf::LibraryKey(_)) => {
                         let l1 = graph.get_lib_data(lib, nid1).unwrap();
 
                         let l2 = graph.get_lib_data(lib, nid2).unwrap();

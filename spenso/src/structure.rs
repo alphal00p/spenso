@@ -10,36 +10,26 @@ use concrete_index::ExpandedIndex;
 use concrete_index::FlatIndex;
 use delegate::delegate;
 use dimension::Dimension;
-use indexmap::IndexMap;
 
-use linnet::permutation;
 use thiserror::Error;
 
 use crate::utils::DuplicateItemError;
 #[cfg(feature = "shadowing")]
 use crate::{
-    shadowing::symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom, SerializableSymbol},
-    structure::abstract_index::AIND_SYMBOLS,
-    structure::slot::ConstructibleSlot,
+    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     tensors::data::DenseTensor,
     tensors::parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
 };
 use linnet::permutation::Permutation;
-use representation::{LibraryRep, RepName, Representation};
+use representation::{RepName, Representation};
 use serde::Deserialize;
 use serde::Serialize;
 use slot::DualSlotTo;
 use slot::IsAbstractSlot;
-use slot::Slot;
 use slot::SlotError;
 use std::fmt::Debug;
-
 #[cfg(feature = "shadowing")]
-use std::fmt::Display;
-use std::hash::Hash;
-use std::ops::Range;
-#[cfg(feature = "shadowing")]
-use symbolica::atom::{representation::FunView, Atom, AtomView, FunctionBuilder, MulView, Symbol};
+use symbolica::atom::{Atom, FunctionBuilder, Symbol};
 
 use crate::iterators::TensorStructureIndexIterator;
 use std::collections::HashMap;
@@ -731,7 +721,7 @@ pub enum MergeInfo {
 impl From<BitVec> for MergeInfo {
     fn from(bitvec: BitVec) -> Self {
         let mut n_transitions = 0;
-        if bitvec.len() == 0 {
+        if bitvec.is_empty() {
             return MergeInfo::FirstBeforeSecond;
         }
         for i in 0..(bitvec.len() - 1) {
@@ -1023,29 +1013,4 @@ impl<S: TensorStructure> From<S> for TensorShell<S> {
 
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
-mod shadowing_tests {
-    use crate::network::parsing::ShadowedStructure;
-
-    use super::representation::Lorentz;
-    use super::*;
-    use named::AtomStructure;
-    use symbolica::atom::AtomCore;
-    use symbolica::parse;
-
-    // #[test]
-    // fn named_structure_from_atom() {
-    //     let expr = parse!("p(1,mu,aind(lor(4,4)))").unwrap();
-
-    //     if let AtomView::Fun(f) = expr.as_atom_view() {
-    //         let named_structure = AtomStructure::<LibraryRep>::try_from(f);
-    //         match named_structure {
-    //             Ok(named_structure) => println!("{}", named_structure),
-    //             Err(e) => println!("{}", e),
-    //         }
-    //     }
-
-    //     if let AtomView::Fun(f) = parse!("gamma(1,mink(1,2),mink(1,2))").unwrap().as_view() {
-    //         let _ = ShadowedStructure::try_from(f).unwrap();
-    //     }
-    // }
-}
+mod shadowing_tests {}

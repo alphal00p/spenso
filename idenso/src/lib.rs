@@ -108,7 +108,7 @@ impl IndexTooling for Atom {
     }
 }
 
-impl<'a> IndexTooling for AtomView<'a> {
+impl IndexTooling for AtomView<'_> {
     fn conj(&self) -> Atom {
         pol_conj_impl(gamma_conj_impl(color_conj_impl(*self).as_view()).as_view())
             .as_view()

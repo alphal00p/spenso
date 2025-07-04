@@ -1,6 +1,3 @@
-use std::fmt::Display;
-
-use indexmap::IndexMap;
 use linnet::permutation::Permutation;
 
 use delegate::delegate;
@@ -11,20 +8,16 @@ use super::{
     named::IdentityName,
     permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
-    slot::{ConstructibleSlot, DualSlotTo, IsAbstractSlot, Slot},
-    HasName, IndexlessNamedStructure, MergeInfo, NamedStructure, OrderedStructure,
-    PermutedStructure, ScalarStructure, StructureContract, StructureError, TensorStructure,
-    TracksCount,
+    slot::{IsAbstractSlot, Slot},
+    HasName, MergeInfo, NamedStructure, OrderedStructure, PermutedStructure, ScalarStructure,
+    StructureContract, StructureError, TensorStructure, TracksCount,
 };
-use bitvec::{order::Lsb0, vec::BitVec};
+use bitvec::vec::BitVec;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 #[cfg(feature = "shadowing")]
-use crate::{
-    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
-    structure::ToSymbolic,
-};
+use crate::shadowing::symbolica_utils::{IntoArgs, IntoSymbol};
 
 #[cfg(not(feature = "shadowing"))]
 use serde::{Deserialize, Serialize};
@@ -107,7 +100,7 @@ where
 }
 
 #[cfg(feature = "shadowing")]
-impl<N: IntoSymbol, A: IntoArgs, R: RepName> Display for SmartShadowStructure<N, A, R> {
+impl<N: IntoSymbol, A: IntoArgs, R: RepName> std::fmt::Display for SmartShadowStructure<N, A, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(ref name) = self.global_name {
             write!(f, "{}", name.ref_into_symbol())?

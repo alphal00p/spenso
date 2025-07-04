@@ -3,18 +3,15 @@
 //! This module contains implementations of fiber types that represent fixed and free
 //! tensor dimensions, enabling efficient iteration through tensor elements.
 
-use bitvec::{slice::BitSlice, vec::BitVec};
+use bitvec::vec::BitVec;
 use std::{
     fmt::{Debug, Display},
     ops::Index,
 };
 
 use crate::structure::{
-    concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
-    dimension::Dimension,
-    representation::{RepName, Representation},
-    slot::IsAbstractSlot,
-    TensorStructure,
+    concrete_index::FlatIndex, dimension::Dimension, representation::Representation,
+    slot::IsAbstractSlot, TensorStructure,
 };
 
 use super::indices::{AbstractFiberIndex, FiberClassIndex, FiberData, FiberIndex};
@@ -32,9 +29,9 @@ struct BareFiber {
 
 impl BareFiber {
     /// Creates a conjugate fiber
-    pub fn conj(self) -> Self {
-        self
-    }
+    // pub fn conj(self) -> Self {
+    //     self
+    // }
 
     /// Creates a bare fiber from fiber data and a tensor structure
     pub fn from<I: TensorStructure>(data: FiberData, structure: &I) -> Self {
@@ -218,7 +215,7 @@ pub struct Fiber<'a, I: TensorStructure> {
     bare_fiber: BareFiber,
 }
 
-impl<'a, I: TensorStructure> Clone for Fiber<'a, I> {
+impl<I: TensorStructure> Clone for Fiber<'_, I> {
     fn clone(&self) -> Self {
         Fiber {
             structure: self.structure,
@@ -227,7 +224,7 @@ impl<'a, I: TensorStructure> Clone for Fiber<'a, I> {
     }
 }
 
-impl<'a, I> Index<usize> for Fiber<'a, I>
+impl<I> Index<usize> for Fiber<'_, I>
 where
     I: TensorStructure,
 {
@@ -238,7 +235,7 @@ where
     }
 }
 
-impl<'a, I> AbstractFiber<FiberIndex> for Fiber<'a, I>
+impl<I> AbstractFiber<FiberIndex> for Fiber<'_, I>
 where
     I: TensorStructure,
 {
@@ -390,7 +387,7 @@ where
     }
 }
 
-impl<'a, I: TensorStructure> Display for Fiber<'a, I> {
+impl<I: TensorStructure> Display for Fiber<'_, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for index in self.bare_fiber.indices.iter() {
             write!(f, "{} ", index)?
@@ -408,7 +405,7 @@ pub struct FiberMut<'a, I: TensorStructure> {
     bare_fiber: BareFiber,
 }
 
-impl<'a, I> Index<usize> for FiberMut<'a, I>
+impl<I> Index<usize> for FiberMut<'_, I>
 where
     I: TensorStructure,
 {
@@ -419,7 +416,7 @@ where
     }
 }
 
-impl<'a, I> AbstractFiber<FiberIndex> for FiberMut<'a, I>
+impl<I> AbstractFiber<FiberIndex> for FiberMut<'_, I>
 where
     I: TensorStructure,
 {
@@ -504,7 +501,7 @@ where
     }
 }
 
-impl<'a, I: TensorStructure> Display for FiberMut<'a, I> {
+impl<I: TensorStructure> Display for FiberMut<'_, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for index in self.bare_fiber.indices.iter() {
             write!(f, "{} ", index)?
@@ -532,7 +529,7 @@ pub struct FiberClass<'a, I: TensorStructure> {
     bare_fiber: BareFiber, // A representant of the class
 }
 
-impl<'a, I: TensorStructure> Clone for FiberClass<'a, I> {
+impl<I: TensorStructure> Clone for FiberClass<'_, I> {
     fn clone(&self) -> Self {
         FiberClass {
             bare_fiber: self.bare_fiber.clone(),
@@ -541,7 +538,7 @@ impl<'a, I: TensorStructure> Clone for FiberClass<'a, I> {
     }
 }
 
-impl<'a, I> Index<usize> for FiberClass<'a, I>
+impl<I> Index<usize> for FiberClass<'_, I>
 where
     I: TensorStructure,
 {
@@ -574,7 +571,7 @@ impl<'a, I: TensorStructure> From<FiberClass<'a, I>> for Fiber<'a, I> {
     }
 }
 
-impl<'a, I: TensorStructure> AbstractFiber<FiberClassIndex> for FiberClass<'a, I> {
+impl<I: TensorStructure> AbstractFiber<FiberClassIndex> for FiberClass<'_, I> {
     type Repr = <I::Slot as IsAbstractSlot>::R;
     fn strides(&self) -> Vec<usize> {
         self.structure.strides().unwrap()
@@ -643,7 +640,7 @@ pub struct FiberClassMut<'a, I: TensorStructure> {
     bare_fiber: BareFiber, // A representant of the class
 }
 
-impl<'a, I> Index<usize> for FiberClassMut<'a, I>
+impl<I> Index<usize> for FiberClassMut<'_, I>
 where
     I: TensorStructure,
 {
@@ -676,7 +673,7 @@ impl<'a, I: TensorStructure> From<FiberClassMut<'a, I>> for FiberMut<'a, I> {
     }
 }
 
-impl<'a, I: TensorStructure> AbstractFiber<FiberClassIndex> for FiberClassMut<'a, I> {
+impl<I: TensorStructure> AbstractFiber<FiberClassIndex> for FiberClassMut<'_, I> {
     type Repr = <I::Slot as IsAbstractSlot>::R;
     fn strides(&self) -> Vec<usize> {
         self.structure.strides().unwrap()

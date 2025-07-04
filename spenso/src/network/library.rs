@@ -298,7 +298,7 @@ impl<D: Clone, S: TensorStructure + Clone> LibraryTensor for DataTensor<D, S> {
         &self,
         indices: &[AbstractIndex],
     ) -> Result<PermutedStructure<Self::WithIndices>, StructureError> {
-        Ok(self.clone().reindex(indices)?)
+        self.clone().reindex(indices)
         // let new_structure = self.structure().clone().reindex(indices)?;
 
         // Ok(match self {
@@ -350,7 +350,7 @@ impl<D: Clone + Default, S: TensorStructure + Clone> LibraryTensor for RealOrCom
         match self {
             RealOrComplexTensor::Real(real_tensor) => {
                 let new_real_tensor =
-                    <DataTensor<D, S> as LibraryTensor>::with_indices(&real_tensor, indices)?;
+                    <DataTensor<D, S> as LibraryTensor>::with_indices(real_tensor, indices)?;
                 Ok(PermutedStructure {
                     structure: RealOrComplexTensor::Real(new_real_tensor.structure),
                     rep_permutation: new_real_tensor.rep_permutation,
@@ -360,7 +360,7 @@ impl<D: Clone + Default, S: TensorStructure + Clone> LibraryTensor for RealOrCom
             RealOrComplexTensor::Complex(complex_tensor) => {
                 let new_complex_tensor =
                     <DataTensor<Complex<D>, S> as LibraryTensor>::with_indices(
-                        &complex_tensor,
+                        complex_tensor,
                         indices,
                     )?;
                 Ok(PermutedStructure {

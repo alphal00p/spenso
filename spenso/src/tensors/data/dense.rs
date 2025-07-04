@@ -1,17 +1,13 @@
 use crate::{
-    algebra::{
-        algebraic_traits::IsZero,
-        complex::Complex,
-        upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
-    },
-    iterators::{DenseTensorLinearIterator, IteratableTensor, SparseTensorLinearIterator},
+    algebra::upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
+    iterators::IteratableTensor,
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
         permuted::PermuteTensor,
         representation::RepName,
         slot::Slot,
         CastStructure, HasName, HasStructure, IndexLess, OrderedStructure, PermutedStructure,
-        ScalarStructure, ScalarTensor, StructureContract, TensorStructure, TracksCount,
+        ScalarStructure, ScalarTensor, TensorStructure, TracksCount,
     },
 };
 
@@ -22,26 +18,18 @@ use crate::structure::slot::IsAbstractSlot;
 use crate::structure::StructureError;
 use delegate::delegate;
 
-use approx_derive::AbsDiffEq;
-
 #[cfg(feature = "shadowing")]
 use crate::{
     shadowing::symbolica_utils::{atomic_expanded_label_id, IntoArgs, IntoSymbol},
     shadowing::{ShadowMapping, Shadowable},
-    tensors::parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
+    tensors::{data::DataIterator, parametric::TensorCoefficient},
 };
 use anyhow::{anyhow, Result};
 use bincode::{Decode, Encode};
-use derive_more::From;
-use enum_try_as_inner::EnumTryAsInner;
 use indexmap::IndexMap;
 use num::Zero;
-use std::collections::HashMap;
 
-use super::{
-    CastData, DataIterator, GetTensorData, HasTensorData, SetTensorData, SparseTensor,
-    StorageTensor,
-};
+use super::{CastData, GetTensorData, HasTensorData, SetTensorData, SparseTensor, StorageTensor};
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -66,7 +54,7 @@ impl<T, S> crate::network::Ref for DenseTensor<T, S> {
     where
         Self: 'a;
 
-    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+    fn refer(&self) -> Self::Ref<'_> {
         self
     }
 }
@@ -109,7 +97,7 @@ where
         permuted
     }
 
-    fn permute_reps(self, rep_perm: &linnet::permutation::Permutation) -> Self::Permuted {
+    fn permute_reps(self, _rep_perm: &linnet::permutation::Permutation) -> Self::Permuted {
         todo!()
     }
 }
@@ -123,7 +111,7 @@ where
     type Slot = S::Slot;
 
     fn reindex(
-        mut self,
+        self,
         indices: &[AbstractIndex],
     ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         let res = self.structure.reindex(indices)?;
@@ -588,8 +576,8 @@ where
         hashmap
     }
     #[cfg(feature = "shadowing")]
-    fn symhashmap(&self, name: Symbol, args: &[Atom]) -> HashMap<Atom, T> {
-        let mut hashmap = HashMap::new();
+    fn symhashmap(&self, name: Symbol, args: &[Atom]) -> std::collections::HashMap<Atom, T> {
+        let mut hashmap = std::collections::HashMap::new();
 
         for (k, v) in self.iter_expanded() {
             hashmap.insert(atomic_expanded_label_id(&k, name, args), v.clone());

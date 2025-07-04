@@ -129,7 +129,6 @@ pub fn pol_conj_impl(expression: AtomView) -> Atom {
 
 pub fn gamma_conj_impl(expression: AtomView) -> Atom {
     let expr = expression.to_owned();
-    let bis = Bispinor {};
 
     expr.replace(AGS.gamma_pattern(RS.a__, RS.i__, RS.j__).to_pattern())
         .with((-AGS.gamma_pattern(RS.a__, RS.j__, RS.i__)).to_pattern())
@@ -474,9 +473,9 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
                         function!(ETS.metric, args[0], args[i])
                     };
                     if args.len() == 2 {
-                        sum = sum + metric * sign * Atom::num(4);
+                        sum += metric * sign * Atom::num(4);
                     } else {
-                        sum = sum + metric * gcn.finish() * sign;
+                        sum += metric * gcn.finish() * sign;
                     }
                 }
                 *out = sum;
@@ -532,7 +531,7 @@ impl GammaSimplifier for Atom {
     }
 }
 
-impl<'a> GammaSimplifier for AtomView<'a> {
+impl GammaSimplifier for AtomView<'_> {
     fn simplify_gamma(&self) -> Atom {
         gamma_simplify_impl(self.as_atom_view())
     }
@@ -570,14 +569,12 @@ mod test {
 
     use crate::id;
     use spenso::{
-        structure::{
-            ToSymbolic, abstract_index::AbstractIndex, permuted::Perm, slot::IsAbstractSlot,
-        },
+        structure::{abstract_index::AbstractIndex, permuted::Perm},
         tensors::symbolic::SymbolicTensor,
     };
     use symbolica::{
         atom::{Atom, AtomCore},
-        impl_assign_ops, parse_lit,
+        parse_lit,
     };
 
     use crate::representations::initialize;
@@ -586,7 +583,7 @@ mod test {
     fn gamma_construct() {
         println!("{}", AGS.gamma_pattern(RS.a_, RS.b_, RS.c_));
 
-        let mut f = GG
+        let f = GG
             .clone()
             .reindex([4, 3, 2])
             .unwrap()

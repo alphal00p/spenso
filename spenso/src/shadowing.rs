@@ -648,7 +648,6 @@ pub mod test {
     use once_cell::sync::Lazy;
     use symbolica::atom::Symbol;
 
-    use crate::network::library::symbolic::LibraryKey;
     use crate::network::library::{symbolic::ExplicitKey, symbolic::TensorLibrary, symbolic::ETS};
 
     pub static EXPLICIT_TENSOR_MAP: Lazy<RwLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>>> =
@@ -662,7 +661,7 @@ pub mod test {
     use crate::{
         contraction::Contract,
         structure::{
-            representation::{LibraryRep, RepName, REPS},
+            representation::{LibraryRep, RepName},
             HasStructure, IndexlessNamedStructure, TensorStructure,
         },
         tensors::parametric::MixedTensor,

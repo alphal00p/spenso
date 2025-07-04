@@ -1,6 +1,3 @@
-use std::fmt::Display;
-
-use indexmap::IndexMap;
 use linnet::permutation::Permutation;
 use tabled::{builder::Builder, settings::Style};
 
@@ -9,29 +6,17 @@ use super::{
     dimension::Dimension,
     permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
-    slot::{DualSlotTo, IsAbstractSlot, Slot, SlotError},
-    HasName, IndexlessNamedStructure, MergeInfo, OrderedStructure, PermutedStructure,
-    ScalarStructure, SmartShadowStructure, StructureContract, StructureError, TensorStructure,
+    slot::{IsAbstractSlot, Slot},
+    HasName, MergeInfo, OrderedStructure, PermutedStructure, ScalarStructure, StructureContract,
+    StructureError, TensorStructure,
 };
-use bitvec::{order::Lsb0, vec::BitVec};
+use bitvec::vec::BitVec;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use delegate::delegate;
 
 #[cfg(feature = "shadowing")]
-use symbolica::atom::{
-    representation::{FunView, MulView},
-    AtomView,
-};
-
-#[cfg(feature = "shadowing")]
-use crate::{
-    shadowing::symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom, SerializableSymbol},
-    structure::abstract_index::AIND_SYMBOLS,
-    structure::slot::ConstructibleSlot,
-    tensors::data::DenseTensor,
-    tensors::parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
-};
+use crate::shadowing::symbolica_utils::{SerializableAtom, SerializableSymbol};
 
 #[cfg(not(feature = "shadowing"))]
 use serde::{Deserialize, Serialize};
@@ -117,7 +102,7 @@ impl<N, A, R: RepName> ScalarStructure for NamedStructure<N, A, R> {
 pub trait IdentityName {
     fn id() -> Self;
 }
-pub const METRIC_NAME: &'static str = "g";
+pub const METRIC_NAME: &str = "g";
 impl IdentityName for String {
     fn id() -> Self {
         METRIC_NAME.to_string()
@@ -333,7 +318,7 @@ impl<N: std::fmt::Display, A: ArgDisplay, R: RepName> std::fmt::Display
                 .map(|a| a.arg_display())
                 .unwrap_or("".to_string()),
         ]);
-        for (index, item) in self.structure.structure.iter().enumerate() {
+        for (_index, item) in self.structure.structure.iter().enumerate() {
             if item.rep.rep.is_self_dual() {
                 table.push_record(&[item.rep.to_string(), format!("{}", item.aind)]);
             } else if item.rep.rep.is_base() {

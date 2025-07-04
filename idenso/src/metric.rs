@@ -4,7 +4,7 @@ use std::{
 };
 
 use spenso::{
-    network::library::symbolic::{ETS, ExplicitKey},
+    network::library::symbolic::ETS,
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         HasName, PermutedStructure, TensorStructure, ToSymbolic,
@@ -67,7 +67,7 @@ pub fn cook_function_impl(fun: FunView) -> Result<Symbol, CookingError> {
         match arg {
             AtomView::Fun(f) => {
                 let arg_sym = cook_function_impl(f)?;
-                name.push_str(&arg_sym.get_stripped_name());
+                name.push_str(arg_sym.get_stripped_name());
             }
             AtomView::Num(n) => match n.get_coeff_view() {
                 CoefficientView::FiniteField(_, _) => {
@@ -114,7 +114,7 @@ pub fn cook_function_impl(fun: FunView) -> Result<Symbol, CookingError> {
                 }
             },
             AtomView::Var(s) => {
-                name.push_str(&s.get_symbol().get_stripped_name());
+                name.push_str(s.get_symbol().get_stripped_name());
             }
             AtomView::Pow(_) => {
                 return Err(CookingError::Pow);
@@ -551,7 +551,7 @@ where
     }
 }
 
-impl<'a> MetricSimplifier for AtomView<'a> {
+impl MetricSimplifier for AtomView<'_> {
     fn to_dots(&self) -> Atom {
         to_dots_impl(*self)
     }
@@ -575,7 +575,7 @@ mod test {
         },
         tensors::symbolic::SymbolicTensor,
     };
-    use symbolica::{parse, parse_lit};
+    use symbolica::parse_lit;
 
     #[test]
     fn metric_contract() {

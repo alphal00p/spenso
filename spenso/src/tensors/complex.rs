@@ -1,32 +1,17 @@
-use std::{
-    fmt::{Debug, Display, LowerExp},
-    ops::{Add, Neg, Sub},
-};
+use std::fmt::{Debug, Display};
 
 use crate::{
     iterators::IteratorEnum,
-    network::Ref,
     structure::{
         concrete_index::ConcreteIndex, permuted::PermuteTensor, representation::RepName,
-        slot::Slot, IndexLess, OrderedStructure, PermutedStructure,
+        slot::Slot, IndexLess, PermutedStructure,
     },
     tensors::data::{SparseTensor, StorageTensor},
 };
 use anyhow::{anyhow, Result};
-use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
-use num::{Float, One, Zero};
-use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
-use serde::{Deserialize, Serialize};
 #[cfg(feature = "shadowing")]
-use symbolica::{
-    atom::Atom,
-    domains::{
-        float::{Complex as SymComplex, ConstructibleFloat, NumericalFloatLike, Real},
-        rational::Rational,
-    },
-    evaluate::FunctionMap,
-};
+use symbolica::{atom::Atom, evaluate::FunctionMap};
 
 use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
@@ -45,7 +30,7 @@ use crate::{
 };
 
 use crate::{
-    algebra::algebraic_traits::{IsZero, RefOne, RefZero},
+    algebra::algebraic_traits::{IsZero, RefZero},
     algebra::complex::{Complex, RealOrComplex, RealOrComplexMut, RealOrComplexRef},
     algebra::upgrading_arithmetic::{FallibleAddAssign, FallibleMul, FallibleSubAssign},
     contraction::{Contract, ContractableWith, ContractionError, Trace},
@@ -83,7 +68,7 @@ impl<T, S: TensorStructure> crate::network::Ref for RealOrComplexTensor<T, S> {
     where
         Self: 'a;
 
-    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+    fn refer(&self) -> Self::Ref<'_> {
         self
     }
 }

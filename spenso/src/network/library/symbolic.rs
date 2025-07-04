@@ -2,13 +2,10 @@ use std::sync::LazyLock;
 
 use super::*;
 use ahash::AHashMap;
-use linnet::{
-    half_edge::tree::SimpleTraversalTree,
-    permutation::{self, Permutation},
-};
+use linnet::permutation::Permutation;
 use symbolica::{
     atom::{Atom, Symbol},
-    hide_namespace, symbol,
+    symbol,
 };
 
 use anyhow::anyhow;
@@ -19,7 +16,7 @@ use crate::{
         named::{IdentityName, METRIC_NAME},
         permuted::{Perm, PermuteTensor},
         representation::{LibraryRep, RepName, REPS},
-        HasName, IndexlessNamedStructure, TensorShell,
+        HasName, IndexlessNamedStructure,
     },
     tensors::parametric::{ConcreteOrParam, MixedTensor, ParamOrConcrete, ParamTensor},
 };
@@ -336,7 +333,7 @@ impl<
     where
         T::SetData: TensorLibraryData,
     {
-        REPS.read().unwrap();
+        let _n = REPS.read().unwrap();
         for r in LibraryRep::all_dualizables() {
             self.insert_generic(Self::id(*r), Self::checked_identity);
         }
@@ -568,8 +565,6 @@ mod test {
         });
 
         lib.get(&key.structure).unwrap();
-        let indexed = key.clone().reindex([0, 1, 2]).unwrap().structure;
-        let expr = indexed.to_symbolic(None).unwrap();
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
             _,
@@ -696,7 +691,7 @@ mod test {
 
     #[test]
     fn big_expr() {
-        REPS.read().unwrap();
+        let _n = REPS.read().unwrap();
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         lib.update_ids();
 
@@ -735,7 +730,7 @@ mod test {
 
     #[test]
     fn small_expr() {
-        REPS.read().unwrap();
+        let _n = REPS.read().unwrap();
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         lib.update_ids();
 
@@ -793,7 +788,7 @@ mod test {
 
     #[test]
     fn transposition() {
-        REPS.read().unwrap();
+        let _n = REPS.read().unwrap();
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         lib.update_ids();
 
@@ -810,6 +805,7 @@ mod test {
 
         lib.insert_explicit(a);
 
+        #[allow(non_snake_case)]
         fn A(i: impl Into<AbstractIndex>, j: impl Into<AbstractIndex>) -> Atom {
             let euc = Euclidean {}.new_rep(4);
             function!(symbol!("A"), euc.slot(i).to_atom(), euc.slot(j).to_atom())
@@ -833,7 +829,7 @@ mod test {
     }
     #[test]
     fn trace_metric_kron() {
-        REPS.read().unwrap();
+        let _n = REPS.read().unwrap();
         let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
         lib.update_ids();
 

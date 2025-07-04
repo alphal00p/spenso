@@ -8,19 +8,13 @@ use linnet::permutation::Permutation;
 use std::fmt::Debug;
 
 use crate::{
-    structure::{
-        concrete_index::FlatIndex,
-        representation::{LibraryRep, RepName},
-        slot::IsAbstractSlot,
-        TensorStructure,
-    },
+    structure::{representation::LibraryRep, slot::IsAbstractSlot, TensorStructure},
     tensors::data::{DenseTensor, GetTensorData, SparseTensor},
 };
 
 use super::{
-    core_iterators::{CoreExpandedFiberIterator, CoreFlatFiberIterator},
-    fiber::{Fiber, FiberClass, FiberClassMut, FiberMut},
-    indices::AbstractFiberIndex,
+    core_iterators::CoreFlatFiberIterator,
+    fiber::{Fiber, FiberClass, FiberMut},
     traits::ResetableIterator,
     FiberIteratorItem, IteratesAlongFibers, IteratesAlongPermutedFibers,
 };
@@ -43,8 +37,8 @@ pub struct FiberIterator<
     pub skipped: usize,
 }
 
-impl<'a, S: TensorStructure, I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R> + Clone> Clone
-    for FiberIterator<'a, S, I>
+impl<S: TensorStructure, I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R> + Clone> Clone
+    for FiberIterator<'_, S, I>
 {
     fn clone(&self) -> Self {
         FiberIterator {
@@ -108,8 +102,8 @@ impl<'a, S: TensorStructure, I: IteratesAlongPermutedFibers<<S::Slot as IsAbstra
     }
 }
 
-impl<'a, I: IteratesAlongFibers<LibraryRep>> Iterator
-    for FiberIterator<'a, crate::structure::OrderedStructure, I>
+impl<I: IteratesAlongFibers<LibraryRep>> Iterator
+    for FiberIterator<'_, crate::structure::OrderedStructure, I>
 {
     type Item = I::Item;
     fn next(&mut self) -> Option<Self::Item> {
@@ -191,12 +185,11 @@ pub struct MutFiberIterator<
 }
 
 impl<
-        'a,
         I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R, Item = It>,
         S: TensorStructure,
         T,
         It,
-    > LendingIterator for MutFiberIterator<'a, SparseTensor<T, S>, I>
+    > LendingIterator for MutFiberIterator<'_, SparseTensor<T, S>, I>
 where
     It: FiberIteratorItem,
 {
@@ -209,28 +202,27 @@ where
         if self.fiber.structure.is_empty_at_flat(flat.flat_idx()) {
             let skipped = self.skipped;
             self.skipped = 0;
-            return Some((
+            Some((
                 self.fiber
                     .structure
                     .get_mut_linear(flat.flat_idx())
                     .unwrap(),
                 skipped,
                 flat.other_data(),
-            ));
+            ))
         } else {
             self.skipped += 1;
-            return self.next();
+            self.next()
         }
     }
 }
 
 impl<
-        'a,
         I: IteratesAlongFibers<<S::Slot as IsAbstractSlot>::R, Item = It>,
         S: TensorStructure,
         T,
         It,
-    > LendingIterator for MutFiberIterator<'a, DenseTensor<T, S>, I>
+    > LendingIterator for MutFiberIterator<'_, DenseTensor<T, S>, I>
 where
     It: FiberIteratorItem,
 {
@@ -336,8 +328,8 @@ impl<'b, N: TensorStructure> FiberClassIterator<'b, N, CoreFlatFiberIterator> {
     }
 }
 
-impl<'b, N: TensorStructure, I: IteratesAlongFibers<<N::Slot as IsAbstractSlot>::R>>
-    FiberClassIterator<'b, N, I>
+impl<N: TensorStructure, I: IteratesAlongFibers<<N::Slot as IsAbstractSlot>::R>>
+    FiberClassIterator<'_, N, I>
 {
     /// Resets the iterator to its initial state
     pub fn reset(&mut self) {
@@ -404,7 +396,7 @@ impl<'a, S: TensorStructure + 'a, I: IteratesAlongFibers<<S::Slot as IsAbstractS
 mod tests {
 
     use crate::structure::{
-        representation::{Euclidean, Minkowski},
+        representation::{Euclidean, RepName},
         OrderedStructure,
     };
 
@@ -424,7 +416,7 @@ mod tests {
 
         let fiber_spec = [true, false, true, false];
         let self_fiber_class = Fiber::from(fiber_spec.as_slice(), &strct.structure); //We use the partition as a filter here, for indices that belong to self, vs those that belong to other
-        let (mut self_fiber_class_iter, mut other_fiber_class_iter) =
+        let (self_fiber_class_iter, mut _other_fiber_class_iter) =
             CoreFlatFiberIterator::new_paired_conjugates(&self_fiber_class); // these are iterators over the open indices of self and other, except expressed in the flat indices of the resulting structure
 
         for i in self_fiber_class_iter {

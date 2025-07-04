@@ -1294,7 +1294,7 @@ impl TrySmallestUpgrade<larger> for smaller {
         where
             Self::LCM: Clone {
                let z = self.ref_zero();
-                Some(Cow::Owned(Complex::new(self.clone(), z)))
+                Some(Cow::Owned(Complex::new(*self, z)))
     }
 }
 

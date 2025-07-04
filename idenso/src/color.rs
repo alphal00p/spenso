@@ -4,14 +4,12 @@ use itertools::Itertools;
 use spenso::{
     network::library::symbolic::{ETS, ExplicitKey},
     structure::{
-        IndexlessNamedStructure, PermutedStructure, TensorStructure,
+        TensorStructure,
         abstract_index::AbstractIndex,
         dimension::Dimension,
-        permuted::Perm,
         representation::{LibraryRep, Minkowski, RepName},
         slot::IsAbstractSlot,
     },
-    tensors::symbolic::SymbolicTensor,
 };
 use symbolica::{
     atom::{Atom, AtomCore, AtomOrView, AtomView, Symbol},
@@ -203,12 +201,12 @@ impl SelectiveExpand for Atom {
     }
 }
 
-impl<'a> SelectiveExpand for AtomView<'a> {
+impl SelectiveExpand for AtomView<'_> {
     fn expand_in_patterns(&self, pats: &[Pattern]) -> Atom {
         let mut coefs = HashSet::new();
 
         for p in pats {
-            for m in self.pattern_match(&p, None, None) {
+            for m in self.pattern_match(p, None, None) {
                 coefs.insert(p.replace_wildcards(&m));
             }
         }
@@ -238,13 +236,6 @@ pub fn color_simplify_impl(expression: AtomView) -> Result<Atom, ColorError> {
         b: impl Into<AbstractIndex>,
         c: impl Into<AbstractIndex>,
     ) -> Atom {
-        fn t(
-            a: impl Into<AbstractIndex>,
-            i: impl Into<AbstractIndex>,
-            j: impl Into<AbstractIndex>,
-        ) -> Atom {
-            CS.t_pattern(CS.nc_, CS.adj_, a, i, j)
-        }
         CS.f_pattern(CS.adj_, a, b, c)
     }
 
@@ -396,49 +387,50 @@ impl ColorSimplifier for Atom {
     }
 }
 
-impl<'a> ColorSimplifier for AtomView<'a> {
+impl ColorSimplifier for AtomView<'_> {
     fn simplify_color(&self) -> Result<Atom, ColorError> {
         color_simplify_impl(self.as_atom_view())
     }
 }
 
-static CF: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> = LazyLock::new(|| {
-    IndexlessNamedStructure::from_iter(
-        [
-            ColorAdjoint {}.new_rep(8),
-            ColorAdjoint {}.new_rep(2),
-            ColorAdjoint {}.new_rep(2),
-            ColorAdjoint {}.new_rep(4),
-            ColorAdjoint {}.new_rep(2),
-        ],
-        CS.f,
-        None,
-    )
-});
-
-static CT: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> = LazyLock::new(|| {
-    IndexlessNamedStructure::from_iter(
-        [
-            ColorAntiFundamental {}.new_rep(3).to_lib(),
-            ColorFundamental {}.new_rep(3).to_lib(),
-            ColorAdjoint {}.new_rep(8).to_lib(),
-        ],
-        CS.t,
-        None,
-    )
-});
-
 #[cfg(test)]
 mod test {
+
+    use spenso::structure::IndexlessNamedStructure;
+    use spenso::structure::PermutedStructure;
+
+    static _CF: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> =
+        LazyLock::new(|| {
+            IndexlessNamedStructure::from_iter(
+                [
+                    ColorAdjoint {}.new_rep(8),
+                    ColorAdjoint {}.new_rep(2),
+                    ColorAdjoint {}.new_rep(2),
+                    ColorAdjoint {}.new_rep(4),
+                    ColorAdjoint {}.new_rep(2),
+                ],
+                CS.f,
+                None,
+            )
+        });
+
+    static CT: LazyLock<PermutedStructure<IndexlessNamedStructure<Symbol, ()>>> =
+        LazyLock::new(|| {
+            IndexlessNamedStructure::from_iter(
+                [
+                    ColorAntiFundamental {}.new_rep(3).to_lib(),
+                    ColorFundamental {}.new_rep(3).to_lib(),
+                    ColorAdjoint {}.new_rep(8).to_lib(),
+                ],
+                CS.t,
+                None,
+            )
+        });
     use spenso::{
-        network::parsing::ShadowedStructure,
-        structure::{
-            NamedStructure, TensorStructure,
-            permuted::{Perm, PermuteTensor},
-        },
+        network::parsing::ShadowedStructure, structure::permuted::Perm,
         tensors::symbolic::SymbolicTensor,
     };
-    use symbolica::{atom::representation::FunView, parse, parse_lit};
+    use symbolica::{parse, parse_lit};
 
     use crate::{
         IndexTooling, gamma::GammaSimplifier, metric::MetricSimplifier, representations::initialize,
@@ -584,7 +576,7 @@ mod test {
     fn t_structure() {
         println!("{}", CS.t_strct(3, 8));
 
-        Atom::Zero.simplify_metrics();
+        let _ = Atom::Zero.simplify_metrics();
     }
 
     #[test]
@@ -622,12 +614,9 @@ mod test {
         let simplified_color = amp_squared_color
             .simplify_metrics()
             .simplify_color()
-            .map_or_else(
-                |a| match a {
-                    ColorError::NotFully(a) => a,
-                },
-                |a| a,
-            );
+            .unwrap_or_else(|a| match a {
+                ColorError::NotFully(a) => a,
+            });
         println!("simplified_color={}", simplified_color);
 
         let spin_sum_rule_src = parse_lit!(
@@ -693,12 +682,12 @@ mod test {
 
         let mut simplified_amp_squared = amp_squared.clone();
 
-        simplified_amp_squared = simplified_amp_squared.simplify_color().map_or_else(
-            |a| match a {
-                ColorError::NotFully(a) => a,
-            },
-            |a| a,
-        );
+        simplified_amp_squared =
+            simplified_amp_squared
+                .simplify_color()
+                .unwrap_or_else(|a| match a {
+                    ColorError::NotFully(a) => a,
+                });
 
         println!(
             "Color-simplified amplitude squared:\n{}",
@@ -781,12 +770,12 @@ mod test {
 
         let mut simplified_amp_squared = amp_squared.clone();
 
-        simplified_amp_squared = simplified_amp_squared.simplify_color().map_or_else(
-            |a| match a {
-                ColorError::NotFully(a) => a,
-            },
-            |a| a,
-        );
+        simplified_amp_squared =
+            simplified_amp_squared
+                .simplify_color()
+                .unwrap_or_else(|a| match a {
+                    ColorError::NotFully(a) => a,
+                });
 
         println!(
             "Color-simplified amplitude squared:\n{}",

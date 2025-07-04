@@ -5,7 +5,6 @@ use idenso::{
     representations::{Bispinor, initialize},
 };
 
-use ahash::HashMap;
 use spenso::{
     algebra::complex::Complex,
     network::library::{
@@ -413,33 +412,33 @@ pub static HEP_LIB: LazyLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>> =
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Borrow;
+    
 
     use idenso::{
         gamma::GammaSimplifier,
         metric::{MetricSimplifier, PermuteWithMetric},
     };
     use spenso::{
-        algebra::upgrading_arithmetic::{FallibleAdd, FallibleSub},
+        algebra::upgrading_arithmetic::FallibleSub,
         iterators::IteratableTensor,
         network::{
-            ContractScalars, ExecutionResult, Network, Sequential, SingleSmallestDegree,
-            SmallestDegree, SmallestDegreeIter, Steps, StepsDebug, TensorOrScalarOrKey,
+            ExecutionResult, Network, Sequential, SingleSmallestDegree,
+            SmallestDegree, SmallestDegreeIter, Steps,
             library::symbolic::ETS, parsing::ShadowedStructure, store::NetworkStore,
         },
         shadowing::Concretize,
         structure::{
-            HasName, HasStructure, IndexlessNamedStructure, NamedStructure, OrderedStructure,
+            HasStructure, IndexlessNamedStructure,
             abstract_index::AbstractIndex, permuted::Perm, slot::IsAbstractSlot,
         },
         tensors::{
-            data::{DataTensor, DenseTensor, SparseOrDense, StorageTensor},
-            parametric::{ParamOrConcrete, ParamTensor, atomcore::TensorAtomMaps},
+            data::{DenseTensor, SparseOrDense},
+            parametric::atomcore::TensorAtomMaps,
             symbolic::SymbolicTensor,
         },
     };
     use symbolica::{atom::Atom, function, id::ConditionResult, parse};
-    use xpct::{equal, expect};
+    
 
     use super::*;
     use ahash::{HashMap, HashMapExt};
@@ -747,12 +746,12 @@ mod tests {
         let mink = Minkowski {}.new_rep(symbol!("spenso::dim"));
         // gamma.reindex([1,2,3]).unwrap().map_structure(|a|)
 
-        let expr = (p(1)
+        let expr = p(1)
             * (p(3) + q(3))
             * gamma(1, 2, 1)
             * gamma(2, 3, 2)
             * gamma(3, 4, 3)
-            * gamma(4, 1, 4));
+            * gamma(4, 1, 4);
 
         validate_gamma(expr, const_map.clone());
         let expr = p(1) * p(1);

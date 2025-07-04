@@ -1,10 +1,6 @@
 use crate::{
-    algebra::{
-        algebraic_traits::IsZero,
-        complex::Complex,
-        upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
-    },
-    iterators::{DenseTensorLinearIterator, IteratableTensor, SparseTensorLinearIterator},
+    algebra::upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
+    iterators::{DenseTensorLinearIterator, SparseTensorLinearIterator},
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
         permuted::PermuteTensor,
@@ -24,11 +20,10 @@ use delegate::delegate;
 
 #[cfg(feature = "shadowing")]
 use crate::{
-    shadowing::symbolica_utils::{atomic_expanded_label_id, IntoArgs, IntoSymbol},
+    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     shadowing::{ShadowMapping, Shadowable},
-    tensors::parametric::{ExpandedCoefficent, FlatCoefficent, TensorCoefficient},
+    tensors::parametric::TensorCoefficient,
 };
-use approx_derive::AbsDiffEq;
 
 use anyhow::{anyhow, Result};
 
@@ -36,16 +31,10 @@ use bincode::{Decode, Encode};
 use derive_more::From;
 use enum_try_as_inner::EnumTryAsInner;
 use indexmap::IndexMap;
-use num::Zero;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use std::{
-    borrow::Cow,
-    fmt::{Display, LowerExp},
-    hash::Hash,
-    ops::{Index, IndexMut},
-};
+use std::{borrow::Cow, fmt::Display, hash::Hash};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{atom::Atom, atom::Symbol};
@@ -204,7 +193,7 @@ impl<T, S> crate::network::Ref for DataTensor<T, S> {
     where
         Self: 'a;
 
-    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+    fn refer(&self) -> Self::Ref<'_> {
         self
     }
 }
@@ -692,7 +681,7 @@ impl<T, S: TensorStructure + StructureContract + Clone> DenseTensor<DenseTensor<
         // }
 
         // Concatenate the outer and inner structures
-        let combined_structure = self.structure.merge(&first_inner_structure)?.0;
+        let combined_structure = self.structure.merge(first_inner_structure)?.0;
 
         // Flatten the data by concatenating inner tensors' data
         let data = self

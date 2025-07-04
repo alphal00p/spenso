@@ -1,4 +1,4 @@
-use bitvec::{order::Lsb0, vec::BitVec};
+use bitvec::vec::BitVec;
 use std::ops::AddAssign;
 
 use crate::{
@@ -6,7 +6,7 @@ use crate::{
     contraction::{Contract, ContractionError},
     network::{
         library::{
-            symbolic::{ExplicitKey, LibraryKey, TensorLibrary},
+            symbolic::{ExplicitKey, TensorLibrary},
             TensorLibraryData,
         },
         parsing::ShadowedStructure,
@@ -418,15 +418,8 @@ impl std::fmt::Display for SymbolicTensor {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::{
-        network::library::symbolic::ETS,
-        structure::{
-            permuted::Perm,
-            representation::{Lorentz, RepName},
-            IndexlessNamedStructure,
-        },
-    };
-    use symbolica::{parse, symbol};
+    use crate::network::library::symbolic::ETS;
+    use symbolica::parse;
 
     #[test]
     fn parse() {

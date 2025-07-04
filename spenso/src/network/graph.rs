@@ -11,7 +11,7 @@ use linnet::{
         involution::{EdgeData, Flow, Hedge},
         nodestore::NodeStorageOps,
         subgraph::{ModifySubgraph, SubGraph, SubGraphOps},
-        tree::{SimpleTraversalTree, TTRoot},
+        tree::SimpleTraversalTree,
         HedgeGraph, HedgeGraphError, NodeIndex,
     },
     permutation::Permutation,
@@ -227,12 +227,12 @@ impl<K> NetworkGraph<K> {
     }
 
     pub fn sync_order(&mut self) {
-        for (v, n, _) in self.graph.iter_nodes() {
+        for (_, n, _) in self.graph.iter_nodes() {
             let mut slots = Vec::new();
             let mut init_ord = Vec::new();
             let mut new_ord = Vec::new();
             let mut o = 0;
-            let mut nc = n.clone();
+            let nc = n.clone();
             for h in nc {
                 new_ord.push(o);
                 o += 1;
@@ -445,7 +445,7 @@ impl<K> NetworkGraph<K> {
                 for child in tt.iter_children(nid, &self.graph) {
                     has_children = true;
                     match &self.graph[child] {
-                        NetworkNode::Leaf(a) => {
+                        NetworkNode::Leaf(_) => {
                             let mut slots = vec![];
 
                             for h in self.graph.iter_crown(child) {
@@ -695,19 +695,9 @@ impl<K> NetworkGraph<K> {
 
         for s in slots {
             let orientation = s.rep_name().orientation();
-            graph.add_external_edge(
-                head,
-                NetworkEdge::Slot(s.clone()),
-                orientation,
-                Flow::Source,
-            );
+            graph.add_external_edge(head, NetworkEdge::Slot(*s), orientation, Flow::Source);
             for _ in 0..n {
-                graph.add_external_edge(
-                    head,
-                    NetworkEdge::Slot(s.clone()),
-                    orientation,
-                    Flow::Sink,
-                );
+                graph.add_external_edge(head, NetworkEdge::Slot(*s), orientation, Flow::Sink);
             }
         }
 
@@ -1131,14 +1121,14 @@ impl<K: Clone> Mul<&NetworkGraph<K>> for NetworkGraph<K> {
     }
 }
 
-impl<'a, 'b, K: Clone> Mul<&'b NetworkGraph<K>> for &'a NetworkGraph<K> {
+impl<'b, K: Clone> Mul<&'b NetworkGraph<K>> for &NetworkGraph<K> {
     type Output = NetworkGraph<K>;
     fn mul(self, rhs: &'b NetworkGraph<K>) -> Self::Output {
         self.clone() * rhs
     }
 }
 
-impl<'a, K: Clone> Mul<NetworkGraph<K>> for &'a NetworkGraph<K> {
+impl<K: Clone> Mul<NetworkGraph<K>> for &NetworkGraph<K> {
     type Output = NetworkGraph<K>;
     fn mul(self, rhs: NetworkGraph<K>) -> Self::Output {
         rhs * self
@@ -1226,14 +1216,14 @@ impl<K: Clone> Add<&NetworkGraph<K>> for NetworkGraph<K> {
     }
 }
 
-impl<'a, 'b, K: Clone> Add<&'b NetworkGraph<K>> for &'a NetworkGraph<K> {
+impl<'b, K: Clone> Add<&'b NetworkGraph<K>> for &NetworkGraph<K> {
     type Output = NetworkGraph<K>;
     fn add(self, rhs: &'b NetworkGraph<K>) -> Self::Output {
         self.clone() + rhs
     }
 }
 
-impl<'a, K: Clone> Add<NetworkGraph<K>> for &'a NetworkGraph<K> {
+impl<K: Clone> Add<NetworkGraph<K>> for &NetworkGraph<K> {
     type Output = NetworkGraph<K>;
     fn add(self, rhs: NetworkGraph<K>) -> Self::Output {
         rhs + self
@@ -1298,14 +1288,14 @@ impl<K: Clone> Sub<&NetworkGraph<K>> for NetworkGraph<K> {
         self + -rhs
     }
 }
-impl<'a, 'b, K: Clone> Sub<&'b NetworkGraph<K>> for &'a NetworkGraph<K> {
+impl<'b, K: Clone> Sub<&'b NetworkGraph<K>> for &NetworkGraph<K> {
     type Output = NetworkGraph<K>;
 
     fn sub(self, rhs: &'b NetworkGraph<K>) -> Self::Output {
         -rhs + self
     }
 }
-impl<'a, K: Clone> Sub<NetworkGraph<K>> for &'a NetworkGraph<K> {
+impl<K: Clone> Sub<NetworkGraph<K>> for &NetworkGraph<K> {
     type Output = NetworkGraph<K>;
 
     fn sub(self, rhs: NetworkGraph<K>) -> Self::Output {
@@ -1347,8 +1337,6 @@ impl<'a, K: Clone> Sub<NetworkGraph<K>> for &'a NetworkGraph<K> {
 
 #[cfg(test)]
 pub mod test {
-
-    use std::ops::Deref;
 
     use crate::{
         network::graph::NetworkLeaf,
@@ -1412,7 +1400,7 @@ pub mod test {
         println!("{}", expr.dot());
 
         // expr.extract_next_ready_op();
-        if let Some((a, op)) = expr.extract_next_ready_op() {
+        if let Some((a, _)) = expr.extract_next_ready_op() {
             println!("{}", a.dot());
         }
     }

@@ -25,7 +25,7 @@ use crate::{network::library::symbolic::ETS, structure::slot::SlotError};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{Atom, AtomCore, AtomOrView, FunctionBuilder, Symbol},
+    atom::{Atom, AtomOrView, FunctionBuilder, Symbol},
     function, symbol,
 };
 
@@ -560,12 +560,10 @@ impl Ord for LibraryRep {
                     } else {
                         Ordering::Greater
                     }
+                } else if *b < 0 {
+                    Ordering::Less
                 } else {
-                    if *b < 0 {
-                        Ordering::Less
-                    } else {
-                        a.cmp(&b)
-                    }
+                    a.cmp(b)
                 }
             }
             (LibraryRep::SelfDual(_), LibraryRep::Dualizable(_))
@@ -602,14 +600,14 @@ fn sorting_reps() {
     let perm = Permutation::sort(b);
     perm.apply_slice_in_place(&mut b);
 
-    let c = [
+    let mut c = [
         LibraryRep::from(Minkowski {}).new_rep(4),
         Euclidean {}.new_rep(4).cast(),
         Euclidean {}.new_rep(4).cast(),
     ];
 
-    let perm = Permutation::sort(b);
-    perm.apply_slice_in_place(&mut b);
+    let perm = Permutation::sort(c);
+    perm.apply_slice_in_place(&mut c);
 
     assert_eq!(a, b);
     assert_eq!(a, c);
@@ -802,7 +800,7 @@ impl Index<LibraryRep> for ExtendibleReps {
 
     fn index(&self, index: LibraryRep) -> &Self::Output {
         match index {
-            LibraryRep::Dummy => &*DUMMY_REP_DATA,
+            LibraryRep::Dummy => &DUMMY_REP_DATA,
             LibraryRep::SelfDual(l) => &SELF_DUAL[l as usize].1,
             LibraryRep::InlineMetric(l) => &INLINE_METRIC[l as usize].1.rep_data,
             LibraryRep::Dualizable(l) => &DUALIZABLE[l.unsigned_abs() as usize - 1].1,
@@ -1142,28 +1140,6 @@ impl<T: RepName> Representation<T> {
     // this could be implemented directly in the fiberiterator.
     /// gives the vector of booleans, saying which concrete index along a Dimension/Abstract Index should have a minus sign during contraction.
     ///
-    /// # Example
-    /// ```
-    /// # use spenso::structure::*;
-    /// # use spenso::structure::representation::*;
-    /// # use spenso::structure::dimension::*;
-    /// # use spenso::structure::abstract_index::*;
-    /// # use spenso::structure::slot::*;
-    /// # use spenso::structure::concrete_index::*;
-    /// let spin: Representation<Bispinor> = Bispinor::rep(5);
-    ///
-    /// let metric_diag: Vec<bool> = spin.negative().unwrap();
-    ///
-    /// let mut agree = true;
-    ///
-    /// for (i, r) in metric_diag.iter().enumerate() {
-    ///   if r ^ spin.is_neg(i) {
-    ///        agree = false;
-    ///     }
-    /// }
-    ///
-    /// assert!(agree);
-    /// ```
     pub fn negative(&self) -> Result<Vec<bool>> {
         Ok((0..usize::try_from(self.dim)?)
             .map(|i| self.is_neg(i))

@@ -669,7 +669,7 @@ where
                     }
 
                     if nonzero && !value.is_zero() {
-                        result_data.insert(result_index.into(), value);
+                        result_data.insert(result_index, value);
                     }
                 }
                 other_fiber_class_iter.reset();

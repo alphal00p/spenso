@@ -8,7 +8,7 @@ use spenso::{
         abstract_index::AbstractIndex,
         dimension::Dimension,
         representation::{LibraryRep, Minkowski, RepName},
-        slot::IsAbstractSlot,
+        slot::{AbsInd, IsAbstractSlot},
     },
 };
 use symbolica::{
@@ -42,11 +42,11 @@ pub struct ColorSymbols {
 
 impl ColorSymbols {
     // Generator for the adjoint representation of SU(N)
-    pub fn t_strct(
+    pub fn t_strct<Aind: AbsInd>(
         &self,
         fundimd: impl Into<Dimension>,
         adim: impl Into<Dimension>,
-    ) -> ExplicitKey {
+    ) -> ExplicitKey<Aind> {
         let nc = fundimd.into();
         let res = ExplicitKey::from_iter(
             [
@@ -74,7 +74,7 @@ impl ColorSymbols {
             .permute_with_metric()
     }
 
-    pub fn f_strct(&self, adim: impl Into<Dimension>) -> ExplicitKey {
+    pub fn f_strct<Aind: AbsInd>(&self, adim: impl Into<Dimension>) -> ExplicitKey<Aind> {
         let adim = adim.into();
         let res = ExplicitKey::from_iter(
             [
@@ -461,18 +461,20 @@ mod test {
 
         let f_p = f.clone().permute_inds();
 
-        let f_parsed =
-            PermutedStructure::<ShadowedStructure>::try_from(&f_p.expression.simplify_metrics())
-                .unwrap();
+        let f_parsed = PermutedStructure::<ShadowedStructure<AbstractIndex>>::try_from(
+            &f_p.expression.simplify_metrics(),
+        )
+        .unwrap();
 
         assert_eq!(f.index_permutation, f_parsed.index_permutation);
         assert!(f_parsed.rep_permutation.is_identity());
 
         let f_p = f.clone().permute_reps_wrapped().permute_inds();
 
-        let f_parsed =
-            PermutedStructure::<ShadowedStructure>::try_from(&f_p.expression.simplify_metrics())
-                .unwrap();
+        let f_parsed = PermutedStructure::<ShadowedStructure<AbstractIndex>>::try_from(
+            &f_p.expression.simplify_metrics(),
+        )
+        .unwrap();
 
         assert_eq!(f.index_permutation, f_parsed.index_permutation);
         assert_eq!(f.rep_permutation, f_parsed.rep_permutation);
@@ -574,7 +576,7 @@ mod test {
 
     #[test]
     fn t_structure() {
-        println!("{}", CS.t_strct(3, 8));
+        println!("{}", CS.t_strct::<AbstractIndex>(3, 8));
 
         let _ = Atom::Zero.simplify_metrics();
     }

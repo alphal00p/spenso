@@ -18,6 +18,7 @@ use crate::{
         abstract_index::AIND_SYMBOLS,
         permuted::PermuteTensor,
         representation::{LibraryRep, LibrarySlot},
+        slot::{AbsInd, DummyAind},
         HasName, HasStructure, MergeInfo, NamedStructure, OrderedStructure, PermutedStructure,
         StructureContract, TensorShell, TensorStructure, ToSymbolic,
     },
@@ -40,14 +41,14 @@ use symbolica::atom::{Atom, AtomCore, AtomView, Symbol};
 ///
 /// Additionally, this can also be used as a tensor structure, that tracks the history, much like [`HistoryStructure`].
 #[derive(Debug, Clone)]
-pub struct SymbolicTensor {
-    pub structure: OrderedStructure,
+pub struct SymbolicTensor<Aind: AbsInd = AbstractIndex> {
+    pub structure: OrderedStructure<LibraryRep, Aind>,
     pub expression: symbolica::atom::Atom,
 }
 
-impl Ref for SymbolicTensor {
+impl<Aind: AbsInd> Ref for SymbolicTensor<Aind> {
     type Ref<'a>
-        = &'a SymbolicTensor
+        = &'a SymbolicTensor<Aind>
     where
         Self: 'a;
 
@@ -56,13 +57,16 @@ impl Ref for SymbolicTensor {
     }
 }
 
-impl PermuteTensor for SymbolicTensor {
-    type Id = SymbolicTensor;
-    type IdSlot = LibrarySlot<AbstractIndex>;
-    type Permuted = SymbolicTensor;
+impl<Aind: AbsInd + DummyAind> PermuteTensor for SymbolicTensor<Aind>
+where
+    Atom: From<Aind>,
+{
+    type Id = SymbolicTensor<Aind>;
+    type IdSlot = LibrarySlot<Aind>;
+    type Permuted = SymbolicTensor<Aind>;
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
-        Self::from_named(&NamedStructure::<Symbol, (), LibraryRep>::id(i, j)).unwrap()
+        Self::from_named(&NamedStructure::<Symbol, (), LibraryRep, Aind>::id(i, j)).unwrap()
     }
 
     fn permute_inds(mut self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
@@ -111,15 +115,12 @@ impl PermuteTensor for SymbolicTensor {
     }
 }
 
-impl TensorStructure for SymbolicTensor {
+impl<Aind: AbsInd> TensorStructure for SymbolicTensor<Aind> {
     // type R = <T::Structure as TensorStructure>::R;
-    type Indexed = SymbolicTensor;
-    type Slot = LibrarySlot<AbstractIndex>;
+    type Indexed = SymbolicTensor<Aind>;
+    type Slot = LibrarySlot<Aind>;
 
-    fn reindex(
-        self,
-        indices: &[AbstractIndex],
-    ) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
+    fn reindex(self, indices: &[Aind]) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         let res = self.structure.reindex(indices)?;
         Ok(PermutedStructure {
             structure: Self {
@@ -138,20 +139,20 @@ impl TensorStructure for SymbolicTensor {
     delegate! {
         to self.structure() {
             fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn external_indices_iter(&self)-> impl Iterator<Item = AbstractIndex>;
+            fn external_indices_iter(&self)-> impl Iterator<Item = Aind>;
             fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
             fn external_structure_iter(&self)-> impl Iterator<Item = Self::Slot>;
             fn get_slot(&self, i: usize)-> Option<Self::Slot>;
             fn get_rep(&self, i: usize)-> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn get_dim(&self, i: usize)-> Option<Dimension>;
-            fn get_aind(&self, i: usize)-> Option<AbstractIndex>;
+            fn get_aind(&self, i: usize)-> Option<Aind>;
             fn order(&self)-> usize;
         }
     }
 }
 
-impl HasStructure for SymbolicTensor {
-    type Structure = OrderedStructure;
+impl<Aind: AbsInd> HasStructure for SymbolicTensor<Aind> {
+    type Structure = OrderedStructure<LibraryRep, Aind>;
     type Scalar = Atom;
     type ScalarRef<'a>
         = &'a Atom
@@ -212,7 +213,7 @@ impl HasStructure for SymbolicTensor {
     }
 }
 
-impl StructureContract for SymbolicTensor {
+impl<Aind: AbsInd> StructureContract for SymbolicTensor<Aind> {
     fn merge(&self, other: &Self) -> Result<(Self, BitVec, BitVec, MergeInfo), StructureError> {
         let expression = &other.expression * &self.expression;
         let (structure, pos_self, pos_other, mergeinfo) = self.structure.merge(&other.structure)?;
@@ -240,10 +241,10 @@ impl StructureContract for SymbolicTensor {
 // impl<Const> Shadowable<Const> for SymbolicTensor {}
 
 #[allow(dead_code)]
-impl SymbolicTensor {
+impl<Aind: AbsInd> SymbolicTensor<Aind> {
     pub fn from_named<N>(structure: &N) -> Option<Self>
     where
-        N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot<AbstractIndex>>,
+        N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot<Aind>>,
         N::Name: IntoSymbol + Clone,
         N::Args: IntoArgs,
     {
@@ -256,7 +257,7 @@ impl SymbolicTensor {
 
     pub fn from_permuted<N>(structure: &PermutedStructure<N>) -> Option<Self>
     where
-        N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot<AbstractIndex>>,
+        N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot<Aind>>,
         N::Name: IntoSymbol + Clone,
         N::Args: IntoArgs,
     {
@@ -270,7 +271,7 @@ impl SymbolicTensor {
         })
     }
 
-    pub fn to_named(&self) -> NamedStructure<Symbol, Vec<Atom>> {
+    pub fn to_named(&self) -> NamedStructure<Symbol, Vec<Atom>, LibraryRep, Aind> {
         NamedStructure {
             structure: self.structure.clone(),
             global_name: self.name(),
@@ -296,19 +297,20 @@ impl SymbolicTensor {
     #[allow(clippy::type_complexity)]
     pub fn to_network(
         &self,
-        library: &TensorLibrary<MixedTensor<f64, ExplicitKey>>,
+        library: &TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>,
     ) -> Result<
         Network<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>,
-            ExplicitKey,
+            NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
+            ExplicitKey<AbstractIndex>,
             AbstractIndex,
         >,
-        TensorNetworkError<ExplicitKey>,
+        TensorNetworkError<ExplicitKey<AbstractIndex>>,
     > {
-        Network::<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, ExplicitKey, AbstractIndex>::try_from_view(
-            self.expression.as_view(),
-            library,
-        )
+        Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
+            ExplicitKey<AbstractIndex>,
+            AbstractIndex,
+        >::try_from_view(self.expression.as_view(), library)
     }
 }
 
@@ -327,7 +329,7 @@ impl SymbolicTensor {
 //     }
 // }
 
-impl HasName for SymbolicTensor {
+impl<Aind: AbsInd> HasName for SymbolicTensor<Aind> {
     type Name = Symbol;
     type Args = Vec<Atom>;
 
@@ -365,9 +367,9 @@ impl HasName for SymbolicTensor {
 
 /// Symbolic contraction of two symbolic tensors is just a multiplication of the atoms.
 ///
-impl Contract<SymbolicTensor> for SymbolicTensor {
-    type LCM = SymbolicTensor;
-    fn contract(&self, other: &SymbolicTensor) -> Result<Self::LCM, ContractionError> {
+impl<Aind: AbsInd> Contract<SymbolicTensor<Aind>> for SymbolicTensor<Aind> {
+    type LCM = SymbolicTensor<Aind>;
+    fn contract(&self, other: &SymbolicTensor<Aind>) -> Result<Self::LCM, ContractionError> {
         let expression = &other.expression * &self.expression;
         let (structure, _, _, _) = self.structure.merge(&other.structure)?;
         Ok(SymbolicTensor {
@@ -377,8 +379,8 @@ impl Contract<SymbolicTensor> for SymbolicTensor {
     }
 }
 
-impl std::ops::Neg for SymbolicTensor {
-    type Output = SymbolicTensor;
+impl<Aind: AbsInd> std::ops::Neg for SymbolicTensor<Aind> {
+    type Output = SymbolicTensor<Aind>;
 
     fn neg(self) -> Self::Output {
         Self {
@@ -388,22 +390,22 @@ impl std::ops::Neg for SymbolicTensor {
     }
 }
 
-impl AddAssign<SymbolicTensor> for SymbolicTensor {
-    fn add_assign(&mut self, rhs: SymbolicTensor) {
+impl<Aind: AbsInd> AddAssign<SymbolicTensor<Aind>> for SymbolicTensor<Aind> {
+    fn add_assign(&mut self, rhs: SymbolicTensor<Aind>) {
         debug_assert_eq!(self.structure, rhs.structure);
         self.expression += rhs.expression;
     }
 }
 
-impl AddAssign<&SymbolicTensor> for SymbolicTensor {
-    fn add_assign(&mut self, rhs: &SymbolicTensor) {
+impl<Aind: AbsInd> AddAssign<&SymbolicTensor<Aind>> for SymbolicTensor<Aind> {
+    fn add_assign(&mut self, rhs: &SymbolicTensor<Aind>) {
         debug_assert_eq!(self.structure, rhs.structure);
         self.expression += &rhs.expression;
     }
 }
 
-impl ScalarMul<Atom> for SymbolicTensor {
-    type Output = SymbolicTensor;
+impl<Aind: AbsInd> ScalarMul<Atom> for SymbolicTensor<Aind> {
+    type Output = SymbolicTensor<Aind>;
 
     fn scalar_mul(&self, rhs: &Atom) -> Option<Self::Output> {
         Some(Self {
@@ -413,7 +415,7 @@ impl ScalarMul<Atom> for SymbolicTensor {
     }
 }
 
-impl std::fmt::Display for SymbolicTensor {
+impl<Aind: AbsInd> std::fmt::Display for SymbolicTensor<Aind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.expression)
     }
@@ -431,7 +433,7 @@ pub mod test {
         let expr = parse!("g(mink(4,6),mink(4,7))");
 
         let structure = SymbolicTensor::from_permuted(
-            &PermutedStructure::<ShadowedStructure>::try_from(expr).unwrap(),
+            &PermutedStructure::<ShadowedStructure<AbstractIndex>>::try_from(expr).unwrap(),
         )
         .unwrap();
 

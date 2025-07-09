@@ -16,14 +16,15 @@ use crate::{
         named::{IdentityName, METRIC_NAME},
         permuted::{Perm, PermuteTensor},
         representation::{initialize, LibraryRep, RepName},
+        slot::AbsInd,
         HasName, IndexlessNamedStructure,
     },
     tensors::parametric::{ConcreteOrParam, MixedTensor, ParamOrConcrete, ParamTensor},
 };
 
-pub type ExplicitKey = IndexlessNamedStructure<Symbol, Vec<Atom>, LibraryRep>;
-pub type LibraryKey = PermutedStructure<ExplicitKey>;
-impl ExplicitKey {
+pub type ExplicitKey<Aind> = IndexlessNamedStructure<Symbol, Vec<Atom>, LibraryRep, Aind>;
+pub type LibraryKey<Aind> = PermutedStructure<ExplicitKey<Aind>>;
+impl<Aind> ExplicitKey<Aind> {
     pub fn from_structure<S: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs>>(
         structure: &PermutedStructure<S>,
     ) -> Option<Self> {
@@ -174,8 +175,8 @@ impl GenericKey {
     }
 }
 
-impl From<ExplicitKey> for GenericKey {
-    fn from(key: ExplicitKey) -> Self {
+impl<Aind: AbsInd> From<ExplicitKey<Aind>> for GenericKey {
+    fn from(key: ExplicitKey<Aind>) -> Self {
         Self {
             global_name: key.global_name.unwrap(),
             reps: key.reps().into_iter().map(|r| r.rep).collect(),
@@ -185,9 +186,9 @@ impl From<ExplicitKey> for GenericKey {
 }
 
 #[allow(clippy::type_complexity)]
-pub struct TensorLibrary<T: HasStructure<Structure = ExplicitKey>> {
-    explicit_dimension: AHashMap<ExplicitKey, PermutedStructure<T>>,
-    generic_dimension: AHashMap<GenericKey, fn(ExplicitKey) -> T>,
+pub struct TensorLibrary<T: HasStructure<Structure = ExplicitKey<Aind>>, Aind> {
+    explicit_dimension: AHashMap<ExplicitKey<Aind>, PermutedStructure<T>>,
+    generic_dimension: AHashMap<GenericKey, fn(ExplicitKey<Aind>) -> T>,
 }
 
 pub struct ExplicitTensorSymbols {
@@ -207,7 +208,7 @@ impl IdentityName for Symbol {
     }
 }
 
-impl<T: HasStructure<Structure = ExplicitKey>> TensorLibrary<T> {
+impl<T: HasStructure<Structure = ExplicitKey<Aind>>, Aind: AbsInd> TensorLibrary<T, Aind> {
     pub fn new() -> Self {
         Self {
             explicit_dimension: AHashMap::new(),
@@ -238,11 +239,12 @@ impl<T: TensorLibraryData> TensorLibraryData for ConcreteOrParam<T> {
 }
 
 impl<
-        T: HasStructure<Structure = ExplicitKey> + Clone,
+        Aind: AbsInd,
+        T: HasStructure<Structure = ExplicitKey<Aind>> + Clone,
         S: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs>,
-    > Library<S> for TensorLibrary<T>
+    > Library<S> for TensorLibrary<T, Aind>
 {
-    type Key = ExplicitKey;
+    type Key = ExplicitKey<Aind>;
     type Value = PermutedStructure<T>;
     // type Structure = ExplicitKey;
 
@@ -273,7 +275,7 @@ impl<
     {
         let a = ExplicitKey::from_structure(structure);
         if let Some(key) = a {
-            if <TensorLibrary<T> as Library<S>>::get(&self, &key).is_ok() {
+            if <TensorLibrary<T, Aind> as Library<S>>::get(&self, &key).is_ok() {
                 Ok(key)
             } else {
                 Err(LibraryError::InvalidKey)
@@ -285,17 +287,18 @@ impl<
 }
 
 impl<
-        T: HasStructure<Structure = ExplicitKey>
+        Aind: AbsInd,
+        T: HasStructure<Structure = ExplicitKey<Aind>>
             + SetTensorData
             + Clone
             + LibraryTensor
             + PermuteTensor<Permuted = T>,
-    > TensorLibrary<T>
+    > TensorLibrary<T, Aind>
 {
     pub fn get_key_from_name(
         &self,
         name: Symbol,
-    ) -> Result<ExplicitKey, LibraryError<ExplicitKey>> {
+    ) -> Result<ExplicitKey<Aind>, LibraryError<ExplicitKey<Aind>>> {
         let keys: Vec<_> = self
             .explicit_dimension
             .keys()
@@ -308,11 +311,11 @@ impl<
             _ => Err(LibraryError::MultipleKeys(name.to_string())),
         }
     }
-    pub fn metric_key(rep: LibraryRep) -> ExplicitKey {
+    pub fn metric_key(rep: LibraryRep) -> ExplicitKey<Aind> {
         ExplicitKey::from_iter([rep.new_rep(4), rep.new_rep(4)], ETS.metric, None).structure
     }
 
-    pub fn generic_mink_metric(key: ExplicitKey) -> T
+    pub fn generic_mink_metric(key: ExplicitKey<Aind>) -> T
     where
         T::SetData: TensorLibraryData,
     {
@@ -357,7 +360,7 @@ impl<
         GenericKey::new(ETS.metric, None, vec![rep, rep.dual()])
     }
 
-    pub fn checked_identity(key: ExplicitKey) -> T
+    pub fn checked_identity(key: ExplicitKey<Aind>) -> T
     where
         T::SetData: TensorLibraryData,
     {
@@ -367,7 +370,7 @@ impl<
         Self::identity(key)
     }
 
-    pub fn identity(key: ExplicitKey) -> T
+    pub fn identity(key: ExplicitKey<Aind>) -> T
     where
         T::SetData: TensorLibraryData,
     {
@@ -380,7 +383,7 @@ impl<
         tensor.into()
     }
 
-    pub fn diag_unimodular_metric(key: ExplicitKey) -> T
+    pub fn diag_unimodular_metric(key: ExplicitKey<Aind>) -> T
     where
         T::SetData: TensorLibraryData,
     {
@@ -405,7 +408,7 @@ impl<
 
     pub fn insert_explicit_dense(
         &mut self,
-        key: PermutedStructure<ExplicitKey>,
+        key: PermutedStructure<ExplicitKey<Aind>>,
         data: Vec<T::Data>,
     ) -> Result<()> {
         let tensor = T::from_dense(key.structure.clone(), data)?;
@@ -422,7 +425,7 @@ impl<
 
     pub fn insert_explicit_sparse(
         &mut self,
-        key: PermutedStructure<ExplicitKey>,
+        key: PermutedStructure<ExplicitKey<Aind>>,
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, T::Data)>,
     ) -> Result<()> {
         let tensor = T::from_sparse(key.structure.clone(), data)?;
@@ -438,13 +441,14 @@ impl<
         Ok(())
     }
 
-    pub fn insert_generic(&mut self, key: GenericKey, data: fn(ExplicitKey) -> T) {
+    pub fn insert_generic(&mut self, key: GenericKey, data: fn(ExplicitKey<Aind>) -> T) {
         self.generic_dimension.insert(key, data);
     }
 
-    pub fn get(&self, key: &ExplicitKey) -> Result<Cow<T>>
+    pub fn get(&self, key: &ExplicitKey<Aind>) -> Result<Cow<T>>
     where
         T: Clone,
+        LibraryError<ExplicitKey<Aind>>: Into<anyhow::Error>,
     {
         // println!("Trying:{}", key);
 
@@ -479,7 +483,8 @@ mod test {
 
     #[test]
     fn add_to_lib() {
-        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let mut lib =
+            TensorLibrary::<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>::new();
         let key = ExplicitKey::from_iter(
             [
                 Euclidean {}.new_rep(4).cast(),
@@ -501,7 +506,10 @@ mod test {
         let indexed = key.clone().reindex([0, 1, 2]).unwrap().structure;
         let expr = indexed.to_symbolic(None).unwrap();
         let mut net = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            NetworkStore<
+                MixedTensor<f64, ShadowedStructure<AbstractIndex>>,
+                ConcreteOrParam<RealOrComplex<f64>>,
+            >,
             _,
         >::try_from_view(expr.as_view(), &lib)
         .unwrap();
@@ -528,7 +536,8 @@ mod test {
     }
     #[test]
     fn libperm() {
-        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let mut lib =
+            TensorLibrary::<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>::new();
         let key = ExplicitKey::from_iter(
             [
                 Euclidean {}.new_rep(2).cast(),
@@ -568,7 +577,10 @@ mod test {
 
         lib.get(&key.structure).unwrap();
         let mut net = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            NetworkStore<
+                MixedTensor<f64, ShadowedStructure<AbstractIndex>>,
+                ConcreteOrParam<RealOrComplex<f64>>,
+            >,
             _,
         >::try_from_view(
             parse!("gamma(euc(2,1),euc(2,2),mink(2,0))-gamma(mink(2,0),euc(2,2),euc(2,1))")
@@ -582,7 +594,10 @@ mod test {
 
         print!("One {}", net.result_tensor(&lib).unwrap());
         let mut net = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            NetworkStore<
+                MixedTensor<f64, ShadowedStructure<AbstractIndex>>,
+                ConcreteOrParam<RealOrComplex<f64>>,
+            >,
             _,
         >::try_from_view(
             parse!("gamma(mink(2,0),euc(2,2),euc(2,1))").as_view(), &lib
@@ -597,7 +612,8 @@ mod test {
 
     #[test]
     fn not_in_lib() {
-        let lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let lib =
+            TensorLibrary::<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>::new();
         let key = ExplicitKey::from_iter(
             [
                 Euclidean {}.new_rep(4).cast(),
@@ -611,7 +627,10 @@ mod test {
         let indexed = key.reindex([0, 1, 2]).unwrap().structure;
         let expr = indexed.to_symbolic(None).unwrap();
         let mut net = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            NetworkStore<
+                MixedTensor<f64, ShadowedStructure<AbstractIndex>>,
+                ConcreteOrParam<RealOrComplex<f64>>,
+            >,
             _,
         >::try_from_view(expr.as_view(), &lib)
         .unwrap();
@@ -649,7 +668,8 @@ mod test {
 
     #[test]
     fn flat() {
-        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let mut lib =
+            TensorLibrary::<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>::new();
         lib.update_ids();
         fn p(m: impl Into<AbstractIndex>) -> Atom {
             let m_atom: AbstractIndex = m.into();
@@ -663,7 +683,10 @@ mod test {
         let a = mink.flat(1, 2) * p(2);
 
         let mut net = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            NetworkStore<
+                MixedTensor<f64, ShadowedStructure<AbstractIndex>>,
+                ConcreteOrParam<RealOrComplex<f64>>,
+            >,
             _,
         >::try_from_view(a.as_view(), &lib)
         .map_err(|a| a.to_string())
@@ -688,11 +711,15 @@ mod test {
 
     #[test]
     fn dot() {
-        let lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let lib =
+            TensorLibrary::<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>::new();
 
         let expr = parse!("p(1,mink(4,2))*q(2,mink(4,2))");
         let mut net = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            NetworkStore<
+                MixedTensor<f64, ShadowedStructure<AbstractIndex>>,
+                ConcreteOrParam<RealOrComplex<f64>>,
+            >,
             _,
         >::try_from_view(expr.as_view(), &lib)
         .map_err(|a| a.to_string())
@@ -733,12 +760,16 @@ mod test {
     #[test]
     fn big_expr() {
         initialize();
-        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let mut lib =
+            TensorLibrary::<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>::new();
         lib.update_ids();
 
         let expr = parse!(" -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*g(mink(4,2),mink(4,5))*g(mink(4,3),mink(4,6))*g(euc(4,0),euc(4,5))*g(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
         let mut net = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            NetworkStore<
+                MixedTensor<f64, ShadowedStructure<AbstractIndex>>,
+                ConcreteOrParam<RealOrComplex<f64>>,
+            >,
             _,
         >::try_from_view(expr.as_view(), &lib)
         .map_err(|a| a.to_string())
@@ -772,14 +803,18 @@ mod test {
     #[test]
     fn small_expr() {
         initialize();
-        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let mut lib =
+            TensorLibrary::<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>::new();
         lib.update_ids();
 
         let expr =
             parse!("(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7)))*g(mink(4,2),mink(4,5))*g(mink(4,3),mink(4,6))*g(mink(4,4),mink(4,7))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))")
                 ;
         let mut net = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            NetworkStore<
+                MixedTensor<f64, ShadowedStructure<AbstractIndex>>,
+                ConcreteOrParam<RealOrComplex<f64>>,
+            >,
             _,
         >::try_from_view(expr.as_view(), &lib)
         .map_err(|a| a.to_string())
@@ -812,8 +847,10 @@ mod test {
 
     #[test]
     fn one_times_x() {
-        let mut a: Network<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, DummyKey> =
-            Network::one() * Network::from_scalar(Atom::var(symbol!("x")));
+        let mut a: Network<
+            NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
+            DummyKey,
+        > = Network::one() * Network::from_scalar(Atom::var(symbol!("x")));
 
         // a.merge_ops();
         a.execute::<Sequential, SmallestDegree, _, _>(&DummyLibrary::default())
@@ -830,7 +867,8 @@ mod test {
     #[test]
     fn transposition() {
         initialize();
-        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let mut lib =
+            TensorLibrary::<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>::new();
         lib.update_ids();
 
         let key = ExplicitKey::from_iter(
@@ -842,7 +880,8 @@ mod test {
 
         let mut a: DataTensor<_, _> = DenseTensor::fill(key.clone(), Atom::num(1)).into();
         a.set(&[3, 0], parse!("a")).unwrap();
-        let a = PermutedStructure::identity(MixedTensor::<f64, ExplicitKey>::param(a));
+        let a =
+            PermutedStructure::identity(MixedTensor::<f64, ExplicitKey<AbstractIndex>>::param(a));
 
         lib.insert_explicit(a);
         #[allow(non_snake_case)]
@@ -854,7 +893,10 @@ mod test {
         let expr = A(0, 1) - A(1, 0);
 
         let mut net = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            NetworkStore<
+                MixedTensor<f64, ShadowedStructure<AbstractIndex>>,
+                ConcreteOrParam<RealOrComplex<f64>>,
+            >,
             _,
         >::try_from_view(expr.as_view(), &lib)
         .map_err(|a| a.to_string())
@@ -870,7 +912,8 @@ mod test {
     #[test]
     fn trace_metric_kron() {
         initialize();
-        let mut lib = TensorLibrary::<MixedTensor<f64, ExplicitKey>>::new();
+        let mut lib =
+            TensorLibrary::<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>::new();
         lib.update_ids();
 
         let mink = Minkowski {}.new_rep(4);
@@ -878,7 +921,10 @@ mod test {
         let expr = mink.id(1, 0) * mink.id(0, 1);
 
         let mut net = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, ConcreteOrParam<RealOrComplex<f64>>>,
+            NetworkStore<
+                MixedTensor<f64, ShadowedStructure<AbstractIndex>>,
+                ConcreteOrParam<RealOrComplex<f64>>,
+            >,
             _,
         >::try_from_view(expr.as_view(), &lib)
         .map_err(|a| a.to_string())

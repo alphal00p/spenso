@@ -3,8 +3,11 @@ use std::fmt::{Debug, Display};
 use crate::{
     iterators::IteratorEnum,
     structure::{
-        concrete_index::ConcreteIndex, permuted::PermuteTensor, representation::RepName,
-        slot::Slot, IndexLess, PermutedStructure,
+        concrete_index::ConcreteIndex,
+        permuted::PermuteTensor,
+        representation::RepName,
+        slot::{AbsInd, DummyAind, Slot},
+        IndexLess, PermutedStructure,
     },
     tensors::data::{SparseTensor, StorageTensor},
 };
@@ -356,13 +359,13 @@ where
     }
 }
 
-impl<T: Clone, S: Clone + Into<IndexLess<R>>, R: RepName<Dual = R>> PermuteTensor
-    for RealOrComplexTensor<T, S>
+impl<T: Clone, Aind: AbsInd, S: Clone + Into<IndexLess<R, Aind>>, R: RepName<Dual = R>>
+    PermuteTensor for RealOrComplexTensor<T, S>
 where
-    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+    S: TensorStructure<Slot = Slot<R, Aind>> + PermuteTensor<IdSlot = Slot<R, Aind>, Id = S>,
 {
     type Id = RealOrComplexTensor<T, S>;
-    type IdSlot = (T, Slot<R>);
+    type IdSlot = (T, Slot<R, Aind>);
     type Permuted = RealOrComplexTensor<T, S>;
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {

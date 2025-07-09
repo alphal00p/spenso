@@ -312,8 +312,8 @@ impl ArgDisplay for Vec<symbolica::atom::Atom> {
     }
 }
 
-impl<N: std::fmt::Display, A: ArgDisplay, R: RepName> std::fmt::Display
-    for NamedStructure<N, A, R>
+impl<N: std::fmt::Display, A: ArgDisplay, R: RepName, Aind: AbsInd> std::fmt::Display
+    for NamedStructure<N, A, R, Aind>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut table = Builder::new();
@@ -341,7 +341,9 @@ impl<N: std::fmt::Display, A: ArgDisplay, R: RepName> std::fmt::Display
         table.build().with(Style::rounded()).fmt(f)
     }
 }
-impl<N: std::fmt::Debug, A: ArgDisplay, R: RepName> std::fmt::Debug for NamedStructure<N, A, R> {
+impl<N: std::fmt::Debug, A: ArgDisplay, R: RepName, Aind: AbsInd> std::fmt::Debug
+    for NamedStructure<N, A, R, Aind>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut table = Builder::new();
 
@@ -367,7 +369,7 @@ impl<N: std::fmt::Debug, A: ArgDisplay, R: RepName> std::fmt::Debug for NamedStr
         write!(f, "{}", format!("{}", table.build().with(Style::rounded())))
     }
 }
-impl<N, A, R: RepName<Dual = R>> StructureContract for NamedStructure<N, A, R> {
+impl<N, A, R: RepName<Dual = R>, Aind: AbsInd> StructureContract for NamedStructure<N, A, R, Aind> {
     delegate! {
         to self.structure{
             fn trace_out(&mut self);

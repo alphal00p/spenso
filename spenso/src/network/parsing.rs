@@ -22,9 +22,13 @@ use crate::structure::{HasStructure, TensorStructure};
 
 use crate::{shadowing::Concretize, structure::representation::LibraryRep, structure::HasName};
 
-pub type ShadowedStructure = NamedStructure<Symbol, Vec<Atom>, LibraryRep>;
+pub type ShadowedStructure<Aind> = NamedStructure<Symbol, Vec<Atom>, LibraryRep, Aind>;
 
-impl<'a> TryFrom<AtomView<'a>> for PermutedStructure<ShadowedStructure> {
+impl<'a, Aind: AbsInd> TryFrom<AtomView<'a>> for PermutedStructure<ShadowedStructure<Aind>>
+where
+    Slot<LibraryRep, Aind>: TryFrom<AtomView<'a>>,
+    StructureError: From<<Slot<LibraryRep, Aind> as TryFrom<AtomView<'a>>>::Error>,
+{
     type Error = StructureError;
     fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
         if let AtomView::Fun(f) = value {
@@ -35,26 +39,38 @@ impl<'a> TryFrom<AtomView<'a>> for PermutedStructure<ShadowedStructure> {
     }
 }
 
-impl TryFrom<Atom> for PermutedStructure<ShadowedStructure> {
+impl<Aind: AbsInd> TryFrom<Atom> for PermutedStructure<ShadowedStructure<Aind>>
+where
+    Slot<LibraryRep, Aind>: for<'a> TryFrom<AtomView<'a>>,
+    StructureError: for<'a> From<<Slot<LibraryRep, Aind> as TryFrom<AtomView<'a>>>::Error>,
+{
     type Error = StructureError;
     fn try_from(value: Atom) -> Result<Self, Self::Error> {
         value.as_view().try_into()
     }
 }
 
-impl TryFrom<&Atom> for PermutedStructure<ShadowedStructure> {
+impl<'a, Aind: AbsInd> TryFrom<&'a Atom> for PermutedStructure<ShadowedStructure<Aind>>
+where
+    Slot<LibraryRep, Aind>: TryFrom<AtomView<'a>>,
+    StructureError: From<<Slot<LibraryRep, Aind> as TryFrom<AtomView<'a>>>::Error>,
+{
     type Error = StructureError;
-    fn try_from(value: &Atom) -> Result<Self, Self::Error> {
+    fn try_from(value: &'a Atom) -> Result<Self, Self::Error> {
         value.as_view().try_into()
     }
 }
 
-impl<'a> TryFrom<FunView<'a>> for PermutedStructure<ShadowedStructure> {
+impl<'a, Aind: AbsInd> TryFrom<FunView<'a>> for PermutedStructure<ShadowedStructure<Aind>>
+where
+    Slot<LibraryRep, Aind>: TryFrom<AtomView<'a>>,
+    StructureError: From<<Slot<LibraryRep, Aind> as TryFrom<AtomView<'a>>>::Error>,
+{
     type Error = StructureError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
         match value.get_symbol() {
             s if s == AIND_SYMBOLS.aind => {
-                let mut structure: Vec<Slot<LibraryRep>> = vec![];
+                let mut structure: Vec<Slot<LibraryRep, Aind>> = vec![];
 
                 for arg in value.iter() {
                     structure.push(arg.try_into()?);
@@ -68,10 +84,11 @@ impl<'a> TryFrom<FunView<'a>> for PermutedStructure<ShadowedStructure> {
             name => {
                 let mut args = vec![];
                 let mut slots = vec![];
-                let mut is_structure = Some(SlotError::EmptyStructure);
+                let mut is_structure: Option<StructureError> =
+                    Some(SlotError::EmptyStructure.into());
 
                 for arg in value.iter() {
-                    let slot: Result<Slot<LibraryRep>, _> = arg.try_into();
+                    let slot: Result<Slot<LibraryRep, Aind>, _> = arg.try_into();
 
                     match slot {
                         Ok(slot) => {
@@ -95,16 +112,16 @@ impl<'a> TryFrom<FunView<'a>> for PermutedStructure<ShadowedStructure> {
                                     }
                                 }
                             }
-                            is_structure = Some(e);
+                            is_structure = Some(e.into());
                             args.push(arg.to_owned().into());
                         }
                     }
                 }
 
                 if let Some(e) = is_structure {
-                    Err(StructureError::EmptyStructure(e))
+                    Err(e)
                 } else {
-                    let mut structure: PermutedStructure<ShadowedStructure> =
+                    let mut structure: PermutedStructure<ShadowedStructure<Aind>> =
                         OrderedStructure::new(slots).map_structure(Into::into);
                     structure.structure.set_name(name.into());
                     if !args.is_empty() {
@@ -422,7 +439,7 @@ pub mod test {
 
     #[test]
     fn parse_tensor_expr() {
-        let tensor1 = ShadowedStructure::from_iter(
+        let tensor1 = ShadowedStructure::<AbstractIndex>::from_iter(
             [
                 Minkowski {}.new_slot(4, 1).to_lib(),
                 Euclidean {}.new_slot(4, 2).to_lib(),
@@ -435,7 +452,7 @@ pub mod test {
         .to_symbolic(None)
         .unwrap();
 
-        let tensor2 = ShadowedStructure::from_iter(
+        let tensor2 = ShadowedStructure::<AbstractIndex>::from_iter(
             [
                 Minkowski {}.new_slot(4, 1).to_lib(),
                 Lorentz {}.new_slot(7, 1).to_lib(),
@@ -448,7 +465,7 @@ pub mod test {
         .to_symbolic(None)
         .unwrap();
 
-        let tensor3 = ShadowedStructure::from_iter(
+        let tensor3 = ShadowedStructure::<AbstractIndex>::from_iter(
             [
                 Lorentz {}.dual().new_slot(7, 1).to_lib(),
                 Euclidean {}.new_slot(4, 2).to_lib(),
@@ -461,13 +478,16 @@ pub mod test {
         .to_symbolic(None)
         .unwrap();
 
-        let tensor4 =
-            ShadowedStructure::from_iter([Lorentz {}.new_slot(3, 2).to_lib()], symbol!("L"), None)
-                .structure
-                .to_symbolic(None)
-                .unwrap();
+        let tensor4 = ShadowedStructure::<AbstractIndex>::from_iter(
+            [Lorentz {}.new_slot(3, 2).to_lib()],
+            symbol!("L"),
+            None,
+        )
+        .structure
+        .to_symbolic(None)
+        .unwrap();
 
-        let tensor5 = ShadowedStructure::from_iter(
+        let tensor5 = ShadowedStructure::<AbstractIndex>::from_iter(
             [Lorentz {}.dual().new_slot(3, 2).to_lib()],
             symbol!("P"),
             None,

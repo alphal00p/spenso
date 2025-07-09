@@ -8,13 +8,16 @@ use idenso::{
 use spenso::{
     algebra::complex::Complex,
     network::library::{
-        TensorLibraryData,
+        LibraryTensor, TensorLibraryData,
         symbolic::{ExplicitKey, TensorLibrary},
     },
     shadowing::Concretize,
     structure::{
-        PermutedStructure, TensorStructure,
+        HasStructure, PermutedStructure, TensorStructure,
+        abstract_index::AbstractIndex,
+        permuted::PermuteTensor,
         representation::{LibraryRep, Minkowski, RepName},
+        slot::AbsInd,
     },
     tensors::{
         data::{SetTensorData, SparseTensor},
@@ -312,103 +315,43 @@ where
     sigma
 }
 
-// pub fn id_impl(rep: SpensoRepresentation) -> Self {
-//     ExplicitKey::from_iter(
-//         [rep.representation, rep.representation.dual()],
-//         ETS.metric,
-//         None,
-//     )
-//     .structure
-//     .into()
-// }
-
-// pub fn metric_impl(rep: SpensoRepresentation) -> Self {
-//     ExplicitKey::from_iter([rep.representation, rep.representation], ETS.metric, None)
-//         .structure
-//         .into()
-// }
-
-#[allow(non_snake_case)]
-pub fn gamma4D_strct(name: Symbol) -> PermutedStructure<ExplicitKey> {
-    ExplicitKey::from_iter(
-        [
-            Bispinor {}.new_rep(4).cast(),
-            Bispinor {}.new_rep(4).cast(),
-            LibraryRep::from(Minkowski {}).new_rep(4),
-        ],
-        name,
-        None,
-    )
-}
-
-pub fn gamma5_strct(name: Symbol) -> PermutedStructure<ExplicitKey> {
-    ExplicitKey::from_iter([Bispinor {}.new_rep(4), Bispinor {}.new_rep(4)], name, None)
-}
-
-pub fn projm_strct(name: Symbol) -> PermutedStructure<ExplicitKey> {
-    ExplicitKey::from_iter([Bispinor {}.new_rep(4), Bispinor {}.new_rep(4)], name, None)
-}
-
-pub fn projp_strct(name: Symbol) -> PermutedStructure<ExplicitKey> {
-    ExplicitKey::from_iter([Bispinor {}.new_rep(4), Bispinor {}.new_rep(4)], name, None)
-}
-
-pub fn hep_lib<T: TensorLibraryData + Clone + Default>(
+pub fn hep_lib<Aind: AbsInd, T: TensorLibraryData + Clone + Default>(
     one: T,
     zero: T,
-) -> TensorLibrary<MixedTensor<T, ExplicitKey>> {
+) -> TensorLibrary<MixedTensor<T, ExplicitKey<Aind>>, Aind>
+where
+{
     let mut weyl = TensorLibrary::new();
     initialize();
     weyl.update_ids();
 
-    let a_key = ExplicitKey::from_iter(
-        [
-            Bispinor {}.new_rep(2),
-            Bispinor {}.new_rep(2),
-            Bispinor {}.new_rep(2).cast(),
-        ],
-        symbol!("A"),
-        None,
+    let gamma_key = PermutedStructure::identity(
+        gamma_data_weyl(AGS.gamma_strct::<Aind>(4), one.clone(), zero.clone()).into(),
     );
-
-    let data = PermutedStructure::identity(a_key.structure.to_shell().concretize(None));
-    weyl.insert_explicit(data);
-
-    let b_key = ExplicitKey::from_iter(
-        [
-            Bispinor {}.new_rep(2),
-            Bispinor {}.new_rep(2),
-            Bispinor {}.new_rep(2),
-        ],
-        symbol!("B"),
-        None,
-    );
-
-    let data = PermutedStructure::identity(b_key.structure.to_shell().concretize(None));
-    weyl.insert_explicit(data);
-
-    let gamma_key = gamma4D_strct(AGS.gamma)
-        .map_structure(|a| gamma_data_weyl(a, one.clone(), zero.clone()).into());
     // println!("permutation{}", gamma_key.rep_permutation);
     weyl.insert_explicit(gamma_key);
 
-    let gamma5_key = gamma5_strct(AGS.gamma5)
-        .map_structure(|a| gamma5_weyl_data(a, one.clone(), zero.clone()).into());
+    let gamma5_key = PermutedStructure::identity(
+        gamma5_weyl_data(AGS.gamma5_strct::<Aind>(4), one.clone(), zero.clone()).into(),
+    );
     weyl.insert_explicit(gamma5_key);
 
-    let projm_key = projm_strct(AGS.projm)
-        .map_structure(|a| proj_m_data_weyl(a, one.clone(), zero.clone()).into());
+    let projm_key = PermutedStructure::identity(
+        proj_m_data_weyl(AGS.projm_strct::<Aind>(4), one.clone(), zero.clone()).into(),
+    );
     weyl.insert_explicit(projm_key);
 
-    let projp_key = projp_strct(AGS.projp)
-        .map_structure(|a| proj_p_data_weyl(a, one.clone(), zero.clone()).into());
+    let projp_key = PermutedStructure::identity(
+        proj_p_data_weyl(AGS.projp_strct::<Aind>(4), one.clone(), zero.clone()).into(),
+    );
     weyl.insert_explicit(projp_key);
 
     weyl
 }
 
-pub static HEP_LIB: LazyLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>> =
-    LazyLock::new(|| hep_lib(1., 0.));
+pub static HEP_LIB: LazyLock<
+    TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>,
+> = LazyLock::new(|| hep_lib(1., 0.));
 
 #[cfg(test)]
 mod tests {
@@ -443,7 +386,7 @@ mod tests {
     #[test]
     fn simple_scalar() {
         initialize();
-        let _a = HEP_LIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
+        let _a = HEP_LIB.get(&AGS.gamma_strct(4)).unwrap();
 
         let expr = parse!("gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_4))*gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
             ","spenso");
@@ -454,12 +397,11 @@ mod tests {
         // );
         // println!("{}", expr);
 
-        let mut net =
-            Network::<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, _>::try_from_view(
-                expr.as_view(),
-                &*HEP_LIB,
-            )
-            .unwrap();
+        let mut net = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
+            _,
+        >::try_from_view(expr.as_view(), &*HEP_LIB)
+        .unwrap();
 
         println!(
             "{}",
@@ -516,18 +458,17 @@ mod tests {
     #[test]
     fn parse_problem() {
         initialize();
-        let _a = HEP_LIB.get(&gamma4D_strct(AGS.gamma).structure).unwrap();
+        let _a = HEP_LIB.get(&AGS.gamma_strct(4)).unwrap();
 
         let expr = parse!("((N(4,mink(4,l_2))*P(4,mink(4,r_2))+N(4,mink(4,r_2))*P(4,mink(4,l_2)))*N(4,mink(4,dummy_ss_4_1))*P(4,mink(4,dummy_ss_4_1))+-1*N(4,mink(4,dummy_ss_4_2))^2*P(4,mink(4,l_2))*P(4,mink(4,r_2))+-1*N(4,mink(4,dummy_ss_4_3))*N(4,mink(4,dummy_ss_4_4))*P(4,mink(4,dummy_ss_4_3))*P(4,mink(4,dummy_ss_4_4))*g(mink(4,l_2),mink(4,r_2)))*((N(5,mink(4,l_3))*P(5,mink(4,r_3))+N(5,mink(4,r_3))*P(5,mink(4,l_3)))*N(5,mink(4,dummy_ss_5_1))*P(5,mink(4,dummy_ss_5_1))+-1*N(5,mink(4,dummy_ss_5_2))^2*P(5,mink(4,l_3))*P(5,mink(4,r_3))+-1*N(5,mink(4,dummy_ss_5_3))*N(5,mink(4,dummy_ss_5_4))*P(5,mink(4,dummy_ss_5_3))*P(5,mink(4,dummy_ss_5_4))*g(mink(4,l_3),mink(4,r_3)))*(-1*G^2*P(0,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5))+G^2*P(2,mink(4,r_20))*𝑖*𝟙(bis(4,r_0),bis(4,r_7))*𝟙(bis(4,r_1),bis(4,r_4))*𝟙(mink(4,r_2),mink(4,r_5))*𝟙(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5)))*(-1*P(2,mink(4,l_20))+P(0,mink(4,l_20)))*-1*G^2*P(2,mink(4,dummy_2_0))*P(3,mink(4,dummy_3_1))*𝑖*𝟙(bis(4,l_0),bis(4,l_7))*𝟙(bis(4,l_1),bis(4,l_4))*𝟙(mink(4,l_2),mink(4,l_5))*𝟙(mink(4,l_3),mink(4,l_4))*gamma(bis(4,l_1),bis(4,r_1),mink(4,dummy_3_1))*gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_20))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))*gamma(bis(4,r_0),bis(4,l_0),mink(4,dummy_2_0))
             ","spenso");
         // println!("{}", expr);
 
-        let mut net =
-            Network::<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, _>::try_from_view(
-                expr.as_view(),
-                &*HEP_LIB,
-            )
-            .unwrap();
+        let mut net = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
+            _,
+        >::try_from_view(expr.as_view(), &*HEP_LIB)
+        .unwrap();
 
         println!(
             "{}",
@@ -573,18 +514,17 @@ mod tests {
         expr: Atom,
         const_map: HashMap<Atom, symbolica::domains::float::Complex<f64>>,
     ) {
-        let mut net =
-            Network::<NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>, _>::try_from_view(
-                expr.as_view(),
-                &*HEP_LIB,
-            )
-            .unwrap();
+        let mut net = Network::<
+            NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
+            _,
+        >::try_from_view(expr.as_view(), &*HEP_LIB)
+        .unwrap();
 
         let simplified = expr.simplify_gamma();
 
         println!("Simplified to {}", simplified);
         let mut net_simplified = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure>, Atom>,
+            NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
             _,
         >::try_from_view(simplified.as_view(), &*HEP_LIB)
         .unwrap();
@@ -635,11 +575,14 @@ mod tests {
     #[test]
     fn gamma_algebra_validate() {
         let mut const_map = HashMap::new();
-        let pt: DenseTensor<Atom, _> =
-            ShadowedStructure::from_iter([Minkowski {}.new_slot(4, 1)], symbol!("spenso::p"), None)
-                .structure
-                .to_shell()
-                .concretize(None);
+        let pt: DenseTensor<Atom, _> = ShadowedStructure::<AbstractIndex>::from_iter(
+            [Minkowski {}.new_slot(4, 1)],
+            symbol!("spenso::p"),
+            None,
+        )
+        .structure
+        .to_shell()
+        .concretize(None);
 
         for (i, a) in pt.iter_flat() {
             const_map.insert(
@@ -648,11 +591,14 @@ mod tests {
             );
         }
 
-        let qt: DenseTensor<Atom, _> =
-            ShadowedStructure::from_iter([Minkowski {}.new_slot(4, 1)], symbol!("spenso::q"), None)
-                .structure
-                .to_shell()
-                .concretize(None);
+        let qt: DenseTensor<Atom, _> = ShadowedStructure::<AbstractIndex>::from_iter(
+            [Minkowski {}.new_slot(4, 1)],
+            symbol!("spenso::q"),
+            None,
+        )
+        .structure
+        .to_shell()
+        .concretize(None);
 
         for (i, a) in qt.iter_flat() {
             const_map.insert(
@@ -760,14 +706,14 @@ mod tests {
         let mink = Minkowski {}.new_rep(2);
         let _expr = function!(
             symbol!("A"),
-            bis.slot(1).to_atom(),
-            bis.slot(2).to_atom(),
-            mink.slot(1).to_atom()
+            bis.slot::<AbstractIndex, _>(1).to_atom(),
+            bis.slot::<AbstractIndex, _>(2).to_atom(),
+            mink.slot::<AbstractIndex, _>(1).to_atom()
         ) * function!(
             symbol!("A"),
-            bis.slot(2).to_atom(),
-            bis.slot(1).to_atom(),
-            mink.slot(2).to_atom()
+            bis.slot::<AbstractIndex, _>(2).to_atom(),
+            bis.slot::<AbstractIndex, _>(1).to_atom(),
+            mink.slot::<AbstractIndex, _>(2).to_atom()
         );
 
         let expr = gamma(1, 2, 1) * gamma(2, 1, 1);

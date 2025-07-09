@@ -2,7 +2,7 @@ use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
 use crate::structure::permuted::PermuteTensor;
 use crate::structure::representation::{RepName, Representation};
-use crate::structure::slot::{IsAbstractSlot, Slot};
+use crate::structure::slot::{AbsInd, IsAbstractSlot, Slot};
 use crate::structure::{IndexLess, PermutedStructure, StructureError};
 use crate::{
     algebra::algebraic_traits::IsZero,
@@ -60,13 +60,13 @@ impl<T, S> crate::network::Ref for SparseTensor<T, S> {
     }
 }
 
-impl<T: Clone, S: Clone + Into<IndexLess<R>>, R: RepName<Dual = R>> PermuteTensor
-    for SparseTensor<T, S>
+impl<Aind: AbsInd, T: Clone, S: Clone + Into<IndexLess<R, Aind>>, R: RepName<Dual = R>>
+    PermuteTensor for SparseTensor<T, S>
 where
-    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+    S: TensorStructure<Slot = Slot<R, Aind>> + PermuteTensor<IdSlot = Slot<R, Aind>, Id = S>,
 {
     type Id = SparseTensor<T, S>;
-    type IdSlot = (T, Slot<R>);
+    type IdSlot = (T, Slot<R, Aind>);
     type Permuted = SparseTensor<T, S>;
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
@@ -84,7 +84,7 @@ where
     }
 
     fn permute_inds(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
-        let mut permuteds: IndexLess<R> = self.structure.clone().into();
+        let mut permuteds: IndexLess<R, Aind> = self.structure.clone().into();
         permutation.apply_slice_in_place(&mut permuteds.structure);
 
         let mut permuted = self.clone();

@@ -5,7 +5,7 @@ use crate::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
         permuted::PermuteTensor,
         representation::RepName,
-        slot::Slot,
+        slot::{AbsInd, DummyAind, Slot},
         CastStructure, HasName, HasStructure, IndexLess, OrderedStructure, PermutedStructure,
         ScalarStructure, ScalarTensor, TensorStructure, TracksCount,
     },
@@ -59,13 +59,13 @@ impl<T, S> crate::network::Ref for DenseTensor<T, S> {
     }
 }
 
-impl<T: Clone, S: Clone + Into<IndexLess<R>>, R: RepName<Dual = R>> PermuteTensor
-    for DenseTensor<T, S>
+impl<Aind: AbsInd, T: Clone, S: Clone + Into<IndexLess<R, Aind>>, R: RepName<Dual = R>>
+    PermuteTensor for DenseTensor<T, S>
 where
-    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+    S: TensorStructure<Slot = Slot<R, Aind>> + PermuteTensor<IdSlot = Slot<R, Aind>, Id = S>,
 {
     type Id = DenseTensor<T, S>;
-    type IdSlot = (T, Slot<R>);
+    type IdSlot = (T, Slot<R, Aind>);
     type Permuted = DenseTensor<T, S>;
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
@@ -80,7 +80,7 @@ where
     }
 
     fn permute_inds(self, permutation: &linnet::permutation::Permutation) -> Self::Permuted {
-        let mut permuteds: IndexLess<R> = self.structure.clone().into();
+        let mut permuteds: IndexLess<R, Aind> = self.structure.clone().into();
         permutation.apply_slice_in_place(&mut permuteds.structure);
 
         let mut permuted = self.clone();

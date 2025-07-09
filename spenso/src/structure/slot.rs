@@ -106,18 +106,6 @@ where
     type Error = SlotError;
 
     fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
-        fn extract_num<'a, A>(iter: &'a mut ListIterator) -> Result<A, SlotError>
-        where
-            A: TryFrom<AtomView<'a>>,
-            SlotError: From<<A as TryFrom<AtomView<'a>>>::Error>,
-        {
-            if let Some(a) = iter.next() {
-                Ok(A::try_from(a)?)
-            } else {
-                Err(SlotError::NoMoreArguments)
-            }
-        }
-
         let (rep, mut iter) = if let AtomView::Fun(f) = value {
             let name = f.get_symbol();
 

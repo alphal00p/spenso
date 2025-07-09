@@ -5,7 +5,7 @@ use crate::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
         permuted::PermuteTensor,
         representation::RepName,
-        slot::Slot,
+        slot::{AbsInd, Slot},
         CastStructure, HasName, HasStructure, IndexLess, OrderedStructure, PermutedStructure,
         ScalarStructure, ScalarTensor, StructureContract, TensorStructure, TracksCount,
     },
@@ -353,13 +353,13 @@ where
     }
 }
 
-impl<T: Clone, S: Clone + Into<IndexLess<R>>, R: RepName<Dual = R>> PermuteTensor
-    for DataTensor<T, S>
+impl<T: Clone, Aind: AbsInd, S: Clone + Into<IndexLess<R, Aind>>, R: RepName<Dual = R>>
+    PermuteTensor for DataTensor<T, S>
 where
-    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+    S: TensorStructure<Slot = Slot<R, Aind>> + PermuteTensor<IdSlot = Slot<R, Aind>, Id = S>,
 {
     type Id = DataTensor<T, S>;
-    type IdSlot = (T, Slot<R>);
+    type IdSlot = (T, Slot<R, Aind>);
     type Permuted = DataTensor<T, S>;
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {

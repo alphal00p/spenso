@@ -5,10 +5,10 @@ use std::{
     io::Cursor,
 };
 
-use crate::structure::StructureError;
 use crate::structure::{abstract_index::AbstractIndex, PermutedStructure};
 use crate::structure::{dimension::Dimension, representation::RepName};
 use crate::structure::{permuted::PermuteTensor, representation::Representation};
+use crate::structure::{slot::AbsInd, StructureError};
 use crate::structure::{slot::IsAbstractSlot, IndexLess};
 use ahash::HashMap;
 use delegate::delegate;
@@ -300,12 +300,13 @@ pub mod mul_assign;
 pub mod neg;
 pub mod scalar_mul;
 
-impl<S: Clone + Into<IndexLess<R>>, R: RepName<Dual = R>> PermuteTensor for ParamTensor<S>
+impl<Aind: AbsInd, S: Clone + Into<IndexLess<R, Aind>>, R: RepName<Dual = R>> PermuteTensor
+    for ParamTensor<S>
 where
-    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+    S: TensorStructure<Slot = Slot<R, Aind>> + PermuteTensor<IdSlot = Slot<R, Aind>, Id = S>,
 {
     type Id = ParamTensor<S>;
-    type IdSlot = Slot<R>;
+    type IdSlot = Slot<R, Aind>;
     type Permuted = ParamTensor<S>;
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
@@ -1176,12 +1177,13 @@ where
 }
 
 impl<
+        Aind: AbsInd,
         C: PermuteTensor<Id = C, Permuted = C>,
-        S: Clone + Into<IndexLess<R>>,
+        S: Clone + Into<IndexLess<R, Aind>>,
         R: RepName<Dual = R>,
     > PermuteTensor for ParamOrConcrete<C, S>
 where
-    S: TensorStructure<Slot = Slot<R>> + PermuteTensor<IdSlot = Slot<R>, Id = S>,
+    S: TensorStructure<Slot = Slot<R, Aind>> + PermuteTensor<IdSlot = Slot<R, Aind>, Id = S>,
     C: HasStructure<Structure = S> + TensorStructure,
 {
     type Id = ParamOrConcrete<C, S>;

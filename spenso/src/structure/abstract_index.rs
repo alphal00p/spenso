@@ -160,6 +160,8 @@ static DUMMYCOUNTER: AtomicUsize = AtomicUsize::new(0);
     Ord,
     PartialOrd,
     Eq,
+    PartialEq,
+    Hash,
     Serialize,
     Deserialize,
     bincode_trait_derive::Encode,
@@ -194,17 +196,11 @@ impl From<Symbol> for AbstractIndex {
         AbstractIndex::Symbol(value.into())
     }
 }
-impl PartialEq for AbstractIndex {
-    fn eq(&self, other: &Self) -> bool {
-        usize::from(*self) == usize::from(*other)
-    }
-}
-
-impl Hash for AbstractIndex {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        usize::from(*self).hash(state)
-    }
-}
+// impl PartialEq for AbstractIndex {
+//     fn eq(&self, other: &Self) -> bool {
+//         usize::from(*self) == usize::from(*other)
+//     }
+// }
 
 impl std::ops::Add<AbstractIndex> for AbstractIndex {
     type Output = AbstractIndex;

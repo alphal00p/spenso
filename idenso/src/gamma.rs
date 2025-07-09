@@ -5,6 +5,7 @@ use spenso::{
     structure::{
         dimension::Dimension,
         representation::{LibraryRep, Minkowski, RepName},
+        slot::AbsInd,
     },
 };
 use symbolica::{
@@ -187,7 +188,7 @@ impl GammaLibrary {
         )
     }
 
-    pub fn gamma_strct(&self, dim: impl Into<Dimension>) -> ExplicitKey {
+    pub fn gamma_strct<Aind: AbsInd>(&self, dim: impl Into<Dimension>) -> ExplicitKey<Aind> {
         let gamma = ExplicitKey::from_iter(
             [
                 LibraryRep::from(Minkowski {}).new_rep(dim),
@@ -225,7 +226,7 @@ impl GammaLibrary {
         )
     }
 
-    pub fn gamma5_strct(&self, dim: impl Into<Dimension>) -> ExplicitKey {
+    pub fn gamma5_strct<Aind: AbsInd>(&self, dim: impl Into<Dimension>) -> ExplicitKey<Aind> {
         let dim = dim.into();
         let gamma5 = ExplicitKey::from_iter(
             [Bispinor {}.new_rep(dim), Bispinor {}.new_rep(dim)],
@@ -235,7 +236,7 @@ impl GammaLibrary {
         gamma5.structure
     }
 
-    pub fn projm_strct(&self, dim: impl Into<Dimension>) -> ExplicitKey {
+    pub fn projm_strct<Aind: AbsInd>(&self, dim: impl Into<Dimension>) -> ExplicitKey<Aind> {
         let dim = dim.into();
         let projm = ExplicitKey::from_iter(
             [Bispinor {}.new_rep(dim), Bispinor {}.new_rep(dim)],
@@ -245,7 +246,7 @@ impl GammaLibrary {
         projm.structure
     }
 
-    pub fn projp_strct(&self, dim: impl Into<Dimension>) -> ExplicitKey {
+    pub fn projp_strct<Aind: AbsInd>(&self, dim: impl Into<Dimension>) -> ExplicitKey<Aind> {
         let dim = dim.into();
         let projp_strct = ExplicitKey::from_iter(
             [Bispinor {}.new_rep(dim), Bispinor {}.new_rep(dim)],

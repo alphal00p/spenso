@@ -2,8 +2,9 @@ use crate::{
     network::parsing::ShadowedStructure,
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
-        concrete_index::FlatIndex, slot::IsAbstractSlot, HasName, HasStructure, TensorShell,
-        TensorStructure, ToSymbolic,
+        concrete_index::FlatIndex,
+        slot::{AbsInd, IsAbstractSlot},
+        HasName, HasStructure, TensorShell, TensorStructure, ToSymbolic,
     },
     tensors::{
         data::{DataTensor, DenseTensor},
@@ -57,8 +58,11 @@ pub trait Concretize<T> {
     fn concretize(self, perm: Option<Permutation>) -> T;
 }
 
-impl Concretize<SymbolicTensor> for ShadowedStructure {
-    fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor {
+impl<Aind: AbsInd> Concretize<SymbolicTensor<Aind>> for ShadowedStructure<Aind>
+where
+    Atom: From<Aind>,
+{
+    fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor<Aind> {
         SymbolicTensor {
             expression: self.to_symbolic(perm).unwrap(),
             structure: self.structure,
@@ -66,8 +70,11 @@ impl Concretize<SymbolicTensor> for ShadowedStructure {
     }
 }
 
-impl Concretize<SymbolicTensor> for TensorShell<ShadowedStructure> {
-    fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor {
+impl<Aind: AbsInd> Concretize<SymbolicTensor<Aind>> for TensorShell<ShadowedStructure<Aind>>
+where
+    Atom: From<Aind>,
+{
+    fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor<Aind> {
         SymbolicTensor {
             expression: self.to_symbolic(perm).unwrap(),
             structure: self.structure.structure,
@@ -673,13 +680,15 @@ pub mod test {
 
     use crate::network::library::{symbolic::ExplicitKey, symbolic::TensorLibrary, symbolic::ETS};
 
-    pub static EXPLICIT_TENSOR_MAP: Lazy<RwLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>>> =
-        Lazy::new(|| {
-            let mut lib = TensorLibrary::new();
-            lib.update_ids();
-            RwLock::new(lib)
-        });
+    pub static EXPLICIT_TENSOR_MAP: Lazy<
+        RwLock<TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>>,
+    > = Lazy::new(|| {
+        let mut lib = TensorLibrary::new();
+        lib.update_ids();
+        RwLock::new(lib)
+    });
 
+    use crate::structure::abstract_index::AbstractIndex;
     use crate::structure::{OrderedStructure, PermutedStructure};
     use crate::{
         contraction::Contract,
@@ -693,7 +702,10 @@ pub mod test {
     #[test]
     fn test_identity() {
         // EXPLICIT_TENSOR_MAP.write().unwrap().update_ids();
-        let mut tensor_library: TensorLibrary<MixedTensor<f64, ExplicitKey>> = TensorLibrary::new();
+        let mut tensor_library: TensorLibrary<
+            MixedTensor<f64, ExplicitKey<AbstractIndex>>,
+            AbstractIndex,
+        > = TensorLibrary::new();
         tensor_library.update_ids();
 
         for rep in LibraryRep::all_representations() {

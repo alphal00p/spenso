@@ -11,6 +11,7 @@ use spenso::{
         abstract_index::AIND_SYMBOLS,
         permuted::Perm,
         representation::{LibraryRep, LibrarySlot, RepName},
+        slot::{AbsInd, DummyAind},
     },
     tensors::symbolic::SymbolicTensor,
 };
@@ -537,11 +538,12 @@ pub trait PermuteWithMetric {
     fn permute_with_metric(self) -> Atom;
 }
 
-impl<N> PermuteWithMetric for PermutedStructure<N>
+impl<N, Aind: AbsInd + DummyAind> PermuteWithMetric for PermutedStructure<N>
 where
-    N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot>,
+    N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot<Aind>>,
     N::Name: IntoSymbol + Clone,
     N::Args: IntoArgs,
+    Atom: From<Aind>,
 {
     fn permute_with_metric(self) -> Atom {
         self.map_structure(|a| SymbolicTensor::from_named(&a).unwrap())
@@ -570,6 +572,7 @@ mod test {
         network::parsing::ShadowedStructure,
         structure::{
             IndexlessNamedStructure, PermutedStructure,
+            abstract_index::AbstractIndex,
             permuted::Perm,
             representation::{Euclidean, Lorentz},
         },
@@ -614,18 +617,20 @@ mod test {
 
         println!("{}\n", f_p.expression);
         println!("{}\n", f_p.expression.simplify_metrics());
-        let f_parsed =
-            PermutedStructure::<ShadowedStructure>::try_from(&f_p.expression.simplify_metrics())
-                .unwrap();
+        let f_parsed = PermutedStructure::<ShadowedStructure<AbstractIndex>>::try_from(
+            &f_p.expression.simplify_metrics(),
+        )
+        .unwrap();
 
         assert_eq!(f.index_permutation, f_parsed.index_permutation);
         assert!(f_parsed.rep_permutation.is_identity());
 
         let f_p = f.clone().permute_reps_wrapped().permute_inds();
 
-        let f_parsed =
-            PermutedStructure::<ShadowedStructure>::try_from(&f_p.expression.simplify_metrics())
-                .unwrap();
+        let f_parsed = PermutedStructure::<ShadowedStructure<AbstractIndex>>::try_from(
+            &f_p.expression.simplify_metrics(),
+        )
+        .unwrap();
 
         println!("{}\n", f_p.expression);
         println!("{}\n", f_p.expression.simplify_metrics());

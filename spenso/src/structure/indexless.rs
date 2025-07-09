@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use linnet::permutation::Permutation;
 use tabled::{builder::Builder, settings::Style};
 
@@ -7,7 +9,7 @@ use super::{
     named::{ArgDisplay, IdentityName},
     permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
-    slot::{IsAbstractSlot, Slot},
+    slot::{AbsInd, IsAbstractSlot, Slot},
     HasName, NamedStructure, OrderedStructure, PermutedStructure, ScalarStructure,
     SmartShadowStructure, StructureError, TensorStructure,
 };
@@ -39,14 +41,15 @@ use symbolica::atom::{Atom, FunctionBuilder, Symbol};
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
 // #[cfg_attr(not(feature = "shadowing"), derive(bincode::Decode))]
-pub struct IndexLess<T: RepName = LibraryRep> {
+pub struct IndexLess<T: RepName = LibraryRep, Aind = AbstractIndex> {
     pub structure: Vec<Representation<T>>,
+    ind: PhantomData<Aind>,
 }
 
-impl<R: RepName<Dual = R>> PermuteTensor for IndexLess<R> {
+impl<R: RepName<Dual = R>, Aind: AbsInd> PermuteTensor for IndexLess<R, Aind> {
     type Id = Self;
-    type Permuted = (IndexLess<LibraryRep>, Vec<IndexLess<LibraryRep>>);
-    type IdSlot = Slot<R>;
+    type Permuted = (IndexLess<LibraryRep>, Vec<IndexLess<LibraryRep, Aind>>);
+    type IdSlot = Slot<R, Aind>;
 
     fn permute_inds(self, _permutation: &Permutation) -> Self::Permuted {
         todo!()
@@ -56,7 +59,7 @@ impl<R: RepName<Dual = R>> PermuteTensor for IndexLess<R> {
         todo!()
     }
 
-    fn id(i: Slot<R>, j: Slot<R>) -> Self::Id {
+    fn id(i: Slot<R, Aind>, j: Slot<R, Aind>) -> Self::Id {
         if i.dim() == j.dim() {
             IndexLess::new(vec![i.rep, j.rep])
         } else {
@@ -65,7 +68,7 @@ impl<R: RepName<Dual = R>> PermuteTensor for IndexLess<R> {
     }
 }
 
-impl<R: RepName> std::fmt::Display for IndexLess<R> {
+impl<R: RepName, Aind> std::fmt::Display for IndexLess<R, Aind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut table = Builder::new();
 
@@ -78,7 +81,7 @@ impl<R: RepName> std::fmt::Display for IndexLess<R> {
     }
 }
 
-impl<R: RepName> std::fmt::Debug for IndexLess<R> {
+impl<R: RepName, Aind> std::fmt::Debug for IndexLess<R, Aind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut table = Builder::new();
 
@@ -95,14 +98,14 @@ impl<R: RepName> std::fmt::Debug for IndexLess<R> {
     }
 }
 
-impl<R: RepName> FromIterator<Representation<R>> for PermutedStructure<IndexLess<R>> {
+impl<R: RepName, Aind> FromIterator<Representation<R>> for PermutedStructure<IndexLess<R, Aind>> {
     fn from_iter<I: IntoIterator<Item = Representation<R>>>(iter: I) -> Self {
         let structure: Vec<_> = iter.into_iter().collect();
         structure.into()
     }
 }
 
-impl<R: RepName> From<Vec<Representation<R>>> for PermutedStructure<IndexLess<R>> {
+impl<R: RepName, Aind> From<Vec<Representation<R>>> for PermutedStructure<IndexLess<R, Aind>> {
     fn from(mut structure: Vec<Representation<R>>) -> Self {
         let permutation = Permutation::sort(&structure);
         permutation.apply_slice_in_place(&mut structure);
@@ -110,47 +113,59 @@ impl<R: RepName> From<Vec<Representation<R>>> for PermutedStructure<IndexLess<R>
         PermutedStructure {
             rep_permutation: permutation,
             index_permutation: Permutation::id(structure.len()),
-            structure: IndexLess { structure },
+            structure: IndexLess {
+                structure,
+                ind: PhantomData,
+            },
         }
     }
 }
 
-impl<R: RepName> From<OrderedStructure<R>> for IndexLess<R> {
-    fn from(structure: OrderedStructure<R>) -> Self {
+impl<R: RepName, Aind> From<OrderedStructure<R, Aind>> for IndexLess<R, Aind> {
+    fn from(structure: OrderedStructure<R, Aind>) -> Self {
         IndexLess {
             structure: structure.into_iter().map(|a| a.rep).collect(),
+            ind: PhantomData,
         }
     }
 }
 
-impl<N, A, R: RepName> From<NamedStructure<N, A, R>> for IndexLess<R> {
-    fn from(structure: NamedStructure<N, A, R>) -> Self {
+impl<N, A, R: RepName, Aind> From<NamedStructure<N, A, R, Aind>> for IndexLess<R, Aind> {
+    fn from(structure: NamedStructure<N, A, R, Aind>) -> Self {
         structure.structure.into()
     }
 }
 
-impl<N, A, R: RepName> From<IndexlessNamedStructure<N, A, R>> for IndexLess<R> {
-    fn from(structure: IndexlessNamedStructure<N, A, R>) -> Self {
+impl<N, A, R: RepName, Aind> From<IndexlessNamedStructure<N, A, R, Aind>> for IndexLess<R, Aind> {
+    fn from(structure: IndexlessNamedStructure<N, A, R, Aind>) -> Self {
         structure.structure
     }
 }
 
-impl<N, A, R: RepName> From<SmartShadowStructure<N, A, R>> for IndexLess<R> {
-    fn from(structure: SmartShadowStructure<N, A, R>) -> Self {
+impl<N, A, R: RepName, Aind: AbsInd> From<SmartShadowStructure<N, A, R, Aind>>
+    for IndexLess<R, Aind>
+{
+    fn from(structure: SmartShadowStructure<N, A, R, Aind>) -> Self {
         structure.structure.into()
     }
 }
 
-impl<T: RepName> IndexLess<T> {
+impl<T: RepName, Aind: AbsInd> IndexLess<T, Aind> {
     pub fn new(structure: Vec<Representation<T>>) -> Self {
-        Self { structure }
+        Self {
+            structure,
+            ind: PhantomData,
+        }
     }
 
     pub fn empty() -> Self {
-        Self { structure: vec![] }
+        Self {
+            structure: vec![],
+            ind: PhantomData,
+        }
     }
 
-    pub fn to_indexed(self, indices: &[AbstractIndex]) -> Result<Vec<Slot<T>>, StructureError> {
+    pub fn to_indexed(self, indices: &[Aind]) -> Result<Vec<Slot<T, Aind>>, StructureError> {
         if self.structure.len() != indices.len() {
             return Err(StructureError::WrongNumberOfArguments(
                 indices.len(),
@@ -167,21 +182,21 @@ impl<T: RepName> IndexLess<T> {
     }
 }
 
-impl<T: RepName<Dual = T>> ScalarStructure for IndexLess<T> {
+impl<T: RepName<Dual = T>, Aind: AbsInd> ScalarStructure for IndexLess<T, Aind> {
     fn scalar_structure() -> Self {
         Self::empty()
     }
 }
 
-impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T> {
-    type Slot = Slot<T>;
+impl<T: RepName<Dual = T>, Aind: AbsInd> TensorStructure for IndexLess<T, Aind> {
+    type Slot = Slot<T, Aind>;
     // type R = T;
-    type Indexed = OrderedStructure<T>;
+    type Indexed = OrderedStructure<T, Aind>;
 
     fn reindex(
         self,
-        indices: &[AbstractIndex],
-    ) -> Result<PermutedStructure<OrderedStructure<T>>, StructureError> {
+        indices: &[Aind],
+    ) -> Result<PermutedStructure<OrderedStructure<T, Aind>>, StructureError> {
         if self.structure.len() != indices.len() {
             return Err(StructureError::WrongNumberOfArguments(
                 indices.len(),
@@ -214,11 +229,11 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T> {
         self.structure.iter().map(|s| s.dim)
     }
 
-    fn get_aind(&self, _: usize) -> Option<AbstractIndex> {
+    fn get_aind(&self, _: usize) -> Option<Aind> {
         None
     }
 
-    fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex> {
+    fn external_indices_iter(&self) -> impl Iterator<Item = Aind> {
         [].iter().cloned()
     }
 
@@ -290,7 +305,7 @@ impl<T: RepName<Dual = T>> TensorStructure for IndexLess<T> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {
+impl<T: RepName<Dual = T>, Aind: AbsInd> ToSymbolic for IndexLess<T, Aind> {
     fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
         ExpandedCoefficent {
             name: None,
@@ -342,8 +357,8 @@ impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {
 
     fn to_symbolic_with(&self, name: Symbol, args: &[Atom], perm: Option<Permutation>) -> Atom {
         let mut slots = self
-            .external_structure_iter()
-            .map(|slot| slot.to_atom())
+            .external_reps_iter()
+            .map(|slot| slot.to_symbolic([]))
             .collect::<Vec<_>>();
         if let Some(p) = perm {
             p.apply_slice_in_place(&mut slots);
@@ -363,18 +378,25 @@ impl<T: RepName<Dual = T>> ToSymbolic for IndexLess<T> {
     feature = "shadowing",
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-pub struct IndexlessNamedStructure<Name = String, Args = usize, R: RepName = LibraryRep> {
-    pub structure: IndexLess<R>,
+pub struct IndexlessNamedStructure<
+    Name = String,
+    Args = usize,
+    R: RepName = LibraryRep,
+    Aind = AbstractIndex,
+> {
+    pub structure: IndexLess<R, Aind>,
     pub global_name: Option<Name>,
     pub additional_args: Option<Args>,
 }
 
-impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for IndexlessNamedStructure<N, A, R> {
+impl<N: IdentityName, A, R: RepName<Dual = R>, Aind: AbsInd> PermuteTensor
+    for IndexlessNamedStructure<N, A, R, Aind>
+{
     type Id = Self;
-    type IdSlot = Slot<R>;
+    type IdSlot = Slot<R, Aind>;
     type Permuted = (
-        IndexlessNamedStructure<N, A, LibraryRep>,
-        Vec<IndexlessNamedStructure<N, A, LibraryRep>>,
+        IndexlessNamedStructure<N, A, LibraryRep, Aind>,
+        Vec<IndexlessNamedStructure<N, A, LibraryRep, Aind>>,
     );
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
@@ -436,14 +458,16 @@ impl<N: IdentityName, A, R: RepName<Dual = R>> PermuteTensor for IndexlessNamedS
 //     }
 // }
 
-impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructure<Name, Args, R> {
-    type Slot = Slot<R>;
-    type Indexed = NamedStructure<Name, Args, R>;
+impl<Name, Args, R: RepName<Dual = R>, Aind: AbsInd> TensorStructure
+    for IndexlessNamedStructure<Name, Args, R, Aind>
+{
+    type Slot = Slot<R, Aind>;
+    type Indexed = NamedStructure<Name, Args, R, Aind>;
 
     fn reindex(
         self,
-        indices: &[AbstractIndex],
-    ) -> Result<PermutedStructure<NamedStructure<Name, Args, R>>, StructureError> {
+        indices: &[Aind],
+    ) -> Result<PermutedStructure<NamedStructure<Name, Args, R, Aind>>, StructureError> {
         let res = self.structure.reindex(indices)?;
 
         Ok(PermutedStructure {
@@ -468,19 +492,21 @@ impl<Name, Args, R: RepName<Dual = R>> TensorStructure for IndexlessNamedStructu
     delegate! {
         to self.structure{
             fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn external_indices_iter(&self) -> impl Iterator<Item = AbstractIndex>;
+            fn external_indices_iter(&self) -> impl Iterator<Item = Aind>;
             fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;
             fn external_structure_iter(&self) -> impl Iterator<Item = Self::Slot>;
             fn order(&self) -> usize;
             fn get_slot(&self, i: usize) -> Option<Self::Slot>;
             fn get_rep(&self, i: usize) -> Option<Representation<<Self::Slot as IsAbstractSlot>::R>>;
-            fn get_aind(&self,i:usize)->Option<AbstractIndex>;
+            fn get_aind(&self,i:usize)->Option<Aind>;
             fn get_dim(&self, i: usize) -> Option<Dimension>;
         }
     }
 }
 
-impl<N, A, T: RepName<Dual = T>> ScalarStructure for IndexlessNamedStructure<N, A, T> {
+impl<N, A, T: RepName<Dual = T>, Aind: AbsInd> ScalarStructure
+    for IndexlessNamedStructure<N, A, T, Aind>
+{
     fn scalar_structure() -> Self {
         IndexlessNamedStructure {
             structure: IndexLess::scalar_structure(),
@@ -490,7 +516,7 @@ impl<N, A, T: RepName<Dual = T>> ScalarStructure for IndexlessNamedStructure<N, 
     }
 }
 
-impl<Name, Args, R: RepName> IndexlessNamedStructure<Name, Args, R> {
+impl<Name, Args, R: RepName, Aind> IndexlessNamedStructure<Name, Args, R, Aind> {
     #[must_use]
     pub fn from_iter<I, T>(iter: T, name: Name, args: Option<Args>) -> PermutedStructure<Self>
     where
@@ -509,7 +535,7 @@ impl<Name, Args, R: RepName> IndexlessNamedStructure<Name, Args, R> {
     }
 }
 
-impl<N, A, R: RepName> HasName for IndexlessNamedStructure<N, A, R>
+impl<N, A, R: RepName, Aind> HasName for IndexlessNamedStructure<N, A, R, Aind>
 where
     N: Clone,
     A: Clone,
@@ -528,8 +554,8 @@ where
     }
 }
 
-impl<N, A, R: RepName> From<IndexLess<R>> for IndexlessNamedStructure<N, A, R> {
-    fn from(value: IndexLess<R>) -> Self {
+impl<N, A, R: RepName, Aind> From<IndexLess<R, Aind>> for IndexlessNamedStructure<N, A, R, Aind> {
+    fn from(value: IndexLess<R, Aind>) -> Self {
         IndexlessNamedStructure {
             structure: value,
             global_name: None,
@@ -538,8 +564,10 @@ impl<N, A, R: RepName> From<IndexLess<R>> for IndexlessNamedStructure<N, A, R> {
     }
 }
 
-impl<N, A, R: RepName> From<NamedStructure<N, A, R>> for IndexlessNamedStructure<N, A, R> {
-    fn from(value: NamedStructure<N, A, R>) -> Self {
+impl<N, A, R: RepName, Aind> From<NamedStructure<N, A, R, Aind>>
+    for IndexlessNamedStructure<N, A, R, Aind>
+{
+    fn from(value: NamedStructure<N, A, R, Aind>) -> Self {
         IndexlessNamedStructure {
             structure: value.structure.into(),
             global_name: value.global_name,
@@ -548,8 +576,8 @@ impl<N, A, R: RepName> From<NamedStructure<N, A, R>> for IndexlessNamedStructure
     }
 }
 
-impl<N: std::fmt::Display, A: ArgDisplay, R: RepName> std::fmt::Display
-    for IndexlessNamedStructure<N, A, R>
+impl<N: std::fmt::Display, A: ArgDisplay, R: RepName, Aind> std::fmt::Display
+    for IndexlessNamedStructure<N, A, R, Aind>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut table = Builder::new();
@@ -571,8 +599,8 @@ impl<N: std::fmt::Display, A: ArgDisplay, R: RepName> std::fmt::Display
         table.build().with(Style::rounded()).fmt(f)
     }
 }
-impl<N: std::fmt::Debug, A: ArgDisplay, R: RepName> std::fmt::Debug
-    for IndexlessNamedStructure<N, A, R>
+impl<N: std::fmt::Debug, A: ArgDisplay, R: RepName, Aind> std::fmt::Debug
+    for IndexlessNamedStructure<N, A, R, Aind>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut table = Builder::new();

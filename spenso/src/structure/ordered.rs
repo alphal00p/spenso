@@ -954,4 +954,17 @@ pub mod test {
         println!("{}", a.merge(&b).unwrap().0);
         println!("{}", b.merge(&a).unwrap().0);
     }
+
+    #[test]
+    fn orderedmerge_euc() {
+        let a: OrderedStructure<Euclidean> =
+            OrderedStructure::from_iter([Euclidean {}.new_slot(4, 2)]).structure;
+        let b: OrderedStructure<Euclidean> =
+            OrderedStructure::from_iter([Euclidean {}.new_slot(4, 2)]).structure;
+
+        println!("{:?}", a);
+        println!("{:?}", b);
+        println!("{}", a.merge(&b).unwrap().0);
+        println!("{}", b.merge(&a).unwrap().0);
+    }
 }

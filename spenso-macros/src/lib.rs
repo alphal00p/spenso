@@ -175,7 +175,8 @@ fn get_filtered_derive_paths(attrs: &[Attribute]) -> Result<Vec<Path>, syn::Erro
                             // Check if the last segment of the path is "SimpleRepresentation"
                             let is_target_derive = path
                                 .segments
-                                .last().is_some_and(|segment| segment.ident == "SimpleRepresentation");
+                                .last()
+                                .is_some_and(|segment| segment.ident == "SimpleRepresentation");
 
                             if !is_target_derive {
                                 derived_traits.push(path); // Keep the original Path struct
@@ -302,7 +303,7 @@ pub fn derive_simple_representation(input: TokenStream) -> TokenStream {
 
                 #base_repname_common_impl
                 #[inline]
-                fn is_dual(self) -> bool { false }
+                fn is_dual(self) -> bool { true }
                 #[inline] fn matches(&self, _other: &Self::Dual) -> bool { true }
                 #[inline] fn dual(self) -> Self::Dual { self }
             }

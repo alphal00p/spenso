@@ -643,6 +643,15 @@ impl LibraryRep {
         REPS.write().unwrap().new_dual_impl(name)
     }
 
+    #[cfg(feature = "shadowing")]
+    pub fn symbol(&self) -> Symbol {
+        REPS.read().unwrap()[*self].symbol
+    }
+
+    pub fn name(&self) -> String {
+        REPS.read().unwrap()[*self].name.clone()
+    }
+
     pub fn new_self_dual(name: &str) -> Result<Self, RepLibraryError> {
         REPS.write().unwrap().new_self_dual(name)
     }
@@ -1034,7 +1043,7 @@ impl RepName for LibraryRep {
     ) -> Atom {
         use crate::structure::abstract_index::AIND_SYMBOLS;
 
-        let mut fun = FunctionBuilder::new(REPS.read().unwrap()[*self].symbol);
+        let mut fun = FunctionBuilder::new(self.symbol());
         for a in args {
             fun = fun.add_arg(a);
         }

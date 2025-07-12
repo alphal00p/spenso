@@ -17,13 +17,13 @@ use symbolica::parse;
 
 #[test]
 fn other_network() {
-    let mut net: TensorNetwork<
+    let mut net: Network<
         DataTensor<
             Complex<Rational>,
             SmartShadowStructure<SerializableSymbol, Vec<SerializableAtom>>,
         >,
         SerializableAtom,
-    > = TensorNetwork::new();
+    > = Network::new();
 
     net.contract().unwrap();
 }
@@ -180,7 +180,7 @@ fn g_concrete(mu: usize, nu: usize) -> RealOrComplexTensor<f64, ShadowedStructur
     let _ = AIND_SYMBOLS.dind;
     let mink = LibraryRep::from(Minkowski {}).rep(4);
 
-    NamedStructure::<_, (), LibraryRep>::from_iter([mink.slot(mu), mink.slot(nu)], ETS.id, None)
+    NamedStructure::<_, (), LibraryRep>::from_iter([mink.slot(mu), mink.slot(nu)], ETS.metric, None)
         .to_shell()
         .to_explicit(&EXPLICIT_TENSOR_MAP.read().unwrap())
         .unwrap()

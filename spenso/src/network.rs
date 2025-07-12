@@ -1,2525 +1,495 @@
-use ahash::AHashMap;
-#[cfg(feature = "shadowing")]
-use ahash::{AHashSet, HashMap};
-#[cfg(feature = "shadowing")]
-use anyhow::anyhow;
-#[cfg(feature = "shadowing")]
-use std::sync::Arc;
-
-#[cfg(feature = "shadowing")]
-use symbolica::atom::PowView;
-
-use crate::structure::slot::IsAbstractSlot;
-// use log::trace;
+use graph::{NAdd, NMul, NetworkEdge, NetworkGraph, NetworkLeaf, NetworkNode, NetworkOp};
+use linnet::half_edge::NodeIndex;
 use serde::{Deserialize, Serialize};
-use slotmap::{new_key_type, DenseSlotMap, Key, SecondaryMap};
-#[cfg(feature = "shadowing")]
-use symbolica::{
-    atom::{representation::FunView, AddView, Atom, AtomView, MulView, Symbol},
-    coefficient::ConvertToRing,
-    domains::{
-        factorized_rational_polynomial::{
-            FactorizedRationalPolynomial, FromNumeratorAndFactorizedDenominator,
-        },
-        float::{Complex as SymComplex, NumericalFloatLike, Real, SingleFloat},
-        rational::Rational,
-        rational_polynomial::{FromNumeratorAndDenominator, RationalPolynomial},
-        EuclideanDomain,
-    },
-    evaluate::{
-        CompileOptions, CompiledCode, CompiledEvaluator, EvalTree, EvaluationFn, ExportedCode,
-        ExpressionEvaluator, FunctionMap, InlineASM,
-    },
-    id::Pattern,
-    poly::{factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, Variable},
-    utils::BorrowedOrOwned,
-};
 
-#[cfg(feature = "shadowing")]
-use symbolica::{
-    atom::{AtomCore, KeyLookup},
-    id::BorrowReplacement,
-    poly::PositiveExponent,
-    symbol,
-};
+use library::{Library, LibraryError};
 
-#[cfg(feature = "shadowing")]
-use crate::{
-    complex::{Complex, RealOrComplexTensor},
-    contraction::RefZero,
-    data::{DataIterator, DenseTensor, SetTensorData, SparseTensor},
-    iterators::IteratableTensor,
-    parametric::atomcore::ReplaceBuilderGeneric,
-    parametric::{
-        atomcore::PatternReplacement, AtomViewOrConcrete, CompiledEvalTensor, EvalTensor,
-        EvalTreeTensor, MixedTensor, ParamTensor, SerializableCompiledCode,
-        SerializableCompiledEvaluator, SerializableExportedCode,
-    },
-    shadowing::{ShadowMapping, Shadowable},
-    structure::representation::LibraryRep,
-    structure::{StructureContract, ToSymbolic},
-    symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
-    tensor_library::{LibraryTensor, TensorLibrary},
-    upgrading_arithmetic::{FallibleAdd, TrySmallestUpgrade},
-};
+use crate::algebra::ScalarMul;
+use crate::contraction::Contract;
+use crate::network::library::LibraryTensor;
+use crate::structure::abstract_index::AbstractIndex;
+use crate::structure::permuted::PermuteTensor;
+// use crate::shadowing::Concretize;
+use crate::structure::representation::LibrarySlot;
+use crate::structure::slot::{AbsInd, IsAbstractSlot};
+use crate::structure::{PermutedStructure, StructureError};
+use std::borrow::Cow;
+use std::fmt::Display;
+use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use store::{NetworkStore, TensorScalarStore, TensorScalarStoreMapping};
+use thiserror::Error;
+// use log::trace;
 
 use crate::{
-    arithmetic::ScalarMul,
-    contraction::{Contract, ContractionError, Trace},
-    data::{DataTensor, GetTensorData, HasTensorData},
-    structure::{
-        representation::LibrarySlot, slot::DualSlotTo, CastStructure, HasName, HasStructure,
-        ScalarTensor, TensorStructure, TracksCount,
-    },
-    upgrading_arithmetic::FallibleMul,
+    contraction::ContractionError,
+    structure::{CastStructure, HasStructure, ScalarTensor, TensorStructure},
 };
 
-#[cfg(feature = "shadowing")]
-use crate::{
-    data::StorageTensor,
-    parametric::atomcore::{TensorAtomMaps, TensorAtomOps},
-};
+// use anyhow::Result;
 
-use anyhow::Result;
+use std::{convert::Infallible, fmt::Debug};
 
-use std::{
-    convert::Infallible,
-    fmt::{Debug, Display},
-};
-
-new_key_type! {
-    pub struct NodeId;
-    pub struct HedgeId;
+#[derive(
+    Debug, Clone, Serialize, Deserialize, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+)]
+#[cfg_attr(
+    feature = "shadowing",
+    trait_decode(trait = symbolica::state::HasStateMap),
+)]
+pub struct Network<S, LibKey, Aind = AbstractIndex> {
+    pub graph: NetworkGraph<LibKey, Aind>,
+    pub store: S,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum Direction {
-    None,
-    Source,
-    Sink,
-}
-
-impl Direction {
-    pub fn reverse(&self) -> Self {
-        match self {
-            Self::None => Self::None,
-            Self::Sink => Self::Source,
-            Self::Source => Self::Sink,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Invel<T> {
-    pub dir: Direction,
-    pub data: T,
-}
-
-impl<T> Invel<T> {
-    pub fn undirected(data: T) -> Self {
-        Invel {
-            dir: Direction::None,
-            data,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum DisplayOption<T> {
-    None,
-    Some(T),
-}
-
-impl<T: Display> Display for DisplayOption<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DisplayOption::None => write!(f, ""),
-            DisplayOption::Some(t) => write!(f, "{}", t),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HalfEdgeGraph<N, E> {
-    pub edges: DenseSlotMap<HedgeId, E>,
-    pub involution: SecondaryMap<HedgeId, Invel<HedgeId>>,
-    pub neighbors: SecondaryMap<HedgeId, HedgeId>,
-    pub nodemap: SecondaryMap<HedgeId, NodeId>,
-    pub nodes: DenseSlotMap<NodeId, N>,
-    pub reverse_nodemap: SecondaryMap<NodeId, HedgeId>,
-}
-
-impl<N, E> HalfEdgeGraph<N, E> {
-    pub fn map_nodes<U, F>(self, f: F) -> HalfEdgeGraph<U, E>
-    where
-        F: Fn((NodeId, N)) -> U,
-    {
-        let mut nodeidmap: SecondaryMap<NodeId, NodeId> = SecondaryMap::new();
-        let mut newnodes: DenseSlotMap<NodeId, U> = DenseSlotMap::with_key();
-
-        for (i, n) in self.nodes {
-            let nid = newnodes.insert(f((i, n)));
-            nodeidmap.insert(i, nid);
-        }
-
-        let mut newnodemap: SecondaryMap<HedgeId, NodeId> = SecondaryMap::new();
-        for (i, n) in self.nodemap {
-            newnodemap.insert(i, nodeidmap[n]);
-        }
-
-        let mut newreverse_nodemap: SecondaryMap<NodeId, HedgeId> = SecondaryMap::new();
-        for (i, n) in self.reverse_nodemap {
-            newreverse_nodemap.insert(nodeidmap[i], n);
-        }
-
-        HalfEdgeGraph {
-            edges: self.edges,
-            involution: self.involution,
-            nodes: newnodes,
-            nodemap: newnodemap,
-            reverse_nodemap: newreverse_nodemap,
-            neighbors: self.neighbors,
-        }
-    }
-
-    pub fn map_nodes_ref<U, F>(&self, f: F) -> HalfEdgeGraph<U, E>
-    where
-        F: Fn((NodeId, &N)) -> U,
-        E: Clone,
-    {
-        let mut nodeidmap: SecondaryMap<NodeId, NodeId> = SecondaryMap::new();
-        let mut newnodes: DenseSlotMap<NodeId, U> = DenseSlotMap::with_key();
-
-        for (i, n) in &self.nodes {
-            let nid = newnodes.insert(f((i, n)));
-            nodeidmap.insert(i, nid);
-        }
-
-        let mut newnodemap: SecondaryMap<HedgeId, NodeId> = SecondaryMap::new();
-        for (i, &n) in &self.nodemap {
-            newnodemap.insert(i, nodeidmap[n]);
-        }
-
-        let mut newreverse_nodemap: SecondaryMap<NodeId, HedgeId> = SecondaryMap::new();
-        for (i, &n) in &self.reverse_nodemap {
-            newreverse_nodemap.insert(nodeidmap[i], n);
-        }
-
-        HalfEdgeGraph {
-            edges: self.edges.clone(),
-            involution: self.involution.clone(),
-            nodes: newnodes,
-            nodemap: newnodemap,
-            reverse_nodemap: newreverse_nodemap,
-            neighbors: self.neighbors.clone(),
-        }
-    }
-
-    pub fn map_nodes_ref_option<U, F>(&self, f: F) -> Option<HalfEdgeGraph<U, E>>
-    where
-        F: Fn((NodeId, &N)) -> Option<U>,
-        E: Clone,
-    {
-        let mut nodeidmap: SecondaryMap<NodeId, NodeId> = SecondaryMap::new();
-        let mut newnodes: DenseSlotMap<NodeId, U> = DenseSlotMap::with_key();
-
-        for (i, n) in &self.nodes {
-            let nid = newnodes.insert(f((i, n))?);
-            nodeidmap.insert(i, nid);
-        }
-
-        let mut newnodemap: SecondaryMap<HedgeId, NodeId> = SecondaryMap::new();
-        for (i, &n) in &self.nodemap {
-            newnodemap.insert(i, nodeidmap[n]);
-        }
-
-        let mut newreverse_nodemap: SecondaryMap<NodeId, HedgeId> = SecondaryMap::new();
-        for (i, &n) in &self.reverse_nodemap {
-            newreverse_nodemap.insert(nodeidmap[i], n);
-        }
-
-        Some(HalfEdgeGraph {
-            edges: self.edges.clone(),
-            involution: self.involution.clone(),
-            nodes: newnodes,
-            nodemap: newnodemap,
-            reverse_nodemap: newreverse_nodemap,
-            neighbors: self.neighbors.clone(),
-        })
-    }
-
-    pub fn map_nodes_ref_result<U, F, Er>(&self, f: F) -> Result<HalfEdgeGraph<U, E>, Er>
-    where
-        F: Fn((NodeId, &N)) -> Result<U, Er>,
-        E: Clone,
-    {
-        let mut nodeidmap: SecondaryMap<NodeId, NodeId> = SecondaryMap::new();
-        let mut newnodes: DenseSlotMap<NodeId, U> = DenseSlotMap::with_key();
-
-        for (i, n) in &self.nodes {
-            let nid = newnodes.insert(f((i, n))?);
-            nodeidmap.insert(i, nid);
-        }
-
-        let mut newnodemap: SecondaryMap<HedgeId, NodeId> = SecondaryMap::new();
-        for (i, &n) in &self.nodemap {
-            newnodemap.insert(i, nodeidmap[n]);
-        }
-
-        let mut newreverse_nodemap: SecondaryMap<NodeId, HedgeId> = SecondaryMap::new();
-        for (i, &n) in &self.reverse_nodemap {
-            newreverse_nodemap.insert(nodeidmap[i], n);
-        }
-
-        Ok(HalfEdgeGraph {
-            edges: self.edges.clone(),
-            involution: self.involution.clone(),
-            nodes: newnodes,
-            nodemap: newnodemap,
-            reverse_nodemap: newreverse_nodemap,
-            neighbors: self.neighbors.clone(),
-        })
-    }
-
-    pub fn map_nodes_ref_mut<U, F>(&mut self, mut f: F) -> HalfEdgeGraph<U, E>
-    where
-        F: FnMut((NodeId, &mut N)) -> U,
-        E: Clone,
-    {
-        let mut nodeidmap: SecondaryMap<NodeId, NodeId> = SecondaryMap::new();
-        let mut newnodes: DenseSlotMap<NodeId, U> = DenseSlotMap::with_key();
-
-        for (i, n) in &mut self.nodes {
-            let nid = newnodes.insert(f((i, n)));
-            nodeidmap.insert(i, nid);
-        }
-
-        let mut newnodemap: SecondaryMap<HedgeId, NodeId> = SecondaryMap::new();
-        for (i, &n) in &self.nodemap {
-            newnodemap.insert(i, nodeidmap[n]);
-        }
-
-        let mut newreverse_nodemap: SecondaryMap<NodeId, HedgeId> = SecondaryMap::new();
-        for (i, &n) in &self.reverse_nodemap {
-            newreverse_nodemap.insert(nodeidmap[i], n);
-        }
-
-        HalfEdgeGraph {
-            edges: self.edges.clone(),
-            involution: self.involution.clone(),
-            nodes: newnodes,
-            nodemap: newnodemap,
-            reverse_nodemap: newreverse_nodemap,
-            neighbors: self.neighbors.clone(),
-        }
-    }
-
-    pub fn map_nodes_mut<F>(&mut self, mut f: F)
-    where
-        F: FnMut((NodeId, &mut N)),
-        E: Clone,
-    {
-        for (i, n) in &mut self.nodes {
-            f((i, n));
-        }
-    }
-}
-
-struct IncidentIterator<'a> {
-    neighbors: &'a SecondaryMap<HedgeId, HedgeId>,
-    current: Option<HedgeId>,
-    start: HedgeId,
-}
-
-impl<'a> Iterator for IncidentIterator<'a> {
-    type Item = HedgeId;
-    fn next(&mut self) -> Option<HedgeId> {
-        let current = self.current?;
-
-        self.current = Some(self.neighbors[current]);
-
-        if self.current == Some(self.start) {
-            self.current = None;
-        }
-
-        Some(current)
-    }
-}
-
-impl<'a> IncidentIterator<'a> {
-    fn new<N, E>(graph: &'a HalfEdgeGraph<N, E>, initial: HedgeId) -> Self {
-        IncidentIterator {
-            neighbors: &graph.neighbors,
-            current: Some(initial),
-            start: initial,
-        }
-    }
-}
-
-#[allow(dead_code)]
-impl<N, E> HalfEdgeGraph<N, E> {
-    fn new() -> Self {
-        HalfEdgeGraph {
-            involution: SecondaryMap::new(),
-            nodemap: SecondaryMap::new(),
-            neighbors: SecondaryMap::new(),
-            reverse_nodemap: SecondaryMap::new(),
-            nodes: DenseSlotMap::with_key(),
-            edges: DenseSlotMap::with_key(),
-        }
-    }
-
-    pub fn dot(&self) -> std::string::String
-    where
-        E: Display,
-    {
-        let mut out = "digraph {\n".to_string();
-        out.push_str("  node [shape=circle,height=0.1,label=\"\"];  overlap=\"scale\";");
-
-        // for (i, n) in &self.nodes {
-        //     out.push_str(&format!("\n {}", i.data().as_ffi()));
-        // }
-        for (i, _) in &self.neighbors {
-            match i.cmp(&self.involution[i].data) {
-                std::cmp::Ordering::Greater => {
-                    match self.involution[i] {
-                        Invel {
-                            dir: Direction::None,
-                            data,
-                        } => out.push_str(&format!(
-                            "\n {} -> {} [label=\" {} = {}\" dir=none];",
-                            self.nodemap[i].data().as_ffi(),
-                            self.nodemap[self.involution[i].data].data().as_ffi(),
-                            self.edges[data],
-                            self.edges[i]
-                        )),
-                        Invel {
-                            dir: Direction::Sink,
-                            data,
-                        } => out.push_str(&format!(
-                            "\n {} -> {} [label=\" {}={} \"];",
-                            self.nodemap[self.involution[i].data].data().as_ffi(),
-                            self.nodemap[i].data().as_ffi(),
-                            self.edges[i],
-                            self.edges[data],
-                        )),
-                        Invel {
-                            dir: Direction::Source,
-                            data,
-                        } => out.push_str(&format!(
-                            "\n {} -> {} [label=\" {}={} \"];",
-                            self.nodemap[i].data().as_ffi(),
-                            self.nodemap[self.involution[i].data].data().as_ffi(),
-                            self.edges[data],
-                            self.edges[i]
-                        )),
-                    };
-                }
-                std::cmp::Ordering::Equal => {
-                    out.push_str(&format!(
-                        " \n ext{} [shape=none, label=\"\"];",
-                        i.data().as_ffi()
-                    ));
-                    match self.involution[i].dir {
-                        Direction::None => out.push_str(&format!(
-                            "\n {} -> ext{} [label =\" {}\" dir=none];",
-                            self.nodemap[i].data().as_ffi(),
-                            i.data().as_ffi(),
-                            self.edges[i]
-                        )),
-                        Direction::Sink => out.push_str(&format!(
-                            "\n ext{} -> {} [label =\" {}\"];",
-                            i.data().as_ffi(),
-                            self.nodemap[i].data().as_ffi(),
-                            self.edges[i]
-                        )),
-                        Direction::Source => out.push_str(&format!(
-                            "\n {} -> ext{} [label =\" {}\"];",
-                            self.nodemap[i].data().as_ffi(),
-                            i.data().as_ffi(),
-                            self.edges[i]
-                        )),
-                    };
-                }
-                _ => {}
-            }
-        }
-
-        out += "}";
-        out
-    }
-
-    pub fn dot_nodes(&self) -> std::string::String
-    where
-        E: Display,
-        N: Display,
-    {
-        let mut out = "digraph {\n".to_string();
-        out.push_str("  node [shape=circle,height=0.1,label=\"\"];  overlap=\"scale\";");
-
-        for (i, n) in &self.nodes {
-            out.push_str(&format!("\n {} [label=\" {} \"]", i.data().as_ffi(), n));
-        }
-        for (i, _) in &self.neighbors {
-            match i.cmp(&self.involution[i].data) {
-                std::cmp::Ordering::Greater => {
-                    match self.involution[i] {
-                        Invel {
-                            dir: Direction::None,
-                            data,
-                        } => out.push_str(&format!(
-                            "\n {} -> {} [label=\" {} = {}\" dir=none];",
-                            self.nodemap[i].data().as_ffi(),
-                            self.nodemap[self.involution[i].data].data().as_ffi(),
-                            self.edges[data],
-                            self.edges[i]
-                        )),
-                        Invel {
-                            dir: Direction::Sink,
-                            data,
-                        } => out.push_str(&format!(
-                            "\n {} -> {} [label=\" {}={} \" penwidth=2.];",
-                            self.nodemap[self.involution[i].data].data().as_ffi(),
-                            self.nodemap[i].data().as_ffi(),
-                            self.edges[i],
-                            self.edges[data],
-                        )),
-                        Invel {
-                            dir: Direction::Source,
-                            data,
-                        } => out.push_str(&format!(
-                            "\n {} -> {} [label=\" {}={} \" penwidth=2.];",
-                            self.nodemap[i].data().as_ffi(),
-                            self.nodemap[self.involution[i].data].data().as_ffi(),
-                            self.edges[data],
-                            self.edges[i]
-                        )),
-                    };
-                }
-                std::cmp::Ordering::Equal => {
-                    out.push_str(&format!(
-                        " \n ext{} [shape=none, label=\"\"];",
-                        i.data().as_ffi()
-                    ));
-                    match self.involution[i].dir {
-                        Direction::None => out.push_str(&format!(
-                            "\n {} -> ext{} [label =\" {}\" dir=none];",
-                            self.nodemap[i].data().as_ffi(),
-                            i.data().as_ffi(),
-                            self.edges[i]
-                        )),
-                        Direction::Sink => out.push_str(&format!(
-                            "\n ext{} -> {} [label =\" {}\" penwidth=2.];",
-                            i.data().as_ffi(),
-                            self.nodemap[i].data().as_ffi(),
-                            self.edges[i]
-                        )),
-                        Direction::Source => out.push_str(&format!(
-                            "\n {} -> ext{} [label =\" {}\" penwidth=2.];",
-                            self.nodemap[i].data().as_ffi(),
-                            i.data().as_ffi(),
-                            self.edges[i]
-                        )),
-                    };
-                }
-                _ => {}
-            }
-        }
-
-        out += "}";
-        out
-    }
-
-    fn add_node(&mut self, data: N) -> NodeId {
-        self.nodes.insert(data)
-    }
-
-    fn node_indices(&self) -> slotmap::dense::Keys<'_, NodeId, N> {
-        self.nodes.keys()
-    }
-
-    /// Add a node with a list of edget with associated data. Matches edges by equality.
-    fn add_node_with_edges(&mut self, data: N, edges: &[E]) -> NodeId
-    where
-        E: Eq + Clone,
-    {
-        self.add_node_with_edges_fn(data, edges, |e, eo| (*e == *eo, Direction::None))
-    }
-
-    /// Add a node with a list of edget with associated data. Matches edges by equality.
-    fn add_node_with_edges_fn<F>(&mut self, data: N, edges: &[E], f: F) -> NodeId
-    where
-        E: Eq + Clone,
-        F: Fn(&E, &E) -> (bool, Direction),
-    {
-        let idx = self.add_node(data);
-        for e in edges {
-            let mut found_match = false;
-            for (i, other_e) in &self.edges {
-                let (matches, dir) = f(e, other_e);
-                if matches && self.involution[i].data == i {
-                    found_match = true;
-                    let eid = self.edges.insert(e.clone());
-                    self.involution.insert(eid, Invel { dir, data: i });
-                    self.involution.insert(i, Invel { dir, data: eid });
-                    self.nodemap.insert(eid, idx);
-                    if let Some(prev_eid) = self.reverse_nodemap.insert(idx, eid) {
-                        let next_eid = self.neighbors.insert(prev_eid, eid).unwrap();
-                        self.neighbors.insert(eid, next_eid);
-                    } else {
-                        self.neighbors.insert(eid, eid);
-                    }
-                    break;
-                }
-            }
-            if !found_match {
-                let eid = self.edges.insert(e.clone());
-                self.involution.insert(
-                    eid,
-                    Invel {
-                        dir: Direction::None,
-                        data: eid,
-                    },
-                );
-                self.nodemap.insert(eid, idx);
-                if let Some(prev_eid) = self.reverse_nodemap.insert(idx, eid) {
-                    let next_eid = self.neighbors.insert(prev_eid, eid).unwrap();
-                    self.neighbors.insert(eid, next_eid);
-                } else {
-                    self.neighbors.insert(eid, eid);
-                }
-            }
-        }
-
-        idx
-    }
-
-    pub fn validate_neighbors(&self) -> bool {
-        for (i, n) in &self.reverse_nodemap {
-            for j in IncidentIterator::new(self, *n) {
-                if self.nodemap[j] != i {
-                    return false;
-                }
-            }
-        }
-        true
-    }
-
-    fn node_labels(&self) -> String
-    where
-        N: Display,
-    {
-        let mut out = String::new();
-        for (i, n) in &self.nodes {
-            out.push_str(&format!("{}[label= \"{}\"]\n", i.data().as_ffi(), n));
-        }
-        out
-    }
-
-    fn remove_edge(&mut self, edge: HedgeId) {
-        self.edges.remove(edge);
-        self.edges.remove(self.involution[edge].data);
-        self.nodemap.remove(edge);
-        self.nodemap.remove(self.involution[edge].data);
-        self.involution.remove(self.involution[edge].data);
-        self.involution.remove(edge);
-    }
-
-    #[allow(clippy::too_many_lines)]
-    fn merge_nodes(&mut self, a: NodeId, b: NodeId, data: N) -> NodeId {
-        let c = self.nodes.insert(data);
-
-        // New initial edge for reverse_nodemap, that does not link to b
-        // if none is found, all incident edges are link to b and must be removed from the neighbors list
-        let mut new_initial_a = self.edges_incident(a).find(|x| {
-            self.nodemap[self.involution[*x].data] != b && self.involution[*x].data != *x
-        });
-
-        if new_initial_a.is_none() {
-            new_initial_a = self
-                .edges_incident(a)
-                .find(|x| self.nodemap[self.involution[*x].data] != b);
-        }
-
-        if let Some(initial) = new_initial_a {
-            let mut current = Ok(initial);
-
-            while let Ok(cur) = current {
-                let mut next = self.neighbors[cur];
-                while self.nodemap[self.involution[next].data] == b {
-                    next = self.neighbors.remove(next).unwrap();
-                }
-                self.neighbors[cur] = next;
-
-                if next == initial {
-                    current = Err(cur);
-                } else {
-                    current = Ok(next);
-                }
-            }
-        } else {
-            // all edges link to b, and must be removed
-            let initial = self.reverse_nodemap[a];
-            let mut current = Some(initial);
-
-            while let Some(c) = current {
-                let next = self.neighbors.remove(c);
-                // self.remove_edge(c);
-                if next == Some(initial) {
-                    current = None;
-                } else {
-                    current = next;
-                }
-            }
-        }
-
-        let mut new_initial_b = self.edges_incident(b).find(|x| {
-            self.nodemap[self.involution[*x].data] != a && self.involution[*x].data != *x
-        });
-
-        if new_initial_b.is_none() {
-            new_initial_b = self
-                .edges_incident(b)
-                .find(|x| self.nodemap[self.involution[*x].data] != a);
-        }
-
-        let mut edge_leading_to_start_b = None;
-
-        if let Some(initial) = new_initial_b {
-            let mut current = Ok(initial);
-            while let Ok(cur) = current {
-                let mut next = self.neighbors[cur];
-                while self.nodemap[self.involution[next].data] == a {
-                    self.remove_edge(next);
-                    next = self.neighbors.remove(next).unwrap();
-                }
-                self.neighbors[cur] = next;
-
-                if next == initial {
-                    current = Err(cur);
-                } else {
-                    current = Ok(next);
-                }
-            }
-
-            if let Err(cur) = current {
-                edge_leading_to_start_b = Some(cur);
-            }
-        } else {
-            // all edges link to b, and must be removed
-            let initial = self.reverse_nodemap[b];
-            let mut current = Some(initial);
-
-            while let Some(c) = current {
-                let next = self.neighbors.remove(c);
-                self.remove_edge(c);
-                if next == Some(initial) {
-                    current = None;
-                } else {
-                    current = next;
-                }
-            }
-        }
-
-        match (new_initial_a, new_initial_b) {
-            (Some(new_edge_a), Some(new_edge_b)) => {
-                self.reverse_nodemap.insert(c, new_edge_a);
-                self.reverse_nodemap.remove(a);
-                self.reverse_nodemap.remove(b);
-                let old_neig = self.neighbors.insert(new_edge_a, new_edge_b).unwrap();
-                if let Some(next) = edge_leading_to_start_b {
-                    self.neighbors.insert(next, old_neig).unwrap();
-                } else {
-                    self.neighbors.insert(new_edge_b, old_neig);
-                }
-            }
-            (Some(new_edge_a), None) => {
-                self.reverse_nodemap.insert(c, new_edge_a);
-                self.reverse_nodemap.remove(a);
-                self.reverse_nodemap.remove(b);
-            }
-            (None, Some(new_edge_b)) => {
-                self.reverse_nodemap.insert(c, new_edge_b);
-                self.reverse_nodemap.remove(a);
-                self.reverse_nodemap.remove(b);
-            }
-            (None, None) => {
-                self.reverse_nodemap.remove(b);
-                self.reverse_nodemap.remove(a);
-            }
-        }
-
-        if let Some(&init) = self.reverse_nodemap.get(c) {
-            let mut current = Some(init);
-            while let Some(cur) = current {
-                self.nodemap.insert(cur, c);
-                let next = self.neighbors[cur];
-                if next == init {
-                    current = None;
-                } else {
-                    current = Some(next);
-                }
-            }
-        }
-
-        self.nodes.remove(a);
-        self.nodes.remove(b);
-        c
-    }
-
-    /// Add an internal edge between two nodes.
-    fn add_edge(&mut self, a: NodeId, b: NodeId, data: E, dir: Direction) -> HedgeId
-    where
-        E: Clone,
-    {
-        let hedge_id_a = self.edges.insert(data.clone());
-        let hedge_id_b = self.edges.insert(data);
-        self.involution.insert(
-            hedge_id_a,
-            Invel {
-                data: hedge_id_b,
-                dir,
-            },
-        );
-        self.involution.insert(
-            hedge_id_b,
-            Invel {
-                data: hedge_id_a,
-                dir: dir.reverse(),
-            },
-        );
-        self.nodemap.insert(hedge_id_a, a);
-        if let Some(prev_eid) = self.reverse_nodemap.insert(a, hedge_id_a) {
-            let next_eid = self.neighbors.insert(prev_eid, hedge_id_a).unwrap();
-            self.neighbors.insert(hedge_id_a, next_eid);
-        } else {
-            self.neighbors.insert(hedge_id_a, hedge_id_a);
-        }
-        self.nodemap.insert(hedge_id_b, b);
-        if let Some(prev_eid) = self.reverse_nodemap.insert(b, hedge_id_b) {
-            let next_eid = self.neighbors.insert(prev_eid, hedge_id_b).unwrap();
-            self.neighbors.insert(hedge_id_b, next_eid);
-        } else {
-            self.neighbors.insert(hedge_id_b, hedge_id_b);
-        }
-        hedge_id_a
-    }
-
-    /// Add external, as a fixed point involution half edge.
-    fn add_external(&mut self, a: NodeId, data: E, dir: Direction) -> HedgeId {
-        let id = self.edges.insert(data);
-        self.involution.insert(id, Invel { data: id, dir });
-        self.nodemap.insert(id, a);
-        if let Some(prev_eid) = self.reverse_nodemap.insert(a, id) {
-            let next_eid = self.neighbors.insert(prev_eid, id).unwrap();
-            self.neighbors.insert(id, next_eid).unwrap();
-        } else {
-            self.neighbors.insert(id, id);
-        }
-        id
-    }
-
-    fn edges_incident(&self, node: NodeId) -> impl Iterator<Item = HedgeId> + '_ {
-        IncidentIterator::new(self, self.reverse_nodemap[node])
-    }
-
-    fn edges_between(&self, a: NodeId, b: NodeId) -> impl Iterator<Item = HedgeId> + '_ {
-        self.edges_incident(a)
-            .filter(move |&i| self.nodemap[self.involution[i].data] == b)
-    }
-
-    fn internal_edges_incident(&self, node: NodeId) -> impl Iterator<Item = HedgeId> + '_ {
-        self.edges_incident(node)
-            .filter(move |&i| self.nodemap[self.involution[i].data] != node)
-    }
-
-    fn external_edges_incident(&self, node: NodeId) -> impl Iterator<Item = HedgeId> + '_ {
-        self.edges_incident(node)
-            .filter(move |&i| self.nodemap[self.involution[i].data] == node)
-    }
-
-    fn degree(&self, node: NodeId) -> usize {
-        self.edges_incident(node).collect::<Vec<_>>().len()
-    }
-
-    fn neighbors(&self, node: NodeId) -> impl Iterator<Item = NodeId> + '_ {
-        self.edges_incident(node)
-            .map(move |i| self.nodemap[self.involution[i].data])
-    }
-
-    // fn map_nodes<F, U>(&self, f: F) -> HalfEdgeGraph<U, E>
-    // where
-    //     F: Fn(&N) -> U,
-    //     E: Clone,
-    // {
-    //     let edges = self.edges.clone();
-    //     let involution = self.involution.clone();
-
-    //     let mut nodes = DenseSlotMap::with_key();
-    //     let mut nodemap = SecondaryMap::new();
-
-    //     for n in &self.nodes {
-    //         let nid = nodes.insert(f(n.1));
-    //         for e in self.edges_incident(n.0) {
-    //             nodemap.insert(e, nid);
-    //         }
-    //     }
-
-    //     HalfEdgeGraph {
-    //         edges,
-    //         involution,
-    //         nodes,
-    //         nodemap,
-    //     }
-    // }
-}
-
-#[test]
-fn merge() {
-    let mut graph = HalfEdgeGraph::new();
-    let a = graph.add_node_with_edges_fn(1, &[1, -2, 3, 4, 5], |a, b| (*a == -b, Direction::None));
-    let b = graph.add_node_with_edges_fn(2, &[-1, 2, -6, 7, 8], |a, b| (*a == -b, Direction::None));
-    let c =
-        graph.add_node_with_edges_fn(4, &[-4, 6, 9, 10, 11], |a, b| (*a == -b, Direction::None));
-
-    println!("{}", graph.dot());
-    println!("{}", graph.degree(a));
-    println!("{}", graph.degree(b));
-
-    for (i, n) in &graph.neighbors {
-        println!("{} {}", graph.edges[i], graph.edges[*n]);
-    }
-
-    let d = graph.merge_nodes(a, b, 3);
-    // print!("merge");
-
-    // for (i, n) in &graph.neighbors {
-    //     println!("{} {}", graph.edges[i], graph.edges[*n]);
-    // }
-
-    // // println!("{:#?}", graph);
-
-    println!("{}", graph.dot());
-    println!("{}", graph.degree(c));
-    println!("{}", graph.neighbors.len());
-
-    let _e = graph.merge_nodes(c, d, 5);
-
-    println!("{}", graph.dot());
-    println!("neighbors");
-    for (i, n) in &graph.neighbors {
-        println!("{} {}", graph.edges[i], graph.edges[*n]);
-    }
-    println!("edges");
-    for (i, n) in &graph.edges {
-        println!("{:?} {}", i, n);
-    }
-    println!("involution");
-
-    for (i, n) in &graph.involution {
-        println!("{} {}", graph.edges[i], graph.edges[n.data]);
-    }
-    println!("nodemap");
-
-    for (i, n) in &graph.nodemap {
-        println!("{} {}", graph.edges[i], graph.nodes[*n]);
-    }
-    println!("reverse_nodemap");
-
-    for (i, n) in &graph.reverse_nodemap {
-        println!("{} {}", graph.nodes[i], graph.edges[*n]);
-    }
-    println!("nodes");
-
-    for (i, n) in &graph.nodes {
-        println!("{:?} {}", i, n);
-    }
-    // println!("{}", graph.degree(e));
-    // println!("{}", graph.neighbors.len());
-
-    // let mut graph = HalfEdgeGraph::new();
-    // let a = graph.add_node_with_edges("a", &[10, 2, 3]);
-    // let b = graph.add_node_with_edges("b", &[20, 3, 4]);
-    // let c = graph.add_node_with_edges("c", &[30, 4, 2]);
-    // let d = graph.add_node_with_edges("d", &[20]);
-    // let e = graph.add_node_with_edges("e", &[30]);
-
-    // println!("Test {}", graph.dot());
-    // println!("{}", graph.degree(a));
-    // println!("{}", graph.degree(b));
-
-    // for (i, n) in &graph.neighbors {
-    //     println!("{} {}", graph.edges[i], graph.edges[*n]);
-    // }
-
-    // let d = graph.merge_nodes(d, b, "bd");
-
-    // // for (i, n) in &graph.neighbors {
-    // //     println!("{} {}", graph.edges[i], graph.edges[*n]);
-    // // }
-
-    // println!("{}", graph.degree(c));
-    // println!("{}", graph.neighbors.len());
-
-    // println!("{}", graph.dot());
-
-    // let e = graph.merge_nodes(c, e, "ce");
-
-    // if graph.validate_neighbors() {
-    //     println!("valid");
-    // } else {
-    //     println!("invalid");
-    // }
-
-    // println!("{}", graph.dot());
-    // let f = graph.merge_nodes(d, e, "de");
-
-    // if graph.validate_neighbors() {
-    //     println!("valid");
-    // } else {
-    //     println!("invalid");
-    // }
-
-    // println!("{}", graph.dot());
-    // println!("{}", graph.node_labels());
-    // println!("{}", graph.degree(a));
-    // println!("{}", graph.neighbors.len());
-
-    // let g = graph.merge_nodes(a, f, "af");
-
-    // if graph.validate_neighbors() {
-    //     println!("valid");
-    // } else {
-    //     println!("invalid");
-    // }
-
-    // println!("{}", graph.dot());
-    // println!("{}", graph.neighbors.len());
-    // println!("{}", graph.degree(g));
-
-    // println!("{}", graph.degree(b));
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct TensorNetwork<T: TensorStructure, S> {
-    pub graph: HalfEdgeGraph<T, LibrarySlot>,
-    // pub params: AHashSet<Atom>,
-    pub scalar: Option<S>,
-}
-
-impl<T: TensorStructure, S> TensorNetwork<T, S> {
-    pub fn map_scalar<F, U>(self, f: F) -> TensorNetwork<T, U>
-    where
-        F: FnOnce(S) -> U,
-    {
-        TensorNetwork {
-            graph: self.graph,
-            scalar: self.scalar.map(f),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct TensorNetworkSet<T: TensorStructure, S> {
-    pub networks: Vec<TensorNetwork<T, S>>,
-}
-
-impl<T, S> TensorNetworkSet<T, S>
-where
-    T: TensorStructure,
-{
-    pub fn new() -> Self {
-        TensorNetworkSet {
-            networks: vec![],
-            // scalars: vec![],
-        }
-    }
-
-    pub fn push(&mut self, network: TensorNetwork<T, S>) {
-        // self.scalars.push(network.scalar);
-        self.networks.push(network);
-    }
-}
-
-impl<T, S> Default for TensorNetworkSet<T, S>
-where
-    T: TensorStructure,
-{
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(feature = "shadowing")]
-pub type EvalTreeTensorNetworkSet<T, S> = SharedTensorNetworkSet<EvalTree<T>, S>;
-
-#[cfg(feature = "shadowing")]
-pub type EvalTensorNetworkSet<T, S> = SharedTensorNetworkSet<ExpressionEvaluator<T>, S>;
-
-#[cfg(feature = "shadowing")]
-pub type CompiledTensorNetworkSet<S> = SharedTensorNetworkSet<CompiledEvaluator, S>;
-
-#[derive(Debug, Clone)]
-pub struct SharedTensorNetworkSet<D, S: TensorStructure> {
-    pub networks: Vec<HalfEdgeGraph<DataTensor<usize, S>, <S as TensorStructure>::Slot>>,
-    pub shared_data: D,
-    pub len: usize,
-}
-
-impl<'a, T: HasTensorData + GetTensorData<GetDataOwned = T::Data>> TensorNetworkSet<T, T::Data>
-where
-    T: Clone + Contract<LCM = T> + Trace,
-    T::Structure: TensorStructure,
-    T::Data: Clone,
-    // T::GetData<'a>: &'a T::Data,
-{
-    pub fn result(&'a self) -> Result<Vec<T::Data>, TensorNetworkError> {
-        let mut data = vec![];
-        for n in &self.networks {
-            data.push(n.result_scalar()?);
-        }
-        Ok(data)
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<S: TensorStructure + Clone> TensorNetworkSet<ParamTensor<S>, Atom> {
-    pub fn eval_tree(
-        &self,
-        fn_map: &FunctionMap,
-        params: &[Atom],
-    ) -> Result<EvalTreeTensorNetworkSet<Rational, S>>
-    where
-        S: TensorStructure,
-    {
-        let mut networks = vec![];
-
-        let mut atoms = vec![];
-        let mut id = 0;
-
-        let one = Atom::new_num(1);
-
-        for s in self.networks.iter().map(|x| x.scalar.as_ref()) {
-            if let Some(a) = s {
-                atoms.push(a.as_view());
-                // trace!("Scalar is Some {}", a);
-            } else {
-                atoms.push(one.as_view());
-                // trace!("Scalar is None");
-            }
-        }
-
-        id += self.networks.len();
-        for net in &self.networks {
-            let mut usize_net = HalfEdgeGraph::new();
-            for (_, p) in &net.graph.nodes {
-                let structure = p.structure().clone();
-                let usize_tensor = match &p.tensor {
-                    DataTensor::Dense(d) => {
-                        let oldid = id;
-                        id += d.size().unwrap();
-                        for (_, a) in d.flat_iter() {
-                            atoms.push(a.as_view());
-                        }
-                        DataTensor::Dense(DenseTensor::from_data(
-                            Vec::from_iter(oldid..id),
-                            structure,
-                        )?)
-                    }
-                    DataTensor::Sparse(s) => {
-                        let mut t = SparseTensor::empty(structure);
-                        for (i, a) in s.flat_iter() {
-                            t.set_flat(i, id)?;
-                            atoms.push(a.as_view());
-                            id += 1;
-                        }
-                        DataTensor::Sparse(t)
-                    }
-                };
-
-                let slots = usize_tensor.external_structure().to_vec();
-                usize_net.add_node_with_edges_fn(usize_tensor, &slots, |s, so| {
-                    (s.matches(so), Direction::None)
-                });
-            }
-            networks.push(usize_net);
-        }
-
-        Ok(EvalTreeTensorNetworkSet {
-            networks,
-            shared_data: AtomView::to_eval_tree_multiple(&atoms, fn_map, params)
-                .map_err(|s| anyhow!(s))?,
-            len: atoms.len(),
-        })
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<S: Clone + TensorStructure> EvalTreeTensorNetworkSet<Rational, S> {
-    pub fn horner_scheme(&mut self) {
-        self.shared_data.horner_scheme();
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<T, S: TensorStructure + Clone> EvalTreeTensorNetworkSet<T, S> {
-    pub fn map_coeff<T2, F: Fn(&T) -> T2>(&self, f: &F) -> EvalTreeTensorNetworkSet<T2, S>
-    where
-        T: Clone + PartialEq,
-    {
-        EvalTreeTensorNetworkSet {
-            networks: self.networks.clone(),
-            shared_data: self.shared_data.map_coeff(f),
-            len: self.len,
-        }
-        // self.map_data_ref(|x| x.map_coeff(f))
-    }
-
-    pub fn linearize(self, cpe_rounds: Option<usize>) -> EvalTensorNetworkSet<T, S>
-    where
-        T: Clone + Default + PartialEq,
-    {
-        EvalTensorNetworkSet {
-            networks: self.networks,
-            shared_data: self.shared_data.linearize(cpe_rounds),
-            len: self.len,
-        }
-    }
-
-    pub fn common_subexpression_elimination(&mut self)
-    where
-        T: Debug + Hash + Eq + Ord + Clone + Default,
-    {
-        self.shared_data.common_subexpression_elimination()
-    }
-
-    pub fn evaluate(&mut self, params: &[T]) -> TensorNetworkSet<DataTensor<T, S>, T>
-    where
-        T: Real + SingleFloat,
-        S: TensorStructure + Clone,
-    {
-        let zero = params[0].zero();
-        let mut data = vec![zero; self.len];
-
-        let mut networks = vec![];
-
-        self.shared_data.evaluate(params, &mut data);
-
-        let scalars: Vec<Option<T>> = data
-            .iter()
-            .take(self.networks.len())
-            .map(|x| Some(x.clone()))
-            .collect();
-        for (i, net) in self.networks.iter().enumerate() {
-            let mut data_net = HalfEdgeGraph::new();
-            for (_, p) in net.nodes.iter() {
-                let structure = p.structure().clone();
-                let data_tensor = match &p {
-                    DataTensor::Dense(d) => {
-                        let mut t_data = vec![];
-                        for (_, &a) in d.flat_iter() {
-                            t_data.push(data[a].clone());
-                        }
-                        DataTensor::Dense(DenseTensor::from_data(t_data, structure).unwrap())
-                    }
-                    DataTensor::Sparse(s) => {
-                        let mut t = SparseTensor::empty(structure);
-                        for (i, &a) in s.flat_iter() {
-                            t.set_flat(i, data[a].clone()).unwrap();
-                        }
-                        DataTensor::Sparse(t)
-                    }
-                };
-
-                let slots: Vec<_> = data_tensor
-                    .external_structure_iter()
-                    .map(|a| a.to_lib())
-                    .collect();
-                data_net.add_node_with_edges_fn(data_tensor, &slots, |s, so| {
-                    (s.matches(so), Direction::None)
-                });
-            }
-            networks.push(TensorNetwork {
-                graph: data_net,
-                scalar: scalars[i].clone(),
-            });
-        }
-
-        TensorNetworkSet { networks }
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<T, S: TensorStructure + Clone> EvalTensorNetworkSet<T, S> {
-    pub fn evaluate(&mut self, params: &[T]) -> TensorNetworkSet<DataTensor<T, S>, T>
-    where
-        T: Real + SingleFloat,
-        S: TensorStructure + Clone,
-    {
-        let zero = params[0].zero();
-        let mut data = vec![zero; self.len];
-
-        let mut networks = vec![];
-
-        self.shared_data.evaluate(params, &mut data);
-
-        let scalars: Vec<Option<T>> = data
-            .iter()
-            .take(self.networks.len())
-            .map(|x| Some(x.clone()))
-            .collect();
-        for (i, net) in self.networks.iter().enumerate() {
-            let mut data_net = HalfEdgeGraph::new();
-            for (_, p) in net.nodes.iter() {
-                let structure = p.structure().clone();
-                let data_tensor = match &p {
-                    DataTensor::Dense(d) => {
-                        let mut t_data = vec![];
-                        for (_, &a) in d.flat_iter() {
-                            t_data.push(data[a].clone());
-                        }
-                        DataTensor::Dense(DenseTensor::from_data(t_data, structure).unwrap())
-                    }
-                    DataTensor::Sparse(s) => {
-                        let mut t = SparseTensor::empty(structure);
-                        for (i, &a) in s.flat_iter() {
-                            t.set_flat(i, data[a].clone()).unwrap();
-                        }
-                        DataTensor::Sparse(t)
-                    }
-                };
-
-                let slots: Vec<_> = data_tensor
-                    .external_structure_iter()
-                    .map(|a| a.to_lib())
-                    .collect();
-                data_net.add_node_with_edges_fn(data_tensor, &slots, |s, so| {
-                    (s.matches(so), Direction::None)
-                });
-            }
-            networks.push(TensorNetwork {
-                graph: data_net,
-                scalar: scalars[i].clone(),
-            });
-        }
-
-        TensorNetworkSet { networks }
-    }
-
-    /// Create a C++ code representation of the evaluation tree tensor.
-    /// With `inline_asm` set to any value other than `None`,
-    /// high-performance inline ASM code will be generated for most
-    /// evaluation instructions. This often gives better performance than
-    /// the `O3` optimization level and results in very fast compilation.
-    pub fn export_cpp(
-        &self,
-        filename: &str,
-        function_name: &str,
-        include_header: bool,
-        inline_asm: InlineASM,
-    ) -> Result<SharedTensorNetworkSet<ExportedCode, S>, std::io::Error>
-    where
-        T: Display,
-    {
-        Ok(SharedTensorNetworkSet {
-            networks: self.networks.clone(),
-            shared_data: self.shared_data.export_cpp(
-                filename,
-                function_name,
-                include_header,
-                inline_asm,
-            )?,
-            len: self.len,
-        })
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<S: TensorStructure + Clone> SharedTensorNetworkSet<ExportedCode, S> {
-    pub fn compile(
-        &self,
-        out: &str,
-        options: CompileOptions,
-    ) -> Result<SharedTensorNetworkSet<CompiledCode, S>, std::io::Error> {
-        Ok(SharedTensorNetworkSet {
-            networks: self.networks.clone(),
-            shared_data: self.shared_data.compile(out, options)?,
-            len: self.len,
-        })
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<S: TensorStructure + Clone> SharedTensorNetworkSet<CompiledCode, S> {
-    pub fn load(&self) -> Result<SharedTensorNetworkSet<CompiledEvaluator, S>, String> {
-        Ok(SharedTensorNetworkSet {
-            networks: self.networks.clone(),
-            shared_data: self.shared_data.load()?,
-            len: self.len,
-        })
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<S: TensorStructure + Clone> CompiledTensorNetworkSet<S> {
-    pub fn evaluate<T: symbolica::evaluate::CompiledEvaluatorFloat + Default + Clone>(
-        &mut self,
-        params: &[T],
-    ) -> TensorNetworkSet<DataTensor<T, S>, T>
-    where
-        S: TensorStructure + Clone,
-    {
-        let zero = T::default();
-        let mut data = vec![zero; self.len];
-
-        let mut networks = vec![];
-
-        self.shared_data.evaluate(params, &mut data);
-
-        let scalars: Vec<Option<T>> = data
-            .iter()
-            .take(self.networks.len())
-            .map(|x| Some(x.clone()))
-            .collect();
-
-        for (i, net) in self.networks.iter().enumerate() {
-            let mut data_net = HalfEdgeGraph::new();
-            for (_, p) in net.nodes.iter() {
-                let structure = p.structure().clone();
-                let data_tensor = match &p {
-                    DataTensor::Dense(d) => {
-                        let mut t_data = vec![];
-                        for (_, &a) in d.flat_iter() {
-                            t_data.push(data[a].clone());
-                        }
-                        DataTensor::Dense(DenseTensor::from_data(t_data, structure).unwrap())
-                    }
-                    DataTensor::Sparse(s) => {
-                        let mut t = SparseTensor::empty(structure);
-                        for (i, &a) in s.flat_iter() {
-                            t.set_flat(i, data[a].clone()).unwrap();
-                        }
-                        DataTensor::Sparse(t)
-                    }
-                };
-
-                let slots: Vec<_> = data_tensor
-                    .external_structure_iter()
-                    .map(|a| a.to_lib())
-                    .collect();
-                data_net.add_node_with_edges_fn(data_tensor, &slots, |s, so| {
-                    (s.matches(so), Direction::None)
-                });
-            }
-            networks.push(TensorNetwork {
-                graph: data_net,
-                scalar: scalars[i].clone(),
-            });
-        }
-
-        TensorNetworkSet { networks }
-    }
-}
-
-// impl<T: TensorStructure + Serialize, Sc: Serialize> Serialize for TensorNetwork<T, Sc>
-// where
-//     T::Slot: Serialize,
-// {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer,
-//     {
-//         let mut state = serializer.serialize_struct("TensorNetwork", 2)?;
-//         state.serialize_field("graph", &self.graph)?;
-//         state.serialize_field("scalar", &self.scalar)?;
-//         state.end()
-//     }
+// pub type TensorNetwork<T, S, Str: TensorScalarStore<Tensor = T, Scalar = S>, K> = Network<Str, K>;
+
+// pub struct TensorNetwork<
+//     T,
+//     S,
+//     K,
+//     Str: TensorScalarStore<Tensor = T, Scalar = S> = NetworkStore<T, S>,
+// > {
+//     net: Network<Str, K>,
 // }
 
-impl<T: TensorStructure, S> TensorNetwork<T, S> {
-    pub fn scalar_mul(&mut self, scalar: S)
-    where
-        S: FallibleMul<S, Output = S>,
-    {
-        if let Some(ref mut s) = self.scalar {
-            *s = scalar.mul_fallible(s).unwrap();
-        } else {
-            self.scalar = Some(scalar);
-        }
-    }
+pub mod graph;
+pub mod library;
+pub mod set;
+pub mod store;
 
-    pub fn edge_to_min_degree_node(&self) -> Option<HedgeId> {
-        let mut neighs = self.graph.reverse_nodemap.clone();
-        if neighs.is_empty() {
-            return None;
-        }
-
-        let mut all_ext = true;
-
-        for (h, g) in &self.graph.involution {
-            if h != g.data {
-                all_ext = false;
-                break;
-            }
-        }
-
-        if all_ext {
-            return None;
-        }
-
-        loop {
-            for (node, initial) in &mut neighs {
-                *initial = self.graph.neighbors[*initial]; //neighbors is a linked list that is cyclic, here we essentially move all the initial pointers to the next node
-
-                let start = self.graph.reverse_nodemap[node]; // get original start
-
-                if *initial == start {
-                    // first neighborhood to completely cycle
-                    let mut all_ext_in_cycle = false;
-                    while self.graph.involution[*initial].data == *initial && !all_ext_in_cycle {
-                        //loop through the cycle till we find a non self involution i.e. an internal edge
-                        *initial = self.graph.neighbors[*initial];
-                        if *initial == start {
-                            // if we're back at the start then we have cycled through all the edges and they are all external
-                            all_ext_in_cycle = true;
-                        }
-                    }
-                    if !all_ext_in_cycle {
-                        return Some(*initial);
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn to_vec(&self) -> Vec<&T> {
-        self.graph.nodes.values().collect()
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<T, S, Sc: AtomCore> TensorNetwork<MixedTensor<T, S>, Sc>
-where
-    S: Clone + TensorStructure + Debug,
-    T: Clone,
+impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMapping
+    for Network<S, K, Aind>
 {
-    #[cfg(feature = "shadowing")]
-    pub fn to_symbolic_tensor_vec(mut self) -> Vec<ParamTensor<S>> {
-        self.graph
-            .nodes
-            .drain()
-            .flat_map(|(_, n)| n.try_into_parametric()) //filters out all parametric tensors
-            .collect()
+    type Store<U, V> = Network<S::Store<U, V>, K, Aind>;
+    type Scalar = S::Scalar;
+    type Tensor = S::Tensor;
+
+    fn iter_scalars(&self) -> impl Iterator<Item = &Self::Scalar> {
+        self.store.iter_scalars()
     }
 
-    // pub fn evaluate<'a, D>(
-    //     &'a self,
-    //     const_map: &AHashMap<AtomView<'a>, D>,
-    // ) -> TensorNetwork<DataTensor<D, N>>
-    // where
-    //     D: Clone,
-    //     N: Clone + TensorStructure,
-    // {
-    //     // let mut evaluated_net = TensorNetwork::new();
-    //     // for (id,t) in &self.graph.nodes {
-
-    //     //     let evaluated_tensor = match t{
-    //     //         MixedTensor::Complex(t)=> t.into(),
-    //     //         MixedTensor::Symbolic(t)=> t.evaluate(const_map),
-    //     //         MixedTensor::Float(t)=> t.into(),
-    //     //     }
-    //     //     evaluated_net.push(evaluated_tensor);
-    //     // }
-
-    //     // evaluated_net
-    // }
-
-    #[cfg(feature = "shadowing")]
-    pub fn evaluate_real<A: AtomCore + KeyLookup, F: Fn(&Rational) -> T + Copy>(
-        &mut self,
-        coeff_map: F,
-        const_map: &AHashMap<A, T>,
-        function_map: &HashMap<Symbol, EvaluationFn<A, T>>,
-    ) where
-        T: Real + for<'c> From<&'c Rational>,
-    {
-        for (_, n) in &mut self.graph.nodes {
-            n.evaluate_real(coeff_map, const_map, function_map);
-        }
+    fn iter_tensors(&self) -> impl Iterator<Item = &Self::Tensor> {
+        self.store.iter_tensors()
     }
 
-    #[cfg(feature = "shadowing")]
-    pub fn evaluate_complex<A: AtomCore + KeyLookup, F: Fn(&Rational) -> SymComplex<T> + Copy>(
-        &mut self,
-        coeff_map: F,
-        const_map: &AHashMap<A, SymComplex<T>>,
-        function_map: &HashMap<Symbol, EvaluationFn<A, SymComplex<T>>>,
-    ) where
-        T: Real + for<'c> From<&'c Rational>,
-        SymComplex<T>: Real + for<'c> From<&'c Rational>,
-    {
-        for (_, n) in &mut self.graph.nodes {
-            n.evaluate_complex(coeff_map, const_map, function_map);
-        }
+    fn iter_scalars_mut(&mut self) -> impl Iterator<Item = &mut Self::Scalar> {
+        self.store.iter_scalars_mut()
+    }
+    fn iter_tensors_mut(&mut self) -> impl Iterator<Item = &mut Self::Tensor> {
+        self.store.iter_tensors_mut()
     }
 
-    pub fn to_fully_parametric(self) -> TensorNetwork<ParamTensor<S>, Sc>
-    where
-        T: TrySmallestUpgrade<Atom, LCM = Atom>,
-        Complex<T>: TrySmallestUpgrade<Atom, LCM = Atom>,
-    {
-        let mut tensors = vec![];
-
-        for n in self.graph.nodes.values() {
-            tensors.push(match n {
-                MixedTensor::Concrete(RealOrComplexTensor::Real(t)) => {
-                    ParamTensor::composite(t.try_upgrade::<Atom>().unwrap().into_owned())
-                }
-                MixedTensor::Concrete(RealOrComplexTensor::Complex(t)) => {
-                    ParamTensor::composite(t.try_upgrade::<Atom>().unwrap().into_owned())
-                }
-                MixedTensor::Param(t) => t.clone(),
-            });
-        }
-
-        TensorNetwork {
-            graph: TensorNetwork::<ParamTensor<S>, Atom>::generate_network_graph(tensors),
-            // params: AHashSet::new(),
-            scalar: self.scalar,
-        }
-    }
-}
-
-#[cfg(feature = "shadowing")]
-use std::hash::Hash;
-
-#[cfg(feature = "shadowing")]
-impl<P: StorageTensor<Data = Atom>> TensorAtomMaps for TensorNetwork<P, Atom>
-where
-    P::Structure: Clone + TensorStructure,
-{
-    type ContainerData<T> = TensorNetwork<P::ContainerData<T>, T>;
-    type Ref<'a>
-        = &'a Self
-    where
-        Self: 'a;
-
-    // fn replace_all<R: symbolica::id::BorrowPatternOrMap>(
-    //     &self,
-    //     pattern: &Pattern,
-    //     rhs: R,
-    //     conditions: Option<&Condition<PatternRestriction>>,
-    //     settings: Option<&MatchSettings>,
-    // ) -> Self {
-    //     let rhs = rhs.borrow();
-    //     let graph = self
-    //         .graph
-    //         .map_nodes_ref(|(_, a)| a.replace_all(pattern, rhs, conditions, settings));
-    //     TensorNetwork {
-    //         graph,
-    //         scalar: self
-    //             .scalar
-    //             .as_ref()
-    //             .map(|a| a.replace_all(pattern, rhs, conditions, settings)),
-    //     }
-    // }
-    fn replace<'b, Pat: Into<symbolica::utils::BorrowedOrOwned<'b, Pattern>>>(
-        &self,
-        pattern: Pat,
-    ) -> crate::parametric::atomcore::ReplaceBuilderGeneric<'b, Self::Ref<'_>, Self>
-    where
-        Self: Sized,
-    {
-        ReplaceBuilderGeneric::new(self, pattern)
-    }
-
-    fn apart(&self, x: Symbol) -> Self {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.apart(x));
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.apart(x)),
-        }
-    }
-
-    fn cancel(&self) -> Self {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.cancel());
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.cancel()),
-        }
-    }
-
-    fn expand(&self) -> Self {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.expand());
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.expand()),
-        }
-    }
-
-    fn factor(&self) -> Self {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.factor());
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.factor()),
-        }
-    }
-
-    fn nsolve<N: SingleFloat + Real + PartialOrd + Clone>(
-        &self,
-        x: Symbol,
-        init: N,
-        prec: N,
-        max_iterations: usize,
-    ) -> std::result::Result<Self::ContainerData<N>, std::string::String> {
-        let graph = self.graph.map_nodes_ref_result(|(_, a)| {
-            a.nsolve(x, init.clone(), prec.clone(), max_iterations)
-        })?;
-        Ok(TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.nsolve(x, init.clone(), prec.clone(), max_iterations))
-                .transpose()?,
-        })
-    }
-
-    fn series<T: AtomCore>(
-        &self,
-        x: Symbol,
-        expansion_point: T,
-        depth: Rational,
-        depth_is_absolute: bool,
-    ) -> std::result::Result<
-        Self::ContainerData<symbolica::poly::series::Series<symbolica::domains::atom::AtomField>>,
-        &'static str,
-    > {
-        let graph = self.graph.map_nodes_ref_result(|(_, a)| {
-            a.series(
-                x,
-                expansion_point.as_atom_view(),
-                depth.clone(),
-                depth_is_absolute,
-            )
-        })?;
-        Ok(TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| {
-                    a.series(
-                        x,
-                        expansion_point.as_atom_view(),
-                        depth.clone(),
-                        depth_is_absolute,
-                    )
-                })
-                .transpose()?,
-        })
-    }
-
-    fn evaluate<A: AtomCore + KeyLookup, T: Real, F: Fn(&Rational) -> T + Copy>(
-        &self,
-        coeff_map: F,
-        const_map: &HashMap<A, T>,
-        function_map: &HashMap<Symbol, EvaluationFn<A, T>>,
-        // cache: &mut HashMap<AtomView<'b>, T>,
-    ) -> std::result::Result<Self::ContainerData<T>, std::string::String> {
-        let graph = self
-            .graph
-            .map_nodes_ref_result(|(_, a)| a.evaluate(coeff_map, const_map, function_map))?;
-        Ok(TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.evaluate(coeff_map, const_map, function_map))
-                .transpose()?,
-        })
-    }
-
-    fn together(&self) -> Self {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.together());
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.together()),
-        }
-    }
-
-    fn expand_in<T: AtomCore>(&self, var: T) -> Self {
-        let var = var.as_atom_view();
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.expand_in(var));
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.expand_in(var)),
-        }
-    }
-
-    fn map_terms(
-        &self,
-        f: impl Fn(AtomView) -> Atom + Send + Sync + Clone,
-        n_cores: usize,
-    ) -> Self {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.map_terms(f.clone(), n_cores));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.map_terms(f.clone(), n_cores)),
-        }
-    }
-
-    fn zero_test(
-        &self,
-        iterations: usize,
-        tolerance: f64,
-    ) -> Self::ContainerData<symbolica::id::ConditionResult> {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.zero_test(iterations, tolerance));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.zero_test(iterations, tolerance)),
-        }
-    }
-
-    fn derivative(&self, x: Symbol) -> Self {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.derivative(x));
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.derivative(x)),
-        }
-    }
-
-    fn expand_num(&self) -> Self {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.expand_num());
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.expand_num()),
-        }
-    }
-
-    fn to_pattern(&self) -> Self::ContainerData<Pattern> {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.to_pattern());
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.to_pattern()),
-        }
-    }
-
-    fn coefficient<T: AtomCore>(&self, x: T) -> Self {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.coefficient(x.as_atom_view()));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.coefficient(x.as_atom_view())),
-        }
-    }
-
-    fn collect_num(&self) -> Self {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.collect_num());
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.collect_num()),
-        }
-    }
-
-    fn replace_map<F: Fn(AtomView, &symbolica::id::Context, &mut Atom) -> bool>(
-        &self,
-        m: &F,
-    ) -> Self {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.replace_map(m));
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.replace_map(m)),
-        }
-    }
-
-    fn to_polynomial<R: EuclideanDomain + ConvertToRing, E: symbolica::poly::Exponent>(
-        &self,
-        field: &R,
-        var_map: Option<Arc<Vec<Variable>>>,
-    ) -> Self::ContainerData<MultivariatePolynomial<R, E>> {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.to_polynomial(field, var_map.clone()));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.to_polynomial(field, var_map.clone())),
-        }
-    }
-
-    fn expand_via_poly<E: symbolica::poly::Exponent, T: AtomCore>(&self, var: Option<T>) -> Self {
-        let var = var.as_ref().map(|a| a.as_atom_view());
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.expand_via_poly::<E, AtomView>(var));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.expand_via_poly::<E, AtomView>(var)),
-        }
-    }
-
-    fn expand_in_symbol(&self, var: Symbol) -> Self {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.expand_in_symbol(var));
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.expand_in_symbol(var)),
-        }
-    }
-
-    fn map_coefficient<
-        F: Fn(symbolica::coefficient::CoefficientView) -> symbolica::coefficient::Coefficient + Copy,
-    >(
-        &self,
-        f: F,
-    ) -> Self {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.map_coefficient(f));
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.map_coefficient(f)),
-        }
-    }
-
-    fn replace_map_mut<F: Fn(AtomView, &symbolica::id::Context, &mut Atom) -> bool>(
-        &mut self,
-        m: &F,
-    ) {
-        self.graph.map_nodes_mut(|(_, a)| a.replace_map_mut(m));
-        if let Some(a) = self.scalar.as_mut() {
-            a.replace_map_mut(m);
-        }
-    }
-
-    fn to_canonical_string(&self) -> Self::ContainerData<std::string::String> {
-        let graph = self.graph.map_nodes_ref(|(_, a)| a.to_canonical_string());
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.to_canonical_string()),
-        }
-    }
-
-    fn replace_multiple<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.replace_multiple(replacements));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.replace_multiple(replacements)),
-        }
-    }
-
-    fn set_coefficient_ring(&self, vars: &Arc<Vec<Variable>>) -> Self {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.set_coefficient_ring(vars));
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.set_coefficient_ring(vars)),
-        }
-    }
-
-    fn coefficients_to_float(&self, f: u32) -> Self {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.coefficients_to_float(f));
-        TensorNetwork {
-            graph,
-            scalar: self.scalar.as_ref().map(|a| a.coefficients_to_float(f)),
-        }
-    }
-
-    fn map_terms_single_core(&self, f: impl Fn(AtomView) -> Atom + Clone) -> Self {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.map_terms_single_core(f.clone()));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.map_terms_single_core(f.clone())),
-        }
-    }
-
-    fn to_polynomial_in_vars<E: symbolica::poly::Exponent>(
-        &self,
-        var_map: &Arc<Vec<Variable>>,
-    ) -> Self::ContainerData<MultivariatePolynomial<symbolica::domains::atom::AtomField, E>> {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.to_polynomial_in_vars(var_map));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.to_polynomial_in_vars(var_map)),
-        }
-    }
-
-    fn to_rational_polynomial<
-        R: EuclideanDomain + ConvertToRing,
-        RO: EuclideanDomain + PolynomialGCD<E>,
-        E: PositiveExponent,
-    >(
-        &self,
-        field: &R,
-        out_field: &RO,
-        var_map: Option<Arc<Vec<Variable>>>,
-    ) -> Self::ContainerData<RationalPolynomial<RO, E>>
-    where
-        RationalPolynomial<RO, E>:
-            FromNumeratorAndDenominator<R, RO, E> + FromNumeratorAndDenominator<RO, RO, E>,
-    {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.to_rational_polynomial(field, out_field, var_map.clone()));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.to_rational_polynomial(field, out_field, var_map.clone())),
-        }
-    }
-
-    fn rationalize_coefficients(&self, relative_error: &Rational) -> Self {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.rationalize_coefficients(relative_error));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.rationalize_coefficients(relative_error)),
-        }
-    }
-
-    fn replace_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
-        self.graph
-            .map_nodes_mut(|(_, a)| a.replace_multiple_mut(replacements));
-        if let Some(a) = self.scalar.as_mut() {
-            a.replace_multiple_mut(replacements);
-        }
-    }
-
-    fn replace_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self {
-        let graph = self
-            .graph
-            .map_nodes_ref(|(_, a)| a.replace_multiple_repeat(replacements));
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.replace_multiple_repeat(replacements)),
-        }
-    }
-
-    fn replace_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
-        self.graph
-            .map_nodes_mut(|(_, a)| a.replace_multiple_repeat_mut(replacements));
-        if let Some(a) = self.scalar.as_mut() {
-            a.replace_multiple_repeat_mut(replacements);
-        }
-    }
-
-    fn to_factorized_rational_polynomial<
-        R: EuclideanDomain + ConvertToRing,
-        RO: EuclideanDomain + PolynomialGCD<E>,
-        E: PositiveExponent,
-    >(
-        &self,
-        field: &R,
-        out_field: &RO,
-        var_map: Option<Arc<Vec<Variable>>>,
-    ) -> Self::ContainerData<FactorizedRationalPolynomial<RO, E>>
-    where
-        FactorizedRationalPolynomial<RO, E>: FromNumeratorAndFactorizedDenominator<R, RO, E>
-            + FromNumeratorAndFactorizedDenominator<RO, RO, E>,
-        MultivariatePolynomial<RO, E>: Factorize,
-    {
-        let graph = self.graph.map_nodes_ref(|(_, a)| {
-            a.to_factorized_rational_polynomial(field, out_field, var_map.clone())
-        });
-        TensorNetwork {
-            graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| a.to_factorized_rational_polynomial(field, out_field, var_map.clone())),
-        }
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<S: TensorStructure + Clone, Sc: AtomCore> TensorNetwork<ParamTensor<S>, Sc> {
-    pub fn eval_tree(
-        &self,
-        fn_map: &FunctionMap,
-        params: &[Atom],
-    ) -> Result<TensorNetwork<EvalTreeTensor<Rational, S>, EvalTree<Rational>>, String>
-    where
-        S: TensorStructure,
-    {
-        let mut evaluate_net = TensorNetwork::new();
-        for (_, t) in &self.graph.nodes {
-            let evaluated_tensor = t.to_evaluation_tree(fn_map, params)?;
-            evaluate_net.push(evaluated_tensor);
-        }
-
-        evaluate_net.scalar = self
-            .scalar
-            .as_ref()
-            .map(|a| a.to_evaluation_tree(fn_map, params))
-            .transpose()?;
-
-        Ok(evaluate_net)
-    }
-
-    pub fn evaluate<A: AtomCore + KeyLookup, D, F: Fn(&Rational) -> D + Copy>(
-        &self,
-        coeff_map: F,
-        const_map: &AHashMap<A, D>,
-        function_map: &HashMap<Symbol, EvaluationFn<A, D>>,
-    ) -> Result<TensorNetwork<DataTensor<D, S>, D>, String>
-    where
-        D: Clone
-            + symbolica::domains::float::Real
-            + for<'c> std::convert::From<&'c symbolica::domains::rational::Rational>,
-    {
-        let mut evaluated_net = TensorNetwork::new();
-        for (_, t) in &self.graph.nodes {
-            let evaluated_tensor = t.evaluate(coeff_map, const_map, function_map)?;
-            evaluated_net.push(evaluated_tensor);
-        }
-
-        evaluated_net.scalar = if let Some(s) = &self.scalar {
-            Some(s.evaluate(coeff_map, const_map, function_map)?)
-        } else {
-            None
-        };
-
-        Ok(evaluated_net)
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<T, S: TensorStructure> TensorNetwork<EvalTreeTensor<T, S>, EvalTree<T>> {
-    pub fn map_coeff<T2, F: Fn(&T) -> T2>(
-        &self,
-        f: &F,
-    ) -> TensorNetwork<EvalTreeTensor<T2, S>, EvalTree<T2>>
-    where
-        T: Clone + PartialEq,
-        S: Clone,
-    {
-        let new_graph = self.graph.map_nodes_ref(|(_, x)| x.map_coeff(f));
-        TensorNetwork {
-            graph: new_graph,
-            scalar: self.scalar.as_ref().map(|a| a.map_coeff(f)),
-        }
-        // self.map_data_ref(|x| x.map_coeff(f))
-    }
-
-    pub fn linearize(
+    fn map<U, V>(
         self,
-        cpe_rounds: Option<usize>,
-    ) -> TensorNetwork<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>
-    where
-        T: Clone + Default + PartialEq,
-        S: Clone,
-    {
-        let new_graph = self.graph.map_nodes(|(_, x)| x.linearize(cpe_rounds));
-        TensorNetwork {
-            graph: new_graph,
-            scalar: self.scalar.map(|a| a.linearize(cpe_rounds)),
+        scalar_map: impl FnMut(Self::Scalar) -> U,
+        tensor_map: impl FnMut(Self::Tensor) -> V,
+    ) -> Self::Store<V, U> {
+        Network {
+            store: self.store.map(scalar_map, tensor_map),
+            graph: self.graph,
         }
     }
 
-    pub fn common_subexpression_elimination(&mut self)
-    where
-        T: Debug + Hash + Eq + Ord + Clone + Default,
-        S: Clone,
-    {
-        self.graph
-            .map_nodes_mut(|(_, x)| x.common_subexpression_elimination());
-        if let Some(a) = self.scalar.as_mut() {
-            a.common_subexpression_elimination()
-        }
-    }
-
-    pub fn evaluate(&mut self, params: &[T]) -> TensorNetwork<DataTensor<T, S>, T>
-    where
-        T: Real,
-        S: TensorStructure + Clone,
-    {
-        let zero = params[0].zero();
-        let new_graph = self.graph.map_nodes_ref_mut(|(_, x)| x.evaluate(params));
-        TensorNetwork {
-            graph: new_graph,
-            scalar: self.scalar.as_mut().map(|a| {
-                let mut out = [zero];
-                a.evaluate(params, &mut out);
-                let [o] = out;
-                o
-            }),
-        }
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<T, S: TensorStructure>
-    TensorNetwork<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>
-{
-    pub fn evaluate(&mut self, params: &[T]) -> TensorNetwork<DataTensor<T, S>, T>
-    where
-        T: Real,
-        S: TensorStructure + Clone,
-    {
-        let zero = params[0].zero();
-        let new_graph = self.graph.map_nodes_ref_mut(|(_, x)| x.evaluate(params));
-        TensorNetwork {
-            graph: new_graph,
-            scalar: self.scalar.as_mut().map(|a| {
-                let mut out = [zero];
-                a.evaluate(params, &mut out);
-                let [o] = out;
-                o
-            }),
-        }
-    }
-    pub fn export_cpp(
-        &self,
-        filename: &str,
-        function_name: &str,
-        include_header: bool,
-        inline_asm: InlineASM,
-    ) -> Result<
-        TensorNetwork<EvalTensor<SerializableExportedCode, S>, SerializableExportedCode>,
-        TensorNetworkError,
-    >
-    where
-        T: NumericalFloatLike,
-        S: Clone,
-    {
-        // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
-        let new_graph = self.graph.map_nodes_ref_result(|(n, x)| {
-            let function_name = format!("{function_name}_{}", n.data().as_ffi());
-            let filename = format!("{filename}_{}.cpp", n.data().as_ffi());
-            x.export_cpp(&filename, &function_name, include_header, inline_asm)
-        })?;
-        let function_name = format!("{function_name}_scalar");
-        let filename = format!("{filename}_scalar.cpp");
-
-        let exported_scalar = if let Some(ref s) = self.scalar {
-            Some(SerializableExportedCode::export_cpp(
-                s,
-                &filename,
-                &function_name,
-                include_header,
-                inline_asm,
-            )?)
-        } else {
-            None
-        };
-
-        Ok(TensorNetwork {
-            graph: new_graph,
-            scalar: exported_scalar,
-        })
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<S: TensorStructure>
-    TensorNetwork<EvalTensor<SerializableExportedCode, S>, SerializableExportedCode>
-{
-    pub fn compile(
-        &self,
-        out: &str,
-        options: CompileOptions,
-    ) -> Result<
-        TensorNetwork<EvalTensor<SerializableCompiledCode, S>, SerializableCompiledCode>,
-        TensorNetworkError,
-    >
-    where
-        S: Clone,
-    {
-        let new_graph = self
-            .graph
-            .map_nodes_ref_result(|(_, x)| x.compile(out, options.clone()))?;
-        let exported_scalar = if let Some(ref s) = self.scalar {
-            Some(s.compile(out, options.clone())?)
-        } else {
-            None
-        };
-        Ok(TensorNetwork {
-            graph: new_graph,
-            scalar: exported_scalar,
+    fn map_result<U, V, Er>(
+        self,
+        scalar_map: impl FnMut(Self::Scalar) -> Result<U, Er>,
+        tensor_map: impl FnMut(Self::Tensor) -> Result<V, Er>,
+    ) -> Result<Self::Store<V, U>, Er> {
+        Ok(Network {
+            store: self.store.map_result(scalar_map, tensor_map)?,
+            graph: self.graph,
         })
     }
 
-    pub fn compile_and_load(
-        &self,
-        out: &str,
-        options: CompileOptions,
-    ) -> Result<
-        TensorNetwork<EvalTensor<SerializableCompiledEvaluator, S>, SerializableCompiledEvaluator>,
-        TensorNetworkError,
-    >
-    where
-        S: Clone,
-    {
-        let new_graph = self.graph.map_nodes_ref_result(|(_, x)| {
-            x.compile(out, options.clone())?
-                .load()
-                .map_err(|s| TensorNetworkError::Other(anyhow!(s)))
-        })?;
-        let exported_scalar = if let Some(ref s) = self.scalar {
-            Some(
-                s.compile(out, options.clone())?
-                    .load()
-                    .map_err(|s| TensorNetworkError::Other(anyhow!(s)))?,
-            )
-        } else {
-            None
-        };
-        Ok(TensorNetwork {
-            graph: new_graph,
-            scalar: exported_scalar,
-        })
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<S: TensorStructure> TensorNetwork<CompiledEvalTensor<S>, SerializableCompiledEvaluator> {
-    pub fn evaluate_float(&mut self, params: &[f64]) -> TensorNetwork<DataTensor<f64, S>, f64>
-    where
-        S: TensorStructure + Clone,
-    {
-        let zero = params[0].zero();
-        let new_graph = self
-            .graph
-            .map_nodes_ref_mut(|(_, x)| x.evaluate_float(params));
-        TensorNetwork {
-            graph: new_graph,
-            scalar: self.scalar.as_mut().map(|a| {
-                let mut out = [zero];
-                a.evaluate(params, &mut out);
-                let [o] = out;
-                o
-            }),
+    fn map_ref<'a, U, V>(
+        &'a self,
+        scalar_map: impl FnMut(&'a Self::Scalar) -> U,
+        tensor_map: impl FnMut(&'a Self::Tensor) -> V,
+    ) -> Self::Store<V, U> {
+        Network {
+            store: self.store.map_ref(scalar_map, tensor_map),
+            graph: self.graph.clone(),
         }
     }
 
-    pub fn evaluate_complex(
+    fn map_ref_result<U, V, Er>(
+        &self,
+        scalar_map: impl FnMut(&Self::Scalar) -> Result<U, Er>,
+        tensor_map: impl FnMut(&Self::Tensor) -> Result<V, Er>,
+    ) -> Result<Self::Store<V, U>, Er> {
+        Ok(Network {
+            store: self.store.map_ref_result(scalar_map, tensor_map)?,
+            graph: self.graph.clone(),
+        })
+    }
+
+    fn map_ref_enumerate<U, V>(
+        &self,
+        scalar_map: impl FnMut((usize, &Self::Scalar)) -> U,
+        tensor_map: impl FnMut((usize, &Self::Tensor)) -> V,
+    ) -> Self::Store<V, U> {
+        Network {
+            store: self.store.map_ref_enumerate(scalar_map, tensor_map),
+            graph: self.graph.clone(),
+        }
+    }
+
+    fn map_ref_result_enumerate<U, V, Er>(
+        &self,
+        scalar_map: impl FnMut((usize, &Self::Scalar)) -> Result<U, Er>,
+        tensor_map: impl FnMut((usize, &Self::Tensor)) -> Result<V, Er>,
+    ) -> Result<Self::Store<V, U>, Er> {
+        Ok(Network {
+            store: self
+                .store
+                .map_ref_result_enumerate(scalar_map, tensor_map)?,
+            graph: self.graph.clone(),
+        })
+    }
+
+    fn map_ref_mut<U, V>(
         &mut self,
-        params: &[SymComplex<f64>],
-    ) -> TensorNetwork<DataTensor<SymComplex<f64>, S>, SymComplex<f64>>
-    where
-        S: TensorStructure + Clone,
-    {
-        let zero = params[0].zero();
-        let new_graph = self
-            .graph
-            .map_nodes_ref_mut(|(_, x)| x.evaluate_complex(params));
-        TensorNetwork {
-            graph: new_graph,
-            scalar: self.scalar.as_mut().map(|a| {
-                let mut out = [zero];
-                a.evaluate_complex(params, &mut out);
-                let [o] = out;
-                o
-            }),
+        scalar_map: impl FnMut(&mut Self::Scalar) -> U,
+        tensor_map: impl FnMut(&mut Self::Tensor) -> V,
+    ) -> Self::Store<V, U> {
+        Network {
+            store: self.store.map_ref_mut(scalar_map, tensor_map),
+            graph: self.graph.clone(),
         }
     }
 
-    pub fn evaluate<T: symbolica::evaluate::CompiledEvaluatorFloat + Default + Clone>(
+    fn map_ref_mut_result<U, V, Er>(
         &mut self,
-        params: &[T],
-    ) -> TensorNetwork<DataTensor<T, S>, T>
-    where
-        S: TensorStructure + Clone,
-    {
-        let zero = T::default();
-        let new_graph = self.graph.map_nodes_ref_mut(|(_, x)| x.evaluate(params));
-        TensorNetwork {
-            graph: new_graph,
-            scalar: self.scalar.as_mut().map(|a| {
-                let mut out = [zero];
-                a.evaluate(params, &mut out);
-                let [o] = out;
-                o
-            }),
+        scalar_map: impl FnMut(&mut Self::Scalar) -> Result<U, Er>,
+        tensor_map: impl FnMut(&mut Self::Tensor) -> Result<V, Er>,
+    ) -> Result<Self::Store<V, U>, Er> {
+        Ok(Network {
+            store: self.store.map_ref_mut_result(scalar_map, tensor_map)?,
+            graph: self.graph.clone(),
+        })
+    }
+
+    fn map_ref_mut_enumerate<U, V>(
+        &mut self,
+        scalar_map: impl FnMut((usize, &mut Self::Scalar)) -> U,
+        tensor_map: impl FnMut((usize, &mut Self::Tensor)) -> V,
+    ) -> Self::Store<V, U> {
+        Network {
+            store: self.store.map_ref_mut_enumerate(scalar_map, tensor_map),
+            graph: self.graph.clone(),
         }
+    }
+
+    fn map_ref_mut_result_enumerate<U, V, Er>(
+        &mut self,
+        scalar_map: impl FnMut((usize, &mut Self::Scalar)) -> Result<U, Er>,
+        tensor_map: impl FnMut((usize, &mut Self::Tensor)) -> Result<V, Er>,
+    ) -> Result<Self::Store<V, U>, Er> {
+        Ok(Network {
+            store: self
+                .store
+                .map_ref_mut_result_enumerate(scalar_map, tensor_map)?,
+            graph: self.graph.clone(),
+        })
     }
 }
 
-#[cfg(feature = "shadowing")]
-impl<S: Clone + TensorStructure> TensorNetwork<EvalTreeTensor<Rational, S>, EvalTree<Rational>> {
-    pub fn horner_scheme(&mut self) {
-        self.graph.map_nodes_mut(|(_, x)| x.horner_scheme());
-        if let Some(a) = self.scalar.as_mut() {
-            a.horner_scheme()
-        }
-    }
-}
-
-impl<T, S> From<Vec<T>> for TensorNetwork<T, S>
-where
-    T: HasStructure,
-    T::Structure: TensorStructure,
-{
-    fn from(tensors: Vec<T>) -> Self {
-        TensorNetwork {
-            graph: Self::generate_network_graph(tensors),
-            // params: AHashSet::new(),
-            scalar: None,
-        }
-    }
-}
-
-impl<T> Default for TensorNetwork<T, T::Scalar>
-where
-    T: HasStructure,
-    T::Structure: TensorStructure,
-{
+impl<S: TensorScalarStore, K, Aind: AbsInd> Default for Network<S, K, Aind> {
     fn default() -> Self {
-        Self::new()
+        Self::one()
     }
 }
 
-impl<T, S> TensorNetwork<T, S>
+impl<S: TensorScalarStore, K, Aind: AbsInd> NMul for Network<S, K, Aind> {
+    type Output = Self;
+    fn n_mul<I: IntoIterator<Item = Self>>(self, iter: I) -> Self::Output {
+        let mut store = self.store;
+        let items = iter.into_iter().map(|mut a| {
+            a.graph.shift_scalars(store.n_scalars());
+            a.graph.shift_tensors(store.n_tensors());
+            store.extend(a.store);
+            a.graph
+        });
+
+        Network {
+            graph: self.graph.n_mul(items),
+            store,
+        }
+    }
+}
+
+impl<S: TensorScalarStore, K, Aind: AbsInd> Mul for Network<S, K, Aind> {
+    type Output = Self;
+    fn mul(self, mut other: Self) -> Self::Output {
+        let mut store = self.store;
+
+        other.graph.shift_scalars(store.n_scalars());
+        other.graph.shift_tensors(store.n_tensors());
+        store.extend(other.store);
+
+        Network {
+            graph: self.graph * other.graph,
+            store,
+        }
+    }
+}
+
+impl<S: TensorScalarStore, K, Aind: AbsInd> MulAssign for Network<S, K, Aind> {
+    fn mul_assign(&mut self, mut rhs: Self) {
+        rhs.graph.shift_scalars(self.store.n_scalars());
+        rhs.graph.shift_tensors(self.store.n_tensors());
+        self.store.extend(rhs.store);
+
+        self.graph *= rhs.graph;
+    }
+}
+
+impl<T: TensorStructure, S, K, Aind: AbsInd> MulAssign<T> for Network<NetworkStore<T, S>, K, Aind>
 where
-    T: HasStructure,
-    T::Structure: TensorStructure,
+    T::Slot: IsAbstractSlot<Aind = Aind>,
 {
-    pub fn new() -> Self {
-        TensorNetwork {
-            graph: HalfEdgeGraph::new(),
-            // params: AHashSet::new(),
-            scalar: None,
+    fn mul_assign(&mut self, rhs: T) {
+        *self *= Network::from_tensor(rhs);
+    }
+}
+
+impl<T: TensorStructure, S, K, Aind: AbsInd> Mul<T> for Network<NetworkStore<T, S>, K, Aind>
+where
+    T::Slot: IsAbstractSlot<Aind = Aind>,
+{
+    type Output = Self;
+    fn mul(self, other: T) -> Self::Output {
+        let mut store = self.store;
+
+        let mut other = Network::from_tensor(other);
+
+        other.graph.shift_scalars(store.n_scalars());
+        other.graph.shift_tensors(store.n_tensors());
+        store.extend(other.store);
+
+        Network {
+            graph: self.graph * other.graph,
+            store,
+        }
+    }
+}
+
+impl<S: TensorScalarStore, K, Aind: AbsInd> Add for Network<S, K, Aind> {
+    type Output = Self;
+    fn add(self, mut other: Self) -> Self::Output {
+        let mut store = self.store;
+
+        other.graph.shift_scalars(store.n_scalars());
+        other.graph.shift_tensors(store.n_tensors());
+        store.extend(other.store);
+
+        Network {
+            graph: self.graph + other.graph,
+            store,
+        }
+    }
+}
+
+impl<S: TensorScalarStore, K, Aind: AbsInd> AddAssign for Network<S, K, Aind> {
+    fn add_assign(&mut self, mut rhs: Self) {
+        rhs.graph.shift_scalars(self.store.n_scalars());
+        rhs.graph.shift_tensors(self.store.n_tensors());
+        self.store.extend(rhs.store);
+
+        self.graph += rhs.graph;
+    }
+}
+
+impl<T: TensorStructure, S, K, Aind: AbsInd> AddAssign<T> for Network<NetworkStore<T, S>, K, Aind>
+where
+    T::Slot: IsAbstractSlot<Aind = Aind>,
+{
+    fn add_assign(&mut self, rhs: T) {
+        *self += Network::from_tensor(rhs);
+    }
+}
+
+impl<T: TensorStructure, S, K, Aind: AbsInd> Add<T> for Network<NetworkStore<T, S>, K, Aind>
+where
+    T::Slot: IsAbstractSlot<Aind = Aind>,
+{
+    type Output = Self;
+    fn add(mut self, other: T) -> Self::Output {
+        self += other;
+        self
+    }
+}
+
+impl<T: TensorStructure, K, Aind: AbsInd> Add<i8> for Network<NetworkStore<T, i8>, K, Aind>
+where
+    T::Slot: IsAbstractSlot<Aind = Aind>,
+{
+    type Output = Self;
+    fn add(mut self, other: i8) -> Self::Output {
+        let mut other = Network::from_scalar(other);
+        other.graph.shift_tensors(self.store.n_tensors());
+        other.graph.shift_tensors(self.store.n_tensors());
+
+        self.store.extend(other.store);
+        Network {
+            graph: self.graph + other.graph,
+            store: self.store,
+        }
+    }
+}
+
+impl<S: TensorScalarStore, K, Aind: AbsInd> NAdd for Network<S, K, Aind> {
+    type Output = Self;
+    fn n_add<I: IntoIterator<Item = Self>>(self, iter: I) -> Self::Output {
+        let mut store = self.store;
+
+        let items = iter.into_iter().map(|mut a| {
+            a.graph.shift_scalars(store.n_scalars());
+            a.graph.shift_tensors(store.n_tensors());
+            store.extend(a.store);
+            a.graph
+        });
+
+        Network {
+            graph: self.graph.n_add(items),
+            store,
+        }
+    }
+}
+
+impl<S: TensorScalarStore, K: Clone, Aind: AbsInd> Neg for Network<S, K, Aind> {
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        Self {
+            store: self.store,
+            graph: self.graph.neg(),
+        }
+    }
+}
+
+impl<S: TensorScalarStore, K: Clone, Aind: AbsInd> Sub for Network<S, K, Aind> {
+    type Output = Self;
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl<S: TensorScalarStore, K: Clone, Aind: AbsInd> SubAssign for Network<S, K, Aind> {
+    fn sub_assign(&mut self, mut rhs: Self) {
+        rhs.graph.shift_scalars(self.store.n_scalars());
+        rhs.graph.shift_tensors(self.store.n_tensors());
+        self.store.extend(rhs.store);
+
+        self.graph -= rhs.graph
+    }
+}
+
+impl<T: TensorStructure, S, K: Clone, Aind: AbsInd> SubAssign<T>
+    for Network<NetworkStore<T, S>, K, Aind>
+where
+    T::Slot: IsAbstractSlot<Aind = Aind>,
+{
+    fn sub_assign(&mut self, rhs: T) {
+        *self -= Network::from_tensor(rhs)
+    }
+}
+
+impl<T: TensorStructure, S, K: Clone, Aind: AbsInd> Sub<T> for Network<NetworkStore<T, S>, K, Aind>
+where
+    T::Slot: IsAbstractSlot<Aind = Aind>,
+{
+    type Output = Self;
+    fn sub(mut self, other: T) -> Self::Output {
+        self -= other;
+        self
+    }
+}
+
+impl<S: TensorScalarStore, K, Aind: AbsInd> Network<S, K, Aind> {
+    pub fn from_scalar(scalar: S::Scalar) -> Self {
+        let mut store = S::default();
+        let id = store.add_scalar(scalar);
+        Network {
+            graph: NetworkGraph::scalar(id),
+            store,
         }
     }
 
-    pub fn push(&mut self, tensor: T) -> NodeId {
-        let slots: Vec<_> = tensor
-            .external_structure_iter()
-            .map(|a| a.to_lib())
-            .collect();
-        self.graph
-            .add_node_with_edges_fn(tensor, &slots, |s, so| (s.matches(so), Direction::None))
-    }
-
-    fn generate_network_graph(tensors: Vec<T>) -> HalfEdgeGraph<T, LibrarySlot> {
-        let mut graph = HalfEdgeGraph::<T, _>::new();
-
-        for tensor in tensors {
-            let slots: Vec<LibrarySlot> = tensor
-                .external_structure_iter()
-                .map(|a| a.to_lib())
-                .collect();
-            graph.add_node_with_edges_fn(tensor, &slots, |s, so| (s.matches(so), Direction::None));
-        }
-
-        graph
-    }
-
-    pub fn edge_to_min_degree_node_with_depth(&self, depth: usize) -> Option<HedgeId>
+    pub fn merge_ops(&mut self)
     where
-        T: TracksCount,
+        K: Clone,
     {
-        let mut neighs: SecondaryMap<NodeId, HedgeId> = self
-            .graph
-            .reverse_nodemap
-            .clone()
-            .into_iter()
-            .filter(|(n, _e)| self.graph.nodes[*n].contractions_num() < depth)
-            .collect();
-        if neighs.is_empty() {
-            return None;
+        self.graph.merge_ops();
+    }
+
+    pub fn from_tensor(tensor: S::Tensor) -> Self
+    where
+        S::Tensor: TensorStructure,
+        <S::Tensor as TensorStructure>::Slot: IsAbstractSlot<Aind = Aind>,
+    {
+        let mut store = S::default();
+        let id = store.add_tensor(tensor);
+        Network {
+            graph: NetworkGraph::tensor(store.get_tensor(id), NetworkLeaf::LocalTensor(id)),
+            store,
         }
+    }
 
-        loop {
-            let mut all_ext = true;
-            for (node, initial) in &mut neighs {
-                *initial = self.graph.neighbors[*initial];
-                let start = self.graph.reverse_nodemap[node];
+    pub fn library_tensor<T>(tensor: &T, key: PermutedStructure<K>) -> Self
+    where
+        T: TensorStructure,
+        T::Slot: IsAbstractSlot<Aind = Aind>,
+    {
+        Network {
+            graph: NetworkGraph::tensor(tensor, NetworkLeaf::LibraryKey(key)),
+            store: S::default(),
+        }
+    }
 
-                if self.graph.involution[start].data != start
-                    && self.graph.nodes[self.graph.nodemap[self.graph.involution[start].data]]
-                        .contractions_num()
-                        < depth
-                {
-                    all_ext = false;
-                    if *initial == start {
-                        return Some(start);
-                    }
-                }
-            }
-            if all_ext {
-                return None;
-            }
+    pub fn one() -> Self {
+        Network {
+            graph: NetworkGraph::one(),
+            store: S::default(),
+        }
+    }
+
+    pub fn zero() -> Self {
+        Network {
+            graph: NetworkGraph::zero(),
+            store: S::default(),
         }
     }
 }
-impl<T: HasTensorData + GetTensorData<GetDataOwned = T::Data>> TensorNetwork<T, T::Data>
-where
-    T: Clone + Contract<LCM = T> + Trace,
-    T::Structure: TensorStructure,
-    T::Data: Clone,
-{
-    pub fn result_scalar(&self) -> Result<T::Data, TensorNetworkError> {
-        match self.graph.nodes.len() {
-            0 => self
-                .scalar
-                .clone()
-                .ok_or(TensorNetworkError::ScalarFieldEmpty),
-            1 => {
-                let t = self.result()?.0;
-                if t.is_scalar() {
-                    Ok(t.get_owned_linear(0.into()).unwrap())
-                } else {
-                    Err(TensorNetworkError::NotScalarOutput)
-                }
-            }
-            _ => Err(TensorNetworkError::MoreThanOneNode),
-        }
-    }
-}
-
-use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum TensorNetworkError {
+pub enum TensorNetworkError<K: Display> {
+    #[error("Slot edge to prod node")]
+    SlotEdgeToProdNode,
+    #[error("Slot edge to scalar node")]
+    SlotEdgeToScalarNode,
+    #[error("More than one neg")]
+    MoreThanOneNeg,
+    #[error("Childless neg")]
+    ChildlessNeg,
+    #[error("Contraction Error:{0}")]
+    ContractionError(#[from] ContractionError),
+    #[error("Scalar connected by a slot edge")]
+    ScalarSlotEdge,
+    #[error("Structure Error:{0}")]
+    StructErr(#[from] StructureError),
+    #[error("LibraryError:{0}")]
+    LibErr(#[from] LibraryError<K>),
+    #[error("Non tensor node still present")]
+    NonTensorNodePresent,
+    #[error("invalid resulting node(0)")]
+    InvalidResultNode(NetworkNode<()>),
     #[error("internal edge still present, contract it first")]
     InternalEdgePresent,
-    #[error("Cannot contract edge")]
-    CannotContractEdge,
+    #[error("uncontracted scalar")]
+    UncontractedScalar,
+    #[error("Cannot contract edge between {0} and {1}")]
+    CannotContractEdgeBetween(NetworkNode<K>, NetworkNode<K>),
     #[error("no nodes in the graph")]
     NoNodes,
     #[error("no scalar present")]
@@ -2534,6 +504,10 @@ pub enum TensorNetworkError {
     ScalarFieldEmpty,
     #[error("not all scalars: {0}")]
     NotAllScalars(String),
+    #[error("try to sum scalar with library tensor: {0}")]
+    ScalarLibSum(String),
+    #[error("try to sum scalar with a tensor: {0}")]
+    SumScalarTensor(String),
     #[error("failed to contract")]
     FailedContract(ContractionError),
     #[error("negative exponent not yet supported")]
@@ -2548,855 +522,1073 @@ pub enum TensorNetworkError {
     Infallible,
 }
 
-impl From<Infallible> for TensorNetworkError {
+impl<K: Display> From<Infallible> for TensorNetworkError<K> {
     fn from(_: Infallible) -> Self {
         TensorNetworkError::Infallible
     }
 }
 
-impl<T, S> TensorNetwork<T, S>
-where
-    S: Clone,
-    T: Clone + TensorStructure + Contract<LCM = T> + Trace,
-{
-    pub fn result(&self) -> Result<(T, Option<S>), TensorNetworkError> {
-        if self.graph.involution.iter().any(|(ni, i)| ni != i.data) {
-            Err(TensorNetworkError::InternalEdgePresent)
-        } else {
-            let mut iter = self.graph.nodes.iter();
+pub enum TensorOrScalarOrKey<T, S, K, Aind> {
+    Tensor {
+        tensor: T,
+        graph_slots: Vec<LibrarySlot<Aind>>,
+    },
+    Scalar(S),
+    Key {
+        key: K,
+        nodeid: NodeIndex,
+    },
+}
 
-            if let Some((_, t)) = iter.next() {
-                let mut res = t.internal_contract();
-                for (_, t) in iter {
-                    res = res
-                        .contract(&t.internal_contract())
-                        .map_err(TensorNetworkError::FailedContract)?;
-                }
-                Ok((res, self.scalar.clone()))
-            } else {
-                Err(TensorNetworkError::NoNodes)
-            }
+pub enum ExecutionResult<T> {
+    One,
+    Zero,
+    Val(T),
+}
+impl<T: Display> Display for ExecutionResult<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExecutionResult::One => write!(f, "One"),
+            ExecutionResult::Zero => write!(f, "Zero"),
+            ExecutionResult::Val(val) => write!(f, "{}", val),
         }
     }
 }
 
-impl<T, S: Clone> TensorNetwork<T, S>
-where
-    T: Clone
-        + TensorStructure
-        + HasStructure<Scalar: From<S>>
-        + ScalarTensor
-        + Contract<LCM = T>
-        + Trace
-        + ScalarMul<S, Output = T>,
-{
-    pub fn result_tensor_smart(&self) -> Result<T, TensorNetworkError> {
-        match self.result() {
-            Err(TensorNetworkError::NoNodes) => {
-                let s = self
-                    .scalar
-                    .as_ref()
-                    .ok_or(TensorNetworkError::NoScalar)?
-                    .clone();
-                Ok(T::new_scalar(s.into()))
-            }
-            Ok((t, s)) => {
-                if let Some(s) = s {
-                    Ok(t.scalar_mul(&s).unwrap())
-                } else {
-                    Ok(t)
-                }
-            }
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl<T, S> TensorNetwork<T, S>
-where
-    T: Clone + TensorStructure,
-{
-    pub fn result_tensor_ref(&self) -> Result<&T, TensorNetworkError> {
-        match self.graph.nodes.len() {
-            0 => Err(TensorNetworkError::NoNodes),
-            1 => Ok(self.graph.nodes.iter().next().unwrap().1),
-            _ => Err(TensorNetworkError::MoreThanOneNode),
-        }
-    }
-
-    pub fn rich_graph(&self) -> HalfEdgeGraph<std::string::String, DisplayOption<LibrarySlot>>
-    where
-        T: HasName<Name: Display>,
-    {
-        let mut rich = HalfEdgeGraph::new();
-        let mut node_links = AHashMap::new();
-
-        for (i, n) in &self.graph.edges {
-            let node = self.graph.nodemap[i];
-            let name = if let Some(n) = self.graph.nodes[node].name() {
-                n.to_string()
-            } else {
-                format!("node{}", i.data().as_ffi())
-            };
-
-            let id =
-                rich.add_node_with_edges_fn(name, &[DisplayOption::Some(*n)], |s, so| {
-                    match (s, so) {
-                        (DisplayOption::Some(s), DisplayOption::Some(so)) => {
-                            (s.matches(so), Direction::None)
-                        }
-                        _ => (false, Direction::None),
-                    }
-                });
-            node_links.entry(node).or_insert(Vec::new()).push(id);
-        }
-
-        for v in node_links.values() {
-            for w in v.as_slice().windows(2) {
-                if let [source, sink] = w {
-                    rich.add_edge(*source, *sink, DisplayOption::None, Direction::Source);
-                }
-            }
-        }
-        rich
-    }
-}
-
-impl<T: TensorStructure<Slot: Serialize + for<'a> Deserialize<'a> + Display>, S>
-    TensorNetwork<T, S>
-{
-    pub fn dot(&self) -> std::string::String {
-        self.graph.dot()
-    }
-}
-
-#[cfg(feature = "shadowing")]
 impl<
-        T: HasName<Name: IntoSymbol>
-            + TensorStructure<Slot: Serialize + for<'a> Deserialize<'a> + Display>,
+        T: TensorStructure,
         S,
-    > TensorNetwork<T, S>
-{
-    pub fn dot_nodes(&self) -> std::string::String {
-        let mut out = "graph {\n".to_string();
-        out.push_str("  node [shape=circle,height=0.1,label=\"\"];  overlap=\"scale\";");
-
-        for (i, n) in &self.graph.nodes {
-            out.push_str(&format!(
-                "\n {} [label=\"{}\"] ",
-                i.data().as_ffi(),
-                n.name()
-                    .map(|x| x.ref_into_symbol().to_string())
-                    .unwrap_or("".into())
-            ));
-        }
-        for (i, _) in &self.graph.neighbors {
-            match i.cmp(&self.graph.involution[i].data) {
-                std::cmp::Ordering::Greater => {
-                    out.push_str(&format!(
-                        "\n {} -- {} [label=\" {} \"];",
-                        self.graph.nodemap[i].data().as_ffi(),
-                        self.graph.nodemap[self.graph.involution[i].data]
-                            .data()
-                            .as_ffi(),
-                        self.graph.edges[i]
-                    ));
-                }
-                std::cmp::Ordering::Equal => {
-                    out.push_str(&format!(
-                        " \n ext{} [shape=none, label=\"\"];",
-                        i.data().as_ffi()
-                    ));
-                    out.push_str(&format!(
-                        "\n {} -- ext{} [label =\" {}\"];",
-                        self.graph.nodemap[i].data().as_ffi(),
-                        i.data().as_ffi(),
-                        self.graph.edges[i]
-                    ));
-                }
-                _ => {}
-            }
-        }
-
-        out += "}";
-        out
-    }
-}
-
-#[cfg(feature = "shadowing")]
-impl<T, S> TensorNetwork<MixedTensor<T, S>, SerializableAtom>
+        K: Display,
+        Str: TensorScalarStore<Tensor = T, Scalar = S>,
+        Aind: AbsInd,
+    > Network<Str, K, Aind>
 where
-    S: TensorStructure + Clone,
-    T: Clone,
+    T::Slot: IsAbstractSlot<Aind = Aind>,
 {
-    pub fn replace<'b, P: Into<BorrowedOrOwned<'b, Pattern>>>(
+    #[allow(clippy::result_large_err, clippy::type_complexity)]
+    pub fn result(
         &self,
-        pattern: P,
-    ) -> ReplaceBuilderGeneric<'b, &'_ Self, Self> {
-        ReplaceBuilderGeneric::new(self, pattern)
-    }
+    ) -> Result<
+        ExecutionResult<TensorOrScalarOrKey<&T, &S, &PermutedStructure<K>, Aind>>,
+        TensorNetworkError<K>,
+    > {
+        let (node, nid, graph_slots) = self.graph.result()?;
 
-    pub fn replace_multiple<R: BorrowReplacement>(&self, replacements: &[R]) -> Self {
-        let new_graph = self
-            .graph
-            .map_nodes_ref(|(_, t)| t.replace_multiple(replacements));
-        TensorNetwork {
-            graph: new_graph,
-            scalar: self
-                .scalar
-                .as_ref()
-                .map(|a| SerializableAtom(a.0.replace_multiple(replacements))),
-        }
-    }
-
-    pub fn generate_params(&mut self) -> AHashSet<Atom> {
-        let mut params = AHashSet::new();
-        for (_, n) in self.graph.nodes.iter().filter(|(_, n)| n.is_parametric()) {
-            for (_, a) in n.iter_flat() {
-                if let AtomViewOrConcrete::Atom(a) = a {
-                    params.insert(a.to_owned());
+        match node {
+            NetworkNode::Leaf(l) => match l {
+                NetworkLeaf::LibraryKey(k) => Ok(ExecutionResult::Val(TensorOrScalarOrKey::Key {
+                    key: k,
+                    nodeid: nid,
+                })),
+                NetworkLeaf::LocalTensor(t) => {
+                    Ok(ExecutionResult::Val(TensorOrScalarOrKey::Tensor {
+                        tensor: self.store.get_tensor(*t),
+                        graph_slots,
+                    }))
                 }
-            }
-        }
-        params
-    }
-}
-
-// use log::trace;
-
-#[cfg(feature = "shadowing")]
-impl<'a, Sc, S, T: HasStructure<Structure = S>> TensorNetwork<T, Sc>
-where
-    Sc: for<'r> TryFrom<AtomView<'r>>
-        + FallibleMul<Output = Sc>
-        + Clone
-        + FallibleAdd<Sc, Output = Sc>,
-    TensorNetworkError: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
-    S: TryFrom<FunView<'a>> + TensorStructure + Clone + HasName,
-    S::Name: IntoSymbol + Clone,
-    S::Args: IntoArgs,
-    S::Slot: Serialize + for<'de> Deserialize<'de>,
-    LibraryRep: From<<S::Slot as IsAbstractSlot>::R>,
-    T: Contract<T, LCM = T>
-        + Trace
-        + ScalarMul<Sc, Output = T>
-        + Clone
-        + FallibleAdd<T, Output = T>
-        + From<ParamTensor<S>>,
-{
-    pub fn try_from_view<LibT: LibraryTensor<WithIndices = T> + Clone>(
-        value: AtomView<'a>,
-        library: &TensorLibrary<LibT>,
-    ) -> Result<Self, TensorNetworkError> {
-        match value {
-            AtomView::Mul(m) => Self::try_from_mul(m, library),
-            AtomView::Fun(f) => Self::try_from_fun(f, library),
-            AtomView::Add(a) => Self::try_from_add(a, library),
-            AtomView::Pow(p) => Self::try_from_pow(p, library),
-            a => {
-                let mut network: Self = TensorNetwork::new();
-                // let a = a.to_owned();
-
-                // trace!("scalar atomview not a: {}", a);
-                network.scalar = Some(a.try_into()?);
-                Ok(network)
-            }
+                NetworkLeaf::Scalar(t) => Ok(ExecutionResult::Val(TensorOrScalarOrKey::Scalar(
+                    self.store.get_scalar(*t),
+                ))),
+            },
+            NetworkNode::Op(o) => match o {
+                NetworkOp::Neg => Err(TensorNetworkError::InvalidResultNode(NetworkNode::Op(
+                    NetworkOp::Neg,
+                ))),
+                NetworkOp::Product => Ok(ExecutionResult::One),
+                NetworkOp::Sum => Ok(ExecutionResult::Zero),
+            },
         }
     }
 
-    fn try_from_mul<LibT: LibraryTensor<WithIndices = T> + Clone>(
-        value: MulView<'a>,
-        library: &TensorLibrary<LibT>,
-    ) -> Result<Self, TensorNetworkError> {
-        let mut network: Self = TensorNetwork::new();
-
-        let one = Atom::new_num(1);
-        let mut scalars = Sc::try_from(one.as_view())?;
-        let mut has_scalar = false;
-
-        for arg in value.iter() {
-            let mut net = Self::try_from_view(arg, library)?;
-            // trace!("mul net: {}", net.dot_nodes());
-            //
-            if net.contract().is_err() {
-                return Err(TensorNetworkError::FailedContractMsg(
-                    format!("Mul failed: {}", arg).into(),
-                ));
-            }
-
-            if let Some(ref s) = net.scalar {
-                has_scalar = true;
-                scalars = scalars.mul_fallible(s).unwrap();
-            }
-            match net.result() {
-                Ok((t, _s)) => {
-                    network.push(t);
-                }
-                Err(TensorNetworkError::NoNodes) => {}
-                Err(e) => return Err(e),
-            }
-        }
-        if has_scalar {
-            // trace!("scalar mul : {}", scalars);
-            network.scalar_mul(scalars);
-        }
-        Ok(network)
-    }
-
-    fn try_from_fun<LibT: LibraryTensor<WithIndices = T> + Clone>(
-        value: FunView<'a>,
-        library: &TensorLibrary<LibT>,
-    ) -> Result<Self, TensorNetworkError> {
-        let mut network: Self = TensorNetwork::new();
-        let s: Result<S, _> = value.try_into();
-
-        let mut scalar = None;
-        if let Ok(s) = s {
-            let t = s.to_shell();
-
-            let explicit = t.to_explicit(library);
-            network.push(if let Some(e) = explicit {
-                e.internal_contract()
-            } else {
-                ParamTensor::param(t.expanded_shadow()?.into()).into()
-            });
-        } else {
-            scalar = Some(value.as_view().try_into().map_err(Into::into)?);
-        }
-
-        network.scalar = scalar;
-        Ok(network)
-    }
-
-    fn try_from_pow<LibT: LibraryTensor<WithIndices = T> + Clone>(
-        value: PowView<'a>,
-        library: &TensorLibrary<LibT>,
-    ) -> std::result::Result<Self, TensorNetworkError> {
-        let mut new: Self = TensorNetwork::new();
-
-        let (base, exp) = value.get_base_exp();
-
-        if let Ok(mut n) = i64::try_from(exp) {
-            if n < 0 {
-                new.scalar = Some(value.as_view().try_into()?);
-            }
-            if n == 0 {
-                let one = Atom::new_num(1);
-                new.scalar = Some(one.as_view().try_into()?);
-                return Ok(new);
-            } else if n == 1 {
-                return Self::try_from_view(base, library);
-            }
-            let mut net = Self::try_from_view(base, library)?;
-
-            if net.contract().is_err() {
-                return Err(TensorNetworkError::FailedContractMsg(
-                    format!("Pow failed: {}", base).into(),
-                ));
-            }
-
-            match net.result() {
-                Ok((res, _s)) => {
-                    new.push(res.clone());
-                    while n > 1 {
-                        if n % 2 == 0 {
-                            new.push(res.clone().dual());
-                        } else {
-                            new.push(res.clone());
-                        }
-
-                        if new.contract().is_err() {
-                            return Err(TensorNetworkError::FailedContractMsg(
-                                value.as_view().to_string().into(),
-                            ));
-                        }
-
-                        n -= 1;
-                    }
-                }
-                Err(TensorNetworkError::NoNodes) => {
-                    new.scalar = Some(value.as_view().try_into()?);
-                }
-                Err(e) => return Err(e),
-            }
-        } else {
-            new.scalar = Some(value.as_view().try_into()?);
-        }
-
-        Ok(new)
-    }
-
-    fn try_from_add<LibT: LibraryTensor<WithIndices = T> + Clone>(
-        value: AddView<'a>,
-        library: &TensorLibrary<LibT>,
-    ) -> Result<Self, TensorNetworkError> {
-        // trace!("AddView: {}", value.as_view());
-        let mut tensors = vec![];
-        let zero = Atom::new_num(0);
-        let mut scalars: Sc = zero.as_view().try_into()?;
-        let mut is_scalar = false;
-        for summand in value.iter() {
-            // trace!("summand: {}", summand);
-            let mut net = Self::try_from_view(summand, library)?;
-
-            if net.contract().is_err() {
-                return Err(TensorNetworkError::FailedContractMsg(
-                    format!("Sum failed: {}", summand).into(),
-                ));
-            }
-
-            match net.result() {
-                Ok((mut t, s)) => {
-                    if let Some(s) = s {
-                        t = t.scalar_mul(&s).unwrap();
-                    }
-                    tensors.push(t);
-                }
-                Err(TensorNetworkError::NoNodes) => {
-                    is_scalar = true;
-                    if let Some(ref s) = net.scalar {
-                        scalars = scalars.add_fallible(s).unwrap();
-                    } else {
-                        return Err(TensorNetworkError::ScalarFieldEmpty);
-                    }
-
-                    // println!("{:?}", net);
-                }
-                Err(e) => return Err(e),
-            }
-        }
-
-        let net: TensorNetwork<_, _> = if let Some(sum) = tensors
-            .into_iter()
-            .reduce(|a, b| a.add_fallible(&b).unwrap())
-        {
-            if is_scalar {
-                // println!("sum: {}", value.as_view());
-                return Err(TensorNetworkError::NotAllScalars(
-                    value.as_view().to_string(),
-                ));
-            }
-            TensorNetwork::from(vec![sum])
-        } else if !is_scalar {
-            // println!("sum: {}", value.as_view());
-            return Err(TensorNetworkError::NotAllScalars(
-                value.as_view().to_string(),
-            ));
-        } else {
-            let mut net = TensorNetwork::new();
-            // trace!("scalars sum: {}", scalars);
-            net.scalar = Some(scalars);
-            net
-        };
-
-        Ok(net)
-    }
-}
-// use log::trace;
-
-#[cfg(feature = "shadowing")]
-impl<T, S> TensorNetwork<T, S>
-where
-    T: Shadowable + HasName<Name = Symbol, Args: IntoArgs>,
-    T::Structure: Clone + ToSymbolic + TensorStructure,
-{
-    pub fn sym_shadow(&mut self, name: &str) -> TensorNetwork<ParamTensor<T::Structure>, S> {
-        {
-            for (i, n) in &mut self.graph.nodes {
-                n.set_name(symbol!(format!("{}{}", name, i.data().as_ffi())));
-            }
-        }
-
-        let edges = self.graph.edges.clone();
-        let involution = self.graph.involution.clone();
-        let neighbors = self.graph.neighbors.clone();
-
-        let mut nodes = DenseSlotMap::with_key();
-        let mut nodemap = SecondaryMap::new();
-        let mut reverse_nodemap = SecondaryMap::new();
-        let mut params = AHashSet::new();
-
-        for (i, n) in &self.graph.nodes {
-            let node = n.expanded_shadow().unwrap();
-
-            let nid = nodes.insert(ParamTensor::<T::Structure>::param(node.clone().into()));
-
-            for (_, a) in node.flat_iter() {
-                params.insert(a.clone());
-            }
-            let mut first = true;
-            for e in self.graph.edges_incident(i) {
-                if first {
-                    reverse_nodemap.insert(nid, e);
-                    first = false;
-                }
-                nodemap.insert(e, nid);
-            }
-        }
-
-        let g = HalfEdgeGraph {
-            edges,
-            involution,
-            reverse_nodemap,
-            neighbors,
-            nodes,
-            nodemap,
-        };
-
-        let scalar = self.scalar.take();
-
-        TensorNetwork {
-            graph: g,
-            // params,
-            scalar,
-        }
-    }
-}
-
-impl<T: TensorStructure, S> TensorNetwork<T, S> {
-    pub fn cast<U>(self) -> TensorNetwork<U, S>
+    #[allow(clippy::result_large_err)]
+    pub fn result_tensor<'a, LT, L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>>(
+        &'a self,
+        lib: &L,
+    ) -> Result<ExecutionResult<Cow<'a, T>>, TensorNetworkError<K>>
     where
+        S: 'a,
+        T: Clone + ScalarTensor + HasStructure,
+        K: Display + Debug,
+        LT: TensorStructure<Indexed = T> + Clone + LibraryTensor<WithIndices = T>,
+        T: PermuteTensor<Permuted = T>,
+        for<'b> &'b S: Into<T::Scalar>,
+        <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
+            IsAbstractSlot<Aind = Aind>,
+    {
+        Ok(match self.result()? {
+            ExecutionResult::One => ExecutionResult::One,
+            ExecutionResult::Zero => ExecutionResult::Zero,
+            ExecutionResult::Val(v) => ExecutionResult::Val(match v {
+                TensorOrScalarOrKey::Tensor { tensor, .. } => Cow::Borrowed(tensor),
+                TensorOrScalarOrKey::Scalar(s) => Cow::Owned(T::new_scalar(s.into())),
+                TensorOrScalarOrKey::Key { nodeid, .. } => {
+                    let less = self.graph.get_lib_data(lib, nodeid).unwrap();
+
+                    Cow::Owned(less)
+                }
+            }),
+        })
+    }
+
+    #[allow(clippy::result_large_err)]
+    pub fn result_scalar<'a>(&'a self) -> Result<ExecutionResult<Cow<'a, S>>, TensorNetworkError<K>>
+    where
+        T: Clone + ScalarTensor + 'a,
+        T::Scalar: Into<S>,
+        K: Display,
+        S: Clone,
+    {
+        Ok(match self.result()? {
+            ExecutionResult::One => ExecutionResult::One,
+            ExecutionResult::Zero => ExecutionResult::Zero,
+            ExecutionResult::Val(v) => ExecutionResult::Val(match v {
+                TensorOrScalarOrKey::Tensor { tensor: t, .. } => Cow::Owned(
+                    t.clone()
+                        .scalar()
+                        .ok_or(TensorNetworkError::NoScalar)?
+                        .into(),
+                ),
+                TensorOrScalarOrKey::Scalar(s) => Cow::Borrowed(s),
+                TensorOrScalarOrKey::Key { .. } => return Err(TensorNetworkError::NoScalar),
+            }),
+        })
+    }
+
+    pub fn cast<U>(self) -> Network<Str::Store<U, S>, K, Aind>
+    where
+        K: Clone,
         T: CastStructure<U> + HasStructure,
         T::Structure: TensorStructure,
         U: HasStructure,
         U::Structure: From<T::Structure> + TensorStructure<Slot = T::Slot>,
     {
-        TensorNetwork {
-            graph: self.graph.map_nodes(|(_, x)| x.cast_structure()),
-            scalar: self.scalar,
-        }
+        self.map(|a| a, |t| t.cast_structure())
     }
 }
 
-#[cfg(feature = "shadowing")]
-impl<T, S> TensorNetwork<T, S>
-where
-    T: HasName<Name: IntoSymbol, Args: IntoArgs> + TensorStructure,
-{
-    pub fn append_map<U>(&self, fn_map: &mut FunctionMap<U>)
-    where
-        T: ShadowMapping<U>,
-        T::Structure: Clone + ToSymbolic,
-        S: Clone,
-    {
-        for (_, n) in &self.graph.nodes {
-            n.expanded_append_map(fn_map)
-        }
+impl<S, K: Display, Aind: AbsInd> Network<S, K, Aind> {
+    pub fn dot(&self) -> std::string::String {
+        self.graph.dot()
     }
+}
 
-    pub fn shadow(&self) -> TensorNetwork<ParamTensor<T::Structure>, S>
-    where
-        T: Shadowable,
-        T::Structure: Clone + ToSymbolic + TensorStructure<Slot = T::Slot>,
-        S: Clone,
-    {
-        let edges = self.graph.edges.clone();
-        let involution = self.graph.involution.clone();
-        let neighbors = self.graph.neighbors.clone();
-
-        let mut nodes = DenseSlotMap::with_key();
-        let mut nodemap = SecondaryMap::new();
-        let mut reverse_nodemap = SecondaryMap::new();
-
-        for (i, n) in &self.graph.nodes {
-            let node = n.expanded_shadow().unwrap();
-
-            let nid = nodes.insert(ParamTensor::<T::Structure>::param(node.clone().into()));
-
-            let mut first = true;
-            for e in self.graph.edges_incident(i) {
-                if first {
-                    reverse_nodemap.insert(nid, e);
-                    first = false;
+impl<T, S, K, Aind: AbsInd> Network<NetworkStore<T, S>, K, Aind> {
+    pub fn dot_display_impl(
+        &self,
+        scalar_disp: impl Fn(&S) -> String,
+        library_disp: impl Fn(&K) -> Option<String>,
+        tensor_disp: impl Fn(&T) -> String,
+    ) -> std::string::String {
+        self.graph.graph.dot_impl(
+            &self.graph.graph.full_filter(),
+            "",
+            &|e| {
+                if let NetworkEdge::Slot(s) = e {
+                    Some(format!("label=\"{s}\""))
+                } else {
+                    None
                 }
-                nodemap.insert(e, nid);
+            },
+            &|n| match n {
+                NetworkNode::Leaf(l) => match l {
+                    NetworkLeaf::LibraryKey(l) => {
+                        // if let Ok(v) = lib.get(l) {
+                        Some(format!("label = \"L:{}\"", library_disp(&l.structure)?))
+                        // } else {
+                        // None
+                        // }
+                    }
+                    NetworkLeaf::LocalTensor(l) => Some(format!(
+                        "label = \"T:{}\"",
+                        tensor_disp(self.store.get_tensor(*l))
+                    )),
+                    NetworkLeaf::Scalar(s) => Some(format!(
+                        "label = \"S:{}\"",
+                        scalar_disp(self.store.get_scalar(*s))
+                    )),
+                },
+                NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
+            },
+        )
+        // self.graph.dot()
+    }
+}
+
+// use log::trace;
+#[cfg(feature = "shadowing")]
+pub mod parsing;
+// use log::trace;
+
+pub trait ContractionStrategy<E, L, K, Aind>: Sized {
+    #[allow(clippy::result_large_err)]
+    fn contract(
+        executor: &mut E,
+        graph: NetworkGraph<K, Aind>,
+        lib: &L,
+    ) -> Result<(NetworkGraph<K, Aind>, bool), TensorNetworkError<K>>
+    where
+        K: Display;
+}
+
+pub trait ExecutionStrategy<E, L, K, Aind>
+where
+    E: ExecuteOp<L, K, Aind>,
+{
+    /// Run the entire contraction to one leaf.
+    #[allow(clippy::result_large_err)]
+    fn execute_all<C: ContractionStrategy<E, L, K, Aind>>(
+        executor: &mut E,
+        graph: &mut NetworkGraph<K, Aind>,
+        lib: &L,
+    ) -> Result<(), TensorNetworkError<K>>
+    where
+        K: Display;
+}
+
+pub struct Sequential;
+
+pub struct Steps<const N: usize> {}
+pub struct StepsDebug<const N: usize> {}
+
+impl<const N: usize, E, L, K, Aind: AbsInd> ExecutionStrategy<E, L, K, Aind> for StepsDebug<N>
+where
+    E: ExecuteOp<L, K, Aind>,
+    K: Clone,
+{
+    fn execute_all<C: ContractionStrategy<E, L, K, Aind>>(
+        executor: &mut E,
+        graph: &mut NetworkGraph<K, Aind>,
+        lib: &L,
+    ) -> Result<(), TensorNetworkError<K>>
+    where
+        K: Display,
+    {
+        for _ in 0..N {
+            // find the *one* ready op
+            if let Some((extracted_graph, op)) = graph.extract_next_ready_op() {
+                println!(
+                    "Extracted_graph: {}",
+                    extracted_graph.dot_impl(
+                        |s| s.to_string(),
+                        |_| "".to_string(),
+                        |s| s.to_string()
+                    )
+                );
+                println!(
+                    "Graph: {}",
+                    graph.dot_impl(|s| s.to_string(), |_| "".to_string(), |s| s.to_string())
+                );
+                // execute + splice
+                let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
+                graph.splice_descendents_of(replacement);
             }
         }
 
-        let g = HalfEdgeGraph {
-            edges,
-            involution,
-            reverse_nodemap,
-            neighbors,
-            nodes,
-            nodemap,
-        };
-
-        let scalar = self.scalar.clone();
-
-        TensorNetwork {
-            graph: g,
-            // params,
-            scalar,
-        }
+        Ok(())
     }
 }
 
-impl<T, S> TensorNetwork<T, S>
+impl<const N: usize, E, L, K, Aind: AbsInd> ExecutionStrategy<E, L, K, Aind> for Steps<N>
 where
-    T: HasName + TensorStructure,
+    E: ExecuteOp<L, K, Aind>,
+    K: Clone,
 {
-    pub fn name(&mut self, name: T::Name)
+    fn execute_all<C: ContractionStrategy<E, L, K, Aind>>(
+        executor: &mut E,
+        graph: &mut NetworkGraph<K, Aind>,
+        lib: &L,
+    ) -> Result<(), TensorNetworkError<K>>
     where
-        T::Name: From<std::string::String> + Display,
+        K: Display,
     {
-        for (id, n) in &mut self.graph.nodes {
-            n.set_name(format!("{}{}", name, id.data().as_ffi()).into());
+        for _ in 0..N {
+            // find the *one* ready op
+            if let Some((extracted_graph, op)) = graph.extract_next_ready_op() {
+                // execute + splice
+                let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
+                graph.splice_descendents_of(replacement);
+            }
         }
+
+        Ok(())
     }
 }
 
-#[cfg(feature = "shadowing")]
-impl<T, S> TensorNetwork<T, S>
+impl<E, L, K, Aind: AbsInd> ExecutionStrategy<E, L, K, Aind> for Sequential
 where
-    T: HasName<Name: IntoSymbol> + TensorStructure,
+    E: ExecuteOp<L, K, Aind>,
+    K: Clone,
 {
-    pub fn namesym(&mut self, name: &str) {
-        for (id, n) in &mut self.graph.nodes {
-            n.set_name(IntoSymbol::from_str(&format!(
-                "{}{}",
-                name,
-                id.data().as_ffi()
-            )));
-        }
+    fn execute_all<C: ContractionStrategy<E, L, K, Aind>>(
+        executor: &mut E,
+        graph: &mut NetworkGraph<K, Aind>,
+        lib: &L,
+    ) -> Result<(), TensorNetworkError<K>>
+    where
+        K: Display,
+    {
+        while {
+            // find the *one* ready op
+            if let Some((extracted_graph, op)) = graph.extract_next_ready_op() {
+                // execute + splice
+                let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
+                graph.splice_descendents_of(replacement);
+                true
+            } else {
+                false
+            }
+        } {}
+
+        Ok(())
     }
 }
 
-impl<T, S> TensorNetwork<T, S>
-where
-    T: Contract<T, LCM = T> + HasStructure,
-    T::Structure: TensorStructure,
-{
-    pub fn contract_algo(
+// 2b) Parallel: batch‐execute all ready ops, then splice serially.
+// pub struct Parallel;
+// impl<E, K> ExecutionStrategy<E, K> for Parallel
+// where
+//     E: ExecuteOp<K> + Clone + Send + Sync,
+//     K: Clone + Send + Sync,
+// {
+//     fn contract_all<L: Library<Key = K> + Sync>(
+//         &self,
+//         executor: &mut E,
+//         graph: &mut NetworkGraph<K>,
+//         lib: &L,
+//     ) {
+//         loop {
+//             // 1) collect *all* ready ops this round
+//             let ready = graph.find_all_ready_ops();
+
+//             if ready.is_empty() {
+//                 break;
+//             }
+
+//             // 2) execute them in parallel
+//             let results: Vec<(NodeIndex, NetworkGraph<K>)> = ready
+//                 .into_par_iter()
+//                 .map(|(nid, op, leaves)| {
+//                     let mut local = executor.clone();
+//                     let replacement = local.execute(lib, op, &leaves);
+//                     (nid, replacement)
+//                 })
+//                 .collect();
+
+//             // 3) splice back sequentially
+//             for (nid, replacement) in results {
+//                 graph.splice_descendents_of(nid, replacement);
+//             }
+//         }
+//     }
+// }
+
+pub trait ExecuteOp<L, K, Aind>: Sized {
+    // type LibStruct;
+    #[allow(clippy::result_large_err)]
+    fn execute<C: ContractionStrategy<Self, L, K, Aind>>(
         &mut self,
-        edge_choice: impl Fn(&Self) -> Option<HedgeId>,
-    ) -> Result<(), ContractionError> {
-        if let Some(e) = edge_choice(self) {
-            self.contract_edge(e)?;
-
-            // println!("{}", self.dot());
-            self.contract_algo(edge_choice)?;
-        }
-        Ok(())
-    }
-    fn contract_edge(&mut self, edge_idx: HedgeId) -> Result<(), ContractionError> {
-        let a = self.graph.nodemap[edge_idx];
-        let b = self.graph.nodemap[self.graph.involution[edge_idx].data];
-
-        let ai = self.graph.nodes.get(a).unwrap();
-        let bi = self.graph.nodes.get(b).unwrap();
-
-        let f = ai.contract(bi)?;
-
-        self.graph.merge_nodes(a, b, f);
-        Ok(())
-    }
-
-    pub fn contract(&mut self) -> std::result::Result<(), ContractionError> {
-        self.contract_algo(Self::edge_to_min_degree_node)
-    }
+        graph: NetworkGraph<K, Aind>,
+        lib: &L,
+        op: NetworkOp,
+    ) -> Result<NetworkGraph<K, Aind>, TensorNetworkError<K>>
+    where
+        K: Display;
 }
 
-#[cfg(feature = "shadowing")]
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Levels<
-    T: HasStructure<Structure = S>,
-    S: TensorStructure + HasName + Clone,
-    Sc: AtomCore,
-> {
-    pub levels: Vec<TensorNetwork<ParamTensor<S>, Sc>>,
-    pub initial: TensorNetwork<T, Sc>,
-    // fn_map: FunctionMap<'static, Complex<T>>,
-    params: Vec<Sc>,
-}
-
-#[cfg(feature = "shadowing")]
-impl<T, S, Sc: AtomCore> From<TensorNetwork<T, Sc>> for Levels<T, S, Sc>
+impl<S, Store: TensorScalarStore, K, Aind: AbsInd> Network<Store, K, Aind>
 where
-    T: HasStructure<Structure = S>,
-    S: TensorStructure + HasName + Clone,
+    Store::Tensor: HasStructure<Structure = S>,
 {
-    fn from(t: TensorNetwork<T, Sc>) -> Self {
-        Levels {
-            initial: t,
-            levels: vec![],
-            // fn_map: FunctionMap::new(),
-            params: vec![],
-        }
+    #[allow(clippy::result_large_err)]
+    pub fn execute<
+        Strat: ExecutionStrategy<Store, L, K, Aind>,
+        C: ContractionStrategy<Store, L, K, Aind>,
+        LT,
+        L,
+    >(
+        &mut self,
+        lib: &L,
+    ) -> Result<(), TensorNetworkError<K>>
+    where
+        K: Display + Clone,
+        L: Library<S, Key = K, Value = PermutedStructure<LT>> + Sync,
+        LT: LibraryTensor<WithIndices = Store::Tensor>,
+        Store: ExecuteOp<L, K, Aind>,
+    {
+        self.merge_ops();
+        // println!("Hi");
+        // Ok(())
+        Strat::execute_all::<C>(&mut self.store, &mut self.graph, lib)
     }
 }
 
-#[cfg(feature = "shadowing")]
 impl<
-        T: Clone + RefZero + Display,
-        S: TensorStructure + Clone + TracksCount + Display,
-        Sc: AtomCore + Clone,
-    > Levels<MixedTensor<T, S>, S, Sc>
+        LT: LibraryTensor + Clone,
+        T: HasStructure
+            + TensorStructure
+            + Neg<Output = T>
+            + Clone
+            + Ref
+            + for<'a> AddAssign<T::Ref<'a>>
+            + for<'a> AddAssign<LT::WithIndices>
+            + From<LT::WithIndices>,
+        L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
+        Sc: Neg<Output = Sc>
+            + for<'a> AddAssign<Sc::Ref<'a>>
+            + Clone
+            + for<'a> AddAssign<T::ScalarRef<'a>>
+            + From<T::Scalar>
+            + Ref,
+        K: Display + Debug,
+        Aind: AbsInd,
+    > ExecuteOp<L, K, Aind> for NetworkStore<T, Sc>
 where
-    MixedTensor<T, S>: Contract<LCM = MixedTensor<T, S>> + Trace,
-
-    S: HasName<Name: IntoSymbol, Args: IntoArgs> + ToSymbolic + StructureContract,
+    LT::WithIndices: PermuteTensor<Permuted = LT::WithIndices>,
+    <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
+        IsAbstractSlot<Aind = Aind>,
 {
-    fn contract_levels(
+    fn execute<C: ContractionStrategy<Self, L, K, Aind>>(
         &mut self,
-        depth: usize,
-        // fn_map: &mut FunctionMap<'a, Complex<T>>,
-    ) {
-        let mut not_done = true;
-        let level = self.levels.len();
+        mut graph: NetworkGraph<K, Aind>,
+        lib: &L,
+        op: NetworkOp,
+    ) -> Result<NetworkGraph<K, Aind>, TensorNetworkError<K>> {
+        graph.sync_order();
+        match op {
+            NetworkOp::Neg => {
+                let ops = graph
+                    .graph
+                    .iter_nodes()
+                    .find(|(_, _, d)| matches!(d, NetworkNode::Op(NetworkOp::Neg)));
 
-        if let Some(current_level) = self.levels.last_mut() {
-            current_level.namesym(&format!("L{level}"))
-        } else {
-            not_done = false;
-        }
+                let (opid, children, _) = ops.unwrap();
 
-        let nl = if let Some(current_level) = self.levels.last() {
-            let mut new_level = current_level.shadow();
-            new_level
-                .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
-                .unwrap();
-            if new_level.graph.nodes.len() == 1 {
-                not_done = false;
+                let mut child = None;
+                for c in children {
+                    if let Some(id) = graph.graph.involved_node_id(c) {
+                        if let NetworkNode::Leaf(l) = &graph.graph[id] {
+                            if child.is_some() {
+                                return Err(TensorNetworkError::MoreThanOneNeg);
+                            } else {
+                                child = Some((id, l));
+                            }
+                        }
+                    }
+                }
+                if let Some((child_id, leaf)) = child {
+                    let new_node = match leaf {
+                        NetworkLeaf::Scalar(s) => {
+                            let s = self.scalar[*s].clone().neg();
+                            let pos = self.scalar.len();
+                            self.scalar.push(s);
+
+                            NetworkLeaf::Scalar(pos)
+                        }
+                        NetworkLeaf::LibraryKey(_) => {
+                            let inds = graph.get_lib_data(lib, child_id).unwrap();
+
+                            let t = T::from(inds).neg();
+                            let pos = self.tensors.len();
+                            self.tensors.push(t);
+                            NetworkLeaf::LocalTensor(pos)
+                        }
+                        NetworkLeaf::LocalTensor(t) => {
+                            let t = self.tensors[*t].clone().neg();
+                            let pos = self.tensors.len();
+                            self.tensors.push(t);
+                            NetworkLeaf::LocalTensor(pos)
+                        }
+                    };
+                    graph.identify_nodes_without_self_edges(
+                        &[child_id, opid],
+                        NetworkNode::Leaf(new_node),
+                    );
+                    Ok(graph)
+                } else {
+                    Err(TensorNetworkError::ChildlessNeg)
+                }
             }
-            Some(new_level)
-        } else {
-            None
-        };
+            NetworkOp::Product => {
+                let (graph, _) = C::contract(self, graph, lib)?;
+                Ok(graph)
+            }
+            NetworkOp::Sum => {
+                // let mut op = None;
+                let mut targets = Vec::new();
+                let mut all_nodes = Vec::new();
+                for (n, _, v) in graph.graph.iter_nodes() {
+                    all_nodes.push(n);
+                    if let NetworkNode::Leaf(l) = &v {
+                        targets.push((n, l));
+                    }
+                }
 
-        if let Some(nl) = nl {
-            self.levels.push(nl);
-        }
+                let (nf, first) = &targets[0];
 
-        if not_done {
-            self.contract_levels(depth)
-        }
-    }
+                let new_node = match first {
+                    NetworkLeaf::Scalar(s) => {
+                        let mut accumulator = self.scalar[*s].clone();
 
-    pub fn contract<R>(&mut self, depth: usize, fn_map: &mut FunctionMap<R>) -> ParamTensor<S>
-    where
-        R: From<T>,
-    {
-        self.initial
-            .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
-            .unwrap();
+                        for (_, t) in &targets[1..] {
+                            match t {
+                                NetworkLeaf::Scalar(s) => {
+                                    accumulator += self.scalar[*s].refer();
+                                }
+                                NetworkLeaf::LocalTensor(t) => {
+                                    if let Some(s) = self.tensors[*t].scalar_ref() {
+                                        accumulator += s;
+                                    } else {
+                                        return Err(TensorNetworkError::NotAllScalars(
+                                            "".to_string(),
+                                        ));
+                                    }
+                                }
+                                NetworkLeaf::LibraryKey { .. } => {
+                                    return Err(TensorNetworkError::ScalarLibSum("".to_string()));
+                                }
+                            }
+                        }
 
-        self.initial.namesym("L0");
-        if self.initial.graph.nodes.len() > 1 {
-            let mut new_level = self.initial.shadow();
-            new_level
-                .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
-                .unwrap();
-            self.levels.push(new_level);
+                        let pos = self.scalar.len();
+                        self.scalar.push(accumulator);
+                        NetworkLeaf::Scalar(pos)
+                    }
+                    NetworkLeaf::LocalTensor(t) => {
+                        let mut accumulator = self.tensors[*t].clone();
+                        if accumulator.is_scalar() {
+                            let mut accumulator = Sc::from(accumulator.scalar().unwrap());
 
-            self.contract_levels(depth);
-            // println!("levels {}", self.levels.len());
-            self.generate_fn_map(fn_map);
-            self.levels.last().unwrap().result().unwrap().0
-        } else {
-            self.initial
-                .result_tensor_ref()
-                .unwrap()
-                .expanded_shadow_with_map(fn_map)
-                .unwrap()
-        }
-    }
+                            for (_, t) in &targets[1..] {
+                                match t {
+                                    NetworkLeaf::Scalar(s) => {
+                                        accumulator += self.scalar[*s].refer();
+                                    }
+                                    NetworkLeaf::LocalTensor(t) => {
+                                        if let Some(s) = self.tensors[*t].scalar_ref() {
+                                            accumulator += s;
+                                        } else {
+                                            return Err(TensorNetworkError::NotAllScalars(
+                                                "".to_string(),
+                                            ));
+                                        }
+                                    }
+                                    NetworkLeaf::LibraryKey { .. } => {
+                                        return Err(TensorNetworkError::ScalarLibSum(
+                                            "".to_string(),
+                                        ));
+                                    }
+                                }
+                            }
 
-    fn generate_fn_map<R>(&self, fn_map: &mut FunctionMap<R>)
-    where
-        R: From<T>,
-    {
-        self.initial.append_map(fn_map);
-        for l in &self.levels {
-            l.append_map(fn_map);
+                            let pos = self.scalar.len();
+                            self.scalar.push(accumulator);
+                            NetworkLeaf::Scalar(pos)
+                        } else {
+                            for (nid, t) in &targets[1..] {
+                                match t {
+                                    NetworkLeaf::Scalar(_) => {
+                                        return Err(TensorNetworkError::SumScalarTensor(
+                                            "".to_string(),
+                                        ))
+                                    }
+                                    NetworkLeaf::LocalTensor(t) => {
+                                        accumulator += self.tensors[*t].refer();
+                                    }
+                                    NetworkLeaf::LibraryKey(_) => {
+                                        let with_index = graph.get_lib_data(lib, *nid).unwrap();
+
+                                        accumulator += with_index;
+                                    }
+                                }
+                            }
+
+                            let pos = self.tensors.len();
+                            self.tensors.push(accumulator);
+
+                            NetworkLeaf::LocalTensor(pos)
+                        }
+                    }
+                    NetworkLeaf::LibraryKey(_) => {
+                        let inds = graph.get_lib_data(lib, *nf).unwrap();
+                        let mut accumulator = T::from(inds);
+                        for (nid, t) in &targets[1..] {
+                            match t {
+                                NetworkLeaf::Scalar(_) => {
+                                    return Err(TensorNetworkError::SumScalarTensor("".to_string()))
+                                }
+                                NetworkLeaf::LocalTensor(t) => {
+                                    accumulator += self.tensors[*t].refer();
+                                }
+                                NetworkLeaf::LibraryKey(_) => {
+                                    let with = graph.get_lib_data(lib, *nid).unwrap();
+                                    accumulator += with;
+                                }
+                            }
+                        }
+
+                        let pos = self.tensors.len();
+                        self.tensors.push(accumulator);
+
+                        NetworkLeaf::LocalTensor(pos)
+                    }
+                };
+
+                graph.identify_nodes_without_self_edges(&all_nodes, NetworkNode::Leaf(new_node));
+                Ok(graph)
+            }
         }
     }
 }
 
-#[cfg(feature = "shadowing")]
-impl<S: TensorStructure + Clone + TracksCount + Display, Sc: AtomCore + Clone>
-    Levels<ParamTensor<S>, S, Sc>
+pub struct SmallestDegree;
+
+pub struct SmallestDegreeIter<const N: usize>;
+
+pub struct ContractScalars;
+
+pub struct SingleSmallestDegree<const D: bool>;
+pub trait Ref {
+    type Ref<'a>
+    where
+        Self: 'a;
+    fn refer(&self) -> Self::Ref<'_>;
+}
+
+impl Ref for f64 {
+    type Ref<'a>
+        = &'a f64
+    where
+        Self: 'a;
+
+    fn refer(&self) -> Self::Ref<'_> {
+        self
+    }
+}
+
+impl<
+        LT: LibraryTensor + Clone,
+        T: HasStructure
+            + TensorStructure
+            + Clone
+            + Contract<LCM = T>
+            + ScalarMul<Sc, Output = T>
+            + Contract<LT::WithIndices, LCM = T>
+            + From<LT::WithIndices>,
+        L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
+        Sc: for<'a> MulAssign<Sc::Ref<'a>>
+            + Clone
+            + for<'a> MulAssign<T::ScalarRef<'a>>
+            + From<T::Scalar>
+            + Ref,
+        K: Display + Debug + Clone,
+        Aind: AbsInd,
+    > ContractionStrategy<NetworkStore<T, Sc>, L, K, Aind> for ContractScalars
 where
-    ParamTensor<S>: Contract<LCM = ParamTensor<S>>,
-
-    S: HasName<Name = Symbol, Args: IntoArgs> + ToSymbolic + StructureContract,
+    LT::WithIndices: Contract<LT::WithIndices, LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + PermuteTensor<Permuted = LT::WithIndices>,
+    <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
+        IsAbstractSlot<Aind = Aind>,
 {
-    fn contract_levels(
-        &mut self,
-        depth: usize,
-        // fn_map: &mut FunctionMap<'a, Complex<T>>,
-    ) {
-        let mut not_done = true;
-        let level = self.levels.len();
+    fn contract(
+        executor: &mut NetworkStore<T, Sc>,
+        mut graph: NetworkGraph<K, Aind>,
+        lib: &L,
+    ) -> Result<(NetworkGraph<K, Aind>, bool), TensorNetworkError<K>>
+    where
+        K: Display,
+    {
+        graph.sync_order();
+        let mut other = None;
+        let mut include_head = true;
+        let mut head = None;
+        let (mut scalars, mut scalar_nodes): (Vec<_>, Vec<_>) = graph
+            .graph
+            .iter_nodes()
+            .filter_map(|(nid, _, c)| {
+                if let NetworkNode::Leaf(l) = c {
+                    match l {
+                        NetworkLeaf::Scalar(i) => Some((*i, nid)),
+                        _ => {
+                            if other.is_none() {
+                                other = Some(nid);
+                            } else {
+                                include_head = false;
+                            }
+                            None
+                        }
+                    }
+                } else {
+                    if let NetworkNode::Op(NetworkOp::Product) = c {
+                        if head.is_some() {
+                            panic!("multiple heads")
+                        }
+                        head = Some(nid);
+                    }
+                    None
+                }
+            })
+            .collect();
 
-        if let Some(current_level) = self.levels.last_mut() {
-            current_level.namesym(&format!("L{level}"))
-        } else {
-            not_done = false;
-        }
+        if let Some(f) = scalars.pop() {
+            let mut acc = executor.scalar[f].clone();
 
-        let nl = if let Some(current_level) = self.levels.last() {
-            let mut new_level = current_level.shadow();
-            new_level
-                .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
-                .unwrap();
-            if new_level.graph.nodes.len() == 1 {
-                not_done = false;
+            for si in scalars {
+                acc *= executor.scalar[si].refer();
             }
-            Some(new_level)
+
+            let new_node = if include_head {
+                if let Some(head) = head {
+                    scalar_nodes.push(head);
+                }
+                if let Some(other) = other {
+                    scalar_nodes.push(other);
+                    if let NetworkNode::Leaf(l) = &graph.graph[other] {
+                        match l {
+                            NetworkLeaf::LocalTensor(l) => {
+                                let a = executor.tensors[*l].scalar_mul(&acc).unwrap();
+                                let pos = executor.tensors.len();
+                                executor.tensors.push(a);
+                                NetworkLeaf::LocalTensor(pos)
+                            }
+                            NetworkLeaf::LibraryKey(_) => {
+                                let inds = graph.get_lib_data(lib, other).unwrap();
+                                let a = inds.scalar_mul(&acc).unwrap();
+
+                                let pos = executor.tensors.len();
+                                executor.tensors.push(a);
+                                NetworkLeaf::LocalTensor(pos)
+                            }
+                            _ => {
+                                unreachable!("aa")
+                            }
+                        }
+                    } else {
+                        unreachable!("aa")
+                    }
+                } else {
+                    let pos = executor.scalar.len();
+                    executor.scalar.push(acc);
+                    NetworkLeaf::Scalar(pos)
+                }
+            } else {
+                let pos = executor.scalar.len();
+                executor.scalar.push(acc);
+                NetworkLeaf::Scalar(pos)
+            };
+
+            if !include_head {
+                graph.identify_nodes_without_self_edges_merge_heads(
+                    &scalar_nodes,
+                    NetworkNode::Leaf(new_node),
+                );
+            } else {
+                graph.identify_nodes_without_self_edges(&scalar_nodes, NetworkNode::Leaf(new_node));
+            }
+            Ok((graph, true))
         } else {
-            None
-        };
-
-        if let Some(nl) = nl {
-            self.levels.push(nl);
-        }
-
-        if not_done {
-            self.contract_levels(depth)
-        }
-    }
-
-    pub fn contract<R>(&mut self, depth: usize, fn_map: &mut FunctionMap<R>) -> ParamTensor<S> {
-        self.initial
-            .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
-            .unwrap();
-
-        self.initial.namesym("L0");
-        if self.initial.graph.nodes.len() > 1 {
-            let mut new_level = self.initial.shadow();
-            new_level
-                .contract_algo(|tn| tn.edge_to_min_degree_node_with_depth(depth))
-                .unwrap();
-            self.levels.push(new_level);
-
-            self.contract_levels(depth);
-            // println!("levels {}", self.levels.len());
-            self.generate_fn_map(fn_map);
-            self.levels.last().unwrap().result().unwrap().0
-        } else {
-            self.initial
-                .result_tensor_ref()
-                .unwrap()
-                .expanded_shadow_with_map(fn_map)
-                .unwrap()
-        }
-    }
-
-    fn generate_fn_map<R>(&self, fn_map: &mut FunctionMap<R>) {
-        self.initial.append_map(fn_map);
-        for l in &self.levels {
-            l.append_map(fn_map);
+            let mut didsmth = false;
+            if include_head {
+                if let Some(other) = other {
+                    if let Some(head) = head {
+                        let v = graph.graph[other].clone();
+                        graph.identify_nodes_without_self_edges(&[head, other], v);
+                        didsmth = true;
+                    }
+                }
+            }
+            Ok((graph, didsmth))
         }
     }
 }
 
+impl<
+        LT: LibraryTensor + Clone,
+        T: HasStructure
+            + TensorStructure
+            + Clone
+            + Contract<LCM = T>
+            + ScalarMul<Sc, Output = T>
+            + Contract<LT::WithIndices, LCM = T>
+            + From<LT::WithIndices>,
+        L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
+        Sc: for<'a> MulAssign<Sc::Ref<'a>>
+            + Clone
+            + for<'a> MulAssign<T::ScalarRef<'a>>
+            + From<T::Scalar>
+            + Ref,
+        K: Display + Debug + Clone,
+        Aind: AbsInd,
+    > ContractionStrategy<NetworkStore<T, Sc>, L, K, Aind> for SmallestDegree
+where
+    LT::WithIndices: Contract<LT::WithIndices, LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + PermuteTensor<Permuted = LT::WithIndices>,
+    <LT::WithIndices as HasStructure>::Structure: Display,
+    T::Structure: Display,
+    <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
+        IsAbstractSlot<Aind = Aind>,
+{
+    fn contract(
+        executor: &mut NetworkStore<T, Sc>,
+        graph: NetworkGraph<K, Aind>,
+        lib: &L,
+    ) -> Result<(NetworkGraph<K, Aind>, bool), TensorNetworkError<K>>
+    where
+        K: Display,
+    {
+        let (mut graph, mut didsmth) = ContractScalars::contract(executor, graph, lib)?;
+
+        while {
+            let (newgraph, smth) = SingleSmallestDegree::<false>::contract(executor, graph, lib)?;
+            graph = newgraph;
+            smth
+        } {
+            didsmth |= true
+        }
+
+        let (graph, _) = ContractScalars::contract(executor, graph, lib)?;
+
+        Ok((graph, didsmth))
+    }
+}
+
+impl<
+        LT: LibraryTensor + Clone,
+        T: HasStructure
+            + TensorStructure
+            + Clone
+            + Contract<LCM = T>
+            + ScalarMul<Sc, Output = T>
+            + Contract<LT::WithIndices, LCM = T>
+            + From<LT::WithIndices>,
+        L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
+        Sc: for<'a> MulAssign<Sc::Ref<'a>>
+            + Clone
+            + for<'a> MulAssign<T::ScalarRef<'a>>
+            + From<T::Scalar>
+            + Ref,
+        K: Display + Debug + Clone,
+        Aind: AbsInd,
+        const N: usize,
+    > ContractionStrategy<NetworkStore<T, Sc>, L, K, Aind> for SmallestDegreeIter<N>
+where
+    LT::WithIndices: Contract<LT::WithIndices, LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + PermuteTensor<Permuted = LT::WithIndices>,
+    <LT::WithIndices as HasStructure>::Structure: Display,
+    T::Structure: Display,
+    <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
+        IsAbstractSlot<Aind = Aind>,
+{
+    fn contract(
+        executor: &mut NetworkStore<T, Sc>,
+        graph: NetworkGraph<K, Aind>,
+        lib: &L,
+    ) -> Result<(NetworkGraph<K, Aind>, bool), TensorNetworkError<K>>
+    where
+        K: Display,
+    {
+        let (mut graph, mut didsmth) = ContractScalars::contract(executor, graph, lib)?;
+
+        for _ in 0..N {
+            let (newgraph, smth) = SingleSmallestDegree::<false>::contract(executor, graph, lib)?;
+            graph = newgraph;
+            didsmth |= smth;
+        }
+
+        let (graph, _) = ContractScalars::contract(executor, graph, lib)?;
+
+        Ok((graph, didsmth))
+    }
+}
+
+impl<
+        LT: LibraryTensor + Clone,
+        T: HasStructure
+            + TensorStructure
+            + Clone
+            + Contract<LCM = T>
+            + ScalarMul<Sc, Output = T>
+            + Contract<LT::WithIndices, LCM = T>
+            + From<LT::WithIndices>,
+        L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
+        Sc: for<'a> MulAssign<Sc::Ref<'a>>
+            + Clone
+            + for<'a> MulAssign<T::ScalarRef<'a>>
+            + From<T::Scalar>
+            + Ref,
+        K: Display + Debug + Clone,
+        Aind: AbsInd,
+        const D: bool,
+    > ContractionStrategy<NetworkStore<T, Sc>, L, K, Aind> for SingleSmallestDegree<D>
+where
+    LT::WithIndices: Contract<LT::WithIndices, LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + PermuteTensor<Permuted = LT::WithIndices>,
+    <LT::WithIndices as HasStructure>::Structure: Display,
+    T::Structure: Display,
+    <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
+        IsAbstractSlot<Aind = Aind>,
+{
+    fn contract(
+        executor: &mut NetworkStore<T, Sc>,
+        mut graph: NetworkGraph<K, Aind>,
+        lib: &L,
+    ) -> Result<(NetworkGraph<K, Aind>, bool), TensorNetworkError<K>>
+    where
+        K: Display,
+    {
+        graph.sync_order();
+        if D {
+            println!("Contracting {}", graph.dot());
+        }
+
+        let mut last_tensor = None;
+        let edge_to_contract = graph
+            .graph
+            .iter_nodes()
+            .filter(|(_, _, d)| d.is_tensor())
+            .filter_map(|(nid1, a, n1)| {
+                let mut degree = 0;
+                let mut first = None;
+                for h in a {
+                    if graph.graph[[&h]].is_slot() && graph.graph.inv(h) != h {
+                        first = Some(h); //only contract slot hedges
+                        degree += 1
+                    }
+                }
+
+                let nid2 = if degree == 0 {
+                    //no internal slots to contract
+                    // contract with last tensor (give max  weight  so only happens when there are no internal slots)
+                    degree = i32::MAX;
+                    if let Some(last_tensor) = last_tensor {
+                        last_tensor
+                    } else {
+                        last_tensor = Some(nid1);
+                        return None;
+                    }
+                } else {
+                    graph.graph.involved_node_id(first?)?
+                };
+
+                let n2 = &graph.graph[nid2];
+
+                last_tensor = Some(nid1);
+
+                Some((degree, nid1, n1, nid2, n2))
+            })
+            .min_by_key(|(degree, _, _, _, _)| *degree);
+
+        if let Some((_, nid1, n1, nid2, n2)) = edge_to_contract {
+            if D {
+                println!("Contracting {} with {}", nid1, nid2);
+            }
+            let new_node = match (n1, n2) {
+                (NetworkNode::Leaf(_), NetworkNode::Op(NetworkOp::Product))
+                | (NetworkNode::Op(NetworkOp::Product), NetworkNode::Leaf(_)) => {
+                    return Err(TensorNetworkError::SlotEdgeToProdNode)
+                }
+                (NetworkNode::Leaf(l1), NetworkNode::Leaf(l2)) => match (l1, l2) {
+                    (NetworkLeaf::Scalar(_), _) | (_, NetworkLeaf::Scalar(_)) => {
+                        return Err(TensorNetworkError::SlotEdgeToScalarNode)
+                    }
+
+                    (NetworkLeaf::LocalTensor(l1), NetworkLeaf::LocalTensor(l2)) => {
+                        if D {
+                            let st1 = executor.tensors[*l1].structure();
+                            let st2 = executor.tensors[*l2].structure();
+
+                            println!("Contracting {} with {}", st1, st2);
+                        }
+
+                        let contracted = executor.tensors[*l1].contract(&executor.tensors[*l2])?;
+
+                        if D {
+                            println!("Obtained {}", contracted.structure());
+                        }
+                        let pos = executor.tensors.len();
+                        executor.tensors.push(contracted);
+
+                        NetworkLeaf::LocalTensor(pos)
+                    }
+                    (NetworkLeaf::LibraryKey(_), NetworkLeaf::LocalTensor(l2)) => {
+                        let l1 = graph.get_lib_data(lib, nid1).unwrap();
+                        if D {
+                            let st1 = l1.structure();
+                            let st2 = executor.tensors[*l2].structure();
+                            println!("Contracting {} with {}", st1, st2);
+                        }
+
+                        let contracted = executor.tensors[*l2].contract(&l1)?;
+                        if D {
+                            println!("Obtained {}", contracted.structure());
+                        }
+                        let pos = executor.tensors.len();
+                        executor.tensors.push(contracted);
+                        NetworkLeaf::LocalTensor(pos)
+                    }
+
+                    (NetworkLeaf::LocalTensor(l2), NetworkLeaf::LibraryKey(_)) => {
+                        let l1 = graph.get_lib_data(lib, nid2).unwrap();
+                        if D {
+                            let st1 = l1.structure();
+                            let st2 = executor.tensors[*l2].structure();
+                            println!("Contracting {} with {}", st2, st1);
+                        }
+
+                        let contracted = executor.tensors[*l2].contract(&l1)?;
+                        if D {
+                            println!("Obtained {}", contracted.structure());
+                        }
+                        let pos = executor.tensors.len();
+                        executor.tensors.push(contracted);
+
+                        NetworkLeaf::LocalTensor(pos)
+                    }
+                    (NetworkLeaf::LibraryKey(_), NetworkLeaf::LibraryKey(_)) => {
+                        let l1 = graph.get_lib_data(lib, nid1).unwrap();
+
+                        let l2 = graph.get_lib_data(lib, nid2).unwrap();
+                        if D {
+                            let st1 = l1.structure();
+                            let st2 = l2.structure();
+                            println!("Contracting {} with {}", st2, st1);
+                        }
+
+                        let contracted = l1.contract(&l2)?;
+                        if D {
+                            println!("Obtained {}", contracted.structure());
+                        }
+                        let pos = executor.tensors.len();
+                        executor.tensors.push(contracted);
+
+                        NetworkLeaf::LocalTensor(pos)
+                    }
+                },
+                (a, b) => {
+                    return Err(TensorNetworkError::CannotContractEdgeBetween(
+                        a.clone(),
+                        b.clone(),
+                    ))
+                }
+            };
+            graph.identify_nodes_without_self_edges_merge_heads(
+                &[nid1, nid2],
+                NetworkNode::Leaf(new_node),
+            );
+            Ok((graph, true))
+        } else {
+            Ok((graph, false))
+        }
+    }
+}
+
+// #[cfg(feature = "shadowing")]
+// pub mod levels;
 #[cfg(feature = "shadowing")]
-#[cfg(test)]
-mod shadowing_tests;
+pub mod symbolica_interop;
+
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-mod test {}

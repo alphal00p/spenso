@@ -1,0 +1,20 @@
+[package]
+name = "idenso"
+version = "0.0.0"
+edition = "2024"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bincode = { version = "2.0", optional = true }
+bincode-trait-derive = { version = "0.1.0", optional = true }
+symbolica = { version = "0.17.0" }
+spenso = { path = "../spenso", features = ["shadowing"] }
+spenso-macros = { path = "../spenso-macros" }
+itertools = "0.14.0"
+linnet = "0.7.1"
+[features]
+
+default = []
+bincode = ["dep:bincode", "dep:bincode-trait-derive"]

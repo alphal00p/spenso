@@ -1,5 +1,7 @@
 use std::ops::Deref;
 
+use bincode::Decode;
+use bincode::Encode;
 use derive_more::Add;
 use derive_more::AddAssign;
 use derive_more::Display;
@@ -44,9 +46,9 @@ pub enum DualConciousIndex {
 impl From<DualConciousIndex> for Atom {
     fn from(value: DualConciousIndex) -> Self {
         match value {
-            DualConciousIndex::Up(s) => Atom::new_num(s as i64),
-            DualConciousIndex::Down(s) => function!(symbol!(DOWN), Atom::new_num(s as i64)),
-            DualConciousIndex::SelfDual(s) => Atom::new_num(s as i64),
+            DualConciousIndex::Up(s) => Atom::num(s as i64),
+            DualConciousIndex::Down(s) => function!(symbol!(DOWN), Atom::num(s as i64)),
+            DualConciousIndex::SelfDual(s) => Atom::num(s as i64),
         }
     }
 }
@@ -80,6 +82,12 @@ impl Deref for DualConciousExpandedIndex {
     }
 }
 
+impl DualConciousExpandedIndex {
+    pub fn permute(&mut self, perm: &Permutation) {
+        perm.apply_slice_in_place(&mut self.indices);
+    }
+}
+
 #[cfg(feature = "shadowing")]
 impl From<DualConciousExpandedIndex> for Atom {
     fn from(value: DualConciousExpandedIndex) -> Self {
@@ -106,13 +114,20 @@ impl From<DualConciousExpandedIndex> for Atom {
     Into,
     Display,
     IntoIterator,
+    Default,
+    Encode,
+    Decode,
 )]
 #[display(fmt = "{:?}", indices)]
-
 pub struct ExpandedIndex {
-    indices: Vec<ConcreteIndex>,
+    pub indices: Vec<ConcreteIndex>,
 }
 
+impl Extend<ConcreteIndex> for ExpandedIndex {
+    fn extend<T: IntoIterator<Item = ConcreteIndex>>(&mut self, iter: T) {
+        self.indices.extend(iter);
+    }
+}
 impl ExpandedIndex {
     pub fn apply_permutation(&self, permutation: &Permutation) -> Self {
         ExpandedIndex {
@@ -138,7 +153,7 @@ impl AsRef<[ConcreteIndex]> for ExpandedIndex {
 //     fn from(value: ExpandedIndex) -> Self {
 //         let mut cind = FunctionBuilder::new(Symbol::new(CONCRETEIND));
 //         for i in value.iter() {
-//             cind = cind.add_arg(Atom::new_num(*i as i64).as_atom_view());
+//             cind = cind.add_arg(Atom::num(*i as i64).as_atom_view());
 //         }
 //         cind.finish()
 //     }
@@ -182,6 +197,8 @@ impl FromIterator<ConcreteIndex> for ExpandedIndex {
     AddAssign,
     Sub,
     SubAssign,
+    Encode,
+    Decode,
 )]
 #[display(fmt = "{}", index)]
 pub struct FlatIndex {
@@ -192,7 +209,7 @@ pub struct FlatIndex {
 impl From<FlatIndex> for Atom {
     fn from(value: FlatIndex) -> Self {
         let mut cind = FunctionBuilder::new(symbol!(FLATIND));
-        cind = cind.add_arg(Atom::new_num(value.index as i64).as_atom_view());
+        cind = cind.add_arg(Atom::num(value.index as i64).as_atom_view());
         cind.finish()
     }
 }

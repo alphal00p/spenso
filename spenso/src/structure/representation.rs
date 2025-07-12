@@ -6,23 +6,31 @@ use super::{
 };
 use ahash::AHashMap;
 use append_only_vec::AppendOnlyVec;
+use linnet::half_edge::involution::Orientation;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use spenso_macros::SimpleRepresentation;
+use std::ops::Index;
 use std::{
+    cmp::Ordering,
     convert::Infallible,
     fmt::{Debug, Display},
-    sync::RwLock,
+    hash::{Hash, Hasher},
+    sync::{LazyLock, RwLock},
 };
-use std::{hash::Hash, ops::Index};
+
+use bincode::{Decode, Encode};
 
 #[cfg(feature = "shadowing")]
-use crate::{structure::slot::SlotError, tensor_library::ETS};
+use crate::{
+    network::library::symbolic::ETS, structure::abstract_index::AIND_SYMBOLS,
+    structure::slot::SlotError,
+};
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{Atom, AtomCore, FunctionBuilder, Symbol},
-    {function, symbol},
+    atom::{Atom, AtomOrView, FunctionBuilder, Symbol},
+    function, symbol,
 };
 
 use thiserror::Error;
@@ -51,7 +59,7 @@ pub trait BaseRepName: RepName<Dual: RepName> + Default {
 
     #[cfg(feature = "shadowing")]
     fn pattern(symbol: Symbol) -> Atom {
-        Self::default().to_symbolic([Atom::new_var(symbol)])
+        Self::default().to_symbolic([Atom::var(symbol)])
     }
 
     fn slot<D: Into<Dimension>, A: Into<AbstractIndex>>(dim: D, aind: A) -> Slot<Self>
@@ -115,12 +123,24 @@ pub trait RepName:
     type Base: RepName;
 
     fn from_library_rep(rep: LibraryRep) -> Result<Self, RepresentationError>;
-
+    fn is_dummy(self) -> bool {
+        false
+    }
+    fn orientation(self) -> Orientation;
     fn dual(self) -> Self::Dual;
     fn is_dual(self) -> bool;
     fn base(&self) -> Self::Base;
     fn is_base(&self) -> bool;
+    fn is_self_dual(&self) -> bool {
+        self.is_base() && self.is_dual()
+    }
+
     fn matches(&self, other: &Self::Dual) -> bool;
+
+    fn match_cmp(&self, _other: &Self::Dual) -> Ordering {
+        Ordering::Equal
+    }
+
     #[cfg(feature = "shadowing")]
     fn try_from_symbol(sym: Symbol, aind: Symbol) -> Result<Self, RepresentationError> {
         Self::from_library_rep(LibraryRep::try_from_symbol(sym, aind)?)
@@ -144,22 +164,55 @@ pub trait RepName:
     #[cfg(feature = "shadowing")]
     /// yields a function builder for the representation, adding a first variable: the dimension.
     ///
-    fn to_symbolic<It: Into<Atom>>(&self, args: impl IntoIterator<Item = It>) -> Atom {
+    fn to_symbolic<'a, It: Into<AtomOrView<'a>>>(
+        &self,
+        args: impl IntoIterator<Item = It>,
+    ) -> Atom {
         let librep: LibraryRep = (*self).into();
         librep.to_symbolic(args)
     }
 
-    fn slot<D: Into<Dimension>, A: Into<AbstractIndex>>(self, dim: D, aind: A) -> Slot<Self>
+    #[cfg(feature = "shadowing")]
+    /// An atom representing the identity function for that representation.
+    /// a is dualized
+    /// b is not
+    fn id_atom<'a, It: Into<AtomOrView<'a>>>(
+        &self,
+        a: impl IntoIterator<Item = It>,
+        b: impl IntoIterator<Item = It>,
+    ) -> Atom {
+        let librep: LibraryRep = (*self).into();
+        function!(
+            ETS.metric,
+            librep.dual().to_symbolic(a),
+            librep.to_symbolic(b)
+        )
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    #[cfg(feature = "shadowing")]
+    /// yields a function builder for the representation, adding a first variable: the dimension.
+    ///
+    fn metric_atom<'a, It: Into<AtomOrView<'a>>>(
+        &self,
+        a: impl IntoIterator<Item = It>,
+        b: impl IntoIterator<Item = It>,
+    ) -> Atom {
+        let librep: LibraryRep = (*self).into();
+        function!(ETS.metric, librep.to_symbolic(a), librep.to_symbolic(b))
+    }
+
+    fn new_slot<Aind, D: Into<Dimension>, A: Into<Aind>>(self, dim: D, aind: A) -> Slot<Self, Aind>
     where
         Self: Sized,
     {
         Slot {
-            rep: self.rep(dim),
+            rep: self.new_rep(dim),
             aind: aind.into(),
         }
     }
 
-    fn rep<D: Into<Dimension>>(&self, dim: D) -> Representation<Self>
+    fn new_rep<D: Into<Dimension>>(&self, dim: D) -> Representation<Self>
     where
         Self: Sized,
     {
@@ -184,6 +237,8 @@ pub trait RepName:
     Default,
     Serialize,
     Deserialize,
+    Encode,
+    Decode,
 )]
 #[representation(name = "euc", self_dual)] // Specify the dual name
 pub struct Euclidean {}
@@ -201,13 +256,27 @@ pub struct Euclidean {}
     Ord,
     Default,
     Serialize,
+    Encode,
+    Decode,
     Deserialize,
 )]
 #[representation(name = "lor")] // Specify the dual name
 pub struct Lorentz {}
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Default,
+    Encode,
+    Decode,
 )]
 pub struct Minkowski {}
 
@@ -223,6 +292,10 @@ impl RepName for Minkowski {
 
     fn from_library_rep(rep: LibraryRep) -> Result<Self, RepresentationError> {
         rep.try_into()
+    }
+
+    fn orientation(self) -> ::linnet::half_edge::involution::Orientation {
+        ::linnet::half_edge::involution::Orientation::Undirected
     }
 
     fn base(&self) -> Self::Base {
@@ -282,38 +355,289 @@ impl BaseRepName for Minkowski {
         Self::default()
     }
 }
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Default,
+    Encode,
+    Decode,
+)]
+pub struct Dummy {}
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Representation<T: RepName> {
-    pub dim: Dimension,
-    pub rep: T,
+impl From<Dummy> for LibraryRep {
+    fn from(_value: Dummy) -> Self {
+        LibraryRep::Dummy
+    }
 }
 
+impl RepName for Dummy {
+    type Base = Dummy;
+    type Dual = Dummy;
+
+    fn from_library_rep(rep: LibraryRep) -> Result<Self, RepresentationError> {
+        rep.try_into()
+    }
+
+    fn orientation(self) -> ::linnet::half_edge::involution::Orientation {
+        ::linnet::half_edge::involution::Orientation::Undirected
+    }
+
+    fn base(&self) -> Self::Base {
+        Dummy::selfless_base()
+    }
+
+    fn is_base(&self) -> bool {
+        true
+    }
+
+    fn dual(self) -> Self::Dual {
+        Dummy::selfless_dual()
+    }
+
+    fn is_dual(self) -> bool {
+        true
+    }
+
+    fn matches(&self, _: &Self::Dual) -> bool {
+        true
+    }
+}
+
+impl Display for Dummy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "dummy")
+    }
+}
+
+impl TryFrom<LibraryRep> for Dummy {
+    type Error = RepresentationError;
+
+    fn try_from(value: LibraryRep) -> std::result::Result<Self, Self::Error> {
+        if value == LibraryRep::Dummy {
+            std::result::Result::Ok(Dummy {})
+        } else {
+            Err(RepresentationError::WrongRepresentationError(
+                "dummy".to_string(),
+                value.to_string(),
+            ))
+        }
+    }
+}
+
+impl BaseRepName for Dummy {
+    const NAME: &'static str = "dummy";
+
+    fn selfless_base() -> Self::Base {
+        Self::default()
+    }
+
+    fn selfless_dual() -> Self::Dual {
+        Self::default()
+    }
+}
+
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Serialize,
+    Deserialize,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+    // bincode_trait_derive::BorrowDecodeFromDecode,
+)]
+#[cfg_attr(
+    feature = "shadowing",
+    trait_decode(trait = symbolica::state::HasStateMap),
+)]
+pub struct Representation<T: RepName> {
+    pub rep: T,
+    pub dim: Dimension,
+}
+
+impl<T: RepName> Ord for Representation<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.rep.is_dummy() && other.rep.is_dummy() {
+            Ordering::Equal
+        } else {
+            self.rep.cmp(&other.rep).then(self.dim.cmp(&other.dim))
+        }
+    }
+}
+
+impl<T: RepName> PartialOrd for Representation<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T: Hash + RepName> Hash for Representation<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.rep.hash(state);
+        self.dim.hash(state);
+    }
+}
+
+impl<T: RepName> PartialEq for Representation<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.rep == other.rep && self.dim == other.dim
+    }
+}
+
+impl<T: RepName> Eq for Representation<T> {}
+
 impl<T: RepName> Representation<T> {
+    #[allow(clippy::cast_possible_wrap)]
     #[cfg(feature = "shadowing")]
-    pub fn pattern<A: AtomCore>(&self, aind: A) -> Atom {
-        let mut atom = Atom::new();
-        atom.set_from_view(&aind.as_atom_view());
-        self.rep.to_symbolic([self.dim.to_symbolic(), atom])
+    /// An atom representing the identity tensor with aind a, and b.
+    /// a is dualized, b is not.
+    ///
+    pub fn id<'a, It: Into<AtomOrView<'a>>>(&self, a: It, b: It) -> Atom {
+        let a: AtomOrView<'a> = a.into();
+        let b: AtomOrView<'a> = b.into();
+        function!(ETS.metric, self.dual().pattern(a), self.pattern(b))
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    #[cfg(feature = "shadowing")]
+    /// An atom representing the metric tensor with aind a, and b.
+    pub fn g<'a, It: Into<AtomOrView<'a>>>(&self, a: It, b: It) -> Atom {
+        let a: AtomOrView<'a> = a.into();
+        let b: AtomOrView<'a> = b.into();
+        function!(ETS.metric, self.pattern(a), self.pattern(b))
+    }
+    #[cfg(feature = "shadowing")]
+    /// An atom representing the musical isomorphism tensor with aind a, and b.
+    pub fn flat<'a, It: Into<AtomOrView<'a>>>(&self, a: It, b: It) -> Atom {
+        let a: AtomOrView<'a> = a.into();
+        let b: AtomOrView<'a> = b.into();
+        function!(ETS.flat, self.pattern(a), self.pattern(b))
+    }
+
+    pub fn to_lib(self) -> Representation<LibraryRep> {
+        let rep: LibraryRep = self.rep.into();
+        Representation { dim: self.dim, rep }
+    }
+
+    pub fn to_dummy(self) -> Representation<Dummy> {
+        Representation {
+            dim: self.dim,
+            rep: Dummy {},
+        }
+    }
+
+    pub fn dot(&self) -> String {
+        format!(
+            "<<TABLE><TR><TD>{}</TD><TD>{}</TD></TR></TABLE>>",
+            self.rep, self.dim
+        )
+    }
+
+    #[cfg(feature = "shadowing")]
+    pub fn pattern<'a, A: Into<AtomOrView<'a>>>(&self, aind: A) -> Atom {
+        let dim = AtomOrView::Atom(self.dim.to_symbolic());
+        let a = aind.into();
+        self.rep.to_symbolic([dim, a])
     }
 
     #[cfg(feature = "shadowing")]
     pub fn to_pattern_wrapped(&self, aind: Symbol) -> Atom {
         self.rep.to_symbolic([
             self.dim.to_symbolic(),
-            function!(symbol!("indexid"), Atom::new_var(aind)),
+            function!(symbol!("indexid"), Atom::var(aind)),
         ])
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, Serialize, Deserialize, Encode, Decode)]
 pub enum LibraryRep {
     SelfDual(u16),
     InlineMetric(u16),
     Dualizable(i16),
+    Dummy,
 }
 
-pub type LibrarySlot = Slot<LibraryRep>;
+impl Ord for LibraryRep {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (LibraryRep::SelfDual(a), LibraryRep::SelfDual(b)) => a.cmp(b),
+            (LibraryRep::InlineMetric(a), LibraryRep::InlineMetric(b)) => a.cmp(b),
+            (LibraryRep::Dualizable(a), LibraryRep::Dualizable(b)) => {
+                if *a < 0 {
+                    if *b < 0 {
+                        a.abs().cmp(&b.abs())
+                    } else {
+                        Ordering::Greater
+                    }
+                } else if *b < 0 {
+                    Ordering::Less
+                } else {
+                    a.cmp(b)
+                }
+            }
+            (LibraryRep::SelfDual(_), LibraryRep::Dualizable(_))
+            | (LibraryRep::SelfDual(_), LibraryRep::InlineMetric(_))
+            | (LibraryRep::InlineMetric(_), LibraryRep::Dualizable(_)) => Ordering::Less,
+            (LibraryRep::Dualizable(_), LibraryRep::SelfDual(_))
+            | (LibraryRep::InlineMetric(_), LibraryRep::SelfDual(_))
+            | (LibraryRep::Dualizable(_), LibraryRep::InlineMetric(_)) => Ordering::Greater,
+            (LibraryRep::Dummy, LibraryRep::Dummy) => Ordering::Equal,
+            (LibraryRep::Dummy, _) => Ordering::Less,
+            (_, LibraryRep::Dummy) => Ordering::Greater,
+        }
+    }
+}
+
+#[test]
+fn sorting_reps() {
+    use linnet::permutation::Permutation;
+    let mut a = [
+        Euclidean {}.new_rep(4).cast(),
+        Euclidean {}.new_rep(4).cast(),
+        LibraryRep::from(Minkowski {}).new_rep(4),
+    ];
+
+    let perm = Permutation::sort(a);
+    perm.apply_slice_in_place(&mut a);
+
+    let mut b = [
+        Euclidean {}.new_rep(4).cast(),
+        LibraryRep::from(Minkowski {}).new_rep(4),
+        Euclidean {}.new_rep(4).cast(),
+    ];
+
+    let perm = Permutation::sort(b);
+    perm.apply_slice_in_place(&mut b);
+
+    let mut c = [
+        LibraryRep::from(Minkowski {}).new_rep(4),
+        Euclidean {}.new_rep(4).cast(),
+        Euclidean {}.new_rep(4).cast(),
+    ];
+
+    let perm = Permutation::sort(c);
+    perm.apply_slice_in_place(&mut c);
+
+    assert_eq!(a, b);
+    assert_eq!(a, c);
+    // assert_eq!()
+}
+
+impl PartialOrd for LibraryRep {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+pub type LibrarySlot<Aind> = Slot<LibraryRep, Aind>;
 
 pub(crate) static REPS: Lazy<RwLock<ExtendibleReps>> =
     Lazy::new(|| RwLock::new(ExtendibleReps::new()));
@@ -324,6 +648,15 @@ pub(crate) static DUALIZABLE: AppendOnlyVec<(LibraryRep, RepData)> = AppendOnlyV
 impl LibraryRep {
     pub fn new_dual(name: &str) -> Result<Self, RepLibraryError> {
         REPS.write().unwrap().new_dual_impl(name)
+    }
+
+    #[cfg(feature = "shadowing")]
+    pub fn symbol(&self) -> Symbol {
+        REPS.read().unwrap()[*self].symbol
+    }
+
+    pub fn name(&self) -> String {
+        REPS.read().unwrap()[*self].name.clone()
     }
 
     pub fn new_self_dual(name: &str) -> Result<Self, RepLibraryError> {
@@ -341,6 +674,12 @@ impl LibraryRep {
     pub fn all_inline_metrics() -> impl Iterator<Item = &'static LibraryRep> {
         INLINE_METRIC.iter().map(|(rep, _)| rep)
     }
+
+    pub fn all_representations() -> impl Iterator<Item = &'static LibraryRep> {
+        Self::all_self_duals()
+            .chain(Self::all_dualizables())
+            .chain(Self::all_inline_metrics())
+    }
 }
 
 pub struct MetricRepData {
@@ -354,6 +693,12 @@ pub struct RepData {
     #[cfg(feature = "shadowing")]
     symbol: Symbol,
 }
+
+static DUMMY_REP_DATA: LazyLock<RepData> = LazyLock::new(|| RepData {
+    name: "Dummy".to_string(),
+    #[cfg(feature = "shadowing")]
+    symbol: symbol!("Dummy"),
+});
 
 pub struct ExtendibleReps {
     name_map: AHashMap<String, LibraryRep>,
@@ -439,8 +784,8 @@ impl ExtendibleReps {
     ) -> Result<LibraryRep, RepLibraryError> {
         if let Some(rep) = self.name_map.get(name) {
             match rep {
-                LibraryRep::SelfDual(_) | LibraryRep::Dualizable(_) => {
-                    return Err(RepLibraryError::AlreadyExistsDifferentType(name.into()))
+                LibraryRep::SelfDual(_) | LibraryRep::Dualizable(_) | LibraryRep::Dummy => {
+                    return Err(RepLibraryError::AlreadyExistsDifferentType(name.into()));
                 }
                 LibraryRep::InlineMetric(a) => {
                     if INLINE_METRIC[*a as usize].1.metric_data == metric_fn {
@@ -481,6 +826,7 @@ impl Index<LibraryRep> for ExtendibleReps {
 
     fn index(&self, index: LibraryRep) -> &Self::Output {
         match index {
+            LibraryRep::Dummy => &DUMMY_REP_DATA,
             LibraryRep::SelfDual(l) => &SELF_DUAL[l as usize].1,
             LibraryRep::InlineMetric(l) => &INLINE_METRIC[l as usize].1.rep_data,
             LibraryRep::Dualizable(l) => &DUALIZABLE[l.unsigned_abs() as usize - 1].1,
@@ -502,7 +848,10 @@ impl ExtendibleReps {
         };
 
         #[cfg(feature = "shadowing")]
-        ETS.id;
+        let _ = ETS.metric;
+
+        #[cfg(feature = "shadowing")]
+        let _ = AIND_SYMBOLS.aind;
         new.new_self_dual(Euclidean::NAME).unwrap();
         fn mink_is_neg(id: ConcreteIndex) -> bool {
             Minkowski {}.is_neg(id)
@@ -528,6 +877,7 @@ impl Default for ExtendibleReps {
 impl Display for LibraryRep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Dummy => write!(f, "Dummy"),
             Self::SelfDual(_) => write!(f, "{}", REPS.read().unwrap()[*self].name),
             Self::InlineMetric(_) => write!(f, "{}", REPS.read().unwrap()[*self].name),
             Self::Dualizable(l) => {
@@ -541,6 +891,10 @@ impl Display for LibraryRep {
     }
 }
 
+pub fn initialize() {
+    let _ = LibraryRep::from(Minkowski {}).to_string();
+}
+
 impl RepName for LibraryRep {
     type Dual = LibraryRep;
     type Base = LibraryRep;
@@ -549,9 +903,23 @@ impl RepName for LibraryRep {
         Ok(rep)
     }
 
+    fn orientation(self) -> Orientation {
+        match self {
+            Self::Dummy => Orientation::Undirected,
+            Self::SelfDual(_) => Orientation::Undirected,
+            Self::InlineMetric(_) => Orientation::Undirected,
+            Self::Dualizable(l) => match l.cmp(&0) {
+                Ordering::Greater => Orientation::Default,
+                Ordering::Less => Orientation::Reversed,
+                Ordering::Equal => panic!("dualizable with 0"),
+            },
+        }
+    }
+
     #[inline]
     fn dual(self) -> Self::Dual {
         match self {
+            Self::Dummy => Self::Dummy,
             Self::SelfDual(l) => Self::SelfDual(l),
             Self::InlineMetric(l) => Self::InlineMetric(l),
             Self::Dualizable(l) => Self::Dualizable(-l),
@@ -574,6 +942,10 @@ impl RepName for LibraryRep {
         }
     }
 
+    fn is_self_dual(&self) -> bool {
+        !matches!(self, Self::Dualizable(_))
+    }
+
     #[inline]
     fn base(&self) -> Self::Base {
         match self {
@@ -587,7 +959,17 @@ impl RepName for LibraryRep {
         match (self, other) {
             (Self::SelfDual(s), Self::SelfDual(o)) => s == o,
             (Self::Dualizable(s), Self::Dualizable(o)) => *s == -o,
+            (Self::InlineMetric(s), Self::InlineMetric(o)) => s == o,
             _ => false,
+        }
+    }
+
+    fn match_cmp(&self, other: &Self::Dual) -> Ordering {
+        match (self, other) {
+            (Self::SelfDual(s), Self::SelfDual(o))
+            | (Self::InlineMetric(s), Self::InlineMetric(o)) => s.cmp(o),
+            (Self::Dualizable(s), Self::Dualizable(o)) => s.abs().cmp(&o.abs()),
+            _ => self.cmp(other),
         }
     }
 
@@ -616,19 +998,7 @@ impl RepName for LibraryRep {
                     Err(RepresentationError::SymbolError(aind))
                 }
             }
-            LibraryRep::SelfDual(_) => {
-                if aind == AIND_SYMBOLS.selfdualind {
-                    Ok(rep)
-                } else if aind == AIND_SYMBOLS.dind || aind == AIND_SYMBOLS.uind {
-                    Err(RepresentationError::ExpectedDualStateError(
-                        AIND_SYMBOLS.selfdualind,
-                        aind,
-                    ))
-                } else {
-                    Err(RepresentationError::SymbolError(aind))
-                }
-            }
-            LibraryRep::InlineMetric(_) => {
+            LibraryRep::SelfDual(_) | LibraryRep::InlineMetric(_) | LibraryRep::Dummy => {
                 if aind == AIND_SYMBOLS.selfdualind {
                     Ok(rep)
                 } else if aind == AIND_SYMBOLS.dind || aind == AIND_SYMBOLS.uind {
@@ -659,22 +1029,26 @@ impl RepName for LibraryRep {
         }
     }
 
+    fn is_dummy(self) -> bool {
+        matches!(self, LibraryRep::Dummy)
+    }
+
     #[cfg(feature = "shadowing")]
     /// yields a function builder for the representation, adding a first variable: the dimension.
-    ///
-
-    fn to_symbolic<It: Into<Atom>>(&self, args: impl IntoIterator<Item = It>) -> Atom {
+    fn to_symbolic<'a, It: Into<AtomOrView<'a>>>(
+        &self,
+        args: impl IntoIterator<Item = It>,
+    ) -> Atom {
         use crate::structure::abstract_index::AIND_SYMBOLS;
 
-        let mut fun = FunctionBuilder::new(REPS.read().unwrap()[*self].symbol);
+        let mut fun = FunctionBuilder::new(self.symbol());
         for a in args {
-            fun = fun.add_arg(&a.into());
+            fun = fun.add_arg(a);
         }
         let inner = fun.finish();
 
         match self {
-            Self::SelfDual(_) => inner,
-            Self::InlineMetric(_) => inner,
+            Self::SelfDual(_) | Self::Dummy | Self::InlineMetric(_) => inner,
             Self::Dualizable(l) => {
                 if *l < 0 {
                     function!(AIND_SYMBOLS.dind, &inner)
@@ -747,6 +1121,13 @@ impl<T: RepName> Representation<T> {
     pub fn matches(&self, other: &Representation<T::Dual>) -> bool {
         self.dim == other.dim && self.rep.matches(&other.rep)
     }
+
+    pub fn match_cmp(&self, other: &Representation<T::Dual>) -> Ordering {
+        self.dim
+            .cmp(&other.dim)
+            .then(self.rep.match_cmp(&other.rep))
+    }
+
     #[cfg(feature = "shadowing")]
     /// yields a function builder for the representation, adding a first variable: the dimension.
     ///
@@ -772,7 +1153,7 @@ impl<T: RepName> Representation<T> {
         self.rep.is_neg(i)
     }
 
-    pub fn slot<A: Into<AbstractIndex>>(&self, aind: A) -> Slot<T> {
+    pub fn slot<Aind, A: Into<Aind>>(&self, aind: A) -> Slot<T, Aind> {
         Slot {
             aind: aind.into(),
             rep: *self,
@@ -783,28 +1164,6 @@ impl<T: RepName> Representation<T> {
     // this could be implemented directly in the fiberiterator.
     /// gives the vector of booleans, saying which concrete index along a Dimension/Abstract Index should have a minus sign during contraction.
     ///
-    /// # Example
-    /// ```
-    /// # use spenso::structure::*;
-    /// # use spenso::structure::representation::*;
-    /// # use spenso::structure::dimension::*;
-    /// # use spenso::structure::abstract_index::*;
-    /// # use spenso::structure::slot::*;
-    /// # use spenso::structure::concrete_index::*;
-    /// let spin: Representation<Bispinor> = Bispinor::rep(5);
-    ///
-    /// let metric_diag: Vec<bool> = spin.negative().unwrap();
-    ///
-    /// let mut agree = true;
-    ///
-    /// for (i, r) in metric_diag.iter().enumerate() {
-    ///   if r ^ spin.is_neg(i) {
-    ///        agree = false;
-    ///     }
-    /// }
-    ///
-    /// assert!(agree);
-    /// ```
     pub fn negative(&self) -> Result<Vec<bool>> {
         Ok((0..usize::try_from(self.dim)?)
             .map(|i| self.is_neg(i))
@@ -814,7 +1173,7 @@ impl<T: RepName> Representation<T> {
 
 #[test]
 fn test_negative() {
-    let spin: Representation<Euclidean> = Euclidean {}.rep(5);
+    let spin: Representation<Euclidean> = Euclidean {}.new_rep(5);
 
     let metric_diag: Vec<bool> = spin.negative().unwrap();
 
@@ -860,6 +1219,34 @@ impl<T: RepName> TryFrom<Representation<T>> for usize {
 impl<'a, T: RepName> FromIterator<&'a Representation<T>> for Vec<Dimension> {
     fn from_iter<I: IntoIterator<Item = &'a Representation<T>>>(iter: I) -> Self {
         iter.into_iter().map(|rep| rep.dim).collect()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use linnet::permutation::Permutation;
+
+    use crate::structure::representation::{RepName, Representation};
+
+    use super::{Euclidean, LibraryRep, Lorentz, Minkowski};
+
+    #[test]
+    fn ordering() {
+        let reps: Vec<LibraryRep> = vec![
+            Euclidean {}.into(),
+            Minkowski {}.into(),
+            Lorentz {}.into(),
+            Lorentz {}.dual().into(),
+        ];
+
+        assert!(Permutation::sort(&reps).is_identity());
+        let reps: Vec<Representation<LibraryRep>> = vec![
+            Euclidean {}.new_rep(3).cast(),
+            Minkowski {}.new_rep(2).cast(),
+            Lorentz {}.new_rep(1).cast(),
+        ];
+
+        assert!(Permutation::sort(&reps).is_identity())
     }
 }
 

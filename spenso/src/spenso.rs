@@ -23,65 +23,17 @@ Namely
 */
 extern crate self as spenso;
 /// All tooling for tensor structures, indices and representations
-pub mod structure;
 // pub use structure::*;
+pub mod algebra;
 //
-
-#[cfg(feature = "shadowing")]
-pub mod symbolica_utils;
-
-/// More ergonomic, and smart arithmatic with symbolic types
-pub mod upgrading_arithmetic;
-// pub use upgrading_arithmetic::*;
-
-/// Tensors with data
-pub mod data;
-// pub use data::*;
-
-/// complex numbers
-pub mod complex;
-// pub use complex::*;
-// pub use symbolic::*;
-/// Iterators on fibers of tensors
-pub mod iterators;
-/// Parametric tensor contraction
-#[cfg(feature = "shadowing")]
-pub mod parametric;
-
-pub mod utils;
-// pub use parametric::*;
-
-/// Symbolic tensors
-#[cfg(feature = "shadowing")]
-pub mod symbolic;
-// pub use iterators::*;
-
 /// Tensor contraction
 pub mod contraction;
-// pub use contraction::*;
-
-/// Tensor networks
+pub mod iterators;
 pub mod network;
-// pub use network::*;
-/// Adding, subtracting, scalar multiplication of tensors
-pub mod arithmetic;
-
-/// data types for tensors
-pub mod scalar;
-// pub use scalar::*;
-
-/// Tensors as defined in the UFO format
-// pub mod ufo;
+pub mod structure;
+pub mod tensors;
 
 #[cfg(feature = "shadowing")]
 pub mod shadowing;
 
-#[cfg(feature = "shadowing")]
-// pub mod polynomial;
-#[cfg(feature = "shadowing")]
-pub mod tensor_library;
-
-#[cfg(feature = "shadowing")]
-pub mod api;
-#[cfg(test)]
-mod tests;
+pub mod utils;

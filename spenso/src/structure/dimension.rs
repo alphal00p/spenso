@@ -6,14 +6,29 @@ use symbolica::{atom::AtomView, coefficient::CoefficientView};
 use thiserror::Error;
 
 #[cfg(feature = "shadowing")]
-use crate::symbolica_utils::SerializableSymbol;
+use symbolica::atom::{Atom, Symbol};
 
 #[cfg(feature = "shadowing")]
-use symbolica::atom::{Atom, Symbol};
+use crate::shadowing::symbolica_utils::SerializableSymbol;
 
 /// A Dimension
 #[derive(
-    Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Display,
+    Debug,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Hash,
+    Display,
+    Serialize,
+    Deserialize,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+    // bincode_trait_derive::BorrowDecodeFromDecode,
+)]
+#[cfg_attr(
+    feature = "shadowing",
+    trait_decode(trait = symbolica::state::HasStateMap),
 )]
 pub enum Dimension {
     Concrete(usize),
@@ -29,9 +44,25 @@ impl Dimension {
     #[cfg(feature = "shadowing")]
     pub fn to_symbolic(&self) -> Atom {
         match self {
-            Self::Concrete(c) => Atom::new_num(*c as i64),
-            Self::Symbolic(s) => Atom::new_var((*s).into()),
+            Self::Concrete(c) => Atom::num(*c as i64),
+            Self::Symbolic(s) => Atom::var((*s).into()),
         }
+    }
+}
+
+impl Ord for Dimension {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (Dimension::Concrete(s), Dimension::Concrete(o)) => s.cmp(o),
+            #[cfg(feature = "shadowing")]
+            _ => std::cmp::Ordering::Equal,
+        }
+    }
+}
+
+impl PartialOrd for Dimension {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -83,7 +114,7 @@ impl<'a> TryFrom<AtomView<'a>> for Dimension {
         match value {
             AtomView::Var(a) => Ok(Dimension::Symbolic(a.get_symbol().into())),
             AtomView::Num(n) => match n.get_coeff_view() {
-                CoefficientView::Natural(n, 1) => {
+                CoefficientView::Natural(n, 1, _, _) => {
                     if n < 0 {
                         return Err(DimensionError::Negative);
                     }
@@ -133,11 +164,11 @@ mod shadowing_tests {
 
     #[test]
     fn dimension_from_view() {
-        let a = Atom::new_num(5);
-        let b = Atom::new_var(symbol!("b"));
+        let a = Atom::num(5);
+        let b = Atom::var(symbol!("b"));
         let c = function!(symbol!("a"), symbol!("b"));
-        let d = Atom::new_num(-1);
-        let e = Atom::new_num((1, 2));
+        let d = Atom::num(-1);
+        let e = Atom::num((1, 2));
 
         let dima = Dimension::try_from(a.as_view()).unwrap();
 

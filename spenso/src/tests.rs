@@ -1413,7 +1413,7 @@ fn test_fallible_mul() {
         let a = &parse!("a(2)").unwrap();
 
         let b = &parse!("b(1)").unwrap();
-        let i = Atom::new_var(Atom::I);
+        let i = Atom::var(Atom::I);
         let mut f = a.mul_fallible(&4.).unwrap();
         f.add_assign_fallible(b);
         f.add_assign_fallible(&i);

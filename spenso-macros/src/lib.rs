@@ -176,7 +176,7 @@ fn get_filtered_derive_paths(attrs: &[Attribute]) -> Result<Vec<Path>, syn::Erro
                             let is_target_derive = path
                                 .segments
                                 .last()
-                                .map_or(false, |segment| segment.ident == "SimpleRepresentation");
+                                .is_some_and(|segment| segment.ident == "SimpleRepresentation");
 
                             if !is_target_derive {
                                 derived_traits.push(path); // Keep the original Path struct
@@ -296,9 +296,14 @@ pub fn derive_simple_representation(input: TokenStream) -> TokenStream {
                 type Base = #base_type_ident;
                 type Dual = #base_type_ident;
 
+                #[inline]
+                fn orientation(self) -> ::linnet::half_edge::involution::Orientation {
+                    ::linnet::half_edge::involution::Orientation::Undirected
+                }
+
                 #base_repname_common_impl
                 #[inline]
-                fn is_dual(self) -> bool { false }
+                fn is_dual(self) -> bool { true }
                 #[inline] fn matches(&self, _other: &Self::Dual) -> bool { true }
                 #[inline] fn dual(self) -> Self::Dual { self }
             }
@@ -366,6 +371,12 @@ pub fn derive_simple_representation(input: TokenStream) -> TokenStream {
                 type Base = #base_type_ident;
                 type Dual = #dual_type_ident;
 
+
+                #[inline]
+                fn orientation(self) -> ::linnet::half_edge::involution::Orientation {
+                    ::linnet::half_edge::involution::Orientation::Default
+                }
+
                 #base_repname_common_impl
                 #[inline]
                 fn is_dual(self) -> bool { false }
@@ -418,6 +429,10 @@ pub fn derive_simple_representation(input: TokenStream) -> TokenStream {
                 type Base = #base_type_ident;
                 type Dual = #base_type_ident;
 
+                #[inline]
+                fn orientation(self) -> ::linnet::half_edge::involution::Orientation {
+                    ::linnet::half_edge::involution::Orientation::Reversed
+                }
                 #base_repname_common_impl
                 #[inline]
                 fn dual(self) -> Self::Dual where Self::Dual: Default { #base_type_ident::default() }

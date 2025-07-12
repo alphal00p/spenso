@@ -1,15 +1,22 @@
 use crate::{
-    data::DenseTensor,
-    parametric::{ParamTensor, TensorCoefficient},
+    network::parsing::ShadowedStructure,
+    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
-        concrete_index::FlatIndex, representation::LibraryRep, slot::IsAbstractSlot, HasName,
-        HasStructure, TensorShell, TensorStructure, ToSymbolic,
+        concrete_index::FlatIndex,
+        slot::{AbsInd, IsAbstractSlot},
+        HasName, HasStructure, TensorShell, TensorStructure, ToSymbolic,
     },
-    symbolica_utils::{IntoArgs, IntoSymbol},
-    tensor_library::{ExplicitKey, LibraryTensor, TensorLibrary},
+    tensors::{
+        data::{DataTensor, DenseTensor},
+        parametric::{MixedTensor, ParamTensor, TensorCoefficient},
+        symbolic::SymbolicTensor,
+    },
 };
 use anyhow::Result;
+use linnet::permutation::Permutation;
 use symbolica::{atom::Atom, evaluate::FunctionMap};
+
+pub mod symbolica_utils;
 
 /// Trait that enables shadowing of a tensor
 ///
@@ -18,10 +25,18 @@ pub trait Shadowable:
     HasStructure<
         Structure: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs> + Clone + Sized,
     > + Sized
+where
+    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
     // type Const;
     fn expanded_shadow(&self) -> Result<DenseTensor<Atom, Self::Structure>> {
         self.shadow(Self::Structure::expanded_coef)
+    }
+    fn expanded_shadow_perm(
+        &self,
+        perm: &Permutation,
+    ) -> Result<DenseTensor<Atom, Self::Structure>> {
+        self.shadow(|a, id| Self::Structure::expanded_coef_perm(a, id, perm))
     }
 
     fn flat_shadow(&self) -> Result<DenseTensor<Atom, Self::Structure>> {
@@ -37,20 +52,85 @@ pub trait Shadowable:
     {
         self.structure().clone().to_dense_labeled(index_to_atom)
     }
+}
 
-    fn to_explicit<'a, 'b, T: LibraryTensor + Clone>(
-        &'a self,
-        library: &'b TensorLibrary<T>,
-    ) -> Option<T::WithIndices>
-    where
-        LibraryRep: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::R>,
-        'a: 'b,
-    {
-        let key = ExplicitKey::from_structure(self.structure().clone())?;
-        library
-            .get(&key)
-            .ok()
-            .map(|t| t.with_indices(&self.external_indices()).unwrap())
+pub trait Concretize<T> {
+    fn concretize(self, perm: Option<Permutation>) -> T;
+}
+
+impl<Aind: AbsInd> Concretize<SymbolicTensor<Aind>> for ShadowedStructure<Aind>
+where
+    Atom: From<Aind>,
+{
+    fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor<Aind> {
+        SymbolicTensor {
+            expression: self.to_symbolic(perm).unwrap(),
+            structure: self.structure,
+        }
+    }
+}
+
+impl<Aind: AbsInd> Concretize<SymbolicTensor<Aind>> for TensorShell<ShadowedStructure<Aind>>
+where
+    Atom: From<Aind>,
+{
+    fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor<Aind> {
+        SymbolicTensor {
+            expression: self.to_symbolic(perm).unwrap(),
+            structure: self.structure.structure,
+        }
+    }
+}
+
+impl<S: Shadowable> Concretize<DenseTensor<Atom, S::Structure>> for S
+where
+    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+{
+    fn concretize(self, perm: Option<Permutation>) -> DenseTensor<Atom, S::Structure> {
+        // self.flat_s
+        // todo!()
+        if let Some(perm) = perm {
+            self.expanded_shadow_perm(&perm).unwrap()
+        } else {
+            self.expanded_shadow().unwrap()
+        }
+    }
+}
+
+impl<S: Shadowable> Concretize<DataTensor<Atom, S::Structure>> for S
+where
+    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+{
+    fn concretize(self, perm: Option<Permutation>) -> DataTensor<Atom, S::Structure> {
+        // self.flat_s
+        // todo!()
+        <S as Concretize<DenseTensor<Atom, S::Structure>>>::concretize(self, perm).into()
+    }
+}
+
+impl<S: Shadowable> Concretize<ParamTensor<S::Structure>> for S
+where
+    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+{
+    fn concretize(self, perm: Option<Permutation>) -> ParamTensor<S::Structure> {
+        // self.flat_s
+        // todo!()
+        ParamTensor::param(
+            <S as Concretize<DataTensor<Atom, S::Structure>>>::concretize(self, perm),
+        )
+    }
+}
+
+impl<T: Clone, S: Shadowable> Concretize<MixedTensor<T, S::Structure>> for S
+where
+    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+{
+    fn concretize(self, perm: Option<Permutation>) -> MixedTensor<T, S::Structure> {
+        // self.flat_s
+        // todo!()
+        MixedTensor::<T, S::Structure>::param(
+            <S as Concretize<DataTensor<Atom, S::Structure>>>::concretize(self, perm),
+        )
     }
 }
 
@@ -517,7 +597,10 @@ pub trait Shadowable:
 //     }
 // }
 
-pub trait ShadowMapping<Const>: Shadowable {
+pub trait ShadowMapping<Const>: Shadowable
+where
+    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+{
     fn expanded_shadow_with_map(
         &self,
         fn_map: &mut FunctionMap<Const>,
@@ -567,6 +650,8 @@ impl<S: TensorStructure + HasName + Clone> Shadowable for TensorShell<S>
 where
     S::Name: IntoSymbol + Clone,
     S::Args: IntoArgs,
+
+    Atom: From<<<S as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
 }
 
@@ -574,6 +659,7 @@ impl<S: TensorStructure + HasName + Clone, Const> ShadowMapping<Const> for Tenso
 where
     S::Name: IntoSymbol + Clone,
     S::Args: IntoArgs,
+    Atom: From<<<S as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
 {
     fn append_map<T>(
         &self,
@@ -591,53 +677,59 @@ pub mod test {
 
     use once_cell::sync::Lazy;
     use symbolica::atom::Symbol;
-    use symbolica::{atom::Atom, parse};
 
-    use crate::tensor_library::{TensorLibrary, ETS};
+    use crate::network::library::{symbolic::ExplicitKey, symbolic::TensorLibrary, symbolic::ETS};
 
-    pub static EXPLICIT_TENSOR_MAP: Lazy<RwLock<TensorLibrary<MixedTensor<f64, ExplicitKey>>>> =
-        Lazy::new(|| {
-            let mut lib = TensorLibrary::new();
-            lib.update_ids();
-            RwLock::new(lib)
-        });
+    #[allow(clippy::type_complexity)]
+    pub static EXPLICIT_TENSOR_MAP: Lazy<
+        RwLock<TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>>,
+    > = Lazy::new(|| {
+        let mut lib = TensorLibrary::new();
+        lib.update_ids();
+        RwLock::new(lib)
+    });
 
+    use crate::structure::abstract_index::AbstractIndex;
+    use crate::structure::{OrderedStructure, PermutedStructure};
     use crate::{
         contraction::Contract,
-        data::StorageTensor,
-        network::TensorNetwork,
-        parametric::MixedTensor,
         structure::{
-            representation::{LibraryRep, RepName, REPS},
-            HasStructure, IndexlessNamedStructure, TensorStructure, VecStructure,
+            representation::{LibraryRep, RepName},
+            HasStructure, IndexlessNamedStructure, TensorStructure,
         },
-        tensor_library::ShadowedStructure,
+        tensors::parametric::MixedTensor,
     };
-
-    use super::ExplicitKey;
 
     #[test]
     fn test_identity() {
         // EXPLICIT_TENSOR_MAP.write().unwrap().update_ids();
-        let mut tensor_library: TensorLibrary<MixedTensor<f64, ExplicitKey>> = TensorLibrary::new();
+        let mut tensor_library: TensorLibrary<
+            MixedTensor<f64, ExplicitKey<AbstractIndex>>,
+            AbstractIndex,
+        > = TensorLibrary::new();
         tensor_library.update_ids();
 
-        for rep in REPS.read().unwrap().reps() {
-            let structure = [rep.rep(4), rep.rep(4).dual()];
+        for rep in LibraryRep::all_representations() {
+            let structure = [rep.new_rep(4), rep.new_rep(4).dual()];
 
-            let idstructure: IndexlessNamedStructure<Symbol, (), LibraryRep> =
-                IndexlessNamedStructure::from_iter(structure, ETS.id, None);
+            let idstructure: PermutedStructure<IndexlessNamedStructure<Symbol, (), LibraryRep>> =
+                IndexlessNamedStructure::from_iter(structure, ETS.metric, None);
 
-            let idkey = ExplicitKey::from_structure(idstructure).unwrap();
+            let idkey = ExplicitKey::from_structure(&idstructure).unwrap();
 
             let id = tensor_library.get(&idkey).unwrap().into_owned();
 
-            let trace_structure = vec![rep.rep(4).slot(3), rep.rep(4).dual().slot(4)];
+            let trace_structure: OrderedStructure = PermutedStructure::from_iter([
+                rep.new_rep(4).slot(3),
+                rep.new_rep(4).dual().slot(4),
+            ])
+            .structure;
             let id1 = id.map_structure(|_| trace_structure.clone());
             let id2 = id1
                 .clone()
                 .map_structure(|_| trace_structure.clone().dual());
 
+            // println!("{}", rep);
             assert_eq!(
                 4.,
                 id1.contract(&id2)

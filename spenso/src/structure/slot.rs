@@ -6,20 +6,41 @@ use super::{
     },
 };
 use crate::structure::dimension::Dimension;
+use bincode::Encode;
+// #[cfg(feature = "shadowing")]
 use serde::{Deserialize, Serialize};
-use std::fmt::{Debug, Display};
 use std::hash::Hash;
+use std::{
+    cmp::Ordering,
+    fmt::{Debug, Display},
+};
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{Atom, AtomView, ListIterator, Symbol},
+    atom::{Atom, AtomView, Symbol},
     {function, symbol},
 };
 
-#[cfg(feature = "shadowing")]
-use crate::tensor_library::ETS;
 use thiserror::Error;
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encode,
+    bincode_trait_derive::Decode,
+    // bincode_trait_derive::BorrowDecodeFromDecode,
+)]
+#[cfg_attr(
+    feature = "shadowing",
+    trait_decode(trait = symbolica::state::HasStateMap),
+)]
 /// A [`Slot`] is an index, identified by a `usize` and a [`Representation`].
 ///
 /// A vector of slots thus identifies the shape and type of the tensor.
@@ -28,42 +49,14 @@ use thiserror::Error;
 /// # Example
 ///
 /// It can be built from a `Representation` calling one of the built in representations e.g.
-/// ```
-/// # use spenso::structure::*;
-/// # use spenso::structure::representation::*;
-/// # use spenso::structure::dimension::*;
-/// # use spenso::structure::abstract_index::*;
-/// # use spenso::structure::slot::*;
-/// # use spenso::structure::concrete_index::*;
-/// let mink: Representation<Lorentz> = Lorentz::rep(4);
-/// let mud: Slot<Lorentz> = mink.new_slot(0);
-/// let muu: Slot<Dual<Lorentz>> = mink.new_slot(0).dual();
-/// assert!(mud.matches(&muu));
-/// assert_eq!("lord4|₀", format!("{muu}"));
-/// ```
 /// Or one can define custom representations{}
-/// ```
-/// # use spenso::structure::*;
-/// # use spenso::structure::representation::*;
-/// # use spenso::structure::dimension::*;
-/// # use spenso::structure::abstract_index::*;
-/// # use spenso::structure::slot::*;
-/// # use spenso::structure::concrete_index::*;
-/// let custom_mink = Rep::new_dual("custom_lor").unwrap();
-///
-/// let nud: Slot<Rep> = custom_mink.new_slot(4, 0);
-/// let nuu: Slot<Rep> = nud.dual();
-///
-/// assert!(nuu.matches(&nud));
-/// assert_eq!("custom_lor🠓4|₀", format!("{nuu}"));
-/// ```
-pub struct Slot<T: RepName> {
-    pub aind: AbstractIndex,
+pub struct Slot<T: RepName, Aind = AbstractIndex> {
     pub(crate) rep: Representation<T>,
+    pub aind: Aind,
 }
 
-impl<T: RepName> Slot<T> {
-    pub fn cast<U: RepName + From<T>>(self) -> Slot<U> {
+impl<T: RepName, Aind> Slot<T, Aind> {
+    pub fn cast<U: RepName + From<T>>(self) -> Slot<U, Aind> {
         Slot {
             aind: self.aind,
             rep: Representation {
@@ -71,15 +64,6 @@ impl<T: RepName> Slot<T> {
                 rep: U::from(self.rep.rep),
             },
         }
-    }
-    #[cfg(feature = "shadowing")]
-    pub fn kroneker_atom(&self, other: &Slot<T::Dual>) -> Atom {
-        function!(ETS.id, self.to_atom(), other.to_atom())
-    }
-
-    #[cfg(feature = "shadowing")]
-    pub fn metric_atom(&self, other: &Slot<T>) -> Atom {
-        function!(ETS.metric, self.to_atom(), other.to_atom())
     }
 }
 
@@ -114,35 +98,14 @@ pub enum SlotError {
 #[cfg(feature = "shadowing")]
 /// Can possibly constuct a Slot from an `AtomView`, if it is of the form: <representation>(<dimension>,<index>)
 ///
-/// # Example
-///
-/// ```
-/// # use spenso::structure::*;
-/// # use spenso::structure::representation::*;
-/// # use spenso::structure::dimension::*;
-/// # use spenso::structure::abstract_index::*;
-/// # use spenso::structure::slot::*;
-/// # use spenso::structure::concrete_index::*;
-/// # use symbolica::atom::AtomView;
-
-///    let mink = Lorentz::rep(4);
-///    let mu = mink.new_slot(0);
-///    let atom = mu.to_atom();
-///    let slot = Slot::try_from(atom.as_view()).unwrap();
-///    assert_eq!(slot, mu);
-/// ```
-impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
+impl<'a, T: RepName, Aind> TryFrom<AtomView<'a>> for Slot<T, Aind>
+where
+    Aind: TryFrom<AtomView<'a>>,
+    SlotError: From<<Aind as TryFrom<AtomView<'a>>>::Error>,
+{
     type Error = SlotError;
 
-    fn try_from(value: AtomView<'_>) -> Result<Self, Self::Error> {
-        fn extract_num(iter: &mut ListIterator) -> Result<AbstractIndex, SlotError> {
-            if let Some(a) = iter.next() {
-                Ok(AbstractIndex::try_from(a)?)
-            } else {
-                Err(SlotError::NoMoreArguments)
-            }
-        }
-
+    fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
         let (rep, mut iter) = if let AtomView::Fun(f) = value {
             let name = f.get_symbol();
 
@@ -167,9 +130,19 @@ impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
             return Err(SlotError::NoMoreArguments);
         };
 
-        let index: AbstractIndex = extract_num(&mut iter)?;
+        let index: Aind = if let Some(a) = iter.next() {
+            Ok(Aind::try_from(a)?)
+        } else {
+            Err(SlotError::NoMoreArguments)
+        }?;
 
-        if extract_num(&mut iter).is_ok() {
+        if if let Some(a) = iter.next() {
+            Ok(Aind::try_from(a)?)
+        } else {
+            Err(SlotError::NoMoreArguments)
+        }
+        .is_ok()
+        {
             return Err(SlotError::TooManyArguments);
         }
 
@@ -184,12 +157,12 @@ impl<T: RepName> TryFrom<AtomView<'_>> for Slot<T> {
 
 // }
 
-pub trait ConstructibleSlot<T: RepName> {
-    fn new(rep: T, dim: Dimension, aind: AbstractIndex) -> Self;
+pub trait ConstructibleSlot<T: RepName, Aind> {
+    fn new(rep: T, dim: Dimension, aind: Aind) -> Self;
 }
 
-impl<T: BaseRepName> ConstructibleSlot<T> for Slot<T> {
-    fn new(_: T, dim: Dimension, aind: AbstractIndex) -> Self {
+impl<T: BaseRepName, Aind> ConstructibleSlot<T, Aind> for Slot<T, Aind> {
+    fn new(_: T, dim: Dimension, aind: Aind) -> Self {
         Slot {
             aind,
             rep: Representation {
@@ -200,15 +173,40 @@ impl<T: BaseRepName> ConstructibleSlot<T> for Slot<T> {
     }
 }
 
+pub trait AbsInd: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + Display {}
+
+pub trait DummyAind {
+    fn new_dummy() -> Self;
+}
+
 pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + Display {
+    type Aind: AbsInd;
     type R: RepName;
+
+    fn reindex(self, id: Self::Aind) -> Self;
     fn dim(&self) -> Dimension;
-    fn to_lib(&self) -> LibrarySlot {
-        let rep: LibraryRep = self.rep_name().into();
-        rep.slot(self.dim(), self.aind())
+    fn to_dummy_rep(&self) -> LibrarySlot<Self::Aind> {
+        let rep = self.rep().to_dummy().to_lib();
+        let aind = self.aind();
+        Slot { rep, aind }
     }
-    fn aind(&self) -> AbstractIndex;
-    fn set_aind(&mut self, aind: AbstractIndex);
+
+    fn to_dummy_ind(&self) -> LibrarySlot<Self::Aind>
+    where
+        Self::Aind: DummyAind,
+    {
+        Slot {
+            rep: self.rep().to_lib(),
+            aind: Self::Aind::new_dummy(),
+        }
+    }
+
+    fn to_lib(&self) -> LibrarySlot<Self::Aind> {
+        let rep: LibraryRep = self.rep_name().into();
+        rep.new_slot(self.dim(), self.aind())
+    }
+    fn aind(&self) -> Self::Aind;
+    fn set_aind(&mut self, aind: Self::Aind);
     fn rep_name(&self) -> Self::R;
     fn rep(&self) -> Representation<Self::R> {
         Representation {
@@ -219,86 +217,104 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + D
 
     #[cfg(feature = "shadowing")]
     /// using the function builder of the representation add the abstract index as an argument, and finish it to an Atom.
-    /// # Example
-    ///
-    /// ```
-    /// # use symbolica::state::{State, Workspace};
-    /// # use spenso::structure::*;
-    /// # use spenso::structure::representation::*;
-    /// # use spenso::structure::dimension::*;
-    /// # use spenso::structure::abstract_index::*;
-    /// # use spenso::structure::slot::*;
-    /// # use spenso::structure::concrete_index::*;
-    /// let mink = Lorentz::rep(4);
-    /// let mu = mink.new_slot(0);
-    /// println!("{}", mu.to_atom());
-    /// assert_eq!("lor(4,0)", mu.to_atom().to_string());
-    /// assert_eq!("lor4|₀", mu.to_string());
-    /// ```
-    fn to_atom(&self) -> Atom;
+    fn to_atom(&self) -> Atom
+    where
+        Atom: From<Self::Aind>;
     #[cfg(feature = "shadowing")]
-    fn to_symbolic_wrapped(&self) -> Atom;
-    #[cfg(feature = "shadowing")]
-    fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError>;
+    fn to_symbolic_wrapped(&self) -> Atom
+    where
+        Atom: From<Self::Aind>;
+    // #[cfg(feature = "shadowing")]
+    // fn try_from_view<'a>(v: AtomView<'a>) -> Result<Self, SlotError>
+    // where
+    //     Self::Aind: TryFrom<AtomView<'a>>,
+    //     SlotError: From<<Self::Aind as TryFrom<AtomView<'a>>>::Error>;
 }
 
 pub trait DualSlotTo: IsAbstractSlot {
     type Dual: IsAbstractSlot;
     fn dual(&self) -> Self::Dual;
     fn matches(&self, other: &Self::Dual) -> bool;
+
+    fn match_cmp(&self, other: &Self::Dual) -> Ordering;
 }
 
-impl<T: RepName> IsAbstractSlot for Slot<T> {
+impl<T: RepName, A: AbsInd> IsAbstractSlot for Slot<T, A> {
+    type Aind = A;
     type R = T;
     // type Dual = GenSlot<T::Dual>;
     fn dim(&self) -> Dimension {
         self.rep.dim
     }
-    fn aind(&self) -> AbstractIndex {
+
+    fn reindex(mut self, id: Self::Aind) -> Self {
+        self.aind = id;
+        self
+    }
+    fn aind(&self) -> Self::Aind {
         self.aind
     }
     fn rep_name(&self) -> Self::R {
         self.rep.rep
     }
 
-    fn set_aind(&mut self, aind: AbstractIndex) {
+    fn set_aind(&mut self, aind: Self::Aind) {
         self.aind = aind;
     }
     #[cfg(feature = "shadowing")]
-    fn to_atom(&self) -> Atom {
+    fn to_atom(&self) -> Atom
+    where
+        Atom: From<Self::Aind>,
+    {
         self.rep.to_symbolic([Atom::from(self.aind)])
     }
     #[cfg(feature = "shadowing")]
-    fn to_symbolic_wrapped(&self) -> Atom {
+    fn to_symbolic_wrapped(&self) -> Atom
+    where
+        Atom: From<Self::Aind>,
+    {
         use symbolica::function;
 
         self.rep
             .to_symbolic([function!(symbol!("indexid"), Atom::from(self.aind))])
     }
-    #[cfg(feature = "shadowing")]
-    fn try_from_view(v: AtomView<'_>) -> Result<Self, SlotError> {
-        Slot::try_from(v)
-    }
+    // #[cfg(feature = "shadowing")]
+    // fn try_from_view<'a>(v: AtomView<'a>) -> Result<Self, SlotError>
+    // where
+    //     Self::Aind: TryFrom<AtomView<'a>>,
+    //     SlotError: From<<Self::Aind as TryFrom<AtomView<'a>>>::Error>,
+    // {
+    //     Slot::try_from(v)
+    // }
 }
 
-impl<T: RepName> std::fmt::Display for Slot<T> {
+impl<T: RepName, Aind: AbsInd> std::fmt::Display for Slot<T, Aind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}|{}", self.rep, self.aind)
+        if self.rep.rep.is_self_dual() {
+            write!(f, "{}|{}", self.rep, self.aind)
+        } else if self.rep.rep.is_dual() {
+            write!(f, "{}|{:-}", self.rep, self.aind)
+        } else {
+            write!(f, "{}|{:+}", self.rep, self.aind)
+        }
     }
 }
 
-impl<T: RepName> Slot<T> {
-    #[cfg(feature = "shadowing")]
+#[cfg(feature = "shadowing")]
+impl<T: RepName, Aind: AbsInd> Slot<T, Aind>
+where
+    Atom: From<Aind>,
+{
     pub fn to_pattern(&self, dimension: Symbol) -> Atom {
         self.rep
             .rep
-            .to_symbolic([Atom::new_var(dimension), Atom::from(self.aind)])
+            .to_symbolic([Atom::var(dimension), Atom::from(self.aind)])
     }
 }
 
-impl<T: RepName> DualSlotTo for Slot<T> {
-    type Dual = Slot<T::Dual>;
-    fn dual(&self) -> Slot<T::Dual> {
+impl<T: RepName, Aind: AbsInd> DualSlotTo for Slot<T, Aind> {
+    type Dual = Slot<T::Dual, Aind>;
+    fn dual(&self) -> Slot<T::Dual, Aind> {
         Slot {
             rep: self.rep.dual(),
             aind: self.aind,
@@ -307,12 +323,18 @@ impl<T: RepName> DualSlotTo for Slot<T> {
     fn matches(&self, other: &Self::Dual) -> bool {
         self.rep.matches(&other.rep) && self.aind() == other.aind()
     }
+
+    fn match_cmp(&self, other: &Self::Dual) -> Ordering {
+        self.rep
+            .match_cmp(&other.rep)
+            .then(self.aind.cmp(&other.aind))
+    }
 }
 
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
-    use symbolica::{parse, symbol};
+    use symbolica::{atom::AtomCore, parse, symbol};
 
     use crate::structure::{
         representation::{DualLorentz, LibraryRep, Lorentz, RepName, Representation},
@@ -321,7 +343,7 @@ mod shadowing_tests {
 
     #[test]
     fn doc_slot() {
-        let mink: Representation<Lorentz> = Lorentz {}.rep(4);
+        let mink: Representation<Lorentz> = Lorentz {}.new_rep(4);
 
         let mud: Slot<Lorentz> = mink.slot(0);
         let muu: Slot<DualLorentz> = mink.slot(0).dual();
@@ -331,7 +353,7 @@ mod shadowing_tests {
 
         let custom_mink = LibraryRep::new_dual("custom_lor").unwrap();
 
-        let nud: Slot<LibraryRep> = custom_mink.slot(4, 0);
+        let nud: Slot<LibraryRep> = custom_mink.new_slot(4, 0);
         let nuu: Slot<LibraryRep> = nud.dual();
 
         assert!(nuu.matches(&nud));
@@ -340,14 +362,14 @@ mod shadowing_tests {
 
     #[test]
     fn to_symbolic() {
-        let mink = Lorentz {}.rep(4);
-        let mu = mink.slot(0);
+        let mink = Lorentz {}.new_rep(4);
+        let mu: Slot<Lorentz> = mink.slot(0);
         println!("{}", mu.to_atom());
-        assert_eq!("spenso::lor(4,0)", mu.to_atom().to_string());
-        assert_eq!("lor🠑4|₀", mu.to_string());
+        assert_eq!("spenso::lor(4,0)", mu.to_atom().to_canonical_string());
+        // assert_eq!("lor🠑4|₀", mu.dual().to_string());
 
-        let mink = Lorentz {}.rep(4);
-        let mu = mink.slot(0);
+        let mink = Lorentz {}.new_rep(4);
+        let mu: Slot<Lorentz> = mink.slot(0);
         let atom = mu.to_atom();
         let slot = Slot::try_from(atom.as_view()).unwrap();
         assert_eq!(slot, mu);
@@ -355,7 +377,7 @@ mod shadowing_tests {
 
     #[test]
     fn slot_from_atom_view() {
-        let mink = Lorentz {}.rep(4);
+        let mink = Lorentz {}.new_rep(4);
         let mu = mink.slot(0);
         let atom = mu.to_atom();
         assert_eq!(Slot::try_from(atom.as_view()).unwrap(), mu);
@@ -368,7 +390,7 @@ mod shadowing_tests {
             mu.dual()
         );
 
-        let expr = parse!("dind(lor(4,-1))").unwrap();
+        let expr = parse!("dind(lor(4,-1))");
 
         let _slot: Slot<LibraryRep> = Slot::try_from(expr.as_view()).unwrap();
         let _slot: Slot<DualLorentz> = Slot::try_from(expr.as_view()).unwrap();

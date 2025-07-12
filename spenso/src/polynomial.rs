@@ -142,7 +142,7 @@ mod test {
 
         // let mut tot_bytes = 0;
 
-        // let mut poly = Atom::new_num(0);
+        // let mut poly = Atom::num(0);
         // for (i, (a, exp)) in a.iter().enumerate() {
         //     let bytes = exp.to_expression().as_view().get_byte_size();
 
@@ -238,7 +238,7 @@ mod test {
 
         let mut tot_bytes = 0;
 
-        let mut poly = Atom::new_num(0);
+        let mut poly = Atom::num(0);
         for (i, (a, exp)) in a.iter().enumerate() {
             let bytes = exp.to_expression().as_view().get_byte_size();
 

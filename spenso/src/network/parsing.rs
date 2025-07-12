@@ -113,7 +113,7 @@ where
                                 }
                             }
                             is_structure = Some(e.into());
-                            args.push(arg.to_owned().into());
+                            args.push(arg.to_owned());
                         }
                     }
                 }
@@ -123,7 +123,7 @@ where
                 } else {
                     let mut structure: PermutedStructure<ShadowedStructure<Aind>> =
                         OrderedStructure::new(slots).map_structure(Into::into);
-                    structure.structure.set_name(name.into());
+                    structure.structure.set_name(name);
                     if !args.is_empty() {
                         structure.structure.additional_args = Some(args);
                     }
@@ -146,6 +146,7 @@ where
     Sc: for<'r> TryFrom<AtomView<'r>> + Clone,
     TensorNetworkError<K>: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
 {
+    #[allow(clippy::result_large_err)]
     pub fn try_from_view<S, Lib: Library<S, Key = K>>(
         value: AtomView<'a>,
         library: &Lib,
@@ -166,6 +167,7 @@ where
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn try_from_mul<S, Lib: Library<S, Key = K>>(
         value: MulView<'a>,
         library: &Lib,
@@ -186,6 +188,7 @@ where
         Ok(first.n_mul(rest?))
     }
 
+    #[allow(clippy::result_large_err)]
     fn try_from_fun<S, Lib: Library<S, Key = K>>(
         value: FunView<'a>,
         library: &Lib,
@@ -222,12 +225,11 @@ where
                 )),
             }
         } else {
-            Ok(Self::from_scalar(
-                value.as_view().try_into().map_err(Into::into)?,
-            ))
+            Ok(Self::from_scalar(value.as_view().try_into()?))
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn try_from_pow<S, Lib: Library<S, Key = K>>(
         value: PowView<'a>,
         library: &Lib,
@@ -260,6 +262,7 @@ where
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn try_from_add<S, Lib: Library<S, Key = K>>(
         value: AddView<'a>,
         library: &Lib,

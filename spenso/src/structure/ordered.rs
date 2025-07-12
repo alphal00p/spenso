@@ -1,8 +1,8 @@
-use std::cmp::Ordering;
-
 use bitvec::vec::BitVec;
 use indexmap::IndexMap;
 use linnet::permutation::Permutation;
+use std::cmp::Ordering;
+use std::hash::Hash;
 use tabled::{builder::Builder, settings::Style};
 
 #[cfg(feature = "shadowing")]
@@ -30,7 +30,7 @@ use super::{
 #[cfg(not(feature = "shadowing"))]
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Hash, bincode_trait_derive::Encode, bincode_trait_derive::Decode)]
+#[derive(Clone, bincode_trait_derive::Encode, bincode_trait_derive::Decode)]
 #[cfg_attr(not(feature = "shadowing"), derive(Serialize, Deserialize))]
 #[cfg_attr(
     feature = "shadowing",
@@ -41,6 +41,12 @@ pub struct OrderedStructure<R: RepName = LibraryRep, Aind = AbstractIndex> {
     dual_start: usize,
     base_start: usize,
     // permutation: Option<Permutation>,
+}
+
+impl<R: Hash + RepName, Aind: Hash> Hash for OrderedStructure<R, Aind> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.structure.hash(state);
+    }
 }
 
 impl<R: PartialEq + RepName, Aind: PartialEq> PartialEq for OrderedStructure<R, Aind> {
@@ -288,15 +294,15 @@ impl<R: RepName, Aind: AbsInd> OrderedStructure<R, Aind> {
         }
     }
 
-    pub fn from_iter<S: RepName, T: IntoIterator<Item = Slot<S, Aind>>>(
-        iter: T,
-    ) -> PermutedStructure<Self>
-    where
-        R: From<S>,
-    {
-        let structure: Vec<Slot<R, Aind>> = iter.into_iter().map(|a| a.cast()).collect();
-        PermutedStructure::from(structure)
-    }
+    // pub fn from_iter<S: RepName, T: IntoIterator<Item = Slot<S, Aind>>>(
+    //     iter: T,
+    // ) -> PermutedStructure<Self>
+    // where
+    //     R: From<S>,
+    // {
+    //     let structure: Vec<Slot<R, Aind>> = iter.into_iter().map(|a| a.cast()).collect();
+    //     PermutedStructure::from(structure)
+    // }
 }
 
 impl<S: RepName, R: From<S> + RepName, Aind: AbsInd> FromIterator<Slot<S, Aind>>
@@ -440,7 +446,7 @@ impl<R: RepName, Aind: AbsInd> std::fmt::Display for OrderedStructure<R, Aind> {
         let mut table = Builder::new();
 
         table.push_record(&["".to_string()]);
-        for (_index, item) in self.structure.iter().enumerate() {
+        for item in self.structure.iter() {
             if item.rep.rep.is_self_dual() {
                 table.push_record(&[item.rep.to_string(), format!("{}", item.aind)]);
             } else if item.rep.rep.is_base() {
@@ -472,7 +478,7 @@ impl<R: RepName, Aind: AbsInd> std::fmt::Debug for OrderedStructure<R, Aind> {
             ]);
         }
         writeln!(f)?;
-        write!(f, "{}", format!("{}", table.build().with(Style::rounded())))
+        write!(f, "{}", table.build().with(Style::rounded()))
     }
 }
 
@@ -926,14 +932,14 @@ pub mod test {
     use crate::structure::{
         representation::{Euclidean, LibraryRep, Lorentz, Minkowski, RepName},
         slot::{DualSlotTo, IsAbstractSlot},
-        StructureContract,
+        PermutedStructure, StructureContract,
     };
 
     use super::OrderedStructure;
 
     #[test]
     fn orderedmerge() {
-        let a: OrderedStructure<LibraryRep> = OrderedStructure::from_iter([
+        let a: OrderedStructure<LibraryRep> = PermutedStructure::from_iter([
             Lorentz {}.new_slot(3, 2).to_lib(),
             Minkowski {}.new_slot(4, 2).to_lib(),
             Lorentz {}.new_slot(7, 1).to_lib(),
@@ -941,7 +947,7 @@ pub mod test {
             Euclidean {}.new_slot(2, 3).to_lib(),
         ])
         .structure;
-        let b: OrderedStructure<LibraryRep> = OrderedStructure::from_iter([
+        let b: OrderedStructure<LibraryRep> = PermutedStructure::from_iter([
             Euclidean {}.new_slot(4, 2).to_lib(),
             Minkowski {}.new_slot(4, 11).to_lib(),
             Lorentz {}.new_slot(7, 1).dual().to_lib(),
@@ -958,9 +964,9 @@ pub mod test {
     #[test]
     fn orderedmerge_euc() {
         let a: OrderedStructure<Euclidean> =
-            OrderedStructure::from_iter([Euclidean {}.new_slot(4, 2)]).structure;
+            PermutedStructure::from_iter([Euclidean {}.new_slot(4, 2)]).structure;
         let b: OrderedStructure<Euclidean> =
-            OrderedStructure::from_iter([Euclidean {}.new_slot(4, 2)]).structure;
+            PermutedStructure::from_iter([Euclidean {}.new_slot(4, 2)]).structure;
 
         println!("{:?}", a);
         println!("{:?}", b);

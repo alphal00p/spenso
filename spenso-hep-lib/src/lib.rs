@@ -1,30 +1,19 @@
 use std::{ops::Neg, sync::LazyLock};
 
-use idenso::{
-    gamma::AGS,
-    representations::{Bispinor, initialize},
-};
+use idenso::{gamma::AGS, representations::initialize};
 
 use spenso::{
     algebra::complex::Complex,
     network::library::{
-        LibraryTensor, TensorLibraryData,
+        TensorLibraryData,
         symbolic::{ExplicitKey, TensorLibrary},
     },
-    shadowing::Concretize,
-    structure::{
-        HasStructure, PermutedStructure, TensorStructure,
-        abstract_index::AbstractIndex,
-        permuted::PermuteTensor,
-        representation::{LibraryRep, Minkowski, RepName},
-        slot::AbsInd,
-    },
+    structure::{PermutedStructure, TensorStructure, abstract_index::AbstractIndex, slot::AbsInd},
     tensors::{
         data::{SetTensorData, SparseTensor},
         parametric::MixedTensor,
     },
 };
-use symbolica::{atom::Symbol, symbol};
 
 #[allow(clippy::similar_names)]
 pub fn gamma_data_dirac<T, N>(structure: N, one: T, zero: T) -> SparseTensor<Complex<T>, N>
@@ -359,6 +348,7 @@ mod tests {
     use idenso::{
         gamma::GammaSimplifier,
         metric::{MetricSimplifier, PermuteWithMetric},
+        representations::Bispinor,
     };
     use spenso::{
         algebra::upgrading_arithmetic::FallibleSub,
@@ -368,6 +358,7 @@ mod tests {
             SmallestDegreeIter, Steps, parsing::ShadowedStructure, store::NetworkStore,
         },
         shadowing::Concretize,
+        structure::representation::{Minkowski, RepName},
         structure::{
             HasStructure, IndexlessNamedStructure, abstract_index::AbstractIndex, permuted::Perm,
             slot::IsAbstractSlot,
@@ -378,7 +369,7 @@ mod tests {
             symbolic::SymbolicTensor,
         },
     };
-    use symbolica::{atom::Atom, function, id::ConditionResult, parse};
+    use symbolica::{atom::Atom, atom::Symbol, function, id::ConditionResult, parse, symbol};
 
     use super::*;
     use ahash::{HashMap, HashMapExt};

@@ -349,7 +349,7 @@ impl From<AbstractIndex> for Atom {
     }
 }
 #[cfg(feature = "shadowing")]
-impl<'a> From<AbstractIndex> for symbolica::atom::AtomOrView<'a> {
+impl From<AbstractIndex> for symbolica::atom::AtomOrView<'_> {
     fn from(value: AbstractIndex) -> Self {
         symbolica::atom::AtomOrView::Atom(Atom::from(value))
     }

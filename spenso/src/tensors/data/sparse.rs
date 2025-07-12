@@ -1,4 +1,3 @@
-use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
 use crate::structure::permuted::PermuteTensor;
 use crate::structure::representation::{RepName, Representation};

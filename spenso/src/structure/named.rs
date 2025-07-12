@@ -76,7 +76,6 @@ impl<N, A, R: RepName, Aind: AbsInd> From<OrderedStructure<R, Aind>>
 }
 
 /// A trait for a structure that has a name
-
 impl<N, A, R: RepName, Aind: AbsInd> HasName for NamedStructure<N, A, R, Aind>
 where
     N: Clone,
@@ -173,7 +172,7 @@ impl<N: IdentityName, A, R: RepName<Dual = R>, Aind: AbsInd + DummyAind> Permute
                 NamedStructure {
                     global_name: self.global_name,
                     additional_args: self.additional_args,
-                    structure: OrderedStructure::from_iter(
+                    structure: PermutedStructure::from_iter(
                         self.structure.into_iter().map(|s| s.to_lib()),
                     )
                     .structure,
@@ -328,7 +327,7 @@ impl<N: std::fmt::Display, A: ArgDisplay, R: RepName, Aind: AbsInd> std::fmt::Di
                 .map(|a| a.arg_display())
                 .unwrap_or("".to_string()),
         ]);
-        for (_index, item) in self.structure.structure.iter().enumerate() {
+        for item in self.structure.structure.iter() {
             if item.rep.rep.is_self_dual() {
                 table.push_record(&[item.rep.to_string(), format!("{}", item.aind)]);
             } else if item.rep.rep.is_base() {
@@ -366,7 +365,7 @@ impl<N: std::fmt::Debug, A: ArgDisplay, R: RepName, Aind: AbsInd> std::fmt::Debu
             ]);
         }
         writeln!(f)?;
-        write!(f, "{}", format!("{}", table.build().with(Style::rounded())))
+        write!(f, "{}", table.build().with(Style::rounded()))
     }
 }
 impl<N, A, R: RepName<Dual = R>, Aind: AbsInd> StructureContract for NamedStructure<N, A, R, Aind> {

@@ -546,7 +546,6 @@ where
 {
     type LCM = SparseTensor<U::Out, I>;
     #[allow(clippy::comparison_chain)]
-
     fn single_contract_interleaved(
         &self,
         other: &SparseTensor<T, I>,

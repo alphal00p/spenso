@@ -6,7 +6,7 @@ use crate::{
         concrete_index::ConcreteIndex,
         permuted::PermuteTensor,
         representation::RepName,
-        slot::{AbsInd, DummyAind, Slot},
+        slot::{AbsInd, Slot},
         IndexLess, PermutedStructure,
     },
     tensors::data::{SparseTensor, StorageTensor},
@@ -16,7 +16,6 @@ use enum_try_as_inner::EnumTryAsInner;
 #[cfg(feature = "shadowing")]
 use symbolica::{atom::Atom, evaluate::FunctionMap};
 
-use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
 use crate::structure::representation::Representation;
 use crate::structure::slot::IsAbstractSlot;

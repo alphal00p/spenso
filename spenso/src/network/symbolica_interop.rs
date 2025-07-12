@@ -552,6 +552,7 @@ impl<
         Aind: Clone + AbsInd,
     > Network<Store, K, Aind>
 {
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn eval_tree(
         &self,
         fn_map: &FunctionMap,
@@ -573,6 +574,7 @@ impl<
         )
     }
 
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn evaluate_direct<A: AtomCore + KeyLookup, D, F: Fn(&Rational) -> D + Copy>(
         &self,
         coeff_map: F,
@@ -618,6 +620,7 @@ impl<
         Aind: AbsInd,
     > Network<Store, K, Aind>
 {
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(
         &self,
         f: &F,
@@ -630,6 +633,7 @@ impl<
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn linearize(
         self,
         cpe_rounds: Option<usize>,
@@ -696,6 +700,7 @@ impl<
         Aind: AbsInd,
     > Network<Store, K, Aind>
 {
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn export_cpp(
         &self,
         filename: &str,
@@ -749,6 +754,7 @@ impl<
         Aind: AbsInd,
     > Network<Store, K, Aind>
 {
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn compile(
         &self,
         out: &str,
@@ -776,6 +782,7 @@ impl<
         )
     }
 
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn compile_and_load(
         &self,
         out: &str,

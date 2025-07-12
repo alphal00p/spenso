@@ -1104,7 +1104,7 @@ impl Add for SerializableAtom {
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> Add<&SerializableAtom> for &'a SerializableAtom {
+impl Add<&SerializableAtom> for &SerializableAtom {
     type Output = SerializableAtom;
     fn add(self, rhs: &SerializableAtom) -> Self::Output {
         SerializableAtom::from(&self.0 + &rhs.0)
@@ -1120,7 +1120,7 @@ impl Add<&SerializableAtom> for SerializableAtom {
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> Add<SerializableAtom> for &'a SerializableAtom {
+impl Add<SerializableAtom> for &SerializableAtom {
     type Output = SerializableAtom;
     fn add(self, rhs: SerializableAtom) -> Self::Output {
         SerializableAtom::from(&self.0 + &rhs.0)
@@ -1136,7 +1136,7 @@ impl Sub for SerializableAtom {
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> Sub<&SerializableAtom> for &'a SerializableAtom {
+impl Sub<&SerializableAtom> for &SerializableAtom {
     type Output = SerializableAtom;
     fn sub(self, rhs: &SerializableAtom) -> Self::Output {
         SerializableAtom::from(&self.0 - &rhs.0)
@@ -1152,7 +1152,7 @@ impl Sub<&SerializableAtom> for SerializableAtom {
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> Sub<SerializableAtom> for &'a SerializableAtom {
+impl Sub<SerializableAtom> for &SerializableAtom {
     type Output = SerializableAtom;
     fn sub(self, rhs: SerializableAtom) -> Self::Output {
         SerializableAtom::from(&self.0 - &rhs.0)
@@ -1168,7 +1168,7 @@ impl Mul for SerializableAtom {
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> Mul<&SerializableAtom> for &'a SerializableAtom {
+impl Mul<&SerializableAtom> for &SerializableAtom {
     type Output = SerializableAtom;
     fn mul(self, rhs: &SerializableAtom) -> Self::Output {
         SerializableAtom::from(&self.0 * &rhs.0)
@@ -1184,7 +1184,7 @@ impl Mul<&SerializableAtom> for SerializableAtom {
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> Mul<SerializableAtom> for &'a SerializableAtom {
+impl Mul<SerializableAtom> for &SerializableAtom {
     type Output = SerializableAtom;
     fn mul(self, rhs: SerializableAtom) -> Self::Output {
         SerializableAtom::from(&self.0 * &rhs.0)
@@ -1200,7 +1200,7 @@ impl Div for SerializableAtom {
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> Div<&SerializableAtom> for &'a SerializableAtom {
+impl Div<&SerializableAtom> for &SerializableAtom {
     type Output = SerializableAtom;
     fn div(self, rhs: &SerializableAtom) -> Self::Output {
         SerializableAtom::from(&self.0 / &rhs.0)
@@ -1216,7 +1216,7 @@ impl Div<&SerializableAtom> for SerializableAtom {
 }
 
 #[cfg(feature = "shadowing")]
-impl<'a> Div<SerializableAtom> for &'a SerializableAtom {
+impl Div<SerializableAtom> for &SerializableAtom {
     type Output = SerializableAtom;
     fn div(self, rhs: SerializableAtom) -> Self::Output {
         SerializableAtom::from(&self.0 / &rhs.0)
@@ -1402,7 +1402,6 @@ where
 }
 
 #[cfg(test)]
-
 mod test {
     #[cfg(feature = "shadowing")]
     use ahash::{HashMap, HashMapExt};

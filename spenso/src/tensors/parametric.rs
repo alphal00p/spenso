@@ -5,7 +5,7 @@ use std::{
     io::Cursor,
 };
 
-use crate::structure::{abstract_index::AbstractIndex, PermutedStructure};
+use crate::structure::PermutedStructure;
 use crate::structure::{dimension::Dimension, representation::RepName};
 use crate::structure::{permuted::PermuteTensor, representation::Representation};
 use crate::structure::{slot::AbsInd, StructureError};
@@ -853,7 +853,7 @@ impl<C, S> crate::network::Ref for ParamOrConcrete<C, S> {
     where
         Self: 'a;
 
-    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+    fn refer(&self) -> Self::Ref<'_> {
         self
     }
 }
@@ -1064,7 +1064,7 @@ impl crate::network::Ref for Atom {
     where
         Self: 'a;
 
-    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+    fn refer(&self) -> Self::Ref<'_> {
         self.as_view()
     }
 }
@@ -1075,7 +1075,7 @@ impl<C: crate::network::Ref> crate::network::Ref for ConcreteOrParam<C> {
     where
         Self: 'a;
 
-    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+    fn refer(&self) -> Self::Ref<'_> {
         match self {
             ConcreteOrParam::Concrete(c) => ConcreteOrParamRef::Concrete(c.refer()),
             ConcreteOrParam::Param(p) => ConcreteOrParamRef::Param(p.refer()),
@@ -1100,7 +1100,7 @@ impl<C: std::ops::Neg<Output = C>> std::ops::Neg for ConcreteOrParam<C> {
     }
 }
 
-impl<'a, C: std::ops::Neg<Output = C>> std::ops::Neg for ConcreteOrParamRef<'a, C> {
+impl<C: std::ops::Neg<Output = C>> std::ops::Neg for ConcreteOrParamRef<'_, C> {
     type Output = ConcreteOrParam<C>;
 
     fn neg(self) -> Self::Output {
@@ -1565,7 +1565,7 @@ where
 pub type MixedTensor<T = f64, S = NamedStructure<Symbol, Vec<Atom>>> =
     ParamOrConcrete<RealOrComplexTensor<T, S>, S>;
 
-impl<'a, I: TensorStructure + Clone + 'a, T: Clone> MixedTensor<T, I> {
+impl<I: TensorStructure + Clone, T: Clone> MixedTensor<T, I> {
     pub fn evaluate_real<A: AtomCore + KeyLookup, F: Fn(&Rational) -> T + Copy>(
         &mut self,
         coeff_map: F,
@@ -3041,8 +3041,8 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
 pub mod test {
     use crate::{
         structure::{
-            representation::{LibraryRep, Minkowski, RepName},
-            OrderedStructure, TensorStructure,
+            representation::{Minkowski, RepName},
+            OrderedStructure, PermutedStructure, TensorStructure,
         },
         tensors::data::{DataTensor, SparseTensor},
     };
@@ -3053,7 +3053,7 @@ pub mod test {
     fn tensor_structure() {
         let a: MixedTensor<f64, OrderedStructure> =
             MixedTensor::param(DataTensor::Sparse(SparseTensor::empty(
-                OrderedStructure::<LibraryRep>::from_iter([Minkowski {}.new_slot(2, 1)]).structure,
+                PermutedStructure::from_iter([Minkowski {}.new_slot(2, 1)]).structure,
             )));
 
         assert_eq!(a.size().unwrap(), 2);

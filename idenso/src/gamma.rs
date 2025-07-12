@@ -433,7 +433,7 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
 
                                 // println!("{}", swapped);
                                 let mu = args.remove(i);
-                                let bis = args.remove(i);
+                                let _bis = args.remove(i);
                                 let nu = args.remove(i);
                                 // println!("mu:{}bis:{}nu:{}", mu, bis, nu);
                                 let metric = function!(ETS.metric, mu, nu)

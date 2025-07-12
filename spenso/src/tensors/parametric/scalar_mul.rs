@@ -40,7 +40,7 @@ where
     type LCM = Atom;
 
     fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
-        Some(std::borrow::Cow::Borrowed(&self))
+        Some(std::borrow::Cow::Borrowed(self))
     }
 }
 
@@ -64,7 +64,7 @@ where
     type LCM = Atom;
 
     fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
-        Some(std::borrow::Cow::Borrowed(&self))
+        Some(std::borrow::Cow::Borrowed(self))
     }
 }
 
@@ -91,7 +91,7 @@ where
     type LCM = <Atom as TrySmallestUpgrade<T>>::LCM;
 
     fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
-        <Atom as TrySmallestUpgrade<T>>::try_upgrade(&self)
+        <Atom as TrySmallestUpgrade<T>>::try_upgrade(self)
     }
 }
 

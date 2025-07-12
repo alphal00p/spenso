@@ -16,7 +16,7 @@ use std::{
 };
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{Atom, AtomView, ListIterator, Symbol},
+    atom::{Atom, AtomView, Symbol},
     {function, symbol},
 };
 

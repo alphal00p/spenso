@@ -231,11 +231,10 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
             let mut slots = Vec::new();
             let mut init_ord = Vec::new();
             let mut new_ord = Vec::new();
-            let mut o = 0;
+            // let mut o = 0;
             let nc = n.clone();
-            for h in nc {
-                new_ord.push(o);
-                o += 1;
+            for (o, h) in nc.enumerate() {
+                new_ord.push(o as u8);
                 slots.push(self.graph[[&h]]);
                 init_ord.push(self.slot_order[h.0]);
             }
@@ -838,6 +837,7 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
         self.graph.n_nodes()
     }
 
+    #[allow(clippy::result_large_err, clippy::type_complexity)]
     pub fn result(
         &self,
     ) -> Result<(&NetworkNode<K>, NodeIndex, Vec<LibrarySlot<Aind>>), TensorNetworkError<K>>
@@ -1355,9 +1355,9 @@ pub mod test {
     use crate::{
         network::graph::NetworkLeaf,
         structure::{
-            representation::{Euclidean, LibraryRep, Lorentz, Minkowski, RepName},
+            representation::{Euclidean, Lorentz, Minkowski, RepName},
             slot::IsAbstractSlot,
-            OrderedStructure,
+            OrderedStructure, PermutedStructure,
         },
     };
 
@@ -1371,7 +1371,7 @@ pub mod test {
         let s = NetworkGraph::scalar(2);
 
         let t = NetworkGraph::<i8>::tensor(
-            &OrderedStructure::<LibraryRep>::from_iter([
+            &PermutedStructure::<OrderedStructure>::from_iter([
                 Minkowski {}.new_slot(1, 2),
                 Minkowski {}.new_slot(2, 2),
             ])
@@ -1380,7 +1380,7 @@ pub mod test {
         );
 
         let t2 = NetworkGraph::<i8>::tensor(
-            &OrderedStructure::<LibraryRep>::from_iter([
+            &PermutedStructure::<OrderedStructure>::from_iter([
                 Minkowski {}.new_slot(1, 2),
                 Minkowski {}.new_slot(2, 2),
             ])
@@ -1389,7 +1389,7 @@ pub mod test {
         );
 
         let t3 = NetworkGraph::<i8>::tensor(
-            &OrderedStructure::<LibraryRep>::from_iter([
+            &PermutedStructure::<OrderedStructure>::from_iter([
                 Lorentz {}.new_slot(1, 2).to_lib(),
                 Euclidean {}.new_slot(2, 2).to_lib(),
             ])
@@ -1398,7 +1398,7 @@ pub mod test {
         );
 
         let t3b = NetworkGraph::<i8>::tensor(
-            &OrderedStructure::<LibraryRep>::from_iter([
+            &PermutedStructure::<OrderedStructure>::from_iter([
                 Lorentz {}.dual().new_slot(1, 2).to_lib(),
                 Euclidean {}.new_slot(2, 1).to_lib(),
             ])

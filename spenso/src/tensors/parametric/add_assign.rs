@@ -39,7 +39,7 @@ where
 
 impl<T: Into<Coefficient>> AddAssign<Complex<T>> for Atom {
     fn add_assign(&mut self, rhs: Complex<T>) {
-        *self = self.as_ref() + rhs.re + Atom::i() + rhs.im;
+        *self = &*self + rhs.re + Atom::i() + rhs.im;
     }
 }
 
@@ -48,7 +48,7 @@ where
     for<'a> &'a T: Into<Coefficient>,
 {
     fn add_assign(&mut self, rhs: &Complex<T>) {
-        *self = self.as_ref() + &rhs.re + Atom::i() + &rhs.im;
+        *self = &*self + &rhs.re + Atom::i() + &rhs.im;
     }
 }
 

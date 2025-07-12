@@ -3,9 +3,8 @@ use std::{borrow::Cow, fmt::Display, marker::PhantomData, ops::Neg};
 use crate::{
     algebra::complex::{Complex, RealOrComplex},
     structure::{
-        abstract_index::AbstractIndex, concrete_index::ConcreteIndex, dimension::Dimension,
-        representation::Representation, slot::IsAbstractSlot, HasStructure, PermutedStructure,
-        StructureError, TensorStructure,
+        concrete_index::ConcreteIndex, dimension::Dimension, representation::Representation,
+        slot::IsAbstractSlot, HasStructure, PermutedStructure, StructureError, TensorStructure,
     },
     tensors::{
         complex::RealOrComplexTensor,
@@ -57,6 +56,7 @@ impl<V, K> Default for DummyLibrary<V, K> {
     }
 }
 
+#[allow(clippy::non_canonical_clone_impl)]
 impl<V, K> Clone for DummyLibrary<V, K> {
     fn clone(&self) -> Self {
         DummyLibrary {

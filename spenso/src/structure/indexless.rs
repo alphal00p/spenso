@@ -73,7 +73,7 @@ impl<R: RepName, Aind> std::fmt::Display for IndexLess<R, Aind> {
         let mut table = Builder::new();
 
         table.push_record(&["".to_string()]);
-        for (_index, item) in self.structure.iter().enumerate() {
+        for item in self.structure.iter() {
             table.push_record(&[item.rep.to_string(), item.dim.to_string()]);
         }
         writeln!(f)?;
@@ -94,7 +94,7 @@ impl<R: RepName, Aind> std::fmt::Debug for IndexLess<R, Aind> {
             ]);
         }
         writeln!(f)?;
-        write!(f, "{}", format!("{}", table.build().with(Style::rounded())))
+        write!(f, "{}", table.build().with(Style::rounded()))
     }
 }
 
@@ -592,7 +592,7 @@ impl<N: std::fmt::Display, A: ArgDisplay, R: RepName, Aind> std::fmt::Display
                 .map(|a| a.arg_display())
                 .unwrap_or("".to_string()),
         ]);
-        for (_index, item) in self.structure.structure.iter().enumerate() {
+        for item in self.structure.structure.iter() {
             table.push_record(&[item.rep.to_string(), item.dim.to_string()]);
         }
         writeln!(f)?;
@@ -623,6 +623,6 @@ impl<N: std::fmt::Debug, A: ArgDisplay, R: RepName, Aind> std::fmt::Debug
             ]);
         }
         writeln!(f)?;
-        write!(f, "{}", format!("{}", table.build().with(Style::rounded())))
+        write!(f, "{}", table.build().with(Style::rounded()))
     }
 }

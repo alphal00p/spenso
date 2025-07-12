@@ -5,13 +5,12 @@ use crate::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
         permuted::PermuteTensor,
         representation::RepName,
-        slot::{AbsInd, DummyAind, Slot},
+        slot::{AbsInd, Slot},
         CastStructure, HasName, HasStructure, IndexLess, OrderedStructure, PermutedStructure,
         ScalarStructure, ScalarTensor, TensorStructure, TracksCount,
     },
 };
 
-use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::dimension::Dimension;
 use crate::structure::representation::Representation;
 use crate::structure::slot::IsAbstractSlot;

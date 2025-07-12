@@ -28,11 +28,6 @@ struct BareFiber {
 }
 
 impl BareFiber {
-    /// Creates a conjugate fiber
-    // pub fn conj(self) -> Self {
-    //     self
-    // }
-
     /// Creates a bare fiber from fiber data and a tensor structure
     pub fn from<I: TensorStructure>(data: FiberData, structure: &I) -> Self {
         match data {

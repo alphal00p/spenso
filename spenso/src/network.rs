@@ -16,7 +16,6 @@ use crate::structure::{PermutedStructure, StructureError};
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
-use std::usize;
 use store::{NetworkStore, TensorScalarStore, TensorScalarStoreMapping};
 use thiserror::Error;
 // use log::trace;
@@ -566,6 +565,7 @@ impl<
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
+    #[allow(clippy::result_large_err, clippy::type_complexity)]
     pub fn result(
         &self,
     ) -> Result<
@@ -600,6 +600,7 @@ where
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn result_tensor<'a, LT, L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>>(
         &'a self,
         lib: &L,
@@ -629,6 +630,7 @@ where
         })
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn result_scalar<'a>(&'a self) -> Result<ExecutionResult<Cow<'a, S>>, TensorNetworkError<K>>
     where
         T: Clone + ScalarTensor + 'a,
@@ -718,6 +720,7 @@ pub mod parsing;
 // use log::trace;
 
 pub trait ContractionStrategy<E, L, K, Aind>: Sized {
+    #[allow(clippy::result_large_err)]
     fn contract(
         executor: &mut E,
         graph: NetworkGraph<K, Aind>,
@@ -732,6 +735,7 @@ where
     E: ExecuteOp<L, K, Aind>,
 {
     /// Run the entire contraction to one leaf.
+    #[allow(clippy::result_large_err)]
     fn execute_all<C: ContractionStrategy<E, L, K, Aind>>(
         executor: &mut E,
         graph: &mut NetworkGraph<K, Aind>,
@@ -839,9 +843,8 @@ where
     }
 }
 
-/// 2b) Parallel: batch‐execute all ready ops, then splice serially.
+// 2b) Parallel: batch‐execute all ready ops, then splice serially.
 // pub struct Parallel;
-
 // impl<E, K> ExecutionStrategy<E, K> for Parallel
 // where
 //     E: ExecuteOp<K> + Clone + Send + Sync,
@@ -881,6 +884,7 @@ where
 
 pub trait ExecuteOp<L, K, Aind>: Sized {
     // type LibStruct;
+    #[allow(clippy::result_large_err)]
     fn execute<C: ContractionStrategy<Self, L, K, Aind>>(
         &mut self,
         graph: NetworkGraph<K, Aind>,
@@ -895,6 +899,7 @@ impl<S, Store: TensorScalarStore, K, Aind: AbsInd> Network<Store, K, Aind>
 where
     Store::Tensor: HasStructure<Structure = S>,
 {
+    #[allow(clippy::result_large_err)]
     pub fn execute<
         Strat: ExecutionStrategy<Store, L, K, Aind>,
         C: ContractionStrategy<Store, L, K, Aind>,
@@ -951,13 +956,10 @@ where
         graph.sync_order();
         match op {
             NetworkOp::Neg => {
-                let ops = graph.graph.iter_nodes().find(|(_, _, d)| {
-                    if let NetworkNode::Op(NetworkOp::Neg) = d {
-                        true
-                    } else {
-                        false
-                    }
-                });
+                let ops = graph
+                    .graph
+                    .iter_nodes()
+                    .find(|(_, _, d)| matches!(d, NetworkNode::Op(NetworkOp::Neg)));
 
                 let (opid, children, _) = ops.unwrap();
 
@@ -1583,13 +1585,10 @@ where
     }
 }
 
-#[cfg(feature = "shadowing")]
+// #[cfg(feature = "shadowing")]
 // pub mod levels;
 #[cfg(feature = "shadowing")]
 pub mod symbolica_interop;
 
-#[cfg(feature = "shadowing")]
-#[cfg(test)]
-// mod shadowing_tests;
 #[cfg(test)]
 mod tests;

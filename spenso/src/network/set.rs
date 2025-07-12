@@ -128,6 +128,7 @@ impl<
         Aind: AbsInd,
     > TensorNetworkSet<Str, K, Aind>
 {
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn result(
         &self,
     ) -> Result<
@@ -140,6 +141,7 @@ impl<
         self.networks.iter().map(|n| n.result()).collect()
     }
 
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn result_tensor<'a, LT, L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>>(
         &'a self,
         lib: &L,
@@ -158,6 +160,7 @@ impl<
         self.networks.iter().map(|n| n.result_tensor(lib)).collect()
     }
 
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn result_scalar<'a>(
         &'a self,
     ) -> Result<Vec<ExecutionResult<Cow<'a, S>>>, TensorNetworkError<K>>
@@ -191,6 +194,7 @@ impl<
         Aind: AbsInd,
     > TensorNetworkSet<Store, K, Aind>
 {
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn eval_tree(
         self,
         fn_map: &FunctionMap,

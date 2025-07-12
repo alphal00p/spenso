@@ -680,6 +680,7 @@ pub mod test {
 
     use crate::network::library::{symbolic::ExplicitKey, symbolic::TensorLibrary, symbolic::ETS};
 
+    #[allow(clippy::type_complexity)]
     pub static EXPLICIT_TENSOR_MAP: Lazy<
         RwLock<TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>>,
     > = Lazy::new(|| {
@@ -718,7 +719,7 @@ pub mod test {
 
             let id = tensor_library.get(&idkey).unwrap().into_owned();
 
-            let trace_structure: OrderedStructure = OrderedStructure::from_iter([
+            let trace_structure: OrderedStructure = PermutedStructure::from_iter([
                 rep.new_rep(4).slot(3),
                 rep.new_rep(4).dual().slot(4),
             ])

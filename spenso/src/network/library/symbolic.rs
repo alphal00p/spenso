@@ -103,9 +103,7 @@ impl<D: Default + Clone, S: TensorStructure + Clone> LibraryTensor for MixedTens
             .into_iter()
             .map(|v| match v {
                 ConcreteOrParam::Concrete(c) => Ok(c),
-                ConcreteOrParam::Param(p) => {
-                    return Err(anyhow!("Only concrete data allowed, not {p}"))
-                }
+                ConcreteOrParam::Param(p) => Err(anyhow!("Only concrete data allowed, not {p}")),
             })
             .collect();
 
@@ -122,9 +120,7 @@ impl<D: Default + Clone, S: TensorStructure + Clone> LibraryTensor for MixedTens
             .into_iter()
             .map(|(i, v)| match v {
                 ConcreteOrParam::Concrete(c) => Ok((i, c)),
-                ConcreteOrParam::Param(p) => {
-                    return Err(anyhow!("Only concrete data allowed, not {p}"))
-                }
+                ConcreteOrParam::Param(p) => Err(anyhow!("Only concrete data allowed, not {p}")),
             })
             .collect();
 
@@ -207,13 +203,20 @@ impl IdentityName for Symbol {
         symbol!(METRIC_NAME;Symmetric)
     }
 }
-
-impl<T: HasStructure<Structure = ExplicitKey<Aind>>, Aind: AbsInd> TensorLibrary<T, Aind> {
-    pub fn new() -> Self {
+impl<T: HasStructure<Structure = ExplicitKey<Aind>>, Aind: AbsInd> Default
+    for TensorLibrary<T, Aind>
+{
+    fn default() -> Self {
         Self {
             explicit_dimension: AHashMap::new(),
             generic_dimension: AHashMap::new(),
         }
+    }
+}
+
+impl<T: HasStructure<Structure = ExplicitKey<Aind>>, Aind: AbsInd> TensorLibrary<T, Aind> {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn merge(&mut self, other: &mut Self) {
@@ -275,7 +278,7 @@ impl<
     {
         let a = ExplicitKey::from_structure(structure);
         if let Some(key) = a {
-            if <TensorLibrary<T, Aind> as Library<S>>::get(&self, &key).is_ok() {
+            if <TensorLibrary<T, Aind> as Library<S>>::get(self, &key).is_ok() {
                 Ok(key)
             } else {
                 Err(LibraryError::InvalidKey)
@@ -329,7 +332,7 @@ impl<
                 tensor.set(&[i, i], T::SetData::one()).unwrap();
             }
         }
-        tensor.into()
+        tensor
     }
 
     pub fn update_ids(&mut self)
@@ -380,7 +383,7 @@ impl<
         for i in 0..dim {
             tensor.set(&[i, i], T::SetData::one()).unwrap();
         }
-        tensor.into()
+        tensor
     }
 
     pub fn diag_unimodular_metric(key: ExplicitKey<Aind>) -> T
@@ -398,7 +401,7 @@ impl<
                 tensor.set(&[i, i], T::SetData::one()).unwrap();
             }
         }
-        tensor.into()
+        tensor
     }
 
     pub fn insert_explicit(&mut self, data: PermutedStructure<T>) {
@@ -473,6 +476,7 @@ mod test {
         },
         shadowing::Concretize,
         structure::{
+            abstract_index::AbstractIndex,
             representation::{Euclidean, Minkowski},
             ToSymbolic,
         },
@@ -555,14 +559,14 @@ mod test {
             ParamTensor::from_sparse(
                 key.structure.clone(),
                 [
-                    (vec![0, 0, 0], parse!("a").into()),
-                    (vec![0, 0, 1], parse!("b").into()),
-                    (vec![0, 1, 0], parse!("c").into()),
-                    (vec![0, 1, 1], parse!("d").into()),
-                    (vec![1, 0, 0], parse!("e").into()),
-                    (vec![1, 0, 1], parse!("f").into()),
-                    (vec![1, 1, 0], parse!("g").into()),
-                    (vec![1, 1, 1], parse!("h").into()),
+                    (vec![0, 0, 0], parse!("a")),
+                    (vec![0, 0, 1], parse!("b")),
+                    (vec![0, 1, 0], parse!("c")),
+                    (vec![0, 1, 1], parse!("d")),
+                    (vec![1, 0, 0], parse!("e")),
+                    (vec![1, 0, 1], parse!("f")),
+                    (vec![1, 1, 0], parse!("g")),
+                    (vec![1, 1, 1], parse!("h")),
                 ],
             )
             .unwrap()

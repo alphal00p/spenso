@@ -1,8 +1,6 @@
-use abstract_index::AbstractIndex;
 use ahash::AHashMap;
 
 use anyhow::{anyhow, Result};
-use approxim::AbsDiffEq;
 use bitvec::vec::BitVec;
 use concrete_index::ConcreteIndex;
 use concrete_index::DualConciousExpandedIndex;
@@ -12,10 +10,8 @@ use concrete_index::FlatIndex;
 use delegate::delegate;
 use dimension::Dimension;
 
-use slot::AbsInd;
 use thiserror::Error;
 
-use crate::utils::DuplicateItemError;
 #[cfg(feature = "shadowing")]
 use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
@@ -371,7 +367,6 @@ pub trait TensorStructure {
     fn get_slot(&self, i: usize) -> Option<Self::Slot>;
     fn order(&self) -> usize;
     /// returns the list of slots that are the external indices of the tensor
-
     fn external_structure(&self) -> Vec<Self::Slot> {
         self.external_structure_iter().collect()
     }
@@ -781,8 +776,8 @@ pub enum StructureError {
     EmptyStructure(SlotError),
     #[error("wrong number of arguments {0}, expected {1}")]
     WrongNumberOfArguments(usize, usize),
-    #[error("Non traced out indices before merger {0}")]
-    NonTracedOut(#[from] DuplicateItemError),
+    // #[error("Non traced out indices before merger {0}")]
+    // NonTracedOut(#[from] DuplicateItemError),
     #[error("Parsing error: expected function view found {0}")]
     ParsingError(String),
 }

@@ -31,13 +31,13 @@
           "onSave": true,
           // "features": [],
           "features": ["shadowing"],
-          "command": "check"
+          "command": "clippy"
         }
       }
     }
   },
-  "shell": {
-    "program": "nu"
-  },
+  // "shell": {
+  //   "program": "nu"
+  // },
   "load_direnv": "direct"
 }

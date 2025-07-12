@@ -52,7 +52,7 @@ impl<Aind: AbsInd> Ref for SymbolicTensor<Aind> {
     where
         Self: 'a;
 
-    fn refer<'a>(&'a self) -> Self::Ref<'a> {
+    fn refer(&self) -> Self::Ref<'_> {
         self
     }
 }
@@ -286,7 +286,7 @@ impl<Aind: AbsInd> SymbolicTensor<Aind> {
         }
     }
 
-    #[must_use]
+    // #[must_use]
     pub fn get_atom(&self) -> &Atom {
         &self.expression
     }
@@ -294,7 +294,7 @@ impl<Aind: AbsInd> SymbolicTensor<Aind> {
     // pub fn to_mixed(self) -> MixedTensor {
     //     self.to_named().to_shell().to_explicit().unwrap()
     // }
-    #[allow(clippy::type_complexity)]
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn to_network(
         &self,
         library: &TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>,

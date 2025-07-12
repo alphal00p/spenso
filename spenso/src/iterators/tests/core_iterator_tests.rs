@@ -8,6 +8,7 @@ use crate::iterators::{
     ShiftableIterator,
 };
 use crate::structure::representation::{Minkowski, RepName};
+use crate::structure::PermutedStructure;
 use crate::structure::{concrete_index::FlatIndex, representation::Euclidean, OrderedStructure};
 use linnet::permutation::Permutation;
 
@@ -44,7 +45,7 @@ fn test_core_flat_iterator() {
 fn test_core_expanded_iterator() {
     let rep = Euclidean {};
     let structure: OrderedStructure =
-        OrderedStructure::from_iter([rep.new_slot(3, 0), rep.new_slot(5, 0), rep.new_slot(2, 1)])
+        PermutedStructure::from_iter([rep.new_slot(3, 0), rep.new_slot(5, 0), rep.new_slot(2, 1)])
             .structure;
 
     let mut fiber = Fiber::zeros(&structure);
@@ -85,11 +86,11 @@ fn test_metric_iterator() {
     fiber.free(1);
 
     // Create a metric iterator
-    let mut iter = MetricFiberIterator::new(&fiber, false);
+    let iter = MetricFiberIterator::new(&fiber, false);
 
     // Collect all indices and their signs
     let mut results = Vec::new();
-    while let Some(MetricItem { neg, item }) = iter.next() {
+    for MetricItem { neg, item } in iter {
         results.push((item, neg));
     }
 

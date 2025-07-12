@@ -10,13 +10,14 @@ use linnet::half_edge::involution::Orientation;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use spenso_macros::SimpleRepresentation;
+use std::ops::Index;
 use std::{
     cmp::Ordering,
     convert::Infallible,
     fmt::{Debug, Display},
+    hash::{Hash, Hasher},
     sync::{LazyLock, RwLock},
 };
-use std::{hash::Hash, ops::Index};
 
 use bincode::{Decode, Encode};
 
@@ -447,7 +448,6 @@ impl BaseRepName for Dummy {
     Debug,
     Copy,
     Clone,
-    Hash,
     Serialize,
     Deserialize,
     bincode_trait_derive::Encode,
@@ -476,6 +476,13 @@ impl<T: RepName> Ord for Representation<T> {
 impl<T: RepName> PartialOrd for Representation<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl<T: Hash + RepName> Hash for Representation<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.rep.hash(state);
+        self.dim.hash(state);
     }
 }
 
@@ -841,10 +848,10 @@ impl ExtendibleReps {
         };
 
         #[cfg(feature = "shadowing")]
-        ETS.metric;
+        let _ = ETS.metric;
 
         #[cfg(feature = "shadowing")]
-        AIND_SYMBOLS.aind;
+        let _ = AIND_SYMBOLS.aind;
         new.new_self_dual(Euclidean::NAME).unwrap();
         fn mink_is_neg(id: ConcreteIndex) -> bool {
             Minkowski {}.is_neg(id)
@@ -901,15 +908,11 @@ impl RepName for LibraryRep {
             Self::Dummy => Orientation::Undirected,
             Self::SelfDual(_) => Orientation::Undirected,
             Self::InlineMetric(_) => Orientation::Undirected,
-            Self::Dualizable(l) => {
-                if l > 0 {
-                    Orientation::Default
-                } else if l < 0 {
-                    Orientation::Reversed
-                } else {
-                    panic!("dualizable with 0")
-                }
-            }
+            Self::Dualizable(l) => match l.cmp(&0) {
+                Ordering::Greater => Orientation::Default,
+                Ordering::Less => Orientation::Reversed,
+                Ordering::Equal => panic!("dualizable with 0"),
+            },
         }
     }
 
@@ -940,10 +943,7 @@ impl RepName for LibraryRep {
     }
 
     fn is_self_dual(&self) -> bool {
-        match self {
-            Self::Dualizable(_) => false,
-            _ => true,
-        }
+        !matches!(self, Self::Dualizable(_))
     }
 
     #[inline]
@@ -1035,8 +1035,6 @@ impl RepName for LibraryRep {
 
     #[cfg(feature = "shadowing")]
     /// yields a function builder for the representation, adding a first variable: the dimension.
-    ///
-
     fn to_symbolic<'a, It: Into<AtomOrView<'a>>>(
         &self,
         args: impl IntoIterator<Item = It>,

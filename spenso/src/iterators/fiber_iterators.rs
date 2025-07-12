@@ -397,7 +397,7 @@ mod tests {
 
     use crate::structure::{
         representation::{Euclidean, RepName},
-        OrderedStructure,
+        OrderedStructure, PermutedStructure,
     };
 
     use super::*;
@@ -405,7 +405,7 @@ mod tests {
     #[test]
     fn weaved_iterator() {
         let strct: DenseTensor<u32, OrderedStructure<Euclidean>> = DenseTensor::zero(
-            OrderedStructure::from_iter([
+            PermutedStructure::from_iter([
                 Euclidean {}.new_slot(4, 1),
                 Euclidean {}.new_slot(4, 2),
                 Euclidean {}.new_slot(4, 3),

@@ -191,7 +191,7 @@ impl<N: IdentityName, A, R: RepName<Dual = R>, Aind: AbsInd + DummyAind> Permute
                     contractions: self.contractions,
                     global_name: self.global_name,
                     additional_args: self.additional_args,
-                    structure: OrderedStructure::from_iter(
+                    structure: PermutedStructure::from_iter(
                         self.structure.into_iter().map(|s| s.to_lib()),
                     )
                     .structure,

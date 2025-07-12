@@ -1,6 +1,6 @@
 use bitvec::vec::BitVec;
 use log::trace;
-use std::collections::HashMap;
+use std::{cmp::Ordering, collections::HashMap};
 // use num::Zero;
 use crate::{
     algebra::{
@@ -634,37 +634,40 @@ where
                     let mut nonzero = false;
 
                     while let Some(((a, skip_a, neg), (b, skip_b))) = items {
-                        if skip_a > skip_b {
-                            //Advance iter_other
-                            let b = iter_other
-                                .by_ref()
-                                .next()
-                                .map(|(b, skip, _)| (b, skip + skip_b + 1));
-                            items = Some((a, skip_a, neg)).zip(b);
-                        } else if skip_b > skip_a {
-                            //Advance iter_self
-                            let a = iter_self
-                                .by_ref()
-                                .next()
-                                .map(|(a, skip, (neg, _))| (a, skip + skip_a + 1, neg));
-                            items = a.zip(Some((b, skip_b)));
-                        } else {
-                            // skip_a == skip_b
-                            if neg {
-                                value.sub_assign_fallible(&a.mul_fallible(b).unwrap());
-                            } else {
-                                value.add_assign_fallible(&a.mul_fallible(b).unwrap());
+                        match skip_a.cmp(&skip_b) {
+                            std::cmp::Ordering::Greater => {
+                                let b = iter_other
+                                    .by_ref()
+                                    .next()
+                                    .map(|(b, skip, _)| (b, skip + skip_b + 1));
+                                items = Some((a, skip_a, neg)).zip(b);
                             }
-                            let b = iter_other
-                                .by_ref()
-                                .next()
-                                .map(|(b, skip, _)| (b, skip + skip_b + 1));
-                            let a = iter_self
-                                .by_ref()
-                                .next()
-                                .map(|(a, skip, (neg, _))| (a, skip + skip_a + 1, neg));
-                            items = a.zip(b);
-                            nonzero = true;
+                            Ordering::Less => {
+                                //Advance iter_self
+                                let a = iter_self
+                                    .by_ref()
+                                    .next()
+                                    .map(|(a, skip, (neg, _))| (a, skip + skip_a + 1, neg));
+                                items = a.zip(Some((b, skip_b)));
+                            }
+                            _ => {
+                                // skip_a == skip_b
+                                if neg {
+                                    value.sub_assign_fallible(&a.mul_fallible(b).unwrap());
+                                } else {
+                                    value.add_assign_fallible(&a.mul_fallible(b).unwrap());
+                                }
+                                let b = iter_other
+                                    .by_ref()
+                                    .next()
+                                    .map(|(b, skip, _)| (b, skip + skip_b + 1));
+                                let a = iter_self
+                                    .by_ref()
+                                    .next()
+                                    .map(|(a, skip, (neg, _))| (a, skip + skip_a + 1, neg));
+                                items = a.zip(b);
+                                nonzero = true;
+                            }
                         }
                     }
 

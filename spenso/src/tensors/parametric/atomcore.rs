@@ -120,11 +120,11 @@ pub trait ReplaceWithBuilder: Sized {
         rhs: M,
     ) -> Self;
 
-    fn recycled<'a>(ref_self: Self::Ref<'a>) -> Self;
+    fn recycled(ref_self: Self::Ref<'_>) -> Self;
     // fn fill_in<'a>(&'a mut self, ref_self: Self::Ref<'a>);
 
-    fn ref_mut<'a>(&'a mut self) -> Self::RefMut<'a>;
-    fn reference<'a>(&'a self) -> Self::Ref<'a>;
+    fn ref_mut(&mut self) -> Self::RefMut<'_>;
+    fn reference(&self) -> Self::Ref<'_>;
 
     fn with_owned<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
         replacement: ReplaceBuilderGeneric<'c, Self, Self>,
@@ -283,35 +283,6 @@ pub trait TensorAtomMaps {
     fn replace_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
     fn replace_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
     fn replace_map_mut<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&mut self, m: &F);
-    /// Collect terms involving the same power of `x`, where `x` is a variable or function, e.g.
-    ///
-    /// ```math
-    /// collect(x + x * y + x^2, x) = x * (1+y) + x^2
-    /// ```
-    ///
-    /// Both the *key* (the quantity collected in) and its coefficient can be mapped using
-    /// `key_map` and `coeff_map` respectively.
-    // fn collect<E: Exponent, T: AtomCore>(
-    //     &self,
-    //     x: T,
-    //     key_map: Option<Box<dyn ClonableAtomMap>>,
-    //     coeff_map: Option<Box<dyn ClonableAtomMap>>,
-    // ) -> Self;
-
-    /// Collect terms involving the same power of `x`, where `x` is a variable or function, e.g.
-    ///
-    /// ```math
-    /// collect(x + x * y + x^2, x) = x * (1+y) + x^2
-    /// ```
-    ///
-    /// Both the *key* (the quantity collected in) and its coefficient can be mapped using
-    /// `key_map` and `coeff_map` respectively.
-    // fn collect_multiple<E: Exponent, T: AtomCore>(
-    //     &self,
-    //     xs: &[T],
-    //     key_map: Option<Box<dyn ClonableAtomMap>>,
-    //     coeff_map: Option<Box<dyn ClonableAtomMap>>,
-    // ) -> Self;
 
     /// Collect terms involving the literal occurrence of `x`.
     fn coefficient<T: AtomCore>(&self, x: T) -> Self::AtomContainer;
@@ -492,9 +463,6 @@ pub trait TensorAtomMaps {
             + FromNumeratorAndFactorizedDenominator<RO, RO, E>,
         MultivariatePolynomial<RO, E>: Factorize;
 
-    /// Construct a printer for the atom with special options.
-    // fn printer<'a>(&'a self, opts: PrintOptions) -> Self::ContainerData<AtomPrinter<'a>>;
-
     /// Print the atom in a form that is unique and independent of any implementation details.
     ///
     /// Anti-symmetric functions are not supported.
@@ -536,14 +504,14 @@ impl<S: StorageTensor<Data = Atom> + Clone + PartialEq> ReplaceWithBuilder for S
     where
         Self: 'a;
 
-    fn ref_mut<'a>(&'a mut self) -> Self::RefMut<'a> {
+    fn ref_mut(&mut self) -> Self::RefMut<'_> {
         self
     }
 
-    fn recycled<'a>(ref_self: Self::Ref<'a>) -> Self {
+    fn recycled(ref_self: Self::Ref<'_>) -> Self {
         ref_self.map_data_ref_self(|_| RecycledAtom::new().into_inner())
     }
-    fn reference<'a>(&'a self) -> Self::Ref<'a> {
+    fn reference(&self) -> Self::Ref<'_> {
         self
     }
 
@@ -583,8 +551,7 @@ impl<S: StorageTensor<Data = Atom> + Clone + PartialEq> ReplaceWithBuilder for S
         *into = replacement.target.map_data_ref_self(move |expr| {
             let rep =
                 replacement.update_symbolica_builder(expr.replace(replacement.pattern.borrow()));
-            let out = rep.with(with_borrowed);
-            out
+            rep.with(with_borrowed)
         });
         replacement.target == into
     }
@@ -805,50 +772,6 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
     fn replace_map_mut<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&mut self, m: &F) {
         self.map_data_mut(|a| a.replace_map_mut(m));
     }
-    // /// Collect terms involving the same power of `x`, where `x` is a variable or function, e.g.
-    // ///
-    // /// ```math
-    // /// collect(x + x * y + x^2, x) = x * (1+y) + x^2
-    // /// ```
-    // ///
-    // /// Both the *key* (the quantity collected in) and its coefficient can be mapped using
-    // /// `key_map` and `coeff_map` respectively.
-    // fn collect<E: Exponent, T: AtomCore>(
-    //     &self,
-    //     x: T,
-    //     key_map: Option<Box<dyn ClonableAtomMap>>,
-    //     coeff_map: Option<Box<dyn ClonableAtomMap>>,
-    // ) -> Self {
-    //     let x = x.as_atom_view();
-    //     match (key_map, coeff_map) {
-    //         (Some(key_map), Some(coeff_map)) => self.map_data_ref_self(|a| {
-    //             a.collect::<E, AtomView>(x, Some(dyn_clone::clone_box(&*key_map)), Some(coeff_map.()))
-    //         }),
-    //         (Some(key_map), None) => {
-    //             self.map_data_ref_self(|a| a.collect::<E, AtomView>(x, Some(key_map.clone()), None))
-    //         }
-    //         (None, Some(coeff_map)) => self
-    //             .map_data_ref_self(|a| a.collect::<E, AtomView>(x, None, Some(coeff_map.clone()))),
-    //         (None, None) => self.map_data_ref_self(|a| a.collect::<E, AtomView>(x, None, None)),
-    //     }
-    // }
-
-    /// Collect terms involving the same power of `x`, where `x` is a variable or function, e.g.
-    ///
-    /// ```math
-    /// collect(x + x * y + x^2, x) = x * (1+y) + x^2
-    /// ```
-    ///
-    /// Both the *key* (the quantity collected in) and its coefficient can be mapped using
-    /// `key_map` and `coeff_map` respectively.
-    // fn collect_multiple<E: Exponent, T: AtomCore>(
-    //     &self,
-    //     xs: &[T],
-    //     key_map: Option<Box<dyn ClonableAtomMap>>,
-    //     coeff_map: Option<Box<dyn ClonableAtomMap>>,
-    // ) -> Self {
-    //     self.map_data_ref_self(|a| a.collect_multiple(xs, key_map, coeff_map))
-    // }
 
     /// Collect terms involving the literal occurrence of `x`.
     fn coefficient<T: AtomCore>(&self, x: T) -> Self {

@@ -795,7 +795,7 @@ dependencies = [
  "itertools 0.14.0",
  "linnet",
  "spenso",
- "spenso-macros",
+ "spenso-macros 0.2.0",
  "symbolica",
 ]
 
@@ -1687,7 +1687,7 @@ dependencies = [
 
 [[package]]
 name = "spenso"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1720,7 +1720,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slotmap",
- "spenso-macros",
+ "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "symbolica",
  "tabled",
  "thiserror 1.0.69",
@@ -1733,7 +1733,7 @@ dependencies = [
  "ahash",
  "idenso",
  "spenso",
- "spenso-macros",
+ "spenso-macros 0.2.0",
  "symbolica",
  "xpct",
 ]
@@ -1747,6 +1747,19 @@ dependencies = [
  "quote",
  "serde",
  "spenso",
+ "symbolica",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "spenso-macros"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e32a2605f26cb6ce44b5e33fbf1678fd96dd7dbe8be96734ad4c229fe08bc7c7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
  "symbolica",
  "syn 2.0.101",
 ]
@@ -2405,8 +2418,3 @@ dependencies = [
  "quote",
  "syn 2.0.101",
 ]
-
-[[patch.unused]]
-name = "linnet"
-version = "0.7.1"
-source = "git+https://github.com/alphal00p/linnet?rev=13b0b37e23bd2a203d559fe3bce771c12ade172c#13b0b37e23bd2a203d559fe3bce771c12ade172c"

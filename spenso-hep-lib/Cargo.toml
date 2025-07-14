@@ -1,7 +1,8 @@
 [package]
 name = "spenso-hep-lib"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
+description = "A spenso tensor library for high energy physics"
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -11,7 +12,7 @@ repository.workspace = true
 spenso = { version = "0.5.0", features = ["shadowing"] }
 symbolica = { version = "0.17.0" }
 spenso-macros = { version = "0.2.0" }
-idenso = { path = "../idenso" }
+idenso = "0.1.0"
 
 
 ahash = { version = "0.8.11", features = ["serde"] }

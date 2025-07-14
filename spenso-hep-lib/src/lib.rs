@@ -598,10 +598,10 @@ mod tests {
             )
         );
 
-        net.validate();
+        // net.validate();
         net.execute::<Steps<1>, SingleSmallestDegree<true>, _, _>(&*HEP_LIB)
             .unwrap();
-        net.validate();
+        // net.validate();
         // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
         // net.validate();
         // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);

@@ -7,7 +7,7 @@ authors = ["Lucien Huber <cargo+mail@lucien.ch>"]
 description = "A tensor (n-dim array) network, iterating, and contraction (using automatic abstract index matching) library."
 documentation = "https://docs.rs/spenso/latest/spenso/"
 keywords = ["tensors", "contraction"]
-readme = "README.md"
+# readme = "README.md"
 repository = "https://github.com/alphal00p/spenso"
 
 

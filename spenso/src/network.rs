@@ -1,5 +1,6 @@
 use graph::{NAdd, NMul, NetworkEdge, NetworkGraph, NetworkLeaf, NetworkNode, NetworkOp};
 use linnet::half_edge::NodeIndex;
+use linnet::permutation::Permutation;
 use serde::{Deserialize, Serialize};
 
 use library::{Library, LibraryError};
@@ -565,6 +566,50 @@ impl<
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
+    pub fn validate(&self)
+    where
+        K: TensorStructure,
+    {
+        for (n, neigh, v) in self.graph.graph.iter_nodes() {
+            match v {
+                NetworkNode::Leaf(NetworkLeaf::LibraryKey(k)) => {
+                    let mut reps = self
+                        .graph
+                        .slots(n)
+                        .into_iter()
+                        .map(|s| s.rep())
+                        .collect::<Vec<_>>();
+                    let p = Permutation::sort(&reps);
+
+                    let mut n_reps = k
+                        .structure
+                        .external_reps_iter()
+                        .map(|r| r.to_lib())
+                        .collect::<Vec<_>>();
+                    let q = Permutation::sort(&n_reps);
+                    println!("p{p}q{q}");
+                    assert_eq!(n_reps, reps);
+                }
+                NetworkNode::Leaf(NetworkLeaf::LocalTensor(k)) => {
+                    let reps = self
+                        .graph
+                        .slots(n)
+                        .into_iter()
+                        .map(|s| s.rep())
+                        .collect::<Vec<_>>();
+                    let n_reps = self
+                        .store
+                        .get_tensor(*k)
+                        .external_reps_iter()
+                        .map(|r| r.to_lib())
+                        .collect::<Vec<_>>();
+                    assert_eq!(n_reps, reps);
+                }
+                _ => {}
+            }
+        }
+    }
+
     #[allow(clippy::result_large_err, clippy::type_complexity)]
     pub fn result(
         &self,

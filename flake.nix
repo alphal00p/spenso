@@ -92,42 +92,6 @@
           version = "0.1.0";
         });
 
-      # Helper function to get crate metadata
-      crateInfo = crateName: craneLib.crateNameFromCargoToml {cargoToml = ./${crateName}/Cargo.toml;};
-
-      # Build individual workspace crates
-      spenso = craneLib.buildPackage (commonArgs
-        // {
-          inherit cargoArtifacts;
-          inherit (crateInfo "spenso") pname version;
-          doCheck = false;
-          cargoExtraArgs = "--package spenso";
-        });
-
-      spenso-macros = craneLib.buildPackage (commonArgs
-        // {
-          inherit cargoArtifacts;
-          inherit (crateInfo "spenso-macros") pname version;
-          doCheck = false;
-          cargoExtraArgs = "--package spenso-macros";
-        });
-
-      spenso-hep-lib = craneLib.buildPackage (commonArgs
-        // {
-          inherit cargoArtifacts;
-          inherit (crateInfo "spenso-hep-lib") pname version;
-          doCheck = false;
-          cargoExtraArgs = "--package spenso-hep-lib";
-        });
-
-      idenso = craneLib.buildPackage (commonArgs
-        // {
-          inherit cargoArtifacts;
-          inherit (crateInfo "idenso") pname version;
-          doCheck = false;
-          cargoExtraArgs = "--package idenso";
-        });
-
       # Build the entire workspace
       workspace = craneLib.buildPackage (commonArgs
         // {
@@ -138,28 +102,29 @@
           cargoExtraArgs = "--workspace";
         });
 
-      # Helper function to create checks for a specific package
-      mkChecksForPackage = crateName: let
-        info = crateInfo crateName;
+      # Helper function to create checks for a specific crate using manifest path
+      mkChecksForCrate = crateName: let
+        manifestPath = "${crateName}/Cargo.toml";
+        crateInfo = craneLib.crateNameFromCargoToml {cargoToml = ./${manifestPath};};
       in {
-        "${info.pname}-clippy" = craneLib.cargoClippy (commonArgs
+        "${crateInfo.pname}-clippy" = craneLib.cargoClippy (commonArgs
           // {
             inherit cargoArtifacts;
-            inherit (info) pname version;
-            cargoClippyExtraArgs = "--package ${info.pname} -- --deny warnings";
+            inherit (crateInfo) pname version;
+            cargoClippyExtraArgs = "--manifest-path ${manifestPath} -- --deny warnings";
           });
 
-        "${info.pname}-doc" = craneLib.cargoDoc (commonArgs
+        "${crateInfo.pname}-doc" = craneLib.cargoDoc (commonArgs
           // {
             inherit cargoArtifacts;
-            inherit (info) pname version;
-            cargoExtraArgs = "--package ${info.pname}";
+            inherit (crateInfo) pname version;
+            cargoExtraArgs = "--manifest-path ${manifestPath}";
           });
 
-        "${info.pname}-nextest" = craneLib.cargoNextest (commonArgs
+        "${crateInfo.pname}-nextest" = craneLib.cargoNextest (commonArgs
           // {
             inherit cargoArtifacts;
-            inherit (info) pname version;
+            inherit (crateInfo) pname version;
             nativeBuildInputs =
               commonArgs.nativeBuildInputs
               ++ [
@@ -167,15 +132,15 @@
               ];
             partitions = 1;
             partitionType = "count";
-            cargoNextestExtraArgs = "--package ${info.pname}";
+            cargoNextestExtraArgs = "--manifest-path ${manifestPath}";
           });
       };
 
-      # Create checks for each package
-      spensoChecks = mkChecksForPackage "spenso";
-      spensoMacrosChecks = mkChecksForPackage "spenso-macros";
-      spensoHepLibChecks = mkChecksForPackage "spenso-hep-lib";
-      idensoChecks = mkChecksForPackage "idenso";
+      # Create checks for each crate
+      spensoChecks = mkChecksForCrate "spenso";
+      spensoMacrosChecks = mkChecksForCrate "spenso-macros";
+      spensoHepLibChecks = mkChecksForCrate "spenso-hep-lib";
+      idensoChecks = mkChecksForCrate "idenso";
 
       # Workspace-wide checks
       workspaceChecks = {
@@ -235,14 +200,9 @@
 
       packages =
         {
-          # Individual crates
-          inherit spenso spenso-macros spenso-hep-lib idenso;
-
-          # Workspace build
+          # Default to the workspace build
+          default = workspace;
           inherit workspace;
-
-          # Default to the main spenso crate
-          default = spenso;
         }
         // lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
           # Coverage packages (workspace-wide)
@@ -260,21 +220,6 @@
               pname = "spenso-workspace";
               version = "0.4.1";
               cargoTarpaulinExtraArgs = "--skip-clean --out xml --output-dir $out --workspace";
-            });
-
-          # Individual crate coverage
-          spenso-llvm-coverage = craneLibLLvmTools.cargoLlvmCov (commonArgs
-            // {
-              inherit cargoArtifacts;
-              inherit (crateInfo "spenso") pname version;
-              cargoExtraArgs = "--package spenso";
-            });
-
-          spenso-tarpaulin-coverage = craneLib.cargoTarpaulin (commonArgs
-            // {
-              inherit cargoArtifacts;
-              inherit (crateInfo "spenso") pname version;
-              cargoTarpaulinExtraArgs = "--skip-clean --out xml --output-dir $out --package spenso";
             });
         };
 

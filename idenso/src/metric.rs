@@ -8,7 +8,7 @@ use spenso::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         HasName, PermutedStructure, TensorStructure, ToSymbolic,
-        abstract_index::AIND_SYMBOLS,
+        abstract_index::{AIND_SYMBOLS, AbstractIndex},
         permuted::Perm,
         representation::{LibraryRep, LibrarySlot, RepName},
         slot::{AbsInd, DummyAind},
@@ -19,7 +19,7 @@ use symbolica::{
     atom::{Atom, AtomCore, AtomType, AtomView, Symbol, representation::FunView},
     coefficient::CoefficientView,
     function,
-    id::{Condition, MatchSettings, PatternRestriction, Replacement, WildcardRestriction},
+    id::{Condition, Match, MatchSettings, PatternRestriction, Replacement, WildcardRestriction},
     symbol,
 };
 
@@ -208,7 +208,7 @@ pub fn wrap_indices_impl(view: AtomView, header: Symbol) -> Atom {
                 i.to_symbolic([dim, RS.a_]).to_pattern(),
                 i.to_symbolic([dima.clone(), function!(header, Atom::var(RS.a_))]),
             )
-            .with_conditions(num_or_var(RS.a_))
+            .with_conditions(not_aind(RS.a_))
             .with_settings(settings.clone()),
         );
     }
@@ -220,7 +220,7 @@ pub fn wrap_indices_impl(view: AtomView, header: Symbol) -> Atom {
                 i.to_symbolic([dim, RS.a_]).to_pattern(),
                 i.to_symbolic([dima.clone(), function!(header, Atom::var(RS.a_))]),
             )
-            .with_conditions(num_or_var(RS.a_))
+            .with_conditions(not_aind(RS.a_))
             .with_settings(settings.clone()),
         );
         reps.push(
@@ -228,7 +228,7 @@ pub fn wrap_indices_impl(view: AtomView, header: Symbol) -> Atom {
                 di.to_symbolic([dim, RS.a_]).to_pattern(),
                 di.to_symbolic([dima.clone(), function!(header, Atom::var(RS.a_))]),
             )
-            .with_conditions(num_or_var(RS.a_))
+            .with_conditions(not_aind(RS.a_))
             .with_settings(settings.clone()),
         );
     }
@@ -435,9 +435,28 @@ pub fn simplify_metrics_impl(view: AtomView) -> Atom {
     expr
 }
 
-pub fn num_or_var(sym: Symbol) -> Condition<PatternRestriction> {
+pub fn not_aind(sym: Symbol) -> Condition<PatternRestriction> {
     sym.restrict(WildcardRestriction::IsAtomType(AtomType::Var))
         | sym.restrict(WildcardRestriction::IsAtomType(AtomType::Num))
+        | sym.restrict(WildcardRestriction::filter(|a| match a {
+            Match::FunctionName(f) => {
+                // println!("FunctionName{f}");
+                LibraryRep::all_representations().all(|r| r.symbol() != *f)
+            }
+            Match::Multiple(_, views) => {
+                // println!("Multiple:");
+                // for v in views {
+                //     print!("{v}");
+                // }
+                views
+                    .iter()
+                    .all(|a| LibrarySlot::<AbstractIndex>::try_from(*a).is_err())
+            }
+            Match::Single(s) => {
+                // println!("Single{s}");
+                LibrarySlot::<AbstractIndex>::try_from(*s).is_err()
+            }
+        }))
 }
 
 pub fn to_dots_impl(expr: AtomView) -> Atom {
@@ -455,25 +474,25 @@ pub fn to_dots_impl(expr: AtomView) -> Atom {
                 (function!(RS.f_, i.to_symbolic([RS.i__])).pow(Atom::num(2))).to_pattern(),
                 function!(MS.dot, RS.f_, RS.f_),
             )
-            .with_conditions(num_or_var(RS.x_)),
+            .with_conditions(not_aind(RS.x_)),
         );
 
         reps.push(
             Replacement::new(
-                (function!(RS.f_, RS.x_, i.to_symbolic([RS.i__]))
-                    * function!(RS.g_, RS.y_, i.to_symbolic([RS.i__])))
+                (function!(RS.f_, RS.x___, i.to_symbolic([RS.i__]))
+                    * function!(RS.g_, RS.y___, i.to_symbolic([RS.i__])))
                 .to_pattern(),
-                function!(MS.dot, function!(RS.f_, RS.x_), function!(RS.g_, RS.y_)),
+                function!(MS.dot, function!(RS.f_, RS.x___), function!(RS.g_, RS.y___)),
             )
-            .with_conditions(num_or_var(RS.x_) & num_or_var(RS.y_)),
+            .with_conditions(not_aind(RS.x___) & not_aind(RS.y___)),
         );
 
         reps.push(
             Replacement::new(
-                (function!(RS.f_, RS.x_, i.to_symbolic([RS.i__])).pow(Atom::num(2))).to_pattern(),
-                function!(MS.dot, function!(RS.f_, RS.x_), function!(RS.f_, RS.x_)),
+                (function!(RS.f_, RS.x___, i.to_symbolic([RS.i__])).pow(Atom::num(2))).to_pattern(),
+                function!(MS.dot, function!(RS.f_, RS.x___), function!(RS.f_, RS.x___)),
             )
-            .with_conditions(num_or_var(RS.x_)),
+            .with_conditions(not_aind(RS.x___)),
         );
     }
 
@@ -481,12 +500,12 @@ pub fn to_dots_impl(expr: AtomView) -> Atom {
         let di = i.dual();
         reps.push(
             Replacement::new(
-                (function!(RS.f_, RS.x_, i.to_symbolic([RS.i__]))
-                    * function!(RS.g_, RS.y_, di.to_symbolic([RS.i__])))
+                (function!(RS.f_, RS.x___, i.to_symbolic([RS.i__]))
+                    * function!(RS.g_, RS.y___, di.to_symbolic([RS.i__])))
                 .to_pattern(),
-                function!(MS.dot, function!(RS.f_, RS.x_), function!(RS.g_, RS.y_)),
+                function!(MS.dot, function!(RS.f_, RS.x___), function!(RS.g_, RS.y___)),
             )
-            .with_conditions(num_or_var(RS.x_) & num_or_var(RS.y_)),
+            .with_conditions(not_aind(RS.x___) & not_aind(RS.y___)),
         );
     }
 
@@ -646,5 +665,15 @@ mod test {
         let expr = bis.g(9, 9).simplify_metrics();
 
         assert_eq!(expr, Atom::var(symbol!("dim")), "got {:#}", expr);
+    }
+    #[test]
+    fn dots() {
+        initialize();
+
+        let a = parse_lit!(
+            P(f(1), 2, spenso::bis(3, 2), spenso::mink(4, 2)) * P(g(1, 2), spenso::mink(4, 2))
+        )
+        .to_dots();
+        println!("{a}");
     }
 }

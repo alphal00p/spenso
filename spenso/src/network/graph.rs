@@ -11,7 +11,7 @@ use linnet::{
         involution::{EdgeData, Flow, Hedge},
         nodestore::NodeStorageOps,
         subgraph::{ModifySubgraph, SubGraph, SubGraphOps},
-        tree::SimpleTraversalTree,
+        tree::{SimpleTraversalTree, TTRoot},
         HedgeGraph, HedgeGraphError, NodeIndex,
     },
     permutation::Permutation,
@@ -221,7 +221,7 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
             }
         }
 
-        let perm = Permutation::sort(ord);
+        let perm = Permutation::sort(&slots);
         perm.apply_slice_in_place(&mut slots);
         slots
     }
@@ -417,11 +417,11 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
         let head = self.head();
         let root_node = self.graph.node_id(head);
 
-        // println!("//tree:\n{}", self.graph.dot(&tt.tree_subgraph));
-        // println!(
-        // "//tree:\n{}",
-        // self.graph.dot(&tt.tree_subgraph(self.graph.as_ref()))
-        // );
+        println!("//tree:\n{}", self.graph.dot(&tt.tree_subgraph));
+        println!(
+            "//tree:\n{}",
+            self.graph.dot(&tt.tree_subgraph(self.graph.as_ref()))
+        );
         // println!("tree{:#?}", tt);
         // println!(
         //     "tree{}",
@@ -446,15 +446,7 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
                 for child in tt.iter_children(nid, &self.graph) {
                     has_children = true;
                     match &self.graph[child] {
-                        NetworkNode::Leaf(_) => {
-                            let mut slots = vec![];
-
-                            for h in self.graph.iter_crown(child) {
-                                if let NetworkEdge::Slot(s) = self.graph[[&h]] {
-                                    slots.push(s.aind)
-                                }
-                            }
-                        }
+                        NetworkNode::Leaf(_) => {}
                         _ => {
                             all_leaves = false;
                             break;
@@ -467,19 +459,19 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
                 if all_leaves && has_children {
                     let op = *op;
 
-                    // println!(
-                    //     "Extracting: {}",
-                    //     self.graph.dot_impl(
-                    //         &subgraph,
-                    //         "",
-                    //         &|a| if let NetworkEdge::Slot(s) = a {
-                    //             Some(format!("label=\"{s}\""))
-                    //         } else {
-                    //             None
-                    //         },
-                    //         &|a| None
-                    //     )
-                    // );
+                    println!(
+                        "Extracting the: {}",
+                        self.graph.dot_impl(
+                            &subgraph,
+                            "",
+                            &|a| if let NetworkEdge::Slot(s) = a {
+                                Some(format!("label=\"{s}\""))
+                            } else {
+                                None
+                            },
+                            &|a| None
+                        )
+                    );
 
                     let extracted = self.extract(&subgraph);
 

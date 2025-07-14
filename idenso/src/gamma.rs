@@ -7,11 +7,13 @@ use spenso::{
         representation::{LibraryRep, Minkowski, RepName},
         slot::AbsInd,
     },
+    tensors::parametric::atomcore::PatternReplacement,
 };
 use symbolica::{
     atom::{Atom, AtomCore, AtomOrView, AtomView, FunctionBuilder, Symbol},
     function,
     id::{Context, Replacement},
+    state::RecycledAtom,
     symbol,
 };
 
@@ -268,11 +270,7 @@ impl GammaLibrary {
     }
 }
 
-pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
-    let mink = Minkowski {};
-
-    let mut expr = expr.expand_mink_bis();
-
+fn collect_gammas(mut expr: Atom) -> Atom {
     let reps: Vec<_> = [
         (
             AGS.projp_pattern(RS.a__, RS.b__),
@@ -295,13 +293,13 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
         (
             function!(
                 GS.gamma_chain,
-                RS.a__,
+                RS.a___,
                 Bispinor {}.to_symbolic([RS.a__]),
                 Bispinor {}.to_symbolic([RS.b__])
             ) * AGS.gamma_pattern(RS.y__, RS.b__, RS.c__),
             function!(
                 GS.gamma_chain,
-                RS.a__,
+                RS.a___,
                 Bispinor {}.to_symbolic([RS.b__]),
                 Minkowski {}.to_symbolic([RS.y__]),
                 Bispinor {}.to_symbolic([RS.a__]),
@@ -312,13 +310,13 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
             AGS.gamma_pattern(RS.y__, RS.a__, RS.b__)
                 * function!(
                     GS.gamma_chain,
-                    RS.a__,
+                    RS.a___,
                     Bispinor {}.to_symbolic([RS.b__]),
                     Bispinor {}.to_symbolic([RS.c__])
                 ),
             function!(
                 GS.gamma_chain,
-                RS.a__,
+                RS.a___,
                 Bispinor {}.to_symbolic([RS.b__]),
                 Minkowski {}.to_symbolic([RS.y__]),
                 Bispinor {}.to_symbolic([RS.a__]),
@@ -337,10 +335,146 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
     let mut atom = Atom::new();
 
     while expr.replace_multiple_into(&reps, &mut atom) {
+        // println!("collecting:{atom}");
         std::mem::swap(&mut expr, &mut atom);
         expr = expr.expand_mink_bis();
+        // println!("expanding::{expr}");
         expr = expr.simplify_metrics();
+        // println!("simplifying::{expr}");
     }
+    expr
+}
+
+fn normalise_gammas(mut expr: Atom) -> Atom {
+    // Uses the anti commutation rule of the gamma chain to sort the minkowski indices
+    fn gamma_chain_normalisation(arg: AtomView, _context: &Context, out: &mut Atom) -> bool {
+        if let AtomView::Fun(f) = arg {
+            if f.get_symbol() == GS.gamma_chain {
+                // println!("Gamma chain:{}", arg);
+                let mut args = f.iter().collect::<Vec<_>>();
+                if args.len() >= 5 {
+                    let more = args.len() > 5;
+                    for i in 0..args.len().saturating_sub(4) {
+                        if i % 2 == 0 {
+                            // println!("{}", args[i]);
+                            // println!("{}?{}", args[i], args[i + 1]);
+                            if args[i] > args[i + 2] {
+                                // println!("{}>{}", args[i], args[i + 1]);
+                                args.swap(i, i + 2);
+                                let swapped = FunctionBuilder::new(GS.gamma_chain)
+                                    .add_args(&args)
+                                    .finish();
+
+                                // println!("{}", swapped);
+                                let mu = args.remove(i);
+                                let _bis = args.remove(i);
+                                let nu = args.remove(i);
+                                if more {
+                                    if i == 0 {
+                                        args.remove(i);
+                                    } else {
+                                        args.remove(i - 1);
+                                    }
+                                }
+
+                                // println!("mu:{}bis:{}nu:{}", mu, bis, nu);
+                                let metric = function!(ETS.metric, mu, nu)
+                                    * 2
+                                    * FunctionBuilder::new(GS.gamma_chain)
+                                        .add_args(&args)
+                                        .finish();
+                                *out = metric - swapped;
+                                // println!("{}->{}", a, c);
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    loop {
+        let new = expr.replace_map(&gamma_chain_normalisation);
+        // .replace_multiple(&reps);
+        if new == expr {
+            break;
+        } else {
+            expr = new;
+        }
+    }
+
+    expr
+}
+
+fn undo_gamma_chain(mut expr: Atom) -> Atom {
+    let reps: Vec<_> = [
+        (
+            GS.chain_pattern(RS.b__, RS.e__, [RS.a__, RS.c__, RS.d__]),
+            AGS.gamma_pattern(RS.a__, RS.b__, RS.c__) * AGS.gamma_pattern(RS.d__, RS.c__, RS.e__),
+        ),
+        (
+            function!(
+                GS.gamma_chain,
+                RS.a___,
+                Bispinor {}.to_symbolic([RS.b__]),
+                Minkowski {}.to_symbolic([RS.y__]),
+                Bispinor {}.to_symbolic([RS.a__]),
+                Bispinor {}.to_symbolic([RS.c__])
+            ),
+            function!(
+                GS.gamma_chain,
+                RS.a___,
+                Bispinor {}.to_symbolic([RS.a__]),
+                Bispinor {}.to_symbolic([RS.b__])
+            ) * AGS.gamma_pattern(RS.y__, RS.b__, RS.c__),
+        ),
+        (
+            function!(
+                GS.gamma_chain,
+                RS.a___,
+                Bispinor {}.to_symbolic([RS.b__]),
+                Minkowski {}.to_symbolic([RS.y__]),
+                Bispinor {}.to_symbolic([RS.a__]),
+                Bispinor {}.to_symbolic([RS.c__])
+            ),
+            AGS.gamma_pattern(RS.y__, RS.a__, RS.b__)
+                * function!(
+                    GS.gamma_chain,
+                    RS.a___,
+                    Bispinor {}.to_symbolic([RS.b__]),
+                    Bispinor {}.to_symbolic([RS.c__])
+                ),
+        ),
+    ]
+    .iter()
+    .map(|(a, b)| {
+        // println!("{}->{}", a, b);
+
+        Replacement::new(a.to_pattern(), b.to_pattern())
+    })
+    .collect();
+
+    loop {
+        let new = expr.replace_multiple(&reps);
+        if new == expr {
+            break;
+        } else {
+            expr = new;
+        }
+    }
+
+    expr
+}
+
+pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
+    let mink = Minkowski {};
+
+    let mut expr = expr.expand_mink_bis();
+
+    expr = collect_gammas(expr);
+    expr = normalise_gammas(expr);
 
     let reps: Vec<_> = [
         (
@@ -348,9 +482,9 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
                 GS.gamma_chain,
                 RS.a___,
                 Bispinor {}.to_symbolic([RS.i__]),
-                mink.to_symbolic([RS.d_, RS.a_]),
+                Minkowski {}.to_symbolic([RS.d_, RS.a_]),
                 Bispinor {}.to_symbolic([RS.j__]),
-                mink.to_symbolic([RS.d_, RS.a_]),
+                Minkowski {}.to_symbolic([RS.d_, RS.a_]),
                 RS.b__
             ),
             function!(GS.gamma_chain, RS.a___, RS.b__) * RS.d_,
@@ -358,9 +492,9 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
         (
             function!(
                 GS.gamma_chain,
-                mink.to_symbolic([RS.d_, RS.a_]),
+                Minkowski {}.to_symbolic([RS.d_, RS.a_]),
                 Bispinor {}.to_symbolic([RS.b__]),
-                mink.to_symbolic([RS.d_, RS.a_]),
+                Minkowski {}.to_symbolic([RS.d_, RS.a_]),
                 Bispinor {}.to_symbolic([RS.i__]),
                 Bispinor {}.to_symbolic([RS.j__])
             ),
@@ -378,90 +512,16 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
             ),
             Bispinor {}.id_atom([RS.a__], [RS.b__]),
         ),
-        (
-            function!(
-                GS.gamma_chain,
-                RS.a___,
-                RS.a_,
-                Bispinor {}.to_symbolic([RS.i__]),
-                RS.b___,
-                RS.b_,
-                Bispinor {}.to_symbolic([RS.j__]),
-                RS.a_,
-                RS.a__
-            ),
-            function!(GS.gamma_chain, RS.a___, RS.b_, RS.b___, RS.a__) * 2
-                - function!(
-                    GS.gamma_chain,
-                    RS.a___,
-                    RS.a_,
-                    Bispinor {}.to_symbolic([RS.i__]),
-                    RS.b___,
-                    RS.a_,
-                    Bispinor {}.to_symbolic([RS.j__]),
-                    RS.b_,
-                    RS.a__
-                ),
-        ),
     ]
     .iter()
-    .map(|(a, b)| Replacement::new(a.to_pattern(), b.to_pattern()))
+    .map(|(a, b)| {
+        // println!("{a:#}->\n\t{b:#}");
+        Replacement::new(a.to_pattern(), b.to_pattern())
+    })
     .collect();
 
-    while expr.replace_multiple_into(&reps, &mut atom) {
-        std::mem::swap(&mut expr, &mut atom);
-    }
-
-    // println!("Before accumulate:{}", expr);
-
-    fn gamma_chain_accumulator(arg: AtomView, _context: &Context, out: &mut Atom) -> bool {
-        if let AtomView::Fun(f) = arg {
-            if f.get_symbol() == GS.gamma_chain {
-                // println!("Gamma chain:{}", arg);
-                let mut args = f.iter().collect::<Vec<_>>();
-                if args.len() >= 5 {
-                    for i in 0..args.len().saturating_sub(4) {
-                        if i % 2 == 0 {
-                            // println!("{}", args[i]);
-                            // println!("{}?{}", args[i], args[i + 1]);
-                            if args[i] > args[i + 2] {
-                                // println!("{}>{}", args[i], args[i + 1]);
-                                args.swap(i, i + 2);
-                                let swapped = FunctionBuilder::new(GS.gamma_chain)
-                                    .add_args(&args)
-                                    .finish();
-
-                                // println!("{}", swapped);
-                                let mu = args.remove(i);
-                                let _bis = args.remove(i);
-                                let nu = args.remove(i);
-                                // println!("mu:{}bis:{}nu:{}", mu, bis, nu);
-                                let metric = function!(ETS.metric, mu, nu)
-                                    * 2
-                                    * FunctionBuilder::new(GS.gamma_chain)
-                                        .add_args(&args)
-                                        .finish();
-                                *out = metric - swapped;
-                                // println!("{}->{}", a, c);
-                                return true;
-                            }
-                        }
-                    }
-                    return false;
-                } else {
-                    return false;
-                }
-            }
-            false
-        } else {
-            false
-        }
-    }
-
     loop {
-        let new = expr
-            .replace_map(&gamma_chain_accumulator)
-            .replace_multiple(&reps);
+        let new = expr.replace_multiple(&reps).simplify_metrics();
         if new == expr {
             break;
         } else {
@@ -482,65 +542,9 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
         .repeat()
         .with(function!(GS.gamma_trace, RS.a___, RS.b___));
 
+    expr = undo_gamma_chain(expr);
     // println!("Before tracer:{expr}");
 
-    let reps: Vec<_> = [
-        (
-            GS.chain_pattern(RS.b__, RS.e__, [RS.a__, RS.c__, RS.d__]),
-            AGS.gamma_pattern(RS.a__, RS.b__, RS.c__) * AGS.gamma_pattern(RS.d__, RS.c__, RS.e__),
-        ),
-        (
-            function!(
-                GS.gamma_chain,
-                RS.a__,
-                Bispinor {}.to_symbolic([RS.b__]),
-                Minkowski {}.to_symbolic([RS.y__]),
-                Bispinor {}.to_symbolic([RS.a__]),
-                Bispinor {}.to_symbolic([RS.c__])
-            ),
-            function!(
-                GS.gamma_chain,
-                RS.a__,
-                Bispinor {}.to_symbolic([RS.a__]),
-                Bispinor {}.to_symbolic([RS.b__])
-            ) * AGS.gamma_pattern(RS.y__, RS.b__, RS.c__),
-        ),
-        (
-            function!(
-                GS.gamma_chain,
-                RS.a__,
-                Bispinor {}.to_symbolic([RS.b__]),
-                Minkowski {}.to_symbolic([RS.y__]),
-                Bispinor {}.to_symbolic([RS.a__]),
-                Bispinor {}.to_symbolic([RS.c__])
-            ),
-            AGS.gamma_pattern(RS.y__, RS.a__, RS.b__)
-                * function!(
-                    GS.gamma_chain,
-                    RS.a__,
-                    Bispinor {}.to_symbolic([RS.b__]),
-                    Bispinor {}.to_symbolic([RS.c__])
-                ),
-        ),
-        (
-            function!(
-                GS.gamma_chain,
-                Minkowski {}.to_symbolic([RS.y__]),
-                Bispinor {}.to_symbolic([RS.a__]),
-                Bispinor {}.to_symbolic([RS.b__])
-            ),
-            AGS.gamma_pattern(RS.y__, RS.a__, RS.b__),
-        ),
-    ]
-    .iter()
-    .map(|(a, b)| {
-        // println!("{}->{}", a, b);
-
-        Replacement::new(a.to_pattern(), b.to_pattern())
-    })
-    .collect();
-
-    expr = expr.replace_multiple(&reps);
     // expr = expr.replace_map(|term, ctx, out| {
 
     //     if let AtomView::Fun(f)= term{
@@ -694,6 +698,7 @@ mod test {
     use super::*;
 
     use crate::id;
+    use crate::representations::SpinAntiFundamental;
     use spenso::{
         structure::{abstract_index::AbstractIndex, permuted::Perm},
         tensors::symbolic::SymbolicTensor,
@@ -826,14 +831,14 @@ mod test {
                 * (p(mink(4, nu3)) + q(mink(4, nu3)))
                 * spenso::gamma_chain(
                     mink(4, nu1),
-                    bis(3),
+                    bis(4, 3),
                     mink(4, mu),
-                    bis(4),
+                    bis(4, 4),
                     mink(4, nu),
-                    bis(5),
+                    bis(4, 5),
                     mink(4, nu3),
-                    bis(1),
-                    bis(1)
+                    bis(4, 1),
+                    bis(4, 1)
                 ),
             "spenso"
         )
@@ -872,7 +877,7 @@ mod test {
         .replace(symbol!("spenso::nu1"))
         .with(symbol!("spenso::nu3"));
         assert_eq!(
-            expr,
+            expr.expand(),
             parse_lit!(
                 4 * dim * p(mink(dim, nu3)) ^ 2 + 4 * dim * p(mink(dim, nu3)) * q(mink(dim, nu3)),
                 "spenso"
@@ -965,7 +970,7 @@ mod test {
             expr,
             &dim * id!(spenso::bis(1), spenso::bis(2)) * 2
                 - dim.pow(Atom::num(2)) * id!(spenso::bis(1), spenso::bis(2)),
-            "got {}",
+            "got {:#}",
             expr
         );
     }
@@ -1061,7 +1066,7 @@ mod test {
             expr,
             mink.g(2, 4) * p(1).npow(2) * 4 + p(2) * q(4) * 4 - q(2) * p(4) * 4
                 + mink.g(2, 4) * p(1) * q(1) * 4,
-            "got {:#}",
+            "got {}",
             expr
         );
 
@@ -1104,5 +1109,41 @@ mod test {
             "got {}",
             expr
         );
+    }
+
+    #[test]
+    fn normalise_g() {
+        let expr = parse_lit!(
+            gamma_chain(mink(dim, mu), bis(5), mink(dim, mu), bis(1), bis(2)),
+            "spenso"
+        );
+
+        println!("{}", expr.simplify_gamma())
+    }
+
+    #[test]
+    fn val_test() {
+        let expr = parse_lit!(
+            G ^ 4
+                * gamma(bis(4, l(3)), bis(4, l(6)), mink(4, l(0)))
+                * gamma(bis(4, l(6)), bis(4, l(5)), mink(4, l(20)))
+                * gamma(bis(4, l(5)), bis(4, l(2)), mink(4, l(1)))
+                * gamma(bis(4, l(2)), bis(4, r(2)), mink(4, dummy(2, 2)))
+                * gamma(bis(4, r(2)), bis(4, r(5)), mink(4, l(1)))
+                * gamma(bis(4, r(5)), bis(4, r(6)), mink(4, r(20)))
+                * gamma(bis(4, r(6)), bis(4, r(3)), mink(4, l(0)))
+                * gamma(bis(4, r(3)), bis(4, l(3)), mink(4, dummy(3, 3)))
+                * P(1, mink(4, l(20)))
+                * P(1, mink(4, r(20)))
+                * P(2, mink(4, dummy(2, 2)))
+                * P(3, mink(4, dummy(3, 3))),
+            "spenso"
+        );
+
+        initialize();
+        println!("{:>}", expr.simplify_gamma().to_dots());
+        // println!("{}", expr.simplify_gamma().to_dots());
+
+        // println!("{}", SpinAntiFundamental {}.to_symbolic([RS.a_]))
     }
 }

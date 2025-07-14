@@ -354,13 +354,16 @@ mod tests {
         algebra::upgrading_arithmetic::FallibleSub,
         iterators::IteratableTensor,
         network::{
-            ExecutionResult, Network, Sequential, SingleSmallestDegree, SmallestDegree,
-            SmallestDegreeIter, Steps, parsing::ShadowedStructure, store::NetworkStore,
+            ContractScalars, ExecutionResult, Network, Sequential, SingleSmallestDegree,
+            SmallestDegree, SmallestDegreeIter, Steps, StepsDebug, parsing::ShadowedStructure,
+            store::NetworkStore,
         },
         shadowing::Concretize,
-        structure::representation::{Minkowski, RepName},
         structure::{
-            HasStructure, IndexlessNamedStructure, abstract_index::AbstractIndex, permuted::Perm,
+            HasStructure, IndexlessNamedStructure,
+            abstract_index::AbstractIndex,
+            permuted::Perm,
+            representation::{Minkowski, RepName},
             slot::IsAbstractSlot,
         },
         tensors::{
@@ -369,7 +372,12 @@ mod tests {
             symbolic::SymbolicTensor,
         },
     };
-    use symbolica::{atom::Atom, atom::Symbol, function, id::ConditionResult, parse, symbol};
+    use symbolica::{
+        atom::{Atom, Symbol},
+        function,
+        id::ConditionResult,
+        parse, parse_lit, symbol,
+    };
 
     use super::*;
     use ahash::{HashMap, HashMapExt};
@@ -451,8 +459,127 @@ mod tests {
         initialize();
         let _a = HEP_LIB.get(&AGS.gamma_strct(4)).unwrap();
 
-        let expr = parse!("((N(4,mink(4,l_2))*P(4,mink(4,r_2))+N(4,mink(4,r_2))*P(4,mink(4,l_2)))*N(4,mink(4,dummy_ss_4_1))*P(4,mink(4,dummy_ss_4_1))+-1*N(4,mink(4,dummy_ss_4_2))^2*P(4,mink(4,l_2))*P(4,mink(4,r_2))+-1*N(4,mink(4,dummy_ss_4_3))*N(4,mink(4,dummy_ss_4_4))*P(4,mink(4,dummy_ss_4_3))*P(4,mink(4,dummy_ss_4_4))*g(mink(4,l_2),mink(4,r_2)))*((N(5,mink(4,l_3))*P(5,mink(4,r_3))+N(5,mink(4,r_3))*P(5,mink(4,l_3)))*N(5,mink(4,dummy_ss_5_1))*P(5,mink(4,dummy_ss_5_1))+-1*N(5,mink(4,dummy_ss_5_2))^2*P(5,mink(4,l_3))*P(5,mink(4,r_3))+-1*N(5,mink(4,dummy_ss_5_3))*N(5,mink(4,dummy_ss_5_4))*P(5,mink(4,dummy_ss_5_3))*P(5,mink(4,dummy_ss_5_4))*g(mink(4,l_3),mink(4,r_3)))*(-1*G^2*P(0,mink(4,r_20))*𝑖*g(bis(4,r_0),bis(4,r_7))*g(bis(4,r_1),bis(4,r_4))*g(mink(4,r_2),mink(4,r_5))*g(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5))+G^2*P(2,mink(4,r_20))*𝑖*g(bis(4,r_0),bis(4,r_7))*g(bis(4,r_1),bis(4,r_4))*g(mink(4,r_2),mink(4,r_5))*g(mink(4,r_3),mink(4,r_4))*gamma(bis(4,r_4),bis(4,r_5),mink(4,r_4))*gamma(bis(4,r_5),bis(4,r_6),mink(4,r_20))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_5)))*(-1*P(2,mink(4,l_20))+P(0,mink(4,l_20)))*-1*G^2*P(2,mink(4,dummy_2_0))*P(3,mink(4,dummy_3_1))*𝑖*g(bis(4,l_0),bis(4,l_7))*g(bis(4,l_1),bis(4,l_4))*g(mink(4,l_2),mink(4,l_5))*g(mink(4,l_3),mink(4,l_4))*gamma(bis(4,l_1),bis(4,r_1),mink(4,dummy_3_1))*gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_20))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))*gamma(bis(4,r_0),bis(4,l_0),mink(4,dummy_2_0))
-            ","spenso");
+        let expr = parse_lit!(
+            (-1 * G
+                ^ 3 * P(0, mink(4, 0))
+                    * P(2, mink(4, 26))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 1))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    + -1 * G
+                ^ 3 * P(0, mink(4, 26))
+                    * P(1, mink(4, 1))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 0))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    + -1 * G
+                ^ 3 * P(0, mink(4, 26))
+                    * P(1, mink(4, 5))
+                    * g(mink(4, 0), mink(4, 1))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 5))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    + -1 * G
+                ^ 3 * P(0, mink(4, 5))
+                    * P(2, mink(4, 26))
+                    * g(mink(4, 0), mink(4, 1))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 5))
+                    + -1 * G
+                ^ 3 * P(1, mink(4, 1))
+                    * P(1, mink(4, 26))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 0))
+                    + -1 * G
+                ^ 3 * P(1, mink(4, 26))
+                    * P(1, mink(4, 5))
+                    * g(mink(4, 0), mink(4, 1))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 5))
+                    + -2 * G
+                ^ 3 * P(0, mink(4, 1))
+                    * P(0, mink(4, 26))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 0))
+                    + -2 * G
+                ^ 3 * P(0, mink(4, 1))
+                    * P(1, mink(4, 26))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 0))
+                    + -2 * G
+                ^ 3 * P(0, mink(4, 5))
+                    * Q(0, mink(4, 5))
+                    * g(mink(4, 0), mink(4, 1))
+                    * gamma(bis(4, 3), bis(4, 2), mink(4, 4))
+                    + -2 * G
+                ^ 3 * P(1, mink(4, 0))
+                    * P(1, mink(4, 1))
+                    * gamma(bis(4, 3), bis(4, 2), mink(4, 4))
+                    + -2 * G
+                ^ 3 * P(1, mink(4, 0))
+                    * P(2, mink(4, 26))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 1))
+                    + -2 * G
+                ^ 3 * P(1, mink(4, 1))
+                    * P(2, mink(4, 0))
+                    * gamma(bis(4, 3), bis(4, 2), mink(4, 4))
+                    + -2 * G
+                ^ 3 * P(1, mink(4, 5))
+                    * P(2, mink(4, 5))
+                    * g(mink(4, 0), mink(4, 1))
+                    * gamma(bis(4, 3), bis(4, 2), mink(4, 4))
+                    + -4 * G
+                ^ 3 * P(0, mink(4, 1))
+                    * P(2, mink(4, 0))
+                    * gamma(bis(4, 3), bis(4, 2), mink(4, 4))
+                    + 2 * G
+                ^ 3 * P(0, mink(4, 0))
+                    * P(0, mink(4, 1))
+                    * gamma(bis(4, 3), bis(4, 2), mink(4, 4))
+                    + 2 * G
+                ^ 3 * P(0, mink(4, 0))
+                    * P(2, mink(4, 1))
+                    * gamma(bis(4, 3), bis(4, 2), mink(4, 4))
+                    + 2 * G
+                ^ 3 * P(0, mink(4, 1))
+                    * P(2, mink(4, 26))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 0))
+                    + 2 * G
+                ^ 3 * P(0, mink(4, 26))
+                    * P(1, mink(4, 0))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 1))
+                    + 2 * G
+                ^ 3 * P(0, mink(4, 5))
+                    * P(2, mink(4, 5))
+                    * g(mink(4, 0), mink(4, 1))
+                    * gamma(bis(4, 3), bis(4, 2), mink(4, 4))
+                    + 2 * G
+                ^ 3 * P(1, mink(4, 0))
+                    * P(1, mink(4, 26))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 1))
+                    + 2 * G
+                ^ 3 * P(1, mink(4, i))
+                ^ 2 * g(mink(4, 0), mink(4, 1)) * gamma(bis(4, 3), bis(4, 2), mink(4, 4)) + G
+                ^ 3 * P(1, mink(4, 1))
+                    * P(2, mink(4, 26))
+                    * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
+                    * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
+                    * gamma(bis(4, 7), bis(4, 6), mink(4, 0))),
+            "spenso"
+        );
         // println!("{}", expr);
 
         let mut net = Network::<
@@ -461,6 +588,7 @@ mod tests {
         >::try_from_view(expr.as_view(), &*HEP_LIB)
         .unwrap();
 
+        net.merge_ops();
         println!(
             "{}",
             net.dot_display_impl(
@@ -470,14 +598,39 @@ mod tests {
             )
         );
 
-        net.execute::<Steps<19>, SmallestDegree, _, _>(&*HEP_LIB)
-            .unwrap();
-        net.execute::<Steps<14>, SingleSmallestDegree<false>, _, _>(&*HEP_LIB)
-            .unwrap();
-        net.execute::<Steps<1>, SingleSmallestDegree<true>, _, _>(&*HEP_LIB)
-            .unwrap();
-        net.execute::<Sequential, SmallestDegree, _, _>(&*HEP_LIB)
-            .unwrap();
+        net.validate();
+        net.execute::<Steps<1>, SingleSmallestDegree<true>, _, _>(&*HEP_LIB);
+        net.validate();
+        // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
+        // net.validate();
+        // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
+        // net.validate();
+        // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
+        // net.validate();
+        // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
+        // net.validate();
+        // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
+        // net.validate();
+        // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
+        // net.validate();
+        // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
+        // net.validate();
+        // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
+        // net.validate();
+        // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
+        // net.validate();
+        // net.execute::<Steps<1>, ContractScalars, _, _>(&*HEP_LIB);
+        // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
+        // net.execute::<StepsDebug<1>, SingleSmallestDegree<true>, _, _>(&*HEP_LIB);
+        // net.execute::<Steps<1>, ContractScalars, _, _>(&*HEP_LIB);
+
+        //     .unwrap();
+        // net.execute::<Steps<14>, SingleSmallestDegree<false>, _, _>(&*HEP_LIB)
+        //     .unwrap();
+        // net.execute::<Steps<1>, SingleSmallestDegree<true>, _, _>(&*HEP_LIB)
+        //     .unwrap();
+        // // net.execute::<Sequential, SmallestDegree, _, _>(&*HEP_LIB)
+        //     .unwrap();
         // println!(
         //     "{}",
         //     net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())

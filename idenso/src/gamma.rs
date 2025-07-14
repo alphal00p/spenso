@@ -7,13 +7,11 @@ use spenso::{
         representation::{LibraryRep, Minkowski, RepName},
         slot::AbsInd,
     },
-    tensors::parametric::atomcore::PatternReplacement,
 };
 use symbolica::{
     atom::{Atom, AtomCore, AtomOrView, AtomView, FunctionBuilder, Symbol},
     function,
     id::{Context, Replacement},
-    state::RecycledAtom,
     symbol,
 };
 
@@ -698,7 +696,6 @@ mod test {
     use super::*;
 
     use crate::id;
-    use crate::representations::SpinAntiFundamental;
     use spenso::{
         structure::{abstract_index::AbstractIndex, permuted::Perm},
         tensors::symbolic::SymbolicTensor,

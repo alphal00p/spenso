@@ -11,6 +11,7 @@ use symbolica::atom::{Atom, AtomCore, AtomView, Symbol};
 pub mod color;
 pub mod gamma;
 pub mod metric;
+pub mod parsing_ind;
 pub mod rep_symbols;
 pub mod representations;
 

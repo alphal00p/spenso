@@ -11,7 +11,7 @@ use linnet::{
         involution::{EdgeData, Flow, Hedge},
         nodestore::NodeStorageOps,
         subgraph::{ModifySubgraph, SubGraph, SubGraphOps},
-        tree::{SimpleTraversalTree, TTRoot},
+        tree::SimpleTraversalTree,
         HedgeGraph, HedgeGraphError, NodeIndex,
     },
     permutation::Permutation,
@@ -459,19 +459,19 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
                 if all_leaves && has_children {
                     let op = *op;
 
-                    println!(
-                        "Extracting the: {}",
-                        self.graph.dot_impl(
-                            &subgraph,
-                            "",
-                            &|a| if let NetworkEdge::Slot(s) = a {
-                                Some(format!("label=\"{s}\""))
-                            } else {
-                                None
-                            },
-                            &|a| None
-                        )
-                    );
+                    // println!(
+                    //     "Extracting the: {}",
+                    //     self.graph.dot_impl(
+                    //         &subgraph,
+                    //         "",
+                    //         &|a| if let NetworkEdge::Slot(s) = a {
+                    //             Some(format!("label=\"{s}\""))
+                    //         } else {
+                    //             None
+                    //         },
+                    //         &|a| None
+                    //     )
+                    // );
 
                     let extracted = self.extract(&subgraph);
 

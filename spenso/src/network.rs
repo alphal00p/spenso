@@ -570,10 +570,10 @@ where
     where
         K: TensorStructure,
     {
-        for (n, neigh, v) in self.graph.graph.iter_nodes() {
+        for (n, _neigh, v) in self.graph.graph.iter_nodes() {
             match v {
                 NetworkNode::Leaf(NetworkLeaf::LibraryKey(k)) => {
-                    let mut reps = self
+                    let reps = self
                         .graph
                         .slots(n)
                         .into_iter()
@@ -581,7 +581,7 @@ where
                         .collect::<Vec<_>>();
                     let p = Permutation::sort(&reps);
 
-                    let mut n_reps = k
+                    let n_reps = k
                         .structure
                         .external_reps_iter()
                         .map(|r| r.to_lib())

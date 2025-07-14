@@ -8,7 +8,7 @@ use spenso::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         HasName, PermutedStructure, TensorStructure, ToSymbolic,
-        abstract_index::{AIND_SYMBOLS, AbstractIndex},
+        abstract_index::AIND_SYMBOLS,
         permuted::Perm,
         representation::{LibraryRep, LibrarySlot, RepName},
         slot::{AbsInd, DummyAind},
@@ -22,6 +22,8 @@ use symbolica::{
     id::{Condition, Match, MatchSettings, PatternRestriction, Replacement, WildcardRestriction},
     symbol,
 };
+
+use crate::parsing_ind::Parsind;
 
 use super::rep_symbols::RS;
 
@@ -450,11 +452,11 @@ pub fn not_aind(sym: Symbol) -> Condition<PatternRestriction> {
                 // }
                 views
                     .iter()
-                    .all(|a| LibrarySlot::<AbstractIndex>::try_from(*a).is_err())
+                    .all(|a| LibrarySlot::<Parsind>::try_from(*a).is_err())
             }
             Match::Single(s) => {
                 // println!("Single{s}");
-                LibrarySlot::<AbstractIndex>::try_from(*s).is_err()
+                LibrarySlot::<Parsind>::try_from(*s).is_err()
             }
         }))
 }
@@ -670,10 +672,9 @@ mod test {
     fn dots() {
         initialize();
 
-        let a = parse_lit!(
-            P(f(1), 2, spenso::bis(3, 2), spenso::mink(4, 2)) * P(g(1, 2), spenso::mink(4, 2))
-        )
-        .to_dots();
+        let a =
+            parse_lit!(P(spenso::mink(4, -1 * g(2)), spenso::mink(4, 2)) * P(spenso::mink(4, 2)))
+                .to_dots();
         println!("{a}");
     }
 }

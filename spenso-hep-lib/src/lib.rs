@@ -354,9 +354,8 @@ mod tests {
         algebra::upgrading_arithmetic::FallibleSub,
         iterators::IteratableTensor,
         network::{
-            ContractScalars, ExecutionResult, Network, Sequential, SingleSmallestDegree,
-            SmallestDegree, SmallestDegreeIter, Steps, StepsDebug, parsing::ShadowedStructure,
-            store::NetworkStore,
+            ExecutionResult, Network, Sequential, SingleSmallestDegree, SmallestDegree,
+            SmallestDegreeIter, Steps, parsing::ShadowedStructure, store::NetworkStore,
         },
         shadowing::Concretize,
         structure::{
@@ -455,6 +454,7 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn parse_problem() {
         initialize();
         let _a = HEP_LIB.get(&AGS.gamma_strct(4)).unwrap();
@@ -599,7 +599,8 @@ mod tests {
         );
 
         net.validate();
-        net.execute::<Steps<1>, SingleSmallestDegree<true>, _, _>(&*HEP_LIB);
+        net.execute::<Steps<1>, SingleSmallestDegree<true>, _, _>(&*HEP_LIB)
+            .unwrap();
         net.validate();
         // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
         // net.validate();

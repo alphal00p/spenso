@@ -788,14 +788,14 @@ checksum = "f154ce46856750ed433c8649605bf7ed2de3bc35fd9d2a9f30cddd873c80cb08"
 
 [[package]]
 name = "idenso"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "bincode",
  "bincode-trait-derive",
  "itertools 0.14.0",
  "linnet",
- "spenso",
- "spenso-macros 0.2.0",
+ "spenso 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "symbolica",
 ]
 
@@ -1727,13 +1727,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "spenso"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92649bcb3fc5000673a8d6486242fc129a3fa7e5d500d7a05837cbacf4c2b6c3"
+dependencies = [
+ "ahash",
+ "anyhow",
+ "append-only-vec",
+ "approx-derive",
+ "approxim",
+ "bincode",
+ "bincode-trait-derive",
+ "bitvec",
+ "constcat",
+ "delegate",
+ "derive_more",
+ "duplicate 1.0.0",
+ "dyn-clone",
+ "enum-try-as-inner",
+ "env_logger",
+ "features",
+ "gat-lending-iterator",
+ "indexmap",
+ "linnet",
+ "log",
+ "num",
+ "once_cell",
+ "rand 0.9.1",
+ "rand_xoshiro 0.6.0",
+ "rayon",
+ "ref-ops",
+ "serde",
+ "serde_json",
+ "slotmap",
+ "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "symbolica",
+ "tabled",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "spenso-hep-lib"
 version = "0.0.0"
 dependencies = [
  "ahash",
  "idenso",
- "spenso",
- "spenso-macros 0.2.0",
+ "spenso 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "symbolica",
  "xpct",
 ]
@@ -1746,7 +1787,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde",
- "spenso",
+ "spenso 0.5.0",
  "symbolica",
  "syn 2.0.101",
 ]

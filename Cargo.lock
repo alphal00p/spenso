@@ -939,8 +939,9 @@ checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "linnet"
-version = "0.7.1"
-source = "git+https://github.com/alphal00p/linnet?rev=13b0b37e23bd2a203d559fe3bce771c12ade172c#13b0b37e23bd2a203d559fe3bce771c12ade172c"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20332ced2c1c16949ca5fac81350884bfab14634e502a0214885b14a057deb50"
 dependencies = [
  "ahash",
  "bincode",
@@ -1739,7 +1740,7 @@ dependencies = [
 
 [[package]]
 name = "spenso-macros"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "linnet",
  "proc-macro2",
@@ -2404,3 +2405,8 @@ dependencies = [
  "quote",
  "syn 2.0.101",
 ]
+
+[[patch.unused]]
+name = "linnet"
+version = "0.7.1"
+source = "git+https://github.com/alphal00p/linnet?rev=13b0b37e23bd2a203d559fe3bce771c12ade172c#13b0b37e23bd2a203d559fe3bce771c12ade172c"

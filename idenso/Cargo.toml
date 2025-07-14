@@ -13,7 +13,7 @@ symbolica = { version = "0.17.0" }
 spenso = { path = "../spenso", features = ["shadowing"] }
 spenso-macros = { path = "../spenso-macros" }
 itertools = "0.14.0"
-linnet = "0.7.1"
+linnet = "0.8.0"
 [features]
 
 default = []

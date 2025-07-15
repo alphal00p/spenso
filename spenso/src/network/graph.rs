@@ -417,11 +417,11 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
         let head = self.head();
         let root_node = self.graph.node_id(head);
 
-        println!("//tree:\n{}", self.graph.dot(&tt.tree_subgraph));
-        println!(
-            "//tree:\n{}",
-            self.graph.dot(&tt.tree_subgraph(self.graph.as_ref()))
-        );
+        // println!("//tree:\n{}", self.graph.dot(&tt.tree_subgraph));
+        // println!(
+        //     "//tree:\n{}",
+        //     self.graph.dot(&tt.tree_subgraph(self.graph.as_ref()))
+        // );
         // println!("tree{:#?}", tt);
         // println!(
         //     "tree{}",

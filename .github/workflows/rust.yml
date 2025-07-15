@@ -33,7 +33,7 @@ jobs:
         id: build-deps
         run: |
           # Build just the dependencies to populate the cache
-          nix build .#packages.workspace --impure --no-link
+          nix build .#workspace --impure --no-link
           echo "deps-built=true" >> $GITHUB_OUTPUT
 
   # Run all checks in parallel, depending on the deps build
@@ -168,4 +168,4 @@ jobs:
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@v7
       - name: Build workspace
-        run: nix build .#packages.workspace --impure --no-link
+        run: nix build .#workspace --impure --no-link

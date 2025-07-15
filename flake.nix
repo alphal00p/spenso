@@ -220,6 +220,27 @@
       idensoFeatureChecks = mkCrateChecksWithFeatures "idenso" "--features bincode" "bincode";
       spensoShadowingChecks = mkCrateChecksWithFeatures "spenso" "--features shadowing" "shadowing";
 
+      # Add tarpaulin checks for crates with features
+      idensoTarpaulinFeatureChecks = {
+        "idenso-tarpaulin-bincode" = craneLib.cargoTarpaulin (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "idenso";
+            version = "0.2.0";
+            cargoTarpaulinExtraArgs = "--manifest-path idenso/Cargo.toml --features bincode --skip-clean --out xml --output-dir $out";
+          });
+      };
+
+      spensoTarpaulinFeatureChecks = {
+        "spenso-tarpaulin-shadowing" = craneLib.cargoTarpaulin (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "spenso";
+            version = "0.5.1";
+            cargoTarpaulinExtraArgs = "--manifest-path spenso/Cargo.toml --features shadowing --skip-clean --out xml --output-dir $out";
+          });
+      };
+
       # Workspace-wide checks
       workspaceChecks = {
         # Build the workspace as part of `nix flake check` for convenience
@@ -293,7 +314,9 @@
         // shadowingFeatureChecks
         // allFeatureChecks
         // noDefaultFeatureChecks
-        // idensoFeatureChecks // spensoShadowingChecks;
+        // idensoFeatureChecks
+        // spensoShadowingChecks
+        // idensoTarpaulinFeatureChecks // spensoTarpaulinFeatureChecks;
 
       packages =
         {

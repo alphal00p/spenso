@@ -73,7 +73,7 @@ jobs:
       - name: Setup Cachix
         uses: cachix/cachix-action@v15
         with:
-          name: spenso
+          name: lcnbr
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@v7
@@ -114,7 +114,7 @@ jobs:
       - name: Setup Cachix
         uses: cachix/cachix-action@v15
         with:
-          name: spenso
+          name: lcnbr
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@v7
@@ -135,7 +135,7 @@ jobs:
       - name: Setup Cachix
         uses: cachix/cachix-action@v15
         with:
-          name: spenso
+          name: lcnbr
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@v7
@@ -163,7 +163,7 @@ jobs:
       - name: Setup Cachix
         uses: cachix/cachix-action@v15
         with:
-          name: spenso
+          name: lcnbr
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@v7

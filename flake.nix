@@ -175,6 +175,14 @@
             version = "0.4.1";
             cargoTarpaulinExtraArgs = "--workspace ${features} --skip-clean --out xml --output-dir $out";
           });
+
+        "workspace-doc-${featuresName}" = craneLib.cargoDoc (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "spenso-workspace";
+            version = "0.4.1";
+            cargoExtraArgs = "--workspace ${features}";
+          });
       };
 
       # Helper function to create per-crate checks with features
@@ -220,6 +228,12 @@
       idensoFeatureChecks = mkCrateChecksWithFeatures "idenso" "--features bincode" "bincode";
       spensoShadowingChecks = mkCrateChecksWithFeatures "spenso" "--features shadowing" "shadowing";
 
+      # Create per-crate all-features checks
+      spensoAllFeaturesChecks = mkCrateChecksWithFeatures "spenso" "--all-features" "all-features";
+      spensoMacrosAllFeaturesChecks = mkCrateChecksWithFeatures "spenso-macros" "--all-features" "all-features";
+      spensoHepLibAllFeaturesChecks = mkCrateChecksWithFeatures "spenso-hep-lib" "--all-features" "all-features";
+      idensoAllFeaturesChecks = mkCrateChecksWithFeatures "idenso" "--all-features" "all-features";
+
       # Add tarpaulin checks for crates with features
       idensoTarpaulinFeatureChecks = {
         "idenso-tarpaulin-bincode" = craneLib.cargoTarpaulin (commonArgs
@@ -238,6 +252,47 @@
             pname = "spenso";
             version = "0.5.1";
             cargoTarpaulinExtraArgs = "--manifest-path spenso/Cargo.toml --features shadowing --skip-clean --out xml --output-dir $out";
+          });
+      };
+
+      # Add per-crate all-features tarpaulin checks
+      spensoTarpaulinAllFeatures = {
+        "spenso-tarpaulin-all-features" = craneLib.cargoTarpaulin (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "spenso";
+            version = "0.5.1";
+            cargoTarpaulinExtraArgs = "--manifest-path spenso/Cargo.toml --all-features --skip-clean --out xml --output-dir $out";
+          });
+      };
+
+      spensoMacrosTarpaulinAllFeatures = {
+        "spenso-macros-tarpaulin-all-features" = craneLib.cargoTarpaulin (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "spenso-macros";
+            version = "0.2.0";
+            cargoTarpaulinExtraArgs = "--manifest-path spenso-macros/Cargo.toml --all-features --skip-clean --out xml --output-dir $out";
+          });
+      };
+
+      spensoHepLibTarpaulinAllFeatures = {
+        "spenso-hep-lib-tarpaulin-all-features" = craneLib.cargoTarpaulin (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "spenso-hep-lib";
+            version = "0.1.1";
+            cargoTarpaulinExtraArgs = "--manifest-path spenso-hep-lib/Cargo.toml --all-features --skip-clean --out xml --output-dir $out";
+          });
+      };
+
+      idensoTarpaulinAllFeatures = {
+        "idenso-tarpaulin-all-features" = craneLib.cargoTarpaulin (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "idenso";
+            version = "0.2.0";
+            cargoTarpaulinExtraArgs = "--manifest-path idenso/Cargo.toml --all-features --skip-clean --out xml --output-dir $out";
           });
       };
 
@@ -316,7 +371,16 @@
         // noDefaultFeatureChecks
         // idensoFeatureChecks
         // spensoShadowingChecks
-        // idensoTarpaulinFeatureChecks // spensoTarpaulinFeatureChecks;
+        // idensoTarpaulinFeatureChecks
+        // spensoTarpaulinFeatureChecks
+        // spensoAllFeaturesChecks
+        // spensoMacrosAllFeaturesChecks
+        // spensoHepLibAllFeaturesChecks
+        // idensoAllFeaturesChecks
+        // spensoTarpaulinAllFeatures
+        // spensoMacrosTarpaulinAllFeatures
+        // spensoHepLibTarpaulinAllFeatures
+        // idensoTarpaulinAllFeatures;
 
       packages =
         {

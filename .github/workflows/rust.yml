@@ -46,24 +46,32 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check:
-          # Individual crate checks only
-          - spenso-clippy
-          - spenso-doc
-          - spenso-nextest
-          - spenso-tarpaulin
-          - spenso-macros-clippy
-          - spenso-macros-doc
-          - spenso-macros-nextest
-          - spenso-macros-tarpaulin
-          - spenso-hep-lib-clippy
-          - spenso-hep-lib-doc
-          - spenso-hep-lib-nextest
-          - spenso-hep-lib-tarpaulin
-          - idenso-clippy
-          - idenso-doc
-          - idenso-nextest
-          - idenso-tarpaulin
+        include:
+          # Per-crate checks with feature matrix (no tarpaulin/doc - handled separately)
+          - crate: spenso
+            check: spenso-clippy
+          - crate: spenso
+            check: spenso-nextest
+          - crate: spenso
+            check: spenso-clippy-shadowing
+          - crate: spenso
+            check: spenso-nextest-shadowing
+          - crate: spenso-macros
+            check: spenso-macros-clippy
+          - crate: spenso-macros
+            check: spenso-macros-nextest
+          - crate: spenso-hep-lib
+            check: spenso-hep-lib-clippy
+          - crate: spenso-hep-lib
+            check: spenso-hep-lib-nextest
+          - crate: idenso
+            check: idenso-clippy
+          - crate: idenso
+            check: idenso-nextest
+          - crate: idenso
+            check: idenso-clippy-bincode
+          - crate: idenso
+            check: idenso-nextest-bincode
     steps:
       - uses: actions/checkout@v4
       - name: Install Nix
@@ -75,42 +83,10 @@ jobs:
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@v7
-      - name: Run ${{ matrix.check }}
-        run: nix build .#checks.x86_64-linux.${{ matrix.check }} --impure --no-link
+      - name: Run ${{ matrix.check }} for ${{ matrix.crate }}
+        run: nix build .#checks.x86_64-linux.${{ matrix.check }} --impure --no-link --print-build-logs
 
-  # Test with different feature combinations per-crate
-  feature-tests:
-    environment: symbolica_keys
-    runs-on: ubuntu-latest
-    needs: build-deps
-    env:
-      SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
-    strategy:
-      fail-fast: false
-      matrix:
-        check:
-          # Individual crate feature checks
-          - spenso-clippy-shadowing
-          - spenso-nextest-shadowing
-          - spenso-tarpaulin-shadowing
-          - idenso-clippy-bincode
-          - idenso-nextest-bincode
-          - idenso-tarpaulin-bincode
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Nix
-        uses: cachix/install-nix-action@v27
-      - name: Setup Cachix
-        uses: cachix/cachix-action@v15
-        with:
-          name: lcnbr
-          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - name: Magic Nix Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v7
-      - name: Run ${{ matrix.check }}
-        run: nix build .#checks.x86_64-linux.${{ matrix.check }} --impure --no-link
-
-  # Coverage runs separately since it's slower and produces artifacts
+  # Coverage and docs - only run with all features for each crate
   coverage:
     environment: symbolica_keys
     runs-on: ubuntu-latest
@@ -120,11 +96,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crate:
-          - spenso
-          - spenso-macros
-          - spenso-hep-lib
-          - idenso
+        include:
+          - crate: spenso
+            check: spenso-tarpaulin-all-features
+          - crate: spenso
+            check: spenso-doc-all-features
+          - crate: spenso-macros
+            check: spenso-macros-tarpaulin-all-features
+          - crate: spenso-macros
+            check: spenso-macros-doc-all-features
+          - crate: spenso-hep-lib
+            check: spenso-hep-lib-tarpaulin-all-features
+          - crate: spenso-hep-lib
+            check: spenso-hep-lib-doc-all-features
+          - crate: idenso
+            check: idenso-tarpaulin-all-features
+          - crate: idenso
+            check: idenso-doc-all-features
     steps:
       - uses: actions/checkout@v4
       - name: Install Nix
@@ -136,9 +124,10 @@ jobs:
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@v7
-      - name: Run tarpaulin coverage for ${{ matrix.crate }}
-        run: nix build .#checks.x86_64-linux.${{ matrix.crate }}-tarpaulin --impure
+      - name: Run ${{ matrix.check }} for ${{ matrix.crate }}
+        run: nix build .#checks.x86_64-linux.${{ matrix.check }} --impure --print-build-logs
       - name: Upload to codecov.io
+        if: contains(matrix.check, 'tarpaulin')
         uses: codecov/codecov-action@v4
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -150,7 +139,7 @@ jobs:
   build:
     environment: symbolica_keys
     runs-on: ubuntu-latest
-    needs: [build-deps, checks, feature-tests, coverage]
+    needs: [build-deps, checks, coverage]
     env:
       SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
     steps:

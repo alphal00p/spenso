@@ -472,7 +472,7 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
     let mut expr = expr.expand_mink_bis();
 
     expr = collect_gammas(expr);
-    expr = normalise_gammas(expr);
+    // expr = normalise_gammas(expr);
 
     let reps: Vec<_> = [
         (
@@ -505,6 +505,29 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
         (
             function!(
                 GS.gamma_chain,
+                Minkowski {}.to_symbolic([RS.a__]),
+                Bispinor {}.to_symbolic([RS.i__]),
+                Bispinor {}.to_symbolic([RS.j__])
+            ),
+            function!(
+                AGS.gamma,
+                Bispinor {}.to_symbolic([RS.i__]),
+                Bispinor {}.to_symbolic([RS.j__]),
+                Minkowski {}.to_symbolic([RS.a__])
+            ),
+        ),
+        (
+            function!(
+                AGS.gamma,
+                Bispinor {}.to_symbolic([RS.i__]),
+                Bispinor {}.to_symbolic([RS.i__]),
+                Minkowski {}.to_symbolic([RS.a__])
+            ),
+            Atom::Zero,
+        ),
+        (
+            function!(
+                GS.gamma_chain,
                 Bispinor {}.to_symbolic([RS.a__]),
                 Bispinor {}.to_symbolic([RS.b__])
             ),
@@ -518,8 +541,12 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
     })
     .collect();
 
+    expr = normalise_gammas(expr);
     loop {
-        let new = expr.replace_multiple(&reps).simplify_metrics();
+        let new = expr
+            .replace_multiple(&reps)
+            .expand_mink()
+            .simplify_metrics();
         if new == expr {
             break;
         } else {
@@ -737,25 +764,40 @@ mod test {
         initialize();
 
         let expr = parse_lit!(
-            (P(0, mink(dim, l(32))) + P(1, mink(dim, l(32))) - P(4, mink(dim, l(32))))
-                * g(mink(dim, l(6)), mink(dim, l(9)))
-                * g(mink(dim, l(7)), mink(dim, l(8)))
-                * g(bis(4, l(0)), bis(4, l(13)))
-                * g(bis(4, l(1)), bis(4, l(12)))
-                * g(bis(4, l(2)), bis(4, l(10)))
-                * g(bis(4, l(3)), bis(4, l(11)))
-                * g(bis(4, l(4)), bis(4, l(6)))
-                * g(bis(4, l(5)), bis(4, l(9)))
-                * gamma(bis(4, l(7)), bis(4, l(6)), mink(dim, l(6)))
-                * gamma(bis(4, l(8)), bis(4, l(7)), mink(dim, l(32)))
-                * gamma(bis(4, l(9)), bis(4, l(8)), mink(dim, l(7)))
-                * gamma(bis(4, l(11)), bis(4, l(10)), mink(dim, l(8)))
-                * gamma(bis(4, l(13)), bis(4, l(12)), mink(dim, l(9))),
+            (-1 * spenso::P(2, spenso::mink(python::dim, python::l(20)))
+                + spenso::P(1, spenso::mink(python::dim, python::l(20))))
+                * 1𝑖
+                * spenso::G
+                ^ 2 * spenso::g(spenso::bis(4, python::l(2)), spenso::bis(4, python::l(4)))
+                    * spenso::g(spenso::bis(4, python::l(3)), spenso::bis(4, python::l(7)))
+                    * spenso::g(
+                        spenso::mink(python::dim, python::l(0)),
+                        spenso::mink(python::dim, python::l(5))
+                    )
+                    * spenso::g(
+                        spenso::mink(python::dim, python::l(1)),
+                        spenso::mink(python::dim, python::l(4))
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, python::l(5)),
+                        spenso::bis(4, python::l(4)),
+                        spenso::mink(python::dim, python::l(4))
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, python::l(6)),
+                        spenso::bis(4, python::l(5)),
+                        spenso::mink(python::dim, python::l(20))
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, python::l(7)),
+                        spenso::bis(4, python::l(6)),
+                        spenso::mink(python::dim, python::l(5))
+                    ),
             "spenso"
         );
 
-        println!("{}", expr);
-        println!("{}", expr.simplify_gamma());
+        println!("Bef:{}", expr);
+        println!("Aft:{}", expr.simplify_gamma());
     }
 
     #[test]
@@ -948,14 +990,14 @@ mod test {
         let expr = parse_lit!(
             spenso::gamma_chain(
                 mink(dim, mu),
-                bis(3),
+                bis(4, 3),
                 mink(dim, nu),
-                bis(4),
+                bis(4, 4),
                 mink(dim, mu),
-                bis(5),
+                bis(4, 5),
                 mink(dim, nu),
-                bis(1),
-                bis(2)
+                bis(4, 1),
+                bis(4, 2)
             ),
             "spenso"
         )
@@ -965,8 +1007,8 @@ mod test {
         let dim = Atom::var(symbol!("spenso::dim"));
         assert_eq!(
             expr,
-            &dim * id!(spenso::bis(1), spenso::bis(2)) * 2
-                - dim.pow(Atom::num(2)) * id!(spenso::bis(1), spenso::bis(2)),
+            &dim * id!(spenso::bis(4, 1), spenso::bis(4, 2)) * 2
+                - dim.pow(Atom::num(2)) * id!(spenso::bis(4, 1), spenso::bis(4, 2)),
             "got {:#}",
             expr
         );
@@ -1119,26 +1161,144 @@ mod test {
     }
 
     #[test]
+    fn collect_expand_chain() {
+        initialize();
+        let expr = parse_lit!(gamma_chain(
+            mink(dim, nu1),
+            bis(dim, 3),
+            mink(dim, nu12),
+            bis(dim, 31),
+            mink(dim, nu13),
+            bis(dim, 32),
+            mink(dim, nu14),
+            bis(dim, 33),
+            mink(dim, nu),
+            bis(dim, 34),
+            mink(dim, nu16),
+            bis(dim, 35),
+            mink(dim, nu17),
+            bis(dim, 36),
+            mink(dim, nu),
+            bis(dim, 4),
+            mink(dim, nu3),
+            bis(dim, 5),
+            mink(dim, nu2),
+            bis(dim, 1),
+            bis(dim, 2)
+        ));
+
+        let a = collect_gammas(undo_gamma_chain(collect_gammas(expr.clone())));
+        assert_eq!(a, expr);
+        // println!("{a}");
+    }
+
+    #[test]
     fn val_test() {
+        initialize();
         let expr = parse_lit!(
-            G ^ 4
-                * gamma(bis(4, l(3)), bis(4, l(6)), mink(4, l(0)))
-                * gamma(bis(4, l(6)), bis(4, l(5)), mink(4, l(20)))
-                * gamma(bis(4, l(5)), bis(4, l(2)), mink(4, l(1)))
-                * gamma(bis(4, l(2)), bis(4, r(2)), mink(4, dummy(2, 2)))
-                * gamma(bis(4, r(2)), bis(4, r(5)), mink(4, l(1)))
-                * gamma(bis(4, r(5)), bis(4, r(6)), mink(4, r(20)))
-                * gamma(bis(4, r(6)), bis(4, r(3)), mink(4, l(0)))
-                * gamma(bis(4, r(3)), bis(4, l(3)), mink(4, dummy(3, 3)))
-                * P(1, mink(4, l(20)))
-                * P(1, mink(4, r(20)))
-                * P(2, mink(4, dummy(2, 2)))
-                * P(3, mink(4, dummy(3, 3))),
+            (MB * g(bis(4, hedge(0, 0)), bis(4, hedge(1, 0)))
+                + gamma(
+                    bis(4, hedge(0, 0)),
+                    bis(4, hedge(1, 0)),
+                    mink(4, edge(0, 1))
+                ) * Q(0, mink(4, edge(0, 1))))
+                * (MB * g(bis(4, hedge(4, 0)), bis(4, hedge(5, 0)))
+                    + gamma(
+                        bis(4, hedge(4, 0)),
+                        bis(4, hedge(5, 0)),
+                        mink(4, edge(2, 1))
+                    ) * Q(2, mink(4, edge(2, 1))))
+                * (MB * g(bis(4, hedge(8, 0)), bis(4, hedge(9, 0)))
+                    + gamma(
+                        bis(4, hedge(8, 0)),
+                        bis(4, hedge(9, 0)),
+                        mink(4, edge(5, 1))
+                    ) * Q(5, mink(4, edge(5, 1))))
+                * gamma(
+                    bis(4, hedge(1, 0)),
+                    bis(4, hedge(4, 0)),
+                    mink(4, hedge(10, 0))
+                )
+                * gamma(
+                    bis(4, hedge(5, 0)),
+                    bis(4, hedge(8, 0)),
+                    mink(4, hedge(2, 0))
+                )
+                * gamma(
+                    bis(4, hedge(9, 0)),
+                    bis(4, hedge(11, 0)),
+                    mink(4, hedge(7, 0))
+                )
+                * gamma(
+                    bis(4, hedge(11, 0)),
+                    bis(4, hedge(0, 0)),
+                    mink(4, hedge(2, 0))
+                )
+                * p(1, mink(4, hedge(10, 0)))
+                * p(7, mink(4, hedge(7, 0))),
             "spenso"
         );
 
-        initialize();
-        println!("{:>}", expr.simplify_gamma().to_dots());
+        let expr = parse_lit!(
+            (MB * g(bis(4, hedge(0, 0)), bis(4, hedge(1, 0)))
+                + gamma(
+                    bis(4, hedge(0, 0)),
+                    bis(4, hedge(1, 0)),
+                    mink(4, edge(0, 1))
+                ) * Q(0, mink(4, edge(0, 1))))
+                * (MB * g(bis(4, hedge(2, 0)), bis(4, hedge(3, 0)))
+                    + gamma(
+                        bis(4, hedge(2, 0)),
+                        bis(4, hedge(3, 0)),
+                        mink(4, edge(1, 1))
+                    ) * Q(1, mink(4, edge(1, 1))))
+                * (MB * g(bis(4, hedge(5, 0)), bis(4, hedge(6, 0)))
+                    + gamma(
+                        bis(4, hedge(5, 0)),
+                        bis(4, hedge(6, 0)),
+                        mink(4, edge(3, 1))
+                    ) * Q(3, mink(4, edge(3, 1))))
+                * (gamma(
+                    bis(4, hedge(9, 0)),
+                    bis(4, hedge(10, 0)),
+                    mink(4, edge(5, 1))
+                ) * Q(5, mink(4, edge(5, 1))))
+                * gamma(
+                    bis(4, hedge(1, 0)),
+                    bis(4, hedge(9, 0)),
+                    mink(4, hedge(7, 0))
+                )
+                * gamma(
+                    bis(4, hedge(3, 0)),
+                    bis(4, hedge(5, 0)),
+                    mink(4, hedge(7, 0))
+                )
+                * gamma(
+                    bis(4, hedge(6, 0)),
+                    bis(4, hedge(0, 0)),
+                    mink(4, hedge(11, 0))
+                )
+                * gamma(
+                    bis(4, hedge(10, 0)),
+                    bis(4, hedge(2, 0)),
+                    mink(4, hedge(4, 0))
+                )
+                * p(1, mink(4, hedge(4, 0)))
+                * p(7, mink(4, hedge(11, 0))),
+            "spenso"
+        );
+
+        println!("Simplified:{:>}", expr.simplify_gamma().to_dots());
+
+        // assert_eq!(
+        //     expr.simplify_gamma().to_dots(),
+        //     expr.simplify_gamma().simplify_gamma().to_dots(),
+        //     "\n{:>}\n not equal to \n{:>}\n diff:\n{:>}",
+        //     expr.simplify_gamma().to_dots(),
+        //     expr.simplify_gamma().simplify_gamma().to_dots(),
+        //     (expr.simplify_gamma().simplify_gamma().to_dots() - expr.simplify_gamma().to_dots())
+        //         .expand()
+        // )
         // println!("{}", expr.simplify_gamma().to_dots());
 
         // println!("{}", SpinAntiFundamental {}.to_symbolic([RS.a_]))

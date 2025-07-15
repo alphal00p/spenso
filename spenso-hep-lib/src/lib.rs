@@ -865,7 +865,7 @@ mod tests {
         validate_gamma(expr, const_map.clone());
         let expr = gamma(1, 2, 2) * gamma(2, 1, 1) + gamma(1, 2, 1) * gamma(2, 1, 2);
         validate_gamma(expr, const_map.clone());
-
+        // let expr = gamma(1, 2, 2) * gamma(2, 1, 1) + gamma(1, 2, 1) * gamma(2, 1, 2);
         // // + gamma(1, 2, 1) * gamma(2, 1, 1);
 
         // // let expr = A(1, 2, 0) * B(2, 1, 3);

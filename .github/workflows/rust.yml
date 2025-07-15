@@ -10,23 +10,136 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
+  # Build dependencies first - this creates the base cache for all other jobs
+  build-deps:
     environment: symbolica_keys
     runs-on: ubuntu-latest
     env:
       SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
-
+    outputs:
+      deps-built: ${{ steps.build-deps.outputs.deps-built }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Nix
         uses: cachix/install-nix-action@v27
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: spenso
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@v7
-      - name: Build
-        run: nix build --impure
-      - name: Run tests
-        run: nix flake check -v --print-build-logs --impure
-      - name: Run tarpaulin
+      - name: Build dependencies
+        id: build-deps
+        run: |
+          # Build just the dependencies to populate the cache
+          nix build .#packages.workspace --impure --no-link
+          echo "deps-built=true" >> $GITHUB_OUTPUT
+
+  # Run all checks in parallel, depending on the deps build
+  checks:
+    environment: symbolica_keys
+    runs-on: ubuntu-latest
+    needs: build-deps
+    env:
+      SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          # Workspace-wide checks
+          - workspace-clippy
+          - workspace-fmt
+          - workspace-audit
+          - workspace-doc
+          - workspace-nextest
+          # Individual crate checks
+          - spenso-clippy
+          - spenso-doc
+          - spenso-nextest
+          - spenso-macros-clippy
+          - spenso-macros-doc
+          - spenso-macros-nextest
+          - spenso-hep-lib-clippy
+          - spenso-hep-lib-doc
+          - spenso-hep-lib-nextest
+          - idenso-clippy
+          - idenso-doc
+          - idenso-nextest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: spenso
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+      - name: Run ${{ matrix.check }}
+        run: nix build .#checks.${{ matrix.check }} --impure --no-link
+
+  # Test with different feature combinations
+  feature-tests:
+    environment: symbolica_keys
+    runs-on: ubuntu-latest
+    needs: build-deps
+    env:
+      SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          # Workspace feature checks
+          - workspace-clippy-default
+          - workspace-nextest-default
+          - workspace-clippy-shadowing
+          - workspace-nextest-shadowing
+          - workspace-clippy-all-features
+          - workspace-nextest-all-features
+          - workspace-clippy-no-default
+          - workspace-nextest-no-default
+          - workspace-tarpaulin-shadowing
+          - workspace-tarpaulin-all-features
+          # Individual crate feature checks
+          - idenso-clippy-bincode
+          - idenso-nextest-bincode
+          - spenso-clippy-shadowing
+          - spenso-nextest-shadowing
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: spenso
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+      - name: Run ${{ matrix.check }}
+        run: nix build .#checks.${{ matrix.check }} --impure --no-link
+
+  # Coverage runs separately since it's slower and produces artifacts
+  coverage:
+    environment: symbolica_keys
+    runs-on: ubuntu-latest
+    needs: build-deps
+    env:
+      SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: spenso
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+      - name: Run tarpaulin coverage
         run: nix build .#checks.workspace-tarpaulin --impure
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v4
@@ -35,3 +148,24 @@ jobs:
         with:
           file: ./result/cobertura.xml
           fail_ci_if_error: true
+
+  # Optional: Build the actual packages to ensure they work
+  build:
+    environment: symbolica_keys
+    runs-on: ubuntu-latest
+    needs: [build-deps, checks, feature-tests]
+    env:
+      SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: spenso
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+      - name: Build workspace
+        run: nix build .#packages.workspace --impure --no-link

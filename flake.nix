@@ -143,11 +143,82 @@
           });
       };
 
+      # Helper function to create checks with feature flags
+      mkChecksWithFeatures = features: featuresName: {
+        "workspace-clippy-${featuresName}" = craneLib.cargoClippy (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "spenso-workspace";
+            version = "0.4.1";
+            cargoClippyExtraArgs = "--workspace ${features} -- --deny warnings";
+          });
+
+        "workspace-nextest-${featuresName}" = craneLib.cargoNextest (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "spenso-workspace";
+            version = "0.4.1";
+            nativeBuildInputs =
+              commonArgs.nativeBuildInputs
+              ++ [
+                pkgs.cargo-insta
+              ];
+            partitions = 1;
+            partitionType = "count";
+            cargoNextestExtraArgs = "--workspace ${features}";
+          });
+
+        "workspace-tarpaulin-${featuresName}" = craneLib.cargoTarpaulin (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "spenso-workspace";
+            version = "0.4.1";
+            cargoTarpaulinExtraArgs = "--workspace ${features} --skip-clean --out xml --output-dir $out";
+          });
+      };
+
+      # Helper function to create per-crate checks with features
+      mkCrateChecksWithFeatures = crateName: features: featuresName: let
+        manifestPath = "${crateName}/Cargo.toml";
+        crateInfo = craneLib.crateNameFromCargoToml {cargoToml = ./${manifestPath};};
+      in {
+        "${crateInfo.pname}-clippy-${featuresName}" = craneLib.cargoClippy (commonArgs
+          // {
+            inherit cargoArtifacts;
+            inherit (crateInfo) pname version;
+            cargoClippyExtraArgs = "--manifest-path ${manifestPath} ${features} -- --deny warnings";
+          });
+
+        "${crateInfo.pname}-nextest-${featuresName}" = craneLib.cargoNextest (commonArgs
+          // {
+            inherit cargoArtifacts;
+            inherit (crateInfo) pname version;
+            nativeBuildInputs =
+              commonArgs.nativeBuildInputs
+              ++ [
+                pkgs.cargo-insta
+              ];
+            partitions = 1;
+            partitionType = "count";
+            cargoNextestExtraArgs = "--manifest-path ${manifestPath} ${features}";
+          });
+      };
+
       # Create checks for each crate
       spensoChecks = mkChecksForCrate "spenso";
       spensoMacrosChecks = mkChecksForCrate "spenso-macros";
       spensoHepLibChecks = mkChecksForCrate "spenso-hep-lib";
       idensoChecks = mkChecksForCrate "idenso";
+
+      # Create feature flag checks
+      defaultFeatureChecks = mkChecksWithFeatures "" "default";
+      shadowingFeatureChecks = mkChecksWithFeatures "--features shadowing" "shadowing";
+      allFeatureChecks = mkChecksWithFeatures "--all-features" "all-features";
+      noDefaultFeatureChecks = mkChecksWithFeatures "--no-default-features" "no-default";
+
+      # Create per-crate feature checks for important combinations
+      idensoFeatureChecks = mkCrateChecksWithFeatures "idenso" "--features bincode" "bincode";
+      spensoShadowingChecks = mkCrateChecksWithFeatures "spenso" "--features shadowing" "shadowing";
 
       # Workspace-wide checks
       workspaceChecks = {
@@ -212,7 +283,17 @@
           });
       };
     in {
-      checks = workspaceChecks // spensoChecks // spensoMacrosChecks // spensoHepLibChecks // idensoChecks;
+      checks =
+        workspaceChecks
+        // spensoChecks
+        // spensoMacrosChecks
+        // spensoHepLibChecks
+        // idensoChecks
+        // defaultFeatureChecks
+        // shadowingFeatureChecks
+        // allFeatureChecks
+        // noDefaultFeatureChecks
+        // idensoFeatureChecks // spensoShadowingChecks;
 
       packages =
         {

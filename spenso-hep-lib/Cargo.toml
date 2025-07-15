@@ -12,7 +12,7 @@ repository.workspace = true
 spenso = { version = "0.5.0", features = ["shadowing"] }
 symbolica = { version = "0.17.0" }
 spenso-macros = { version = "0.2.0" }
-idenso = "0.1.0"
+idenso = "0.2.0"
 
 
 ahash = { version = "0.8.11", features = ["serde"] }

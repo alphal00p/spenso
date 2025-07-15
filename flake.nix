@@ -210,6 +210,13 @@
             partitionType = "count";
             cargoNextestExtraArgs = "--manifest-path ${manifestPath} ${features}";
           });
+
+        "${crateInfo.pname}-doc-${featuresName}" = craneLib.cargoDoc (commonArgs
+          // {
+            inherit cargoArtifacts;
+            inherit (crateInfo) pname version;
+            cargoExtraArgs = "--manifest-path ${manifestPath} ${features}";
+          });
       };
 
       # Create checks for each crate

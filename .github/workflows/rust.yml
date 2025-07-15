@@ -5,6 +5,18 @@ on:
     branches: ["master"]
   pull_request:
     branches: ["master"]
+  workflow_dispatch:
+    inputs:
+      run_coverage:
+        description: "Run coverage tests"
+        required: false
+        default: false
+        type: boolean
+      run_docs:
+        description: "Generate documentation"
+        required: false
+        default: false
+        type: boolean
 
 env:
   CARGO_TERM_COLOR: always
@@ -36,8 +48,8 @@ jobs:
           nix build .#packages.x86_64-linux.workspace --impure --no-link
           echo "deps-built=true" >> $GITHUB_OUTPUT
 
-  # Run all checks per-crate
-  checks:
+  # Run clippy checks per-crate
+  clippy:
     environment: symbolica_keys
     runs-on: ubuntu-latest
     needs: build-deps
@@ -47,29 +59,55 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Per-crate checks with feature matrix (no tarpaulin/doc - handled separately)
+          # Per-crate clippy checks with feature matrix
           - crate: spenso
             check: spenso-clippy
           - crate: spenso
-            check: spenso-nextest
-          - crate: spenso
             check: spenso-clippy-shadowing
-          - crate: spenso
-            check: spenso-nextest-shadowing
           - crate: spenso-macros
             check: spenso-macros-clippy
-          - crate: spenso-macros
-            check: spenso-macros-nextest
           - crate: spenso-hep-lib
             check: spenso-hep-lib-clippy
-          - crate: spenso-hep-lib
-            check: spenso-hep-lib-nextest
           - crate: idenso
             check: idenso-clippy
           - crate: idenso
-            check: idenso-nextest
-          - crate: idenso
             check: idenso-clippy-bincode
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: lcnbr
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+      - name: Run ${{ matrix.check }} for ${{ matrix.crate }}
+        run: nix build .#checks.x86_64-linux.${{ matrix.check }} --impure --no-link --print-build-logs
+
+  # Run nextest checks per-crate
+  nextest:
+    environment: symbolica_keys
+    runs-on: ubuntu-latest
+    needs: build-deps
+    env:
+      SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Per-crate nextest checks with feature matrix
+          - crate: spenso
+            check: spenso-nextest
+          - crate: spenso
+            check: spenso-nextest-shadowing
+          - crate: spenso-macros
+            check: spenso-macros-nextest
+          - crate: spenso-hep-lib
+            check: spenso-hep-lib-nextest
+          - crate: idenso
+            check: idenso-nextest
           - crate: idenso
             check: idenso-nextest-bincode
     steps:
@@ -99,20 +137,28 @@ jobs:
         include:
           - crate: spenso
             check: spenso-tarpaulin-all-features
+            type: coverage
           - crate: spenso
             check: spenso-doc-all-features
+            type: doc
           - crate: spenso-macros
             check: spenso-macros-tarpaulin-all-features
+            type: coverage
           - crate: spenso-macros
             check: spenso-macros-doc-all-features
+            type: doc
           - crate: spenso-hep-lib
             check: spenso-hep-lib-tarpaulin-all-features
+            type: coverage
           - crate: spenso-hep-lib
             check: spenso-hep-lib-doc-all-features
+            type: doc
           - crate: idenso
             check: idenso-tarpaulin-all-features
+            type: coverage
           - crate: idenso
             check: idenso-doc-all-features
+            type: doc
     steps:
       - uses: actions/checkout@v4
       - name: Install Nix
@@ -125,9 +171,10 @@ jobs:
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@v7
       - name: Run ${{ matrix.check }} for ${{ matrix.crate }}
+        if: (matrix.type == 'coverage' && (github.event.inputs.run_coverage == 'true' || github.event.inputs.run_coverage == null)) || (matrix.type == 'doc' && (github.event.inputs.run_docs == 'true' || github.event.inputs.run_docs == null))
         run: nix build .#checks.x86_64-linux.${{ matrix.check }} --impure --print-build-logs
       - name: Upload to codecov.io
-        if: contains(matrix.check, 'tarpaulin')
+        if: matrix.type == 'coverage' && (github.event.inputs.run_coverage == 'true' || github.event.inputs.run_coverage == null)
         uses: codecov/codecov-action@v4
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -139,7 +186,7 @@ jobs:
   build:
     environment: symbolica_keys
     runs-on: ubuntu-latest
-    needs: [build-deps, checks, coverage]
+    needs: [build-deps, clippy, nextest, coverage]
     env:
       SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
     steps:

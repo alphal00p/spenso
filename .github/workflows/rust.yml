@@ -27,7 +27,7 @@ jobs:
       - name: Run tests
         run: nix flake check -v --print-build-logs --impure
       - name: Run tarpaulin
-        run: nix build .#spenso-tarpaulin-coverage --impure
+        run: nix build .#checks.workspace-tarpaulin --impure
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v4
         env:

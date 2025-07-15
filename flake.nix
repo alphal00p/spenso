@@ -134,6 +134,13 @@
             partitionType = "count";
             cargoNextestExtraArgs = "--manifest-path ${manifestPath}";
           });
+
+        "${crateInfo.pname}-tarpaulin" = craneLib.cargoTarpaulin (commonArgs
+          // {
+            inherit cargoArtifacts;
+            inherit (crateInfo) pname version;
+            cargoTarpaulinExtraArgs = "--manifest-path ${manifestPath} --skip-clean --out xml --output-dir $out";
+          });
       };
 
       # Create checks for each crate
@@ -193,6 +200,15 @@
             partitions = 1;
             partitionType = "count";
             cargoNextestExtraArgs = "--workspace";
+          });
+
+        # Workspace-wide tarpaulin coverage
+        workspace-tarpaulin = craneLib.cargoTarpaulin (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "spenso-workspace";
+            version = "0.4.1";
+            cargoTarpaulinExtraArgs = "--workspace --skip-clean --out xml --output-dir $out";
           });
       };
     in {

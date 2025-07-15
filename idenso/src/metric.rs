@@ -19,7 +19,10 @@ use symbolica::{
     atom::{Atom, AtomCore, AtomType, AtomView, Symbol, representation::FunView},
     coefficient::CoefficientView,
     function,
-    id::{Condition, Match, MatchSettings, PatternRestriction, Replacement, WildcardRestriction},
+    id::{
+        Condition, FilterFn, Match, MatchSettings, PatternRestriction, Replacement,
+        WildcardRestriction,
+    },
     symbol,
 };
 
@@ -194,6 +197,20 @@ pub fn cook_indices_impl(view: AtomView) -> Atom {
     expr
 }
 
+pub fn not_wraped_aind(header: Symbol) -> impl FilterFn + 'static {
+    move |a| match a {
+        Match::FunctionName(f) => *f != header,
+        Match::Single(a) => {
+            if let Some(n) = a.get_symbol() {
+                n != header
+            } else {
+                true
+            }
+        }
+        _ => false,
+    }
+}
+
 pub fn wrap_indices_impl(view: AtomView, header: Symbol) -> Atom {
     let mut expr = view.expand();
     let dim = RS.d_;
@@ -210,7 +227,7 @@ pub fn wrap_indices_impl(view: AtomView, header: Symbol) -> Atom {
                 i.to_symbolic([dim, RS.a_]).to_pattern(),
                 i.to_symbolic([dima.clone(), function!(header, Atom::var(RS.a_))]),
             )
-            .with_conditions(not_aind(RS.a_))
+            .with_conditions(RS.a_.filter(not_wraped_aind(header)))
             .with_settings(settings.clone()),
         );
     }
@@ -222,7 +239,7 @@ pub fn wrap_indices_impl(view: AtomView, header: Symbol) -> Atom {
                 i.to_symbolic([dim, RS.a_]).to_pattern(),
                 i.to_symbolic([dima.clone(), function!(header, Atom::var(RS.a_))]),
             )
-            .with_conditions(not_aind(RS.a_))
+            .with_conditions(RS.a_.filter(not_wraped_aind(header)))
             .with_settings(settings.clone()),
         );
         reps.push(
@@ -230,7 +247,7 @@ pub fn wrap_indices_impl(view: AtomView, header: Symbol) -> Atom {
                 di.to_symbolic([dim, RS.a_]).to_pattern(),
                 di.to_symbolic([dima.clone(), function!(header, Atom::var(RS.a_))]),
             )
-            .with_conditions(not_aind(RS.a_))
+            .with_conditions(RS.a_.filter(not_wraped_aind(header)))
             .with_settings(settings.clone()),
         );
     }
@@ -437,7 +454,7 @@ pub fn simplify_metrics_impl(view: AtomView) -> Atom {
     expr
 }
 
-pub fn not_aind(sym: Symbol) -> Condition<PatternRestriction> {
+pub fn not_slot(sym: Symbol) -> Condition<PatternRestriction> {
     sym.restrict(WildcardRestriction::IsAtomType(AtomType::Var))
         | sym.restrict(WildcardRestriction::IsAtomType(AtomType::Num))
         | sym.restrict(WildcardRestriction::filter(|a| match a {
@@ -461,6 +478,30 @@ pub fn not_aind(sym: Symbol) -> Condition<PatternRestriction> {
         }))
 }
 
+// pub fn not_aind(sym: Symbol) -> Condition<PatternRestriction> {
+//     sym.restrict(WildcardRestriction::IsAtomType(AtomType::Var))
+//         | sym.restrict(WildcardRestriction::IsAtomType(AtomType::Num))
+//         | sym.restrict(WildcardRestriction::filter(|a| match a {
+//             Match::FunctionName(f) => {
+//                 println!("FunctionName{f}");
+//                 LibraryRep::all_representations().all(|r| r.symbol() != *f)
+//             }
+//             Match::Multiple(_, views) => {
+//                 println!("Multiple:");
+//                 for v in views {
+//                     print!("{v}");
+//                 }
+//                 views
+//                     .iter()
+//                     .all(|a| LibrarySlot::<Parsind>::try_from(*a).is_err())
+//             }
+//             Match::Single(s) => {
+//                 println!("Single{s}");
+//                 LibrarySlot::<Parsind>::try_from(*s).is_err()
+//             }
+//         }))
+// }
+
 pub fn to_dots_impl(expr: AtomView) -> Atom {
     let mut reps = vec![];
 
@@ -471,13 +512,10 @@ pub fn to_dots_impl(expr: AtomView) -> Atom {
             function!(MS.dot, RS.f_, RS.g_),
         ));
 
-        reps.push(
-            Replacement::new(
-                (function!(RS.f_, i.to_symbolic([RS.i__])).pow(Atom::num(2))).to_pattern(),
-                function!(MS.dot, RS.f_, RS.f_),
-            )
-            .with_conditions(not_aind(RS.x_)),
-        );
+        reps.push(Replacement::new(
+            (function!(RS.f_, i.to_symbolic([RS.i__])).pow(Atom::num(2))).to_pattern(),
+            function!(MS.dot, RS.f_, RS.f_),
+        ));
 
         reps.push(
             Replacement::new(
@@ -486,7 +524,7 @@ pub fn to_dots_impl(expr: AtomView) -> Atom {
                 .to_pattern(),
                 function!(MS.dot, function!(RS.f_, RS.x___), function!(RS.g_, RS.y___)),
             )
-            .with_conditions(not_aind(RS.x___) & not_aind(RS.y___)),
+            .with_conditions(not_slot(RS.x___) & not_slot(RS.y___)),
         );
 
         reps.push(
@@ -494,7 +532,7 @@ pub fn to_dots_impl(expr: AtomView) -> Atom {
                 (function!(RS.f_, RS.x___, i.to_symbolic([RS.i__])).pow(Atom::num(2))).to_pattern(),
                 function!(MS.dot, function!(RS.f_, RS.x___), function!(RS.f_, RS.x___)),
             )
-            .with_conditions(not_aind(RS.x___)),
+            .with_conditions(not_slot(RS.x___)),
         );
     }
 
@@ -507,7 +545,7 @@ pub fn to_dots_impl(expr: AtomView) -> Atom {
                 .to_pattern(),
                 function!(MS.dot, function!(RS.f_, RS.x___), function!(RS.g_, RS.y___)),
             )
-            .with_conditions(not_aind(RS.x___) & not_aind(RS.y___)),
+            .with_conditions(not_slot(RS.x___) & not_slot(RS.y___)),
         );
     }
 
@@ -675,6 +713,14 @@ mod test {
         let a =
             parse_lit!(P(spenso::mink(4, -1 * g(2)), spenso::mink(4, 2)) * P(spenso::mink(4, 2)))
                 .to_dots();
+        assert_eq!(
+            a,
+            parse_lit!(P(spenso::mink(4, 2)) * P(spenso::mink(4, -g(2)), spenso::mink(4, 2)))
+        );
+        let a =
+            parse_lit!(P(wrong::mink(4, -1 * g(2)), spenso::mink(4, 2)) * P(spenso::mink(4, 2)))
+                .to_dots();
         println!("{a}");
+        assert_eq!(a, parse_lit!(spenso::dot(P(), P(wrong::mink(4, -g(2))))));
     }
 }

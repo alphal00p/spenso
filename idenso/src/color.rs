@@ -605,10 +605,11 @@ mod test {
             "spenso"
         );
         let amplitude_color_left = amplitude_color.wrap_indices(symbol!("spenso::left"));
+
+        // return;
         let amplitude_color_right = amplitude_color
             .conj()
             .wrap_indices(symbol!("spenso::right"));
-
         println!("left{amplitude_color_left}");
 
         println!("right{amplitude_color_right}");

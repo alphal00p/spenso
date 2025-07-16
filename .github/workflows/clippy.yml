@@ -1,0 +1,89 @@
+name: Checks
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    # This environment is used to access the SYMBOLICA_LICENSE secret.
+    environment: symbolica_keys
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        crate: [spenso, spenso-macros, spenso-hep-lib, idenso]
+        features: [default, shadowing, bincode, all-features]
+        type: [clippy, nextest]
+
+        # Exclude combinations that are not valid.
+        exclude:
+          # spenso only has default, shadowing, all-features
+          - crate: spenso
+            features: bincode
+          # spenso-macros only has default, all-features
+          - crate: spenso-macros
+            features: shadowing
+          - crate: spenso-macros
+            features: bincode
+          # spenso-hep-lib only has default, all-features
+          - crate: spenso-hep-lib
+            features: shadowing
+          - crate: spenso-hep-lib
+            features: bincode
+          # idenso only has default, bincode, all-features
+          - crate: idenso
+            features: shadowing
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: lcnbr
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+
+      - name: Set Nix system string
+        id: set-system
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            echo "system=x86_64-linux" >> $GITHUB_OUTPUT
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            if [ "$(uname -m)" == "arm64" ]; then
+              echo "system=aarch64-darwin" >> $GITHUB_OUTPUT
+            else
+              echo "system=x86_64-darwin" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Set check name for Nix
+        id: set-check-name
+        shell: bash
+        run: |
+          if [ "${{ matrix.features }}" == "default" ]; then
+            echo "check_name=${{ matrix.crate }}-${{ matrix.type }}" >> $GITHUB_OUTPUT
+          else
+            echo "check_name=${{ matrix.crate }}-${{ matrix.type }}-${{ matrix.features }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run ${{ matrix.type }} for ${{ matrix.crate }} (${{ matrix.features }})
+        env:
+          SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
+        run: |
+          nix build .#checks.${{ steps.set-system.outputs.system }}.${{ steps.set-check-name.outputs.check_name }} --impure --no-link --print-build-logs

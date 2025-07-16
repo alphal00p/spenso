@@ -1290,31 +1290,31 @@ mod test {
             "spenso"
         );
 
-        let expr = parse_lit!(
-            g(mink(D, left(2)), mink(D, left(5)))
-                * g(mink(D, left(2)), mink(D, right(2)))
-                * g(mink(D, left(3)), mink(D, left(6)))
-                * g(mink(D, left(3)), mink(D, right(3)))
-                * g(mink(D, left(4)), mink(D, left(7)))
-                * g(mink(D, left(5)), mink(D, left(6)))
-                * g(mink(D, right(2)), mink(D, right(5)))
-                * g(mink(D, right(3)), mink(D, right(6)))
-                * g(mink(D, right(4)), mink(D, right(7)))
-                * g(mink(D, right(6)), mink(D, right(7)))
-                * g(bis(D, left(0)), bis(D, left(5)))
-                * g(bis(D, left(1)), bis(D, left(4)))
-                * g(bis(D, right(0)), bis(D, right(5)))
-                * g(bis(D, right(1)), bis(D, right(4)))
-                * gamma(bis(D, left(1)), bis(D, right(1)), mink(D, 1337))
-                * gamma(bis(D, right(0)), bis(D, left(0)), mink(D, 1338))
-                * gamma(bis(D, left(5)), bis(D, left(4)), mink(D, left(4)))
-                * gamma(bis(D, right(4)), bis(D, right(5)), mink(D, right(4)))
-                * Q(0, mink(D, 1338))
-                * Q(1, mink(D, 1337))
-                * Q(3, mink(D, left(7)))
-                * Q(3, mink(D, right(5))),
-            "spenso"
-        );
+        // let expr = parse_lit!(
+        //     g(mink(D, left(2)), mink(D, left(5)))
+        //         * g(mink(D, left(2)), mink(D, right(2)))
+        //         * g(mink(D, left(3)), mink(D, left(6)))
+        //         * g(mink(D, left(3)), mink(D, right(3)))
+        //         * g(mink(D, left(4)), mink(D, left(7)))
+        //         * g(mink(D, left(5)), mink(D, left(6)))
+        //         * g(mink(D, right(2)), mink(D, right(5)))
+        //         * g(mink(D, right(3)), mink(D, right(6)))
+        //         * g(mink(D, right(4)), mink(D, right(7)))
+        //         * g(mink(D, right(6)), mink(D, right(7)))
+        //         * g(bis(D, left(0)), bis(D, left(5)))
+        //         * g(bis(D, left(1)), bis(D, left(4)))
+        //         * g(bis(D, right(0)), bis(D, right(5)))
+        //         * g(bis(D, right(1)), bis(D, right(4)))
+        //         * gamma(bis(D, left(1)), bis(D, right(1)), mink(D, 1337))
+        //         * gamma(bis(D, right(0)), bis(D, left(0)), mink(D, 1338))
+        //         * gamma(bis(D, left(5)), bis(D, left(4)), mink(D, left(4)))
+        //         * gamma(bis(D, right(4)), bis(D, right(5)), mink(D, right(4)))
+        //         * Q(0, mink(D, 1338))
+        //         * Q(1, mink(D, 1337))
+        //         * Q(3, mink(D, left(7)))
+        //         * Q(3, mink(D, right(5))),
+        //     "spenso"
+        // );
 
         println!("Simplified:{:>}", expr.simplify_gamma().to_dots());
 

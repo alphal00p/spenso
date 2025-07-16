@@ -7,7 +7,7 @@ use spenso::{
         TensorStructure,
         abstract_index::AbstractIndex,
         dimension::Dimension,
-        representation::{LibraryRep, Minkowski, RepName},
+        representation::{Minkowski, RepName},
         slot::{AbsInd, IsAbstractSlot},
     },
 };
@@ -20,11 +20,11 @@ use symbolica::{
 
 use crate::{metric::PermuteWithMetric, representations::ColorAntiFundamental};
 
+use super::rep_symbols::RS;
 use super::{
     metric::MetricSimplifier,
     representations::{Bispinor, ColorAdjoint, ColorFundamental},
 };
-use super::{rep_symbols::RS, representations::ColorSextet};
 
 #[derive(Debug)]
 pub enum ColorError {
@@ -806,7 +806,7 @@ mod test {
     }
 
     #[test]
-    fn test_Val() {
+    fn test_val() {
         initialize();
         let expr = parse_lit!(
             (G ^ 3

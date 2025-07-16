@@ -147,15 +147,15 @@ pub fn color_conj_impl(expression: AtomView) -> Atom {
 }
 
 pub trait SelectiveExpand {
-    fn expand_in_patterns(&self, pats: &[Pattern]) -> Atom;
-    fn expand_metrics(&self) -> Atom {
+    fn expand_in_patterns(&self, pats: &[Pattern]) -> Vec<(Atom, Atom)>;
+    fn expand_metrics(&self) -> Vec<(Atom, Atom)> {
         let metric_pat = function!(ETS.metric, RS.a__).to_pattern();
         let id_pat = function!(ETS.metric, RS.a__).to_pattern();
 
         self.expand_in_patterns(&[metric_pat, id_pat])
     }
 
-    fn expand_color(&self) -> Atom {
+    fn expand_color(&self) -> Vec<(Atom, Atom)> {
         let cof = ColorFundamental {};
         let coaf = ColorFundamental {}.dual();
         let coad = ColorAdjoint {};
@@ -167,7 +167,7 @@ pub trait SelectiveExpand {
         self.expand_in_patterns(&[cof_pat, coad_pat, coaf_pat])
     }
 
-    fn expand_bis(&self) -> Atom {
+    fn expand_bis(&self) -> Vec<(Atom, Atom)> {
         let bis = Bispinor {};
 
         let bis_pat = function!(RS.f_, RS.a___, bis.to_symbolic([RS.b__]), RS.c___).to_pattern();
@@ -175,7 +175,7 @@ pub trait SelectiveExpand {
         self.expand_in_patterns(&[bis_pat])
     }
 
-    fn expand_mink(&self) -> Atom {
+    fn expand_mink(&self) -> Vec<(Atom, Atom)> {
         let mink = Minkowski {};
 
         let mink_pat = function!(RS.f_, RS.a___, mink.to_symbolic([RS.b__]), RS.c___).to_pattern();
@@ -183,7 +183,7 @@ pub trait SelectiveExpand {
         self.expand_in_patterns(&[mink_pat])
     }
 
-    fn expand_mink_bis(&self) -> Atom {
+    fn expand_mink_bis(&self) -> Vec<(Atom, Atom)> {
         let mink = Minkowski {};
 
         let mink_pat = function!(RS.f_, RS.a___, mink.to_symbolic([RS.b__]), RS.c___).to_pattern();
@@ -196,14 +196,16 @@ pub trait SelectiveExpand {
     }
 }
 impl SelectiveExpand for Atom {
-    fn expand_in_patterns(&self, pats: &[Pattern]) -> Atom {
+    fn expand_in_patterns(&self, pats: &[Pattern]) -> Vec<(Atom, Atom)> {
         self.as_view().expand_in_patterns(pats)
     }
 }
 
 impl SelectiveExpand for AtomView<'_> {
-    fn expand_in_patterns(&self, pats: &[Pattern]) -> Atom {
+    fn expand_in_patterns(&self, pats: &[Pattern]) -> Vec<(Atom, Atom)> {
         let mut coefs = HashSet::new();
+
+        //A (x+y)(z*B+x*C)=> A(x*x*C+y*x*C+y*z*B+y*z*B)
 
         for p in pats {
             for m in self.pattern_match(p, None, None) {
@@ -214,13 +216,11 @@ impl SelectiveExpand for AtomView<'_> {
         let coefs = coefs.into_iter().collect_vec();
 
         self.coefficient_list::<i8>(&coefs)
-            .into_iter()
-            .map(|(a, b)| a * b)
-            .fold(Atom::Zero, |acc, b| acc + b)
+        // .coll
     }
 }
 
-pub fn color_simplify_impl(expression: AtomView) -> Result<Atom, ColorError> {
+pub fn color_simplify_impl(expression: AtomView) -> Atom {
     let tr = Atom::var(CS.tr);
 
     fn t(
@@ -324,44 +324,43 @@ pub fn color_simplify_impl(expression: AtomView) -> Result<Atom, ColorError> {
         })
         .collect();
 
-    let mut atom = Atom::num(0);
     // for r in &replacements {
     //     println!("{r}")
     // }
     // for f in &frep {
     //     println!("{f}")
     // }
-    let mut expression = expression.to_owned();
-    let mut first = true;
-    while first || expression.replace_multiple_into(&replacements, &mut atom) {
-        if !first {
-            std::mem::swap(&mut expression, &mut atom)
-        };
-        first = false;
-        expression = expression.replace_multiple(&frep);
-        expression = expression.expand_color();
-        expression = expression.simplify_metrics();
-    }
+    let mut expression = expression.expand_color();
 
-    let pats: Vec<LibraryRep> = vec![ColorAdjoint {}.into()];
-    let dualizablepats: Vec<LibraryRep> = vec![ColorFundamental {}.into(), ColorSextet {}.into()];
-
-    let mut fully_simplified = true;
-    for p in pats.iter().chain(&dualizablepats) {
-        if expression
-            .pattern_match(&p.to_symbolic([RS.a__]).to_pattern(), None, None)
-            .next()
-            .is_some()
-        {
-            fully_simplified = false;
+    for (e, _) in &mut expression {
+        let mut atom = Atom::num(0);
+        let mut first = true;
+        while first || e.replace_multiple_into(&replacements, &mut atom) {
+            if !first {
+                std::mem::swap(e, &mut atom)
+            };
+            first = false;
+            *e = e.replace_multiple(&frep);
+            *e = e.expand();
+            *e = e.simplify_metrics();
         }
     }
 
-    if fully_simplified {
-        Ok(expression)
-    } else {
-        Err(ColorError::NotFully(expression))
-    }
+    // let pats: Vec<LibraryRep> = vec![ColorAdjoint {}.into()];
+    // let dualizablepats: Vec<LibraryRep> = vec![ColorFundamental {}.into(), ColorSextet {}.into()];
+
+    // let mut fully_simplified = true;
+    // for p in pats.iter().chain(&dualizablepats) {
+    //     if expression
+    //         .pattern_match(&p.to_symbolic([RS.a__]).to_pattern(), None, None)
+    //         .next()
+    //         .is_some()
+    //     {
+    //         fully_simplified = false;
+    //     }
+    // }
+    //
+    expression.iter().fold(Atom::Zero, |a, (c, s)| a + c * s)
 }
 /// Trait for applying SU(N) color algebra simplification rules to a symbolic expression.
 ///
@@ -379,16 +378,16 @@ pub trait ColorSimplifier {
     /// - `Err(ColorError::NotFully(Atom))`: If the simplification could not fully remove all
     ///   explicit color index structures (like `cof(...)`, `coad(...)`). The partially
     ///   simplified `Atom` is included in the error.
-    fn simplify_color(&self) -> Result<Atom, ColorError>;
+    fn simplify_color(&self) -> Atom;
 }
 impl ColorSimplifier for Atom {
-    fn simplify_color(&self) -> Result<Atom, ColorError> {
+    fn simplify_color(&self) -> Atom {
         color_simplify_impl(self.as_atom_view())
     }
 }
 
 impl ColorSimplifier for AtomView<'_> {
-    fn simplify_color(&self) -> Result<Atom, ColorError> {
+    fn simplify_color(&self) -> Atom {
         color_simplify_impl(self.as_atom_view())
     }
 }
@@ -432,6 +431,7 @@ mod test {
     };
     use symbolica::{parse, parse_lit};
 
+    use crate::gamma::PS;
     use crate::{
         IndexTooling, gamma::GammaSimplifier, metric::MetricSimplifier, representations::initialize,
     };
@@ -504,7 +504,7 @@ mod test {
     fn test_color_simplification() {
         let atom = parse_lit!(f(coad(8, 2), coad(8, 2), coad(8, 1)), "spenso");
         println!("{atom}");
-        let simplified = atom.simplify_color().unwrap();
+        let simplified = atom.simplify_color();
         println!("{simplified}");
         assert_eq!(simplified, Atom::num(0));
     }
@@ -614,12 +614,7 @@ mod test {
 
         println!("right{amplitude_color_right}");
         let amp_squared_color = amplitude_color_left * spin_sum_rule * amplitude_color_right;
-        let simplified_color = amp_squared_color
-            .simplify_metrics()
-            .simplify_color()
-            .unwrap_or_else(|a| match a {
-                ColorError::NotFully(a) => a,
-            });
+        let simplified_color = amp_squared_color.simplify_metrics().simplify_color();
         println!("simplified_color={}", simplified_color);
 
         let spin_sum_rule_src = parse_lit!(
@@ -685,12 +680,7 @@ mod test {
 
         let mut simplified_amp_squared = amp_squared.clone();
 
-        simplified_amp_squared =
-            simplified_amp_squared
-                .simplify_color()
-                .unwrap_or_else(|a| match a {
-                    ColorError::NotFully(a) => a,
-                });
+        simplified_amp_squared = simplified_amp_squared.simplify_color();
 
         println!(
             "Color-simplified amplitude squared:\n{}",
@@ -763,32 +753,41 @@ mod test {
             "spenso"
         )
         .to_pattern();
-        amp_squared = amp_squared
-            .expand_bis()
-            .expand_mink()
-            .replace(spin_sum_rule_src.to_pattern())
-            .with(spin_sum_rule_trg.to_pattern());
+
+        let pols_pats: Vec<Pattern> = vec![
+            function!(PS.vbar, RS.x__).into(),
+            function!(PS.v, RS.x__).into(),
+            function!(PS.u, RS.x__).into(),
+            function!(PS.ubar, RS.x__).into(),
+            function!(PS.eps, RS.x__).into(),
+            function!(PS.ebar, RS.x__).into(),
+        ];
+
+        let mut pols_coefs = amp_squared.expand_in_patterns(&pols_pats);
+
+        for (c, _) in &mut pols_coefs {
+            println!("c:{c}");
+            let r = c
+                .replace(spin_sum_rule_src.to_pattern())
+                .with(spin_sum_rule_trg.to_pattern());
+            println!("r:{r}");
+            *c = r;
+        }
+
+        amp_squared = pols_coefs.iter().fold(Atom::Zero, |a, (c, s)| a + c * s);
 
         println!("Amplitude squared spin-summed:\n{}", amp_squared.factor());
 
         let mut simplified_amp_squared = amp_squared.clone();
 
-        simplified_amp_squared =
-            simplified_amp_squared
-                .simplify_color()
-                .unwrap_or_else(|a| match a {
-                    ColorError::NotFully(a) => a,
-                });
+        simplified_amp_squared = simplified_amp_squared.simplify_color();
 
         println!(
             "Color-simplified amplitude squared:\n{}",
             simplified_amp_squared
         );
 
-        simplified_amp_squared = simplified_amp_squared
-            .simplify_gamma()
-            .expand_mink()
-            .simplify_metrics();
+        simplified_amp_squared = simplified_amp_squared.simplify_gamma().simplify_metrics();
 
         println!(
             "Gamma+color-simplified amplitude squared:\n{}",
@@ -803,6 +802,219 @@ mod test {
             "{:#}\nnot equal to\n{:#}",
             tgt,
             simplified_amp_squared.factor()
+        );
+    }
+
+    #[test]
+    fn test_Val() {
+        initialize();
+        let expr = parse_lit!(
+            (G ^ 3
+                * (g(mink(4, l(6)), mink(4, l(7))) * g(mink(4, l(8)), mink(4, l(9)))
+                    - g(mink(4, l(6)), mink(4, l(8))) * g(mink(4, l(7)), mink(4, l(9))))
+                * g(dind(cof(Nc, 2)), cof(Nc, l(5)))
+                * g(mink(4, l(0)), mink(4, l(6)))
+                * g(mink(4, l(1)), mink(4, l(7)))
+                * g(mink(4, l(4)), mink(4, l(8)))
+                * g(mink(4, l(5)), mink(4, l(9)))
+                * g(bis(4, l(2)), bis(4, l(5)))
+                * g(bis(4, l(3)), bis(4, l(6)))
+                * g(dind(cof(Nc, l(6))), cof(Nc, 3))
+                * g(coad(Nc ^ 2 - 1, 0), coad(Nc ^ 2 - 1, l(8)))
+                * g(coad(Nc ^ 2 - 1, 1), coad(Nc ^ 2 - 1, l(9)))
+                * g(coad(Nc ^ 2 - 1, 4), coad(Nc ^ 2 - 1, l(10)))
+                * g(coad(Nc ^ 2 - 1, l(7)), coad(Nc ^ 2 - 1, l(11)))
+                * gamma(bis(4, l(6)), bis(4, l(5)), mink(4, l(5)))
+                * t(coad(Nc ^ 2 - 1, l(7)), cof(Nc, l(6)), dind(cof(Nc, l(5))))
+                * f(
+                    coad(Nc ^ 2 - 1, l(8)),
+                    coad(Nc ^ 2 - 1, l(11)),
+                    coad(Nc ^ 2 - 1, l(12))
+                )
+                * f(
+                    coad(Nc ^ 2 - 1, l(9)),
+                    coad(Nc ^ 2 - 1, l(10)),
+                    coad(Nc ^ 2 - 1, l(12))
+                )
+                * ubar(2, bis(4, l(2)))
+                * v(3, bis(4, l(3)))
+                * ϵ(0, mink(4, l(0)))
+                * ϵ(1, mink(4, l(1)))
+                * ϵbar(4, mink(4, l(4)))
+                + G
+                ^ 3 * (g(mink(4, l(6)), mink(4, l(7))) * g(mink(4, l(8)), mink(4, l(9)))
+                    - g(mink(4, l(6)), mink(4, l(9))) * g(mink(4, l(7)), mink(4, l(8))))
+                    * g(dind(cof(Nc, 2)), cof(Nc, l(5)))
+                    * g(mink(4, l(0)), mink(4, l(6)))
+                    * g(mink(4, l(1)), mink(4, l(7)))
+                    * g(mink(4, l(4)), mink(4, l(8)))
+                    * g(mink(4, l(5)), mink(4, l(9)))
+                    * g(bis(4, l(2)), bis(4, l(5)))
+                    * g(bis(4, l(3)), bis(4, l(6)))
+                    * g(dind(cof(Nc, l(6))), cof(Nc, 3))
+                    * g(coad(Nc ^ 2 - 1, 0), coad(Nc ^ 2 - 1, l(8)))
+                    * g(coad(Nc ^ 2 - 1, 1), coad(Nc ^ 2 - 1, l(9)))
+                    * g(coad(Nc ^ 2 - 1, 4), coad(Nc ^ 2 - 1, l(10)))
+                    * g(coad(Nc ^ 2 - 1, l(7)), coad(Nc ^ 2 - 1, l(11)))
+                    * gamma(bis(4, l(6)), bis(4, l(5)), mink(4, l(5)))
+                    * t(coad(Nc ^ 2 - 1, l(7)), cof(Nc, l(6)), dind(cof(Nc, l(5))))
+                    * f(
+                        coad(Nc ^ 2 - 1, l(8)),
+                        coad(Nc ^ 2 - 1, l(10)),
+                        coad(Nc ^ 2 - 1, l(12))
+                    )
+                    * f(
+                        coad(Nc ^ 2 - 1, l(9)),
+                        coad(Nc ^ 2 - 1, l(11)),
+                        coad(Nc ^ 2 - 1, l(12))
+                    )
+                    * ubar(2, bis(4, l(2)))
+                    * v(3, bis(4, l(3)))
+                    * ϵ(0, mink(4, l(0)))
+                    * ϵ(1, mink(4, l(1)))
+                    * ϵbar(4, mink(4, l(4)))
+                    + G
+                ^ 3 * (g(mink(4, l(6)), mink(4, l(8))) * g(mink(4, l(7)), mink(4, l(9)))
+                    - g(mink(4, l(6)), mink(4, l(9))) * g(mink(4, l(7)), mink(4, l(8))))
+                    * g(dind(cof(Nc, 2)), cof(Nc, l(5)))
+                    * g(mink(4, l(0)), mink(4, l(6)))
+                    * g(mink(4, l(1)), mink(4, l(7)))
+                    * g(mink(4, l(4)), mink(4, l(8)))
+                    * g(mink(4, l(5)), mink(4, l(9)))
+                    * g(bis(4, l(2)), bis(4, l(5)))
+                    * g(bis(4, l(3)), bis(4, l(6)))
+                    * g(dind(cof(Nc, l(6))), cof(Nc, 3))
+                    * g(coad(Nc ^ 2 - 1, 0), coad(Nc ^ 2 - 1, l(8)))
+                    * g(coad(Nc ^ 2 - 1, 1), coad(Nc ^ 2 - 1, l(9)))
+                    * g(coad(Nc ^ 2 - 1, 4), coad(Nc ^ 2 - 1, l(10)))
+                    * g(coad(Nc ^ 2 - 1, l(7)), coad(Nc ^ 2 - 1, l(11)))
+                    * gamma(bis(4, l(6)), bis(4, l(5)), mink(4, l(5)))
+                    * t(coad(Nc ^ 2 - 1, l(7)), cof(Nc, l(6)), dind(cof(Nc, l(5))))
+                    * f(
+                        coad(Nc ^ 2 - 1, l(8)),
+                        coad(Nc ^ 2 - 1, l(9)),
+                        coad(Nc ^ 2 - 1, l(12))
+                    )
+                    * f(
+                        coad(Nc ^ 2 - 1, l(10)),
+                        coad(Nc ^ 2 - 1, l(11)),
+                        coad(Nc ^ 2 - 1, l(12))
+                    )
+                    * ubar(2, bis(4, l(2)))
+                    * v(3, bis(4, l(3)))
+                    * ϵ(0, mink(4, l(0)))
+                    * ϵ(1, mink(4, l(1)))
+                    * ϵbar(4, mink(4, l(4))))
+                * (-G
+                    ^ 3 * (g(mink(4, r(6)), mink(4, r(7))) * g(mink(4, r(8)), mink(4, r(9)))
+                        - g(mink(4, r(6)), mink(4, r(8))) * g(mink(4, r(7)), mink(4, r(9))))
+                        * g(dind(cof(Nc, 3)), cof(Nc, r(6)))
+                        * g(mink(4, r(0)), mink(4, r(6)))
+                        * g(mink(4, r(1)), mink(4, r(7)))
+                        * g(mink(4, r(4)), mink(4, r(8)))
+                        * g(mink(4, r(5)), mink(4, r(9)))
+                        * g(bis(4, r(2)), bis(4, r(5)))
+                        * g(bis(4, r(3)), bis(4, r(6)))
+                        * g(dind(cof(Nc, r(5))), cof(Nc, 2))
+                        * g(coad(Nc ^ 2 - 1, 0), coad(Nc ^ 2 - 1, r(8)))
+                        * g(coad(Nc ^ 2 - 1, 1), coad(Nc ^ 2 - 1, r(9)))
+                        * g(coad(Nc ^ 2 - 1, 4), coad(Nc ^ 2 - 1, r(10)))
+                        * g(coad(Nc ^ 2 - 1, r(7)), coad(Nc ^ 2 - 1, r(11)))
+                        * gamma(bis(4, r(5)), bis(4, r(6)), mink(4, r(5)))
+                        * t(coad(Nc ^ 2 - 1, r(7)), cof(Nc, r(5)), dind(cof(Nc, r(6))))
+                        * f(
+                            coad(Nc ^ 2 - 1, r(8)),
+                            coad(Nc ^ 2 - 1, r(11)),
+                            coad(Nc ^ 2 - 1, r(12))
+                        )
+                        * f(
+                            coad(Nc ^ 2 - 1, r(9)),
+                            coad(Nc ^ 2 - 1, r(10)),
+                            coad(Nc ^ 2 - 1, r(12))
+                        )
+                        * u(2, bis(4, r(2)))
+                        * vbar(3, bis(4, r(3)))
+                        * ϵ(4, mink(4, r(4)))
+                        * ϵbar(0, mink(4, r(0)))
+                        * ϵbar(1, mink(4, r(1)))
+                        - G
+                    ^ 3 * (g(mink(4, r(6)), mink(4, r(7))) * g(mink(4, r(8)), mink(4, r(9)))
+                        - g(mink(4, r(6)), mink(4, r(9))) * g(mink(4, r(7)), mink(4, r(8))))
+                        * g(dind(cof(Nc, 3)), cof(Nc, r(6)))
+                        * g(mink(4, r(0)), mink(4, r(6)))
+                        * g(mink(4, r(1)), mink(4, r(7)))
+                        * g(mink(4, r(4)), mink(4, r(8)))
+                        * g(mink(4, r(5)), mink(4, r(9)))
+                        * g(bis(4, r(2)), bis(4, r(5)))
+                        * g(bis(4, r(3)), bis(4, r(6)))
+                        * g(dind(cof(Nc, r(5))), cof(Nc, 2))
+                        * g(coad(Nc ^ 2 - 1, 0), coad(Nc ^ 2 - 1, r(8)))
+                        * g(coad(Nc ^ 2 - 1, 1), coad(Nc ^ 2 - 1, r(9)))
+                        * g(coad(Nc ^ 2 - 1, 4), coad(Nc ^ 2 - 1, r(10)))
+                        * g(coad(Nc ^ 2 - 1, r(7)), coad(Nc ^ 2 - 1, r(11)))
+                        * gamma(bis(4, r(5)), bis(4, r(6)), mink(4, r(5)))
+                        * t(coad(Nc ^ 2 - 1, r(7)), cof(Nc, r(5)), dind(cof(Nc, r(6))))
+                        * f(
+                            coad(Nc ^ 2 - 1, r(8)),
+                            coad(Nc ^ 2 - 1, r(10)),
+                            coad(Nc ^ 2 - 1, r(12))
+                        )
+                        * f(
+                            coad(Nc ^ 2 - 1, r(9)),
+                            coad(Nc ^ 2 - 1, r(11)),
+                            coad(Nc ^ 2 - 1, r(12))
+                        )
+                        * u(2, bis(4, r(2)))
+                        * vbar(3, bis(4, r(3)))
+                        * ϵ(4, mink(4, r(4)))
+                        * ϵbar(0, mink(4, r(0)))
+                        * ϵbar(1, mink(4, r(1)))
+                        - G
+                    ^ 3 * (g(mink(4, r(6)), mink(4, r(8))) * g(mink(4, r(7)), mink(4, r(9)))
+                        - g(mink(4, r(6)), mink(4, r(9))) * g(mink(4, r(7)), mink(4, r(8))))
+                        * g(dind(cof(Nc, 3)), cof(Nc, r(6)))
+                        * g(mink(4, r(0)), mink(4, r(6)))
+                        * g(mink(4, r(1)), mink(4, r(7)))
+                        * g(mink(4, r(4)), mink(4, r(8)))
+                        * g(mink(4, r(5)), mink(4, r(9)))
+                        * g(bis(4, r(2)), bis(4, r(5)))
+                        * g(bis(4, r(3)), bis(4, r(6)))
+                        * g(dind(cof(Nc, r(5))), cof(Nc, 2))
+                        * g(coad(Nc ^ 2 - 1, 0), coad(Nc ^ 2 - 1, r(8)))
+                        * g(coad(Nc ^ 2 - 1, 1), coad(Nc ^ 2 - 1, r(9)))
+                        * g(coad(Nc ^ 2 - 1, 4), coad(Nc ^ 2 - 1, r(10)))
+                        * g(coad(Nc ^ 2 - 1, r(7)), coad(Nc ^ 2 - 1, r(11)))
+                        * gamma(bis(4, r(5)), bis(4, r(6)), mink(4, r(5)))
+                        * t(coad(Nc ^ 2 - 1, r(7)), cof(Nc, r(5)), dind(cof(Nc, r(6))))
+                        * f(
+                            coad(Nc ^ 2 - 1, r(8)),
+                            coad(Nc ^ 2 - 1, r(9)),
+                            coad(Nc ^ 2 - 1, r(12))
+                        )
+                        * f(
+                            coad(Nc ^ 2 - 1, r(10)),
+                            coad(Nc ^ 2 - 1, r(11)),
+                            coad(Nc ^ 2 - 1, r(12))
+                        )
+                        * u(2, bis(4, r(2)))
+                        * vbar(3, bis(4, r(3)))
+                        * ϵ(4, mink(4, r(4)))
+                        * ϵbar(0, mink(4, r(0)))
+                        * ϵbar(1, mink(4, r(1)))),
+            "spenso"
+        );
+
+        println!("{expr}");
+        println!("Simplify_metrics");
+        println!("{}", expr.clone().simplify_metrics());
+        println!("Simplify_color");
+        println!(
+            "{:>}",
+            expr.simplify_gamma()
+                .simplify_color()
+                .expand()
+                .simplify_metrics()
+                .to_dots()
         );
     }
 }

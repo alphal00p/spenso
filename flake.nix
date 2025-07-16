@@ -40,10 +40,7 @@
         (crane.mkLib nixpkgs.legacyPackages.${system}).overrideToolchain
         fenix.packages.${system}.stable.toolchain;
 
-      src = lib.cleanSourceWith {
-        src = craneLib.path ./.; # The original, unfiltered source
-        filter = path: type: (craneLib.filterCargoSources path type) || (builtins.match ".*snap$" path != null);
-      };
+      src = craneLib.cleanCargoSource ./.;
 
       # Common arguments can be set here to avoid repeating them later
       commonArgs = {
@@ -84,13 +81,69 @@
           "rustc"
         ]);
 
-      # Build *just* the cargo dependencies, so we can reuse
-      # all of that work (e.g. via cachix) when running in CI
-      cargoArtifacts = craneLib.buildDepsOnly (commonArgs
+      # Build *just* the cargo dependencies (of the entire workspace),
+      # so we can reuse all of that work (e.g. via cachix) when running in CI
+      # It is *highly* recommended to use something like cargo-hakari to avoid
+      # cache misses when building individual top-level-crates
+      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+      individualCrateArgs =
+        commonArgs
         // {
-          pname = "spenso-workspace-deps";
-          version = "0.1.0";
-        });
+          inherit cargoArtifacts;
+          inherit (craneLib.crateNameFromCargoToml {inherit src;}) version;
+          # NB: we disable tests since we'll run them all via cargo-nextest
+          doCheck = false;
+        };
+
+      fileSetForCrate = crate:
+        lib.fileset.toSource {
+          root = ./.;
+          fileset = lib.fileset.unions [
+            ./Cargo.toml
+            ./Cargo.lock
+            (craneLib.fileset.commonCargoSources ./spenso)
+            (craneLib.fileset.commonCargoSources ./spenso-macros)
+            (craneLib.fileset.commonCargoSources ./spenso-hep-lib)
+            (craneLib.fileset.commonCargoSources ./idenso)
+            (craneLib.fileset.commonCargoSources crate)
+          ];
+        };
+
+      # Build the top-level crates of the workspace as individual derivations.
+      # This allows consumers to only depend on (and build) only what they need.
+      spenso = craneLib.buildPackage (
+        individualCrateArgs
+        // {
+          pname = "spenso";
+          cargoExtraArgs = "-p spenso";
+          src = fileSetForCrate ./spenso;
+        }
+      );
+      spenso-macros = craneLib.buildPackage (
+        individualCrateArgs
+        // {
+          pname = "spenso-macros";
+          cargoExtraArgs = "-p spenso-macros";
+          src = fileSetForCrate ./spenso-macros;
+        }
+      );
+      spenso-hep-lib = craneLib.buildPackage (
+        individualCrateArgs
+        // {
+          pname = "spenso-hep-lib";
+          cargoExtraArgs = "-p spenso-hep-lib";
+          src = fileSetForCrate ./spenso-hep-lib;
+        }
+      );
+      idenso = craneLib.buildPackage (
+        individualCrateArgs
+        // {
+          pname = "idenso";
+          cargoExtraArgs = "-p idenso";
+          src = fileSetForCrate ./idenso;
+        }
+      );
 
       # Build the entire workspace
       workspace = craneLib.buildPackage (commonArgs
@@ -102,120 +155,77 @@
           cargoExtraArgs = "--workspace";
         });
 
-      # Helper function to create checks for a specific crate using manifest path
+      # Helper function to create checks for a specific crate using workspace subset pattern
       mkChecksForCrate = crateName: let
-        manifestPath = "${crateName}/Cargo.toml";
-        crateInfo = craneLib.crateNameFromCargoToml {cargoToml = ./${manifestPath};};
+        crateInfo = craneLib.crateNameFromCargoToml {cargoToml = ./${crateName}/Cargo.toml;};
       in {
         "${crateInfo.pname}-clippy" = craneLib.cargoClippy (commonArgs
           // {
             inherit cargoArtifacts;
             inherit (crateInfo) pname version;
-            cargoClippyExtraArgs = "--manifest-path ${manifestPath} -- --deny warnings";
+            cargoExtraArgs = "-p ${crateInfo.pname}";
+            cargoClippyExtraArgs = "--all-targets -- --deny warnings";
           });
 
         "${crateInfo.pname}-doc" = craneLib.cargoDoc (commonArgs
           // {
             inherit cargoArtifacts;
             inherit (crateInfo) pname version;
-            cargoExtraArgs = "--manifest-path ${manifestPath}";
+            cargoExtraArgs = "-p ${crateInfo.pname}";
           });
 
         "${crateInfo.pname}-nextest" = craneLib.cargoNextest (commonArgs
           // {
             inherit cargoArtifacts;
             inherit (crateInfo) pname version;
-            nativeBuildInputs =
-              commonArgs.nativeBuildInputs
-              ++ [
-                pkgs.cargo-insta
-              ];
+            cargoExtraArgs = "-p ${crateInfo.pname}";
             partitions = 1;
             partitionType = "count";
-            cargoNextestExtraArgs = "--manifest-path ${manifestPath}";
           });
 
         "${crateInfo.pname}-tarpaulin" = craneLib.cargoTarpaulin (commonArgs
           // {
             inherit cargoArtifacts;
             inherit (crateInfo) pname version;
-            cargoTarpaulinExtraArgs = "--manifest-path ${manifestPath} --skip-clean --out xml --output-dir $out";
+            cargoExtraArgs = "-p ${crateInfo.pname}";
+            cargoTarpaulinExtraArgs = "--skip-clean --out xml --output-dir $out";
           });
       };
 
-      # Helper function to create checks with feature flags
-      mkChecksWithFeatures = features: featuresName: {
-        "workspace-clippy-${featuresName}" = craneLib.cargoClippy (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "spenso-workspace";
-            version = "0.4.1";
-            cargoClippyExtraArgs = "--workspace ${features} -- --deny warnings";
-          });
-
-        "workspace-nextest-${featuresName}" = craneLib.cargoNextest (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "spenso-workspace";
-            version = "0.4.1";
-            nativeBuildInputs =
-              commonArgs.nativeBuildInputs
-              ++ [
-                pkgs.cargo-insta
-              ];
-            partitions = 1;
-            partitionType = "count";
-            cargoNextestExtraArgs = "--workspace ${features}";
-          });
-
-        "workspace-tarpaulin-${featuresName}" = craneLib.cargoTarpaulin (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "spenso-workspace";
-            version = "0.4.1";
-            cargoTarpaulinExtraArgs = "--workspace ${features} --skip-clean --out xml --output-dir $out";
-          });
-
-        "workspace-doc-${featuresName}" = craneLib.cargoDoc (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "spenso-workspace";
-            version = "0.4.1";
-            cargoExtraArgs = "--workspace ${features}";
-          });
-      };
-
-      # Helper function to create per-crate checks with features
+      # Helper function to create per-crate checks with features using workspace subset pattern
       mkCrateChecksWithFeatures = crateName: features: featuresName: let
-        manifestPath = "${crateName}/Cargo.toml";
-        crateInfo = craneLib.crateNameFromCargoToml {cargoToml = ./${manifestPath};};
+        crateInfo = craneLib.crateNameFromCargoToml {cargoToml = ./${crateName}/Cargo.toml;};
       in {
         "${crateInfo.pname}-clippy-${featuresName}" = craneLib.cargoClippy (commonArgs
           // {
             inherit cargoArtifacts;
             inherit (crateInfo) pname version;
-            cargoClippyExtraArgs = "--manifest-path ${manifestPath} ${features} -- --deny warnings";
+            cargoExtraArgs = "-p ${crateInfo.pname} ${features}";
+            cargoClippyExtraArgs = "--all-targets -- --deny warnings";
           });
 
         "${crateInfo.pname}-nextest-${featuresName}" = craneLib.cargoNextest (commonArgs
           // {
             inherit cargoArtifacts;
             inherit (crateInfo) pname version;
-            nativeBuildInputs =
-              commonArgs.nativeBuildInputs
-              ++ [
-                pkgs.cargo-insta
-              ];
+            cargoExtraArgs = "-p ${crateInfo.pname} ${features}";
             partitions = 1;
             partitionType = "count";
-            cargoNextestExtraArgs = "--manifest-path ${manifestPath} ${features}";
           });
 
         "${crateInfo.pname}-doc-${featuresName}" = craneLib.cargoDoc (commonArgs
           // {
             inherit cargoArtifacts;
             inherit (crateInfo) pname version;
-            cargoExtraArgs = "--manifest-path ${manifestPath} ${features}";
+            cargoExtraArgs = "-p ${crateInfo.pname} ${features}";
+          });
+
+        "${crateInfo.pname}-tarpaulin-${featuresName}" = craneLib.cargoTarpaulin (commonArgs
+          // {
+            inherit cargoArtifacts;
+            inherit (crateInfo) pname version;
+            cargoExtraArgs = "-p ${crateInfo.pname} ${features}";
+            cargoTarpaulinExtraArgs = "--skip-clean --out xml --output-dir $out";
           });
       };
 
@@ -224,12 +234,6 @@
       spensoMacrosChecks = mkChecksForCrate "spenso-macros";
       spensoHepLibChecks = mkChecksForCrate "spenso-hep-lib";
       idensoChecks = mkChecksForCrate "idenso";
-
-      # Create feature flag checks
-      defaultFeatureChecks = mkChecksWithFeatures "" "default";
-      shadowingFeatureChecks = mkChecksWithFeatures "--features shadowing" "shadowing";
-      allFeatureChecks = mkChecksWithFeatures "--all-features" "all-features";
-      noDefaultFeatureChecks = mkChecksWithFeatures "--no-default-features" "no-default";
 
       # Create per-crate feature checks for important combinations
       idensoFeatureChecks = mkCrateChecksWithFeatures "idenso" "--features bincode" "bincode";
@@ -241,129 +245,83 @@
       spensoHepLibAllFeaturesChecks = mkCrateChecksWithFeatures "spenso-hep-lib" "--all-features" "all-features";
       idensoAllFeaturesChecks = mkCrateChecksWithFeatures "idenso" "--all-features" "all-features";
 
-      # Add tarpaulin checks for crates with features
-      idensoTarpaulinFeatureChecks = {
-        "idenso-tarpaulin-bincode" = craneLib.cargoTarpaulin (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "idenso";
-            version = "0.2.0";
-            cargoTarpaulinExtraArgs = "--manifest-path idenso/Cargo.toml --features bincode --skip-clean --out xml --output-dir $out";
-          });
-      };
-
-      spensoTarpaulinFeatureChecks = {
-        "spenso-tarpaulin-shadowing" = craneLib.cargoTarpaulin (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "spenso";
-            version = "0.5.1";
-            cargoTarpaulinExtraArgs = "--manifest-path spenso/Cargo.toml --features shadowing --skip-clean --out xml --output-dir $out";
-          });
-      };
-
-      # Add per-crate all-features tarpaulin checks
-      spensoTarpaulinAllFeatures = {
-        "spenso-tarpaulin-all-features" = craneLib.cargoTarpaulin (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "spenso";
-            version = "0.5.1";
-            cargoTarpaulinExtraArgs = "--manifest-path spenso/Cargo.toml --all-features --skip-clean --out xml --output-dir $out";
-          });
-      };
-
-      spensoMacrosTarpaulinAllFeatures = {
-        "spenso-macros-tarpaulin-all-features" = craneLib.cargoTarpaulin (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "spenso-macros";
-            version = "0.2.0";
-            cargoTarpaulinExtraArgs = "--manifest-path spenso-macros/Cargo.toml --all-features --skip-clean --out xml --output-dir $out";
-          });
-      };
-
-      spensoHepLibTarpaulinAllFeatures = {
-        "spenso-hep-lib-tarpaulin-all-features" = craneLib.cargoTarpaulin (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "spenso-hep-lib";
-            version = "0.1.1";
-            cargoTarpaulinExtraArgs = "--manifest-path spenso-hep-lib/Cargo.toml --all-features --skip-clean --out xml --output-dir $out";
-          });
-      };
-
-      idensoTarpaulinAllFeatures = {
-        "idenso-tarpaulin-all-features" = craneLib.cargoTarpaulin (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "idenso";
-            version = "0.2.0";
-            cargoTarpaulinExtraArgs = "--manifest-path idenso/Cargo.toml --all-features --skip-clean --out xml --output-dir $out";
-          });
-      };
-
       # Workspace-wide checks
       workspaceChecks = {
-        # Build the workspace as part of `nix flake check` for convenience
-        inherit workspace;
+        # Build the crates as part of `nix flake check` for convenience
+        inherit spenso spenso-macros spenso-hep-lib idenso workspace;
 
-        # Workspace-wide clippy
+        # Run clippy (and deny all warnings) on the workspace source,
+        # again, reusing the dependency artifacts from above.
+        #
+        # Note that this is done as a separate derivation so that
+        # we can block the CI if there are issues here, but not
+        # prevent downstream consumers from building our crate by itself.
         workspace-clippy = craneLib.cargoClippy (commonArgs
           // {
             inherit cargoArtifacts;
-            pname = "spenso-workspace";
-            version = "0.4.1";
-            cargoClippyExtraArgs = "--workspace -- --deny warnings";
+            cargoClippyExtraArgs = "--all-targets -- --deny warnings";
           });
 
-        # Workspace-wide doc
         workspace-doc = craneLib.cargoDoc (commonArgs
           // {
             inherit cargoArtifacts;
-            pname = "spenso-workspace";
-            version = "0.4.1";
-            cargoExtraArgs = "--workspace";
           });
 
-        # Check formatting (workspace-wide)
+        # Check formatting
         workspace-fmt = craneLib.cargoFmt {
           inherit src;
-          pname = "spenso-workspace";
-          version = "0.4.1";
         };
 
-        # Audit dependencies (workspace-wide)
+        workspace-toml-fmt = craneLib.taploFmt {
+          src = pkgs.lib.sources.sourceFilesBySuffices src [".toml"];
+          # taplo arguments can be further customized below as needed
+          # taploExtraArgs = "--config ./taplo.toml";
+        };
+
+        # Audit dependencies
         workspace-audit = craneLib.cargoAudit {
           inherit src advisory-db;
-          pname = "spenso-workspace";
-          version = "0.4.1";
         };
 
-        # Run tests with cargo-nextest (workspace-wide)
+        # Audit licenses
+        workspace-deny = craneLib.cargoDeny {
+          inherit src;
+        };
+
+        # Run tests with cargo-nextest
+        # Consider setting `doCheck = false` on other crate derivations
+        # if you do not want the tests to run twice
         workspace-nextest = craneLib.cargoNextest (commonArgs
           // {
             inherit cargoArtifacts;
-            pname = "spenso-workspace";
-            version = "0.4.1";
-            nativeBuildInputs =
-              commonArgs.nativeBuildInputs
-              ++ [
-                pkgs.cargo-insta
-              ];
             partitions = 1;
             partitionType = "count";
-            cargoNextestExtraArgs = "--workspace";
           });
 
         # Workspace-wide tarpaulin coverage
         workspace-tarpaulin = craneLib.cargoTarpaulin (commonArgs
           // {
             inherit cargoArtifacts;
-            pname = "spenso-workspace";
-            version = "0.4.1";
             cargoTarpaulinExtraArgs = "--workspace --skip-clean --out xml --output-dir $out";
           });
+
+        # Ensure that cargo-hakari is up to date
+        workspace-hakari = craneLib.mkCargoDerivation {
+          inherit src;
+          pname = "workspace-hakari";
+          cargoArtifacts = null;
+          doInstallCargoArtifacts = false;
+
+          buildPhaseCargoCommand = ''
+            cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
+            cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
+            cargo hakari verify
+          '';
+
+          nativeBuildInputs = [
+            pkgs.cargo-hakari
+          ];
+        };
       };
     in {
       checks =
@@ -372,28 +330,17 @@
         // spensoMacrosChecks
         // spensoHepLibChecks
         // idensoChecks
-        // defaultFeatureChecks
-        // shadowingFeatureChecks
-        // allFeatureChecks
-        // noDefaultFeatureChecks
         // idensoFeatureChecks
         // spensoShadowingChecks
-        // idensoTarpaulinFeatureChecks
-        // spensoTarpaulinFeatureChecks
         // spensoAllFeaturesChecks
         // spensoMacrosAllFeaturesChecks
         // spensoHepLibAllFeaturesChecks
-        // idensoAllFeaturesChecks
-        // spensoTarpaulinAllFeatures
-        // spensoMacrosTarpaulinAllFeatures
-        // spensoHepLibTarpaulinAllFeatures
-        // idensoTarpaulinAllFeatures;
+        // idensoAllFeaturesChecks;
 
       packages =
         {
-          # Default to the workspace build
+          inherit spenso spenso-macros spenso-hep-lib idenso workspace;
           default = workspace;
-          inherit workspace;
         }
         // lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
           # Coverage packages (workspace-wide)
@@ -425,6 +372,7 @@
         # Extra inputs can be added here; cargo and rustc are provided by default.
         packages = [
           pkgs.cargo-insta
+          pkgs.cargo-hakari
           pkgs.quarto
           pkgs.nodejs
           pkgs.uv

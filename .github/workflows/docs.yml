@@ -1,0 +1,58 @@
+name: Documentation
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types:
+      - completed
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Run documentation and workspace checks
+  docs:
+    environment: symbolica_keys
+    runs-on: ubuntu-latest
+    # Only run if tests completed successfully
+    if: github.event.workflow_run.conclusion == 'success'
+    env:
+      SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Workspace-level docs
+          - check: workspace-doc
+            type: docs
+            description: "workspace documentation"
+          # Additional workspace checks
+          - check: workspace-fmt
+            type: check
+            description: "workspace formatting"
+          - check: workspace-toml-fmt
+            type: check
+            description: "workspace TOML formatting"
+          - check: workspace-audit
+            type: check
+            description: "workspace audit"
+          - check: workspace-deny
+            type: check
+            description: "workspace deny"
+          - check: workspace-hakari
+            type: check
+            description: "workspace hakari"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: lcnbr
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+      - name: Run ${{ matrix.description }}
+        run: nix build .#checks.x86_64-linux.${{ matrix.check }} --impure --print-build-logs

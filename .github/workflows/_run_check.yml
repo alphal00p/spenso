@@ -1,0 +1,126 @@
+name: Reusable Clippy and Nextest Check
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+      crate:
+        required: true
+        type: string
+      features:
+        required: true
+        type: string
+    secrets:
+      CACHIX_AUTH_TOKEN:
+        required: true
+      SYMBOLICA_LICENSE:
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  clippy:
+    name: Clippy ${{ inputs.os }} / ${{ inputs.crate }} / ${{ inputs.features }}
+    runs-on: ${{ inputs.os }}
+    environment: symbolica_keys # To access SYMBOLICA_LICENSE
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: lcnbr
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+
+      - name: Set Nix system string
+        id: set-system
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            echo "system=x86_64-linux" >> $GITHUB_OUTPUT
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            if [ "$(uname -m)" == "arm64" ]; then
+              echo "system=aarch64-darwin" >> $GITHUB_OUTPUT
+            else
+              echo "system=x86_64-darwin" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Set Clippy check name for Nix
+        id: set-clippy-check-name
+        shell: bash
+        run: |
+          if [ "${{ inputs.features }}" == "default" ]; then
+            echo "check_name=${{ inputs.crate }}-clippy" >> $GITHUB_OUTPUT
+          else
+            echo "check_name=${{ inputs.crate }}-clippy-${{ inputs.features }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Clippy for ${{ inputs.crate }} (${{ inputs.features }})
+        env:
+          SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
+        run: |
+          nix build .#checks.${{ steps.set-system.outputs.system }}.${{ steps.set-clippy-check-name.outputs.check_name }} --impure --no-link --print-build-logs
+
+  nextest:
+    name: Nextest ${{ inputs.os }} / ${{ inputs.crate }} / ${{ inputs.features }}
+    runs-on: ${{ inputs.os }}
+    needs: clippy
+    environment: symbolica_keys # To access SYMBOLICA_LICENSE
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: lcnbr
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+
+      - name: Set Nix system string
+        id: set-system
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            echo "system=x86_64-linux" >> $GITHUB_OUTPUT
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            if [ "$(uname -m)" == "arm64" ]; then
+              echo "system=aarch64-darwin" >> $GITHUB_OUTPUT
+            else
+              echo "system=x86_64-darwin" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Set Nextest check name for Nix
+        id: set-nextest-check-name
+        shell: bash
+        run: |
+          if [ "${{ inputs.features }}" == "default" ]; then
+            echo "check_name=${{ inputs.crate }}-nextest" >> $GITHUB_OUTPUT
+          else
+            echo "check_name=${{ inputs.crate }}-nextest-${{ inputs.features }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Nextest for ${{ inputs.crate }} (${{ inputs.features }})
+        env:
+          SYMBOLICA_LICENSE: ${{ secrets.SYMBOLICA_LICENSE }}
+        run: |
+          nix build .#checks.${{ steps.set-system.outputs.system }}.${{ steps.set-nextest-check-name.outputs.check_name }} --impure --no-link --print-build-logs

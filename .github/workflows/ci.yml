@@ -1,0 +1,197 @@
+name: CI
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+jobs:
+  ubuntu:
+    name: Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Starting Ubuntu checks"
+
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - run: echo "Starting macOS checks"
+
+  ubuntu-spenso:
+    name: Ubuntu / spenso
+    needs: ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Grouping spenso checks for Ubuntu"
+
+  ubuntu-spenos-default:
+    name: Ubuntu / spenso / default
+    needs: ubuntu-spenso
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: ubuntu-latest
+      crate: spenso
+      features: default
+
+  ubuntu-spenso-macros:
+    name: Ubuntu / spenso-macros
+    needs: ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Grouping spenso-macros checks for Ubuntu"
+
+  ubuntu-spenso-macros-default:
+    name: Ubuntu / spenso-macros / default
+    needs: ubuntu-spenso-macros
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: ubuntu-latest
+      crate: spenso-macros
+      features: default
+
+  ubuntu-spenso-hep-lib:
+    name: Ubuntu / spenso-hep-lib
+    needs: ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Grouping spenso-hep-lib checks for Ubuntu"
+
+  ubuntu-spenso-hep-lib-default:
+    name: Ubuntu / spenso-hep-lib / default
+    needs: ubuntu-spenso-hep-lib
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: ubuntu-latest
+      crate: spenso-hep-lib
+      features: default
+
+  ubuntu-idenso:
+    name: Ubuntu / idenso
+    needs: ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Grouping idenso checks for Ubuntu"
+
+  ubuntu-idenso-default:
+    name: Ubuntu / idenso / default
+    needs: ubuntu-idenso
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: ubuntu-latest
+      crate: idenso
+      features: default
+
+  macos-spenso:
+    name: macOS / spenso
+    needs: macos
+    runs-on: macos-latest
+    steps:
+      - run: echo "Grouping spenso checks for macOS"
+
+  macos-spenso-default:
+    name: macOS / spenso / default
+    needs: macos-spenso
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: macos-latest
+      crate: spenso
+      features: default
+
+  macos-spenso-macros:
+    name: macOS / spenso-macros
+    needs: macos
+    runs-on: macos-latest
+    steps:
+      - run: echo "Grouping spenso-macros checks for macOS"
+
+  macos-spenso-macros-default:
+    name: macOS / spenso-macros / default
+    needs: macos-spenso-macros
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: macos-latest
+      crate: spenso-macros
+      features: default
+
+  macos-spenso-hep-lib:
+    name: macOS / spenso-hep-lib
+    needs: macos
+    runs-on: macos-latest
+    steps:
+      - run: echo "Grouping spenso-hep-lib checks for macOS"
+
+  macos-spenso-hep-lib-default:
+    name: macOS / spenso-hep-lib / default
+    needs: macos-spenso-hep-lib
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: macos-latest
+      crate: spenso-hep-lib
+      features: default
+
+  macos-idenso:
+    name: macOS / idenso
+    needs: macos
+    runs-on: macos-latest
+    steps:
+      - run: echo "Grouping idenso checks for macOS"
+
+  macos-idenso-default:
+    name: macOS / idenso / default
+    needs: macos-idenso
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: macos-latest
+      crate: idenso
+      features: default
+
+  ubuntu-spenso-shadowing:
+    name: Ubuntu / spenso / shadowing
+    needs: ubuntu-spenso
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: ubuntu-latest
+      crate: spenso
+      features: shadowing
+
+  ubuntu-spenso-all-features:
+    name: Ubuntu / spenso / all-features
+    needs: ubuntu-spenso
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: ubuntu-latest
+      crate: spenso
+      features: all-features
+
+  macos-spenso-shadowing:
+    name: macOS / spenso / shadowing
+    needs: macos-spenso
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: macos-latest
+      crate: spenso
+      features: shadowing
+
+  macos-spenso-all-features:
+    name: macOS / spenso / all-features
+    needs: macos-spenso
+    uses: ./.github/workflows/_run_check.yml
+    secrets: inherit
+    with:
+      os: macos-latest
+      crate: spenso
+      features: all-features

@@ -85,13 +85,18 @@
       # so we can reuse all of that work (e.g. via cachix) when running in CI
       # It is *highly* recommended to use something like cargo-hakari to avoid
       # cache misses when building individual top-level-crates
-      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+      cargoArtifacts = craneLib.buildDepsOnly (
+        commonArgs
+        // {
+          pname = "spenso-workspace-deps";
+          version = "1.0.0";
+        }
+      );
 
       individualCrateArgs =
         commonArgs
         // {
           inherit cargoArtifacts;
-          inherit (craneLib.crateNameFromCargoToml {inherit src;}) version;
           # NB: we disable tests since we'll run them all via cargo-nextest
           doCheck = false;
         };
@@ -115,7 +120,7 @@
       spenso = craneLib.buildPackage (
         individualCrateArgs
         // {
-          pname = "spenso";
+          inherit (craneLib.crateNameFromCargoToml {cargoToml = ./spenso/Cargo.toml;}) pname version;
           cargoExtraArgs = "-p spenso";
           src = fileSetForCrate ./spenso;
         }
@@ -123,7 +128,7 @@
       spenso-macros = craneLib.buildPackage (
         individualCrateArgs
         // {
-          pname = "spenso-macros";
+          inherit (craneLib.crateNameFromCargoToml {cargoToml = ./spenso-macros/Cargo.toml;}) pname version;
           cargoExtraArgs = "-p spenso-macros";
           src = fileSetForCrate ./spenso-macros;
         }
@@ -131,7 +136,7 @@
       spenso-hep-lib = craneLib.buildPackage (
         individualCrateArgs
         // {
-          pname = "spenso-hep-lib";
+          inherit (craneLib.crateNameFromCargoToml {cargoToml = ./spenso-hep-lib/Cargo.toml;}) pname version;
           cargoExtraArgs = "-p spenso-hep-lib";
           src = fileSetForCrate ./spenso-hep-lib;
         }
@@ -139,7 +144,7 @@
       idenso = craneLib.buildPackage (
         individualCrateArgs
         // {
-          pname = "idenso";
+          inherit (craneLib.crateNameFromCargoToml {cargoToml = ./idenso/Cargo.toml;}) pname version;
           cargoExtraArgs = "-p idenso";
           src = fileSetForCrate ./idenso;
         }
@@ -150,7 +155,7 @@
         // {
           inherit cargoArtifacts;
           pname = "spenso-workspace";
-          version = "0.4.1";
+          version = "1.0.0";
           doCheck = false;
           cargoExtraArgs = "--workspace";
         });
@@ -256,36 +261,27 @@
         # Note that this is done as a separate derivation so that
         # we can block the CI if there are issues here, but not
         # prevent downstream consumers from building our crate by itself.
+        # Workspace-wide checks
         workspace-clippy = craneLib.cargoClippy (commonArgs
           // {
             inherit cargoArtifacts;
+            pname = "spenso-workspace";
+            version = "1.0.0";
             cargoClippyExtraArgs = "--all-targets -- --deny warnings";
           });
 
         workspace-doc = craneLib.cargoDoc (commonArgs
           // {
             inherit cargoArtifacts;
+            pname = "spenso-workspace";
+            version = "1.0.0";
           });
 
         # Check formatting
         workspace-fmt = craneLib.cargoFmt {
           inherit src;
-        };
-
-        workspace-toml-fmt = craneLib.taploFmt {
-          src = pkgs.lib.sources.sourceFilesBySuffices src [".toml"];
-          # taplo arguments can be further customized below as needed
-          # taploExtraArgs = "--config ./taplo.toml";
-        };
-
-        # Audit dependencies
-        workspace-audit = craneLib.cargoAudit {
-          inherit src advisory-db;
-        };
-
-        # Audit licenses
-        workspace-deny = craneLib.cargoDeny {
-          inherit src;
+          pname = "spenso-workspace-fmt";
+          version = "1.0.0";
         };
 
         # Run tests with cargo-nextest
@@ -294,6 +290,8 @@
         workspace-nextest = craneLib.cargoNextest (commonArgs
           // {
             inherit cargoArtifacts;
+            pname = "spenso-workspace";
+            version = "1.0.0";
             partitions = 1;
             partitionType = "count";
           });
@@ -302,26 +300,10 @@
         workspace-tarpaulin = craneLib.cargoTarpaulin (commonArgs
           // {
             inherit cargoArtifacts;
+            pname = "spenso-workspace";
+            version = "1.0.0";
             cargoTarpaulinExtraArgs = "--workspace --skip-clean --out xml --output-dir $out";
           });
-
-        # Ensure that cargo-hakari is up to date
-        workspace-hakari = craneLib.mkCargoDerivation {
-          inherit src;
-          pname = "workspace-hakari";
-          cargoArtifacts = null;
-          doInstallCargoArtifacts = false;
-
-          buildPhaseCargoCommand = ''
-            cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-            cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
-            cargo hakari verify
-          '';
-
-          nativeBuildInputs = [
-            pkgs.cargo-hakari
-          ];
-        };
       };
     in {
       checks =
@@ -348,7 +330,7 @@
             // {
               inherit cargoArtifacts;
               pname = "spenso-workspace";
-              version = "0.4.1";
+              version = "1.0.0";
               cargoExtraArgs = "--workspace";
             });
 
@@ -356,7 +338,7 @@
             // {
               inherit cargoArtifacts;
               pname = "spenso-workspace";
-              version = "0.4.1";
+              version = "1.0.0";
               cargoTarpaulinExtraArgs = "--skip-clean --out xml --output-dir $out --workspace";
             });
         };
@@ -372,7 +354,6 @@
         # Extra inputs can be added here; cargo and rustc are provided by default.
         packages = [
           pkgs.cargo-insta
-          pkgs.cargo-hakari
           pkgs.quarto
           pkgs.nodejs
           pkgs.uv

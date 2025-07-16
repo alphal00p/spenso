@@ -107,7 +107,7 @@ pub static PS: LazyLock<PolSymbols> = LazyLock::new(|| PolSymbols {
 });
 
 pub fn pol_conj_impl(expression: AtomView) -> Atom {
-    let expr = expression.to_owned().expand();
+    let expr = expression.to_owned();
 
     expr.replace_multiple(&[
         Replacement::new(
@@ -1195,49 +1195,49 @@ mod test {
     #[test]
     fn val_test() {
         initialize();
-        let expr = parse_lit!(
-            (MB * g(bis(4, hedge(0, 0)), bis(4, hedge(1, 0)))
-                + gamma(
-                    bis(4, hedge(0, 0)),
-                    bis(4, hedge(1, 0)),
-                    mink(4, edge(0, 1))
-                ) * Q(0, mink(4, edge(0, 1))))
-                * (MB * g(bis(4, hedge(4, 0)), bis(4, hedge(5, 0)))
-                    + gamma(
-                        bis(4, hedge(4, 0)),
-                        bis(4, hedge(5, 0)),
-                        mink(4, edge(2, 1))
-                    ) * Q(2, mink(4, edge(2, 1))))
-                * (MB * g(bis(4, hedge(8, 0)), bis(4, hedge(9, 0)))
-                    + gamma(
-                        bis(4, hedge(8, 0)),
-                        bis(4, hedge(9, 0)),
-                        mink(4, edge(5, 1))
-                    ) * Q(5, mink(4, edge(5, 1))))
-                * gamma(
-                    bis(4, hedge(1, 0)),
-                    bis(4, hedge(4, 0)),
-                    mink(4, hedge(10, 0))
-                )
-                * gamma(
-                    bis(4, hedge(5, 0)),
-                    bis(4, hedge(8, 0)),
-                    mink(4, hedge(2, 0))
-                )
-                * gamma(
-                    bis(4, hedge(9, 0)),
-                    bis(4, hedge(11, 0)),
-                    mink(4, hedge(7, 0))
-                )
-                * gamma(
-                    bis(4, hedge(11, 0)),
-                    bis(4, hedge(0, 0)),
-                    mink(4, hedge(2, 0))
-                )
-                * p(1, mink(4, hedge(10, 0)))
-                * p(7, mink(4, hedge(7, 0))),
-            "spenso"
-        );
+        // let expr = parse_lit!(
+        //     (MB * g(bis(4, hedge(0, 0)), bis(4, hedge(1, 0)))
+        //         + gamma(
+        //             bis(4, hedge(0, 0)),
+        //             bis(4, hedge(1, 0)),
+        //             mink(4, edge(0, 1))
+        //         ) * Q(0, mink(4, edge(0, 1))))
+        //         * (MB * g(bis(4, hedge(4, 0)), bis(4, hedge(5, 0)))
+        //             + gamma(
+        //                 bis(4, hedge(4, 0)),
+        //                 bis(4, hedge(5, 0)),
+        //                 mink(4, edge(2, 1))
+        //             ) * Q(2, mink(4, edge(2, 1))))
+        //         * (MB * g(bis(4, hedge(8, 0)), bis(4, hedge(9, 0)))
+        //             + gamma(
+        //                 bis(4, hedge(8, 0)),
+        //                 bis(4, hedge(9, 0)),
+        //                 mink(4, edge(5, 1))
+        //             ) * Q(5, mink(4, edge(5, 1))))
+        //         * gamma(
+        //             bis(4, hedge(1, 0)),
+        //             bis(4, hedge(4, 0)),
+        //             mink(4, hedge(10, 0))
+        //         )
+        //         * gamma(
+        //             bis(4, hedge(5, 0)),
+        //             bis(4, hedge(8, 0)),
+        //             mink(4, hedge(2, 0))
+        //         )
+        //         * gamma(
+        //             bis(4, hedge(9, 0)),
+        //             bis(4, hedge(11, 0)),
+        //             mink(4, hedge(7, 0))
+        //         )
+        //         * gamma(
+        //             bis(4, hedge(11, 0)),
+        //             bis(4, hedge(0, 0)),
+        //             mink(4, hedge(2, 0))
+        //         )
+        //         * p(1, mink(4, hedge(10, 0)))
+        //         * p(7, mink(4, hedge(7, 0))),
+        //     "spenso"
+        // );
 
         let expr = parse_lit!(
             (MB * g(bis(4, hedge(0, 0)), bis(4, hedge(1, 0)))

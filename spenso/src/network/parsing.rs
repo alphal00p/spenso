@@ -631,12 +631,164 @@ pub mod test {
     }
 
     #[test]
+    fn contract_problem() {
+        initialize();
+
+        let expr = parse_lit!(
+            (-1 * spenso::Q(spenso::EMRID(0, 4), spenso::mink(4, python::l_20))
+                * spenso::gamma(
+                    spenso::euc(4, python::l_3),
+                    spenso::euc(4, python::l_6),
+                    spenso::mink(4, python::l_0)
+                )
+                * spenso::gamma(
+                    spenso::euc(4, python::l_5),
+                    spenso::euc(4, python::l_2),
+                    spenso::mink(4, python::l_20)
+                )
+                * spenso::gamma(
+                    spenso::euc(4, python::l_6),
+                    spenso::euc(4, python::l_5),
+                    spenso::mink(4, python::l_1)
+                )
+                + 2 * spenso::Q(spenso::EMRID(0, 4), spenso::mink(4, python::l_1))
+                    * spenso::gamma(
+                        spenso::euc(4, python::l_3),
+                        spenso::euc(4, python::l_2),
+                        spenso::mink(4, python::l_0)
+                    ))
+                * 1𝑖
+                * spenso::G
+                ^ 2
+        );
+
+        let lib = DummyLibrary::<_>::new();
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+        println!("{}", expr);
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        net.execute::<Steps<14>, SmallestDegree, _, _>(&lib)
+            .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+    }
+
+    #[test]
     // #[should_panic]
     fn parse_problem() {
         initialize();
-        let expr = parse!("(-1*G^3*P(0,mink(4,l_0))*P(2,mink(4,l_26))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_1))+-1*G^3*P(0,mink(4,l_26))*P(1,mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_0))+-1*G^3*P(0,mink(4,l_26))*P(1,mink(4,l_5))*g(mink(4,l_0),mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))+-1*G^3*P(0,mink(4,l_5))*P(2,mink(4,l_26))*g(mink(4,l_0),mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))+-1*G^3*P(1,mink(4,l_1))*P(1,mink(4,l_26))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_0))+-1*G^3*P(1,mink(4,l_26))*P(1,mink(4,l_5))*g(mink(4,l_0),mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))+-2*G^3*P(0,mink(4,l_1))*P(0,mink(4,l_26))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_0))+-2*G^3*P(0,mink(4,l_1))*P(1,mink(4,l_26))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_0))+-2*G^3*P(0,mink(4,l_5))^2*g(mink(4,l_0),mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_2),mink(4,l_4))+-2*G^3*P(1,mink(4,l_0))*P(1,mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_2),mink(4,l_4))+-2*G^3*P(1,mink(4,l_0))*P(2,mink(4,l_26))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_1))+-2*G^3*P(1,mink(4,l_1))*P(2,mink(4,l_0))*gamma(bis(4,l_3),bis(4,l_2),mink(4,l_4))+-2*G^3*P(1,mink(4,l_5))*P(2,mink(4,l_5))*g(mink(4,l_0),mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_2),mink(4,l_4))+-4*G^3*P(0,mink(4,l_1))*P(2,mink(4,l_0))*gamma(bis(4,l_3),bis(4,l_2),mink(4,l_4))+2*G^3*P(0,mink(4,l_0))*P(0,mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_2),mink(4,l_4))+2*G^3*P(0,mink(4,l_0))*P(2,mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_2),mink(4,l_4))+2*G^3*P(0,mink(4,l_1))*P(2,mink(4,l_26))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_0))+2*G^3*P(0,mink(4,l_26))*P(1,mink(4,l_0))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_1))+2*G^3*P(0,mink(4,l_5))*P(2,mink(4,l_5))*g(mink(4,l_0),mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_2),mink(4,l_4))+2*G^3*P(1,mink(4,l_0))*P(1,mink(4,l_26))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_1))+2*G^3*P(1,mink(4,l_5))^2*g(mink(4,l_0),mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_2),mink(4,l_4))+4*G^3*P(1,mink(4,l_0))*P(2,mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_2),mink(4,l_4))+G^3*P(0,mink(4,l_0))*P(0,mink(4,l_26))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_1))+G^3*P(0,mink(4,l_0))*P(1,mink(4,l_26))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_1))+G^3*P(0,mink(4,l_26))*P(0,mink(4,l_5))*g(mink(4,l_0),mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))+G^3*P(0,mink(4,l_5))*P(1,mink(4,l_26))*g(mink(4,l_0),mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5))+G^3*P(1,mink(4,l_1))*P(2,mink(4,l_26))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_0))+G^3*P(1,mink(4,l_5))*P(2,mink(4,l_26))*g(mink(4,l_0),mink(4,l_1))*gamma(bis(4,l_3),bis(4,l_7),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_2),mink(4,l_26))*gamma(bis(4,l_7),bis(4,l_6),mink(4,l_5)))*(-1*G^3*P(0,mink(4,r_0))*P(1,mink(4,r_26))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_4))+-1*G^3*P(0,mink(4,r_4))*P(1,mink(4,r_26))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_0))+-1*G^3*P(1,mink(4,r_26))*P(2,mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_0))+-1*G^3*P(1,mink(4,r_26))*P(2,mink(4,r_6))*g(mink(4,r_0),mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_6))+-1*G^3*P(1,mink(4,r_26))*P(3,mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_0))+-1*G^3*P(1,mink(4,r_26))*P(3,mink(4,r_6))*g(mink(4,r_0),mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_6))+-1*G^3*P(1,mink(4,r_4))*P(2,mink(4,r_26))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_0))+-1*G^3*P(1,mink(4,r_6))*P(2,mink(4,r_26))*g(mink(4,r_0),mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_6))+-2*G^3*P(0,mink(4,r_6))*P(2,mink(4,r_26))*g(mink(4,r_0),mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_6))+-2*G^3*P(1,mink(4,r_0))*P(1,mink(4,r_26))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_4))+-2*G^3*P(2,mink(4,r_0))*P(2,mink(4,r_26))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_4))+-2*G^3*P(2,mink(4,r_26))*P(3,mink(4,r_0))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_4))+2*G^3*P(0,mink(4,r_6))*P(1,mink(4,r_26))*g(mink(4,r_0),mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_6))+2*G^3*P(1,mink(4,r_0))*P(2,mink(4,r_26))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_4))+2*G^3*P(1,mink(4,r_26))*P(2,mink(4,r_0))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_4))+2*G^3*P(1,mink(4,r_26))*P(3,mink(4,r_0))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_4))+G^3*P(0,mink(4,r_0))*P(2,mink(4,r_26))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_4))+G^3*P(0,mink(4,r_4))*P(2,mink(4,r_26))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_0))+G^3*P(1,mink(4,r_26))*P(1,mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_0))+G^3*P(1,mink(4,r_26))*P(1,mink(4,r_6))*g(mink(4,r_0),mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_6))+G^3*P(2,mink(4,r_26))*P(2,mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_0))+G^3*P(2,mink(4,r_26))*P(2,mink(4,r_6))*g(mink(4,r_0),mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_6))+G^3*P(2,mink(4,r_26))*P(3,mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_0))+G^3*P(2,mink(4,r_26))*P(3,mink(4,r_6))*g(mink(4,r_0),mink(4,r_4))*gamma(bis(4,r_2),bis(4,r_6),mink(4,r_1))*gamma(bis(4,r_6),bis(4,r_7),mink(4,r_26))*gamma(bis(4,r_7),bis(4,r_3),mink(4,r_6)))
-
-    ");
+        let expr = parse_lit!(
+            (-1 * G
+                ^ 3 * P(0, mink(4, 0))
+                    // * P(2, mink(4, 26))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 1))
+                    // * PP(mink(4, 26))
+                    + -1 * G
+                ^ 3 * P(1, mink(4, 1))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 0))
+                    // * PP(mink(4, 26))
+                    + -1 * G
+                ^ 3 * P(0, mink(4, 26))
+                    * P(1, mink(4, 5))
+                    * g(mink(4, 0), mink(4, 1))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 5))
+                    * PP(mink(4, 26))
+                    + -1 * G
+                ^ 3 * P(0, mink(4, 5))
+                    * P(2, mink(4, 26))
+                    * g(mink(4, 0), mink(4, 1))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 26))
+                    * PP(mink(4, 5))
+                    + -1 * G
+                ^ 3 * P(1, mink(4, 1))
+                    * P(1, mink(4, 26))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 26))
+                    * PP(mink(4, 0))
+                    + -1 * G
+                ^ 3 * P(1, mink(4, 26))
+                    * P(1, mink(4, 5))
+                    * g(mink(4, 0), mink(4, 1))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 26))
+                    * PP(mink(4, 5))
+                    + -2 * G
+                ^ 3 * P(0, mink(4, 1))
+                    * P(0, mink(4, 26))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 26))
+                    * PP(mink(4, 0))
+                    + -2 * G
+                ^ 3 * P(0, mink(4, 1))
+                    * P(1, mink(4, 26))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 26))
+                    * PP(mink(4, 0))
+                    + -2 * G
+                ^ 3 * P(0, mink(4, 5))
+                    * Q(0, mink(4, 5))
+                    * g(mink(4, 0), mink(4, 1))
+                    * PP(mink(4, 4))
+                    + -2 * G
+                ^ 3 * P(1, mink(4, 0)) * P(1, mink(4, 1)) * PP(mink(4, 4)) + -2 * G
+                ^ 3 * P(1, mink(4, 0))
+                    * P(2, mink(4, 26))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 26))
+                    * PP(mink(4, 1))
+                    + -2 * G
+                ^ 3 * P(1, mink(4, 1)) * P(2, mink(4, 0)) * PP(mink(4, 4)) + -2 * G
+                ^ 3 * P(1, mink(4, 5))
+                    * P(2, mink(4, 5))
+                    * g(mink(4, 0), mink(4, 1))
+                    * PP(mink(4, 4))
+                    + -4 * G
+                ^ 3 * P(0, mink(4, 1)) * P(2, mink(4, 0)) * PP(mink(4, 4)) + 2 * G
+                ^ 3 * P(0, mink(4, 0)) * P(0, mink(4, 1)) * PP(mink(4, 4)) + 2 * G
+                ^ 3 * P(0, mink(4, 0)) * P(2, mink(4, 1)) * PP(mink(4, 4)) + 2 * G
+                ^ 3 * P(0, mink(4, 1))
+                    * P(2, mink(4, 26))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 26))
+                    * PP(mink(4, 0))
+                    + 2 * G
+                ^ 3 * P(0, mink(4, 26))
+                    * P(1, mink(4, 0))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 26))
+                    * PP(mink(4, 1))
+                    + 2 * G
+                ^ 3 * P(0, mink(4, 5))
+                    * P(2, mink(4, 5))
+                    * g(mink(4, 0), mink(4, 1))
+                    * PP(mink(4, 4))
+                    + 2 * G
+                ^ 3 * P(1, mink(4, 0))
+                    * P(1, mink(4, 26))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 26))
+                    * PP(mink(4, 1))
+                    + 2 * G
+                ^ 3 * P(1, mink(4, i))
+                ^ 2 * g(mink(4, 0), mink(4, 1)) * PP(mink(4, 4)) + G
+                ^ 3 * P(1, mink(4, 1))
+                    * P(2, mink(4, 26))
+                    * PP(mink(4, 4))
+                    * PP(mink(4, 26))
+                    * PP(mink(4, 0))),
+            "spenso"
+        );
 
         let lib = DummyLibrary::<_>::new();
         let mut net =

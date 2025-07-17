@@ -801,6 +801,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "idenso"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ce05b7a74aff5fe2d87498875564f0b14770fff39643211c71a79d05cdc896d"
+dependencies = [
+ "anyhow",
+ "itertools 0.14.0",
+ "linnet",
+ "spenso 0.5.1",
+ "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "symbolica",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1772,7 +1786,7 @@ name = "spenso-hep-lib"
 version = "0.1.2"
 dependencies = [
  "ahash",
- "idenso",
+ "idenso 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "spenso 0.5.1",
  "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "symbolica",

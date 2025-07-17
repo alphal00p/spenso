@@ -98,12 +98,12 @@ pub struct PolSymbols {
 }
 
 pub static PS: LazyLock<PolSymbols> = LazyLock::new(|| PolSymbols {
-    eps: symbol!("ϵ"),
-    ebar: symbol!("ϵbar"),
-    u: symbol!("u"),
-    ubar: symbol!("ubar"),
-    v: symbol!("v"),
-    vbar: symbol!("vbar"),
+    eps: symbol!("spenso::ϵ"),
+    ebar: symbol!("spenso::ϵbar"),
+    u: symbol!("spenso::u"),
+    ubar: symbol!("spenso::ubar"),
+    v: symbol!("spenso::v"),
+    vbar: symbol!("spenso::vbar"),
 });
 
 pub fn pol_conj_impl(expression: AtomView) -> Atom {
@@ -1216,7 +1216,7 @@ mod test {
         //     "spenso"
         // );
 
-        let expr = parse_lit!(
+        let _expr = parse_lit!(
             (MB * g(bis(4, hedge(0, 0)), bis(4, hedge(1, 0)))
                 + gamma(
                     bis(4, hedge(0, 0)),
@@ -1536,7 +1536,27 @@ mod test {
         );
 
         let res = parse_lit!(7776 * G ^ 6 * dot(P(2), P(3)), "spenso");
-        assert_eq!(res, expr.simplify_gamma().to_dots())
+        assert_eq!(
+            res,
+            expr.simplify_gamma().to_dots(),
+            "fount{}",
+            expr.simplify_gamma().to_dots()
+        );
+
+        let expr = parse_lit!(
+            G ^ 2
+                * Q(EMRID(0, 4), mink(dim, l(20)))
+                * g(bis(4, l(2)), bis(4, l(4)))
+                * g(bis(4, l(3)), bis(4, l(7)))
+                * g(mink(dim, l(0)), mink(dim, l(5)))
+                * g(mink(dim, l(1)), mink(dim, l(4)))
+                * gamma(bis(4, l(5)), bis(4, l(4)), mink(dim, l(4)))
+                * gamma(bis(4, l(6)), bis(4, l(5)), mink(dim, l(20)))
+                * gamma(bis(4, l(7)), bis(4, l(6)), mink(dim, l(5))),
+            "spenso"
+        );
+
+        println!("{:>}", expr.simplify_gamma().expand());
         // assert_eq!(
         //     expr.simplify_gamma().to_dots(),
         //     expr.simplify_gamma().simplify_gamma().to_dots(),

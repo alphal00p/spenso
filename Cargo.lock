@@ -789,10 +789,10 @@ checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
 [[package]]
 name = "idenso"
 version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ce05b7a74aff5fe2d87498875564f0b14770fff39643211c71a79d05cdc896d"
 dependencies = [
  "anyhow",
- "bincode",
- "bincode-trait-derive",
  "itertools 0.14.0",
  "linnet",
  "spenso 0.5.1",
@@ -802,11 +802,11 @@ dependencies = [
 
 [[package]]
 name = "idenso"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ce05b7a74aff5fe2d87498875564f0b14770fff39643211c71a79d05cdc896d"
+version = "0.2.2"
 dependencies = [
  "anyhow",
+ "bincode",
+ "bincode-trait-derive",
  "itertools 0.14.0",
  "linnet",
  "spenso 0.5.1",
@@ -1742,7 +1742,7 @@ dependencies = [
 
 [[package]]
 name = "spenso"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1786,7 +1786,7 @@ name = "spenso-hep-lib"
 version = "0.1.2"
 dependencies = [
  "ahash",
- "idenso 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "idenso 0.2.1",
  "spenso 0.5.1",
  "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "symbolica",
@@ -1801,7 +1801,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde",
- "spenso 0.5.2",
+ "spenso 0.5.3",
  "symbolica",
  "syn 2.0.104",
 ]

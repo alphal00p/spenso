@@ -40,7 +40,7 @@ use symbolica::atom::{Atom, AtomCore, AtomView, Symbol};
 /// Currently contraction is just a multiplication of the atoms, but in the future this will ensure that internal indices are independent accross the contraction.
 ///
 /// Additionally, this can also be used as a tensor structure, that tracks the history, much like [`HistoryStructure`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SymbolicTensor<Aind: AbsInd = AbstractIndex> {
     pub structure: OrderedStructure<LibraryRep, Aind>,
     pub expression: symbolica::atom::Atom,

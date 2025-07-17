@@ -113,7 +113,14 @@ pub trait TensorScalarStoreMapping: Sized {
 }
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+    PartialEq,
+    Eq,
 )]
 pub struct NetworkStore<T, S> {
     pub tensors: Vec<T>,

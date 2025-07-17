@@ -40,7 +40,8 @@ use super::{
     Deserialize,
     bincode_trait_derive::Encode,
     bincode_trait_derive::Decode,
-    // bincode_trait_derive::BorrowDecodeFromDecode,
+    PartialEq,
+    Eq, // bincode_trait_derive::BorrowDecodeFromDecode,
 )]
 #[cfg_attr(
     feature = "shadowing",

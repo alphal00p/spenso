@@ -77,7 +77,7 @@ impl<V, K> DummyLibrary<V, K> {
     }
 }
 
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DummyKey {}
 
 impl Display for DummyKey {

@@ -31,7 +31,14 @@ use crate::{
 use std::{convert::Infallible, fmt::Debug};
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, bincode_trait_derive::Encode, bincode_trait_derive::Decode,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+    PartialEq,
+    Eq,
 )]
 #[cfg_attr(
     feature = "shadowing",

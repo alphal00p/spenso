@@ -686,7 +686,7 @@ pub mod test {
         initialize();
         let expr = parse_lit!(
             (-1 * G
-                ^ 3 * P(0, mink(4, 0))
+                ^ 2 * P(0, mink(4, 0))
                     // * P(2, mink(4, 26))
                     * PP(mink(4, 4))
                     * PP(mink(4, 1))
@@ -757,29 +757,14 @@ pub mod test {
                 ^ 3 * P(0, mink(4, 1)) * P(2, mink(4, 0)) * PP(mink(4, 4)) + 2 * G
                 ^ 3 * P(0, mink(4, 0)) * P(0, mink(4, 1)) * PP(mink(4, 4)) + 2 * G
                 ^ 3 * P(0, mink(4, 0)) * P(2, mink(4, 1)) * PP(mink(4, 4)) + 2 * G
-                ^ 3 * P(0, mink(4, 1))
-                    * P(2, mink(4, 26))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 26))
-                    * PP(mink(4, 0))
-                    + 2 * G
-                ^ 3 * P(0, mink(4, 26))
-                    * P(1, mink(4, 0))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 26))
-                    * PP(mink(4, 1))
-                    + 2 * G
+                ^ 2 * P(0, mink(4, 1)) * P(2) * PP(mink(4, 4)) * P(2, 2) * PP(mink(4, 0)) + 2 * G
+                ^ 3 * P(1, mink(4, 0)) * PP(mink(4, 4)) * PP(mink(4, 1)) + 2 * G
                 ^ 3 * P(0, mink(4, 5))
                     * P(2, mink(4, 5))
                     * g(mink(4, 0), mink(4, 1))
                     * PP(mink(4, 4))
                     + 2 * G
-                ^ 3 * P(1, mink(4, 0))
-                    * P(1, mink(4, 26))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 26))
-                    * PP(mink(4, 1))
-                    + 2 * G
+                ^ 3 * P(1, mink(4, 0)) * P(1, 1) * PP(mink(4, 4)) * PP(1) * PP(mink(4, 1)) + 2 * G
                 ^ 3 * P(1, mink(4, i))
                 ^ 2 * g(mink(4, 0), mink(4, 1)) * PP(mink(4, 4)) + G
                 ^ 3 * P(1, mink(4, 1))
@@ -881,5 +866,56 @@ pub mod test {
         } else {
             panic!("Not tensor")
         }
+    }
+    #[test]
+    // #[should_panic]
+    fn infinite_execution() {
+        initialize();
+        let expr = parse_lit!(
+            (-1 * spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_9))
+                * spenso::g(spenso::mink(4, python::l_7), spenso::mink(4, python::l_8))
+                + spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_8))
+                    * spenso::g(spenso::mink(4, python::l_7), spenso::mink(4, python::l_9)))
+                * -1𝑖
+                * (spenso::G
+                    ^ 3 * spenso::g(spenso::bis(4, python::l_2), spenso::bis(4, python::l_5))
+                        * spenso::g(spenso::bis(4, python::l_3), spenso::bis(4, python::l_6))
+                        * spenso::g(spenso::mink(4, python::l_0), spenso::mink(4, python::l_6))
+                        * spenso::g(spenso::mink(4, python::l_1), spenso::mink(4, python::l_7))
+                        * spenso::g(spenso::mink(4, python::l_4), spenso::mink(4, python::l_8))
+                        * spenso::g(spenso::mink(4, python::l_5), spenso::mink(4, python::l_9))
+                        * spenso::gamma(
+                            spenso::bis(4, python::l_6),
+                            spenso::bis(4, python::l_5),
+                            spenso::mink(4, python::l_5)
+                        )),
+            "spenso"
+        );
+
+        let lib = DummyLibrary::<_>::new();
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+
+        let mut net_iter = net.clone();
+
+        loop {
+            let old = net_iter.clone();
+            net_iter
+                .execute::<Steps<1>, SingleSmallestDegree<false>, _, _>(&lib)
+                .unwrap();
+            net_iter
+                .execute::<Steps<1>, ContractScalars, _, _>(&lib)
+                .unwrap();
+            if net_iter == old {
+                break;
+            }
+        }
+        println!(
+            "{}",
+            net_iter.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
     }
 }

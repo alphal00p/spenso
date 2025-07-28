@@ -734,6 +734,7 @@ impl<T, S, K, Aind: AbsInd> Network<NetworkStore<T, S>, K, Aind> {
         self.graph.graph.dot_impl(
             &self.graph.graph.full_filter(),
             "",
+            &|_| None,
             &|e| {
                 if let NetworkEdge::Slot(s) = e {
                     Some(format!("label=\"{s}\""))
@@ -832,6 +833,11 @@ where
                 );
                 // execute + splice
                 let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
+                println!(
+                    "Replacement Graph: {}",
+                    replacement.dot_impl(|s| s.to_string(), |_| "".to_string(), |s| s.to_string())
+                );
+
                 graph.splice_descendents_of(replacement);
             }
         }
@@ -968,7 +974,8 @@ where
         Store: ExecuteOp<L, K, Aind>,
     {
         self.merge_ops();
-        // println!("Hi");
+        println!("Hi");
+        println!("{}", self.graph.dot());
         // Ok(())
         Strat::execute_all::<C>(&mut self.store, &mut self.graph, lib)
     }
@@ -1061,6 +1068,7 @@ where
                 }
             }
             NetworkOp::Product => {
+                println!("Doing Product");
                 let (graph, _) = C::contract(self, graph, lib)?;
                 Ok(graph)
             }
@@ -1254,6 +1262,8 @@ where
         let mut other = None;
         let mut include_head = true;
         let mut head = None;
+        println!("{}", graph.dot());
+
         let (mut scalars, mut scalar_nodes): (Vec<_>, Vec<_>) = graph
             .graph
             .iter_nodes()
@@ -1281,6 +1291,8 @@ where
                 }
             })
             .collect();
+
+        println!("Scalars {scalars:?} nodes {scalar_nodes:?}");
 
         if let Some(f) = scalars.pop() {
             let mut acc = executor.scalar[f].clone();
@@ -1389,7 +1401,10 @@ where
     where
         K: Display,
     {
+        println!("Contracting scalars");
         let (mut graph, mut didsmth) = ContractScalars::contract(executor, graph, lib)?;
+
+        println!("Contracted scalars");
 
         while {
             let (newgraph, smth) = SingleSmallestDegree::<false>::contract(executor, graph, lib)?;

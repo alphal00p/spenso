@@ -581,6 +581,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dot-parser"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6cce83b336cd8d9b2718f4e8228a185de6e7a1cfe34f237e8c4acaf1c4141630"
+dependencies = [
+ "either",
+ "pest",
+ "pest_derive",
+]
+
+[[package]]
 name = "duplicate"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -794,25 +805,17 @@ dependencies = [
  "bincode",
  "bincode-trait-derive",
  "itertools 0.14.0",
- "linnet",
- "spenso 0.5.1",
- "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linnet 0.9.0",
+ "spenso 0.5.2",
+ "spenso-macros",
  "symbolica",
 ]
 
 [[package]]
-name = "idenso"
-version = "0.2.1"
+name = "indenter"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ce05b7a74aff5fe2d87498875564f0b14770fff39643211c71a79d05cdc896d"
-dependencies = [
- "anyhow",
- "itertools 0.14.0",
- "linnet",
- "spenso 0.5.1",
- "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "symbolica",
-]
+checksum = "ce23b50ad8242c51a442f3ff322d56b02f08852c77e4c0b4d3fd684abc89c683"
 
 [[package]]
 name = "indexmap"
@@ -964,12 +967,41 @@ dependencies = [
  "bitvec",
  "by_address",
  "derive_more",
- "dot-parser",
+ "dot-parser 0.4.2",
  "duplicate 2.0.0",
  "indexmap",
  "insta",
  "itertools 0.14.0",
  "kurbo",
+ "piet",
+ "proptest",
+ "rand 0.8.5",
+ "ref-ops",
+ "serde",
+ "similar-asserts",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "linnet"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d88e6b22cd9d4e94011384860b7c0d5de869c39b97878d56ecdc5624240b34a"
+dependencies = [
+ "ahash",
+ "bincode",
+ "bincode-trait-derive",
+ "bitvec",
+ "by_address",
+ "derive_more",
+ "dot-parser 0.5.1",
+ "duplicate 2.0.0",
+ "indenter",
+ "indexmap",
+ "insta",
+ "itertools 0.14.0",
+ "kurbo",
+ "paste",
  "piet",
  "proptest",
  "rand 0.8.5",
@@ -1125,6 +1157,12 @@ dependencies = [
  "fnv",
  "unicode-width",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "pest"
@@ -1723,7 +1761,7 @@ dependencies = [
  "features",
  "gat-lending-iterator",
  "indexmap",
- "linnet",
+ "linnet 0.8.0",
  "log",
  "num",
  "once_cell",
@@ -1734,7 +1772,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slotmap",
- "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spenso-macros",
  "symbolica",
  "tabled",
  "thiserror 1.0.69",
@@ -1764,7 +1802,7 @@ dependencies = [
  "gat-lending-iterator",
  "indexmap",
  "insta",
- "linnet",
+ "linnet 0.9.0",
  "log",
  "num",
  "once_cell",
@@ -1775,7 +1813,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slotmap",
- "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spenso-macros",
  "symbolica",
  "tabled",
  "thiserror 1.0.69",
@@ -1786,9 +1824,9 @@ name = "spenso-hep-lib"
 version = "0.1.2"
 dependencies = [
  "ahash",
- "idenso 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "idenso",
  "spenso 0.5.1",
- "spenso-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spenso-macros",
  "symbolica",
  "xpct",
 ]
@@ -1797,24 +1835,11 @@ dependencies = [
 name = "spenso-macros"
 version = "0.2.0"
 dependencies = [
- "linnet",
+ "linnet 0.9.0",
  "proc-macro2",
  "quote",
  "serde",
  "spenso 0.5.2",
- "symbolica",
- "syn 2.0.104",
-]
-
-[[package]]
-name = "spenso-macros"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e32a2605f26cb6ce44b5e33fbf1678fd96dd7dbe8be96734ad4c229fe08bc7c7"
-dependencies = [
- "proc-macro2",
- "quote",
- "serde",
  "symbolica",
  "syn 2.0.104",
 ]

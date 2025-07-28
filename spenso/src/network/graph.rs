@@ -339,7 +339,7 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
 
     pub fn extract<S: SubGraph<Base = BitVec>>(&mut self, subgraph: &S) -> Self
     where
-        K: Clone,
+        K: Clone + Display,
     {
         let mut left = Hedge(0);
         let mut extracted = Hedge(self.graph.n_hedges());
@@ -362,7 +362,10 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
             subgraph,
             |a| a.map(Clone::clone),
             |a| a,
-            |a| a.clone(),
+            |a| {
+                println!("a{a}");
+                a.clone()
+            },
             |a| a,
         );
 
@@ -376,7 +379,7 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
 
     pub fn find_all_ready_ops(&mut self) -> Vec<(Self, NetworkOp, Vec<NetworkLeaf<K>>)>
     where
-        K: Clone,
+        K: Clone + Display,
     {
         let tt: SimpleTraversalTree<ParentChildStore<()>> = self.expr_tree().cast();
         let head = self.head();
@@ -411,7 +414,7 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
     }
     pub fn extract_next_ready_op(&mut self) -> Option<(Self, NetworkOp)>
     where
-        K: Clone,
+        K: Clone + Display,
     {
         // build a traversal over *all* internal edges
         let tt: SimpleTraversalTree<ChildVecStore<()>> = self.expr_tree().cast();
@@ -460,19 +463,20 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
                 if all_leaves && has_children {
                     let op = *op;
 
-                    // println!(
-                    //     "Extracting the: {}",
-                    //     self.graph.dot_impl(
-                    //         &subgraph,
-                    //         "",
-                    //         &|a| if let NetworkEdge::Slot(s) = a {
-                    //             Some(format!("label=\"{s}\""))
-                    //         } else {
-                    //             None
-                    //         },
-                    //         &|a| None
-                    //     )
-                    // );
+                    println!(
+                        "Extracting the: {}",
+                        self.dot_impl(|a| a.to_string(), |_| "None".to_string(), |a| a.to_string())
+                    );
+
+                    println!(
+                        "Extracting the: {}",
+                        self.dot_impl_of(
+                            &subgraph,
+                            |a| a.to_string(),
+                            |_| "None".to_string(),
+                            |a| a.to_string()
+                        )
+                    );
 
                     let extracted = self.extract(&subgraph);
 
@@ -594,6 +598,7 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
         self.graph.dot_impl(
             &self.graph.full_filter(),
             "",
+            &|_| None,
             &|e| {
                 if let NetworkEdge::Slot(s) = e {
                     Some(format!("label=\"{s}\""))
@@ -624,6 +629,42 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
         self.graph.dot_impl(
             &self.graph.full_filter(),
             "",
+            &|_| None,
+            &|e| {
+                if let NetworkEdge::Slot(s) = e {
+                    Some(format!("label=\"{s}\""))
+                } else {
+                    None
+                }
+            },
+            &|n| match n {
+                NetworkNode::Leaf(l) => match l {
+                    NetworkLeaf::LibraryKey(l) => {
+                        Some(format!("label= \"L:{}\"", library_disp(&l.structure)))
+                    }
+                    NetworkLeaf::LocalTensor(l) => {
+                        Some(format!("label = \"T:{}\"", tensor_disp(*l)))
+                    }
+                    NetworkLeaf::Scalar(s) => Some(format!("label = \"S:{}\"", scalar_disp(*s))),
+                },
+                NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
+            },
+        )
+    }
+    pub fn dot_impl_of<S: SubGraph>(
+        &self,
+        subgraph: &S,
+        scalar_disp: impl Fn(usize) -> String,
+        library_disp: impl Fn(&K) -> String,
+        tensor_disp: impl Fn(usize) -> String,
+    ) -> String
+// where
+        // K: Display,
+    {
+        self.graph.dot_impl(
+            subgraph,
+            "",
+            &|_| None,
             &|e| {
                 if let NetworkEdge::Slot(s) = e {
                     Some(format!("label=\"{s}\""))

@@ -299,7 +299,7 @@ pub mod test {
 
     use super::*;
     use library::DummyLibrary;
-    use symbolica::{parse, parse_lit, symbol};
+    use symbolica::{atom::AtomCore, parse, parse_lit, symbol};
 
     #[test]
     fn parse_scalar() {
@@ -786,60 +786,13 @@ pub mod test {
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Steps<14>, SmallestDegree, _, _>(&lib)
+        net.execute::<StepsDebug<1>, SmallestDegree, _, _>(&lib)
             .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<Steps<10>, ContractScalars, _, _>(&lib)
-            .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
-
-        net.execute::<Steps<10>, SingleSmallestDegree<false>, _, _>(&lib)
-            .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
-
-        net.execute::<Steps<1>, ContractScalars, _, _>(&lib)
-            .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
-
-        net.execute::<Steps<10>, SingleSmallestDegree<false>, _, _>(&lib)
-            .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
-        net.execute::<Steps<1>, ContractScalars, _, _>(&lib)
-            .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
-
-        net.execute::<Steps<15>, SingleSmallestDegree<false>, _, _>(&lib)
-            .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
-
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
-            .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
         if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
             net.result().unwrap()
         {
@@ -871,26 +824,66 @@ pub mod test {
     // #[should_panic]
     fn infinite_execution() {
         initialize();
+        let _s = symbol!("python::dim");
+
+        let _ = parse_lit!(
+            (spenso::N(0, spenso::mink(python::dim, python::l(0)))
+                * spenso::P(0, spenso::mink(python::dim, python::r(0)))
+                + spenso::N(0, spenso::mink(python::dim, python::r(0)))
+                    * spenso::P(0, spenso::mink(python::dim, python::l(0))))
+                * spenso::N(0, spenso::mink(python::dim, python::dummy_ss(0, 1)))
+                * spenso::P(0, spenso::mink(python::dim, python::dummy_ss(0, 1)))
+                + -1 * spenso::N(0, spenso::mink(python::dim, python::dummy_ss(0, 3)))
+                    * spenso::N(0, spenso::mink(python::dim, python::dummy_ss(0, 4)))
+                    * spenso::P(0, spenso::mink(python::dim, python::dummy_ss(0, 3)))
+                    * spenso::P(0, spenso::mink(python::dim, python::dummy_ss(0, 4)))
+                    * spenso::g(
+                        spenso::mink(python::dim, python::l(0)),
+                        spenso::mink(python::dim, python::r(0))
+                    )
+        )
+        .replace(parse_lit!(python::dim))
+        .with(Atom::num(4));
+
         let expr = parse_lit!(
-            (-1 * spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_9))
-                * spenso::g(spenso::mink(4, python::l_7), spenso::mink(4, python::l_8))
-                + spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_8))
-                    * spenso::g(spenso::mink(4, python::l_7), spenso::mink(4, python::l_9)))
-                * -1𝑖
-                * (spenso::G
-                    ^ 3 * spenso::g(spenso::bis(4, python::l_2), spenso::bis(4, python::l_5))
-                        * spenso::g(spenso::bis(4, python::l_3), spenso::bis(4, python::l_6))
-                        * spenso::g(spenso::mink(4, python::l_0), spenso::mink(4, python::l_6))
-                        * spenso::g(spenso::mink(4, python::l_1), spenso::mink(4, python::l_7))
-                        * spenso::g(spenso::mink(4, python::l_4), spenso::mink(4, python::l_8))
-                        * spenso::g(spenso::mink(4, python::l_5), spenso::mink(4, python::l_9))
-                        * spenso::gamma(
-                            spenso::bis(4, python::l_6),
-                            spenso::bis(4, python::l_5),
-                            spenso::mink(4, python::l_5)
-                        )),
-            "spenso"
+            -1𝑖 * spenso::G
+                ^ 3 * (spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_8))
+                    * spenso::g(spenso::mink(4, python::l_7), spenso::mink(4, python::l_9))
+                    - spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_9))
+                        * spenso::g(spenso::mink(4, python::l_8), spenso::mink(4, python::l_7)))
+                    * spenso::g(spenso::mink(4, python::l_0), spenso::mink(4, python::l_6))
+                    * spenso::g(spenso::mink(4, python::l_1), spenso::mink(4, python::l_7))
+                    * spenso::g(spenso::mink(4, python::l_4), spenso::mink(4, python::l_8))
+                    * spenso::g(spenso::mink(4, python::l_5), spenso::mink(4, python::l_9))
+                    * spenso::g(spenso::bis(4, python::l_2), spenso::bis(4, python::l_5))
+                    * spenso::g(spenso::bis(4, python::l_3), spenso::bis(4, python::l_6))
+                    * spenso::gamma(
+                        spenso::bis(4, python::l_6),
+                        spenso::bis(4, python::l_5),
+                        spenso::mink(4, python::l_5)
+                    )
         );
+
+        // let expr = parse_lit!(
+        //     (-1 * spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_9))
+        //         * spenso::g(spenso::mink(4, python::l_7), spenso::mink(4, python::l_8))
+        //         + spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_8))
+        //             * spenso::g(spenso::mink(4, python::l_7), spenso::mink(4, python::l_9)))
+        //         * -1𝑖
+        //         * (spenso::G
+        //             ^ 3 * spenso::g(spenso::bis(4, python::l_2), spenso::bis(4, python::l_5))
+        //                 * spenso::g(spenso::bis(4, python::l_3), spenso::bis(4, python::l_6))
+        //                 * spenso::g(spenso::mink(4, python::l_0), spenso::mink(4, python::l_6))
+        //                 * spenso::g(spenso::mink(4, python::l_1), spenso::mink(4, python::l_7))
+        //                 * spenso::g(spenso::mink(4, python::l_4), spenso::mink(4, python::l_8))
+        //                 * spenso::g(spenso::mink(4, python::l_5), spenso::mink(4, python::l_9))
+        //                 * spenso::gamma(
+        //                     spenso::bis(4, python::l_6),
+        //                     spenso::bis(4, python::l_5),
+        //                     spenso::mink(4, python::l_5)
+        //                 )),
+        //     "spenso"
+        // );
 
         let lib = DummyLibrary::<_>::new();
         let mut net =

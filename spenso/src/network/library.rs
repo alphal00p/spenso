@@ -14,6 +14,7 @@ use crate::{
 
 use anyhow::Result;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -41,7 +42,7 @@ pub trait Library<S> {
     fn get<'a>(&'a self, key: &Self::Key) -> Result<Cow<'a, Self::Value>, LibraryError<Self::Key>>;
 }
 
-// #[derive(Default, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct DummyLibrary<V, K = DummyKey> {
     key: PhantomData<K>,
     value: PhantomData<V>,
@@ -77,7 +78,7 @@ impl<V, K> DummyLibrary<V, K> {
     }
 }
 
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct DummyKey {}
 
 impl Display for DummyKey {

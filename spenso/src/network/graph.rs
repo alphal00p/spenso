@@ -478,7 +478,11 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
                         )
                     );
 
+                    self.graph.check().unwrap();
+
                     let extracted = self.extract(&subgraph);
+
+                    extracted.graph.check().unwrap();
 
                     return Some((extracted, op));
                 }

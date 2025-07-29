@@ -188,6 +188,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
+name = "base64"
+version = "0.21.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
+
+[[package]]
 name = "bincode"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -245,6 +251,9 @@ name = "bitflags"
 version = "2.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bitvec"
@@ -571,17 +580,6 @@ dependencies = [
 
 [[package]]
 name = "dot-parser"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f6d24c07743a3ef530749637f2cd177d9fc37f535678e4e443ea729eba64f50"
-dependencies = [
- "either",
- "pest",
- "pest_derive",
-]
-
-[[package]]
-name = "dot-parser"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6cce83b336cd8d9b2718f4e8228a185de6e7a1cfe34f237e8c4acaf1c4141630"
@@ -805,8 +803,8 @@ dependencies = [
  "bincode",
  "bincode-trait-derive",
  "itertools 0.14.0",
- "linnet 0.9.0",
- "spenso 0.5.2",
+ "linnet",
+ "spenso",
  "spenso-macros",
  "symbolica",
 ]
@@ -836,7 +834,7 @@ checksum = "154934ea70c58054b556dd430b99a98c2a7ff5309ac9891597e339b5c28f4371"
 dependencies = [
  "console",
  "once_cell",
- "ron",
+ "ron 0.7.1",
  "serde",
  "similar",
  "toml",
@@ -957,9 +955,9 @@ checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "linnet"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20332ced2c1c16949ca5fac81350884bfab14634e502a0214885b14a057deb50"
+checksum = "0868db14b3bf8774eeeee7c0f46a4db2a752c0eb33ff979f2cece331d5282d86"
 dependencies = [
  "ahash",
  "bincode",
@@ -967,34 +965,7 @@ dependencies = [
  "bitvec",
  "by_address",
  "derive_more",
- "dot-parser 0.4.2",
- "duplicate 2.0.0",
- "indexmap",
- "insta",
- "itertools 0.14.0",
- "kurbo",
- "piet",
- "proptest",
- "rand 0.8.5",
- "ref-ops",
- "serde",
- "similar-asserts",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "linnet"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d88e6b22cd9d4e94011384860b7c0d5de869c39b97878d56ecdc5624240b34a"
-dependencies = [
- "ahash",
- "bincode",
- "bincode-trait-derive",
- "bitvec",
- "by_address",
- "derive_more",
- "dot-parser 0.5.1",
+ "dot-parser",
  "duplicate 2.0.0",
  "indenter",
  "indexmap",
@@ -1547,9 +1518,21 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88073939a61e5b7680558e6be56b419e208420c2adb92be54921fa6b72283f1a"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "bitflags 1.3.2",
  "serde",
+]
+
+[[package]]
+name = "ron"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b91f7eff05f748767f183df4320a63d6936e9c6107d97c9e6bdd9784f4289c94"
+dependencies = [
+ "base64 0.21.7",
+ "bitflags 2.9.1",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -1739,47 +1722,6 @@ dependencies = [
 
 [[package]]
 name = "spenso"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "086fef34d698b27acc5c16dd5228db54ed929fc22cde3276d762e454325c3344"
-dependencies = [
- "ahash",
- "anyhow",
- "append-only-vec",
- "approx-derive",
- "approxim",
- "bincode",
- "bincode-trait-derive",
- "bitvec",
- "constcat",
- "delegate",
- "derive_more",
- "duplicate 1.0.0",
- "dyn-clone",
- "enum-try-as-inner",
- "env_logger",
- "features",
- "gat-lending-iterator",
- "indexmap",
- "linnet 0.8.0",
- "log",
- "num",
- "once_cell",
- "rand 0.9.1",
- "rand_xoshiro 0.6.0",
- "rayon",
- "ref-ops",
- "serde",
- "serde_json",
- "slotmap",
- "spenso-macros",
- "symbolica",
- "tabled",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "spenso"
 version = "0.5.2"
 dependencies = [
  "ahash",
@@ -1802,7 +1744,7 @@ dependencies = [
  "gat-lending-iterator",
  "indexmap",
  "insta",
- "linnet 0.9.0",
+ "linnet",
  "log",
  "num",
  "once_cell",
@@ -1810,6 +1752,7 @@ dependencies = [
  "rand_xoshiro 0.6.0",
  "rayon",
  "ref-ops",
+ "ron 0.8.1",
  "serde",
  "serde_json",
  "slotmap",
@@ -1825,7 +1768,7 @@ version = "0.1.2"
 dependencies = [
  "ahash",
  "idenso",
- "spenso 0.5.1",
+ "spenso",
  "spenso-macros",
  "symbolica",
  "xpct",
@@ -1835,11 +1778,11 @@ dependencies = [
 name = "spenso-macros"
 version = "0.2.0"
 dependencies = [
- "linnet 0.9.0",
+ "linnet",
  "proc-macro2",
  "quote",
  "serde",
- "spenso 0.5.2",
+ "spenso",
  "symbolica",
  "syn 2.0.104",
 ]

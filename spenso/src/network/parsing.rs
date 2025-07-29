@@ -287,6 +287,7 @@ where
 #[cfg(test)]
 pub mod test {
     use core::panic;
+    use std::{fs::File, io::Write};
 
     use crate::{
         structure::{
@@ -781,6 +782,16 @@ pub mod test {
                 .unwrap();
 
         println!("{}", expr);
+
+        net.graph.graph.check().unwrap();
+
+        // println!("{:?}", net.graph);
+
+        // let ron_string = ron::ser::to_string(&net.graph).unwrap();
+
+        // Write the RON string to a file
+        // let mut file = File::create("graph.ron").unwrap();
+        // file.write_all(ron_string.as_bytes()).unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())

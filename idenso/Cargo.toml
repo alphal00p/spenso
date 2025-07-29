@@ -16,7 +16,7 @@ symbolica = { version = "0.17.0" }
 spenso = { version = "0.5.2", features = ["shadowing"] }
 spenso-macros = "0.2.0"
 itertools = "0.14.0"
-linnet = "0.10.0"
+linnet = "0.11.0"
 [features]
 
 default = []

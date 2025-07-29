@@ -955,9 +955,9 @@ checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "linnet"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0868db14b3bf8774eeeee7c0f46a4db2a752c0eb33ff979f2cece331d5282d86"
+checksum = "96371e18d882a024b4c7a6a113cccb5387c31d312e55e5a5c7b1d0ed3f21f052"
 dependencies = [
  "ahash",
  "bincode",

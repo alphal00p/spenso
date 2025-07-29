@@ -141,7 +141,7 @@ pub fn cook_indices_impl(view: AtomView) -> Atom {
     let mut expr = view.to_owned();
 
     let settings = MatchSettings {
-        level_range: (0, Some(1)),
+        level_range: (0, Some(0)),
         ..Default::default()
     };
 
@@ -164,13 +164,14 @@ pub fn cook_indices_impl(view: AtomView) -> Atom {
 
     for i in LibraryRep::all_dualizables() {
         let ipat = i.to_symbolic([RS.d_, RS.a_]).to_pattern();
+        // println!("{ipat}");
         let ipat_dual = i.dual().to_symbolic([RS.d_, RS.a_]).to_pattern();
-
         expr = expr.replace_map(|term, ctx, out| {
-            if ctx.function_level < 2 && ctx.function_level > 0 {
-                if let Some(c) = term.pattern_match(&ipat, None, &settings).next() {
+            if ctx.function_level == 1 {
+                if let Some(c) = term.pattern_match(&ipat_dual, None, &settings).next() {
                     if let Ok(aind) = cook_function_view(c[&RS.a_].as_view()) {
-                        *out = i.to_symbolic([c[&RS.d_].clone(), aind]);
+                        // println!("{aind}");
+                        *out = i.dual().to_symbolic([c[&RS.d_].clone(), aind]);
                         return true;
                     }
                 }
@@ -180,8 +181,8 @@ pub fn cook_indices_impl(view: AtomView) -> Atom {
             }
         });
         expr = expr.replace_map(|term, ctx, out| {
-            if ctx.function_level < 2 && ctx.function_level > 0 {
-                if let Some(c) = term.pattern_match(&ipat_dual, None, &settings).next() {
+            if ctx.function_level == 1 {
+                if let Some(c) = term.pattern_match(&ipat, None, &settings).next() {
                     if let Ok(aind) = cook_function_view(c[&RS.a_].as_view()) {
                         *out = i.to_symbolic([c[&RS.d_].clone(), aind]);
                         return true;
@@ -623,7 +624,10 @@ impl MetricSimplifier for AtomView<'_> {
 #[cfg(test)]
 mod test {
 
-    use crate::representations::{Bispinor, initialize};
+    use crate::{
+        IndexTooling,
+        representations::{Bispinor, initialize},
+    };
 
     use super::*;
 
@@ -638,6 +642,18 @@ mod test {
         tensors::symbolic::SymbolicTensor,
     };
     use symbolica::parse_lit;
+
+    #[test]
+    fn cook() {
+        initialize();
+        let expr = parse_lit!(
+            spenso::g(spenso::mink(4, f(0)), spenso::dind(spenso::cof(4, f(1))))
+                * p(spenso::mink(4, 1))
+        )
+        .cook_indices();
+
+        println!("{}", expr);
+    }
 
     #[test]
     fn metric_contract() {

@@ -363,7 +363,7 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
             |a| a.map(Clone::clone),
             |a| a,
             |a| {
-                println!("a{a}");
+                // println!("a{a}");
                 a.clone()
             },
             |a| a,
@@ -463,20 +463,20 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
                 if all_leaves && has_children {
                     let op = *op;
 
-                    println!(
-                        "Extracting the: {}",
-                        self.dot_impl(|a| a.to_string(), |_| "None".to_string(), |a| a.to_string())
-                    );
+                    // println!(
+                    //     "Extracting the: {}",
+                    //     self.dot_impl(|a| a.to_string(), |_| "None".to_string(), |a| a.to_string())
+                    // );
 
-                    println!(
-                        "Extracting the: {}",
-                        self.dot_impl_of(
-                            &subgraph,
-                            |a| a.to_string(),
-                            |_| "None".to_string(),
-                            |a| a.to_string()
-                        )
-                    );
+                    // println!(
+                    //     "Extracting the: {}",
+                    //     self.dot_impl_of(
+                    //         &subgraph,
+                    //         |a| a.to_string(),
+                    //         |_| "None".to_string(),
+                    //         |a| a.to_string()
+                    //     )
+                    // );
 
                     self.graph.check().unwrap();
 

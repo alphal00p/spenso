@@ -299,7 +299,7 @@ pub mod test {
     };
 
     use super::*;
-    use library::DummyLibrary;
+    use library::{DummyKey, DummyLibrary};
     use symbolica::{atom::AtomCore, parse, parse_lit, symbol};
 
     #[test]
@@ -564,6 +564,70 @@ pub mod test {
             panic!("Not tensor")
         }
     }
+
+    #[test]
+    fn gammaloop_six_photon() {
+        initialize();
+        let expr = parse_lit!(
+            -64 / 243 * ee
+                ^ 6 * (MT * g(euc(4, hedge3), euc(4, hedge4))
+                    + gamma(euc(4, hedge3), euc(4, hedge4), mink(4, edge_3_1))
+                        * Q(3, mink(4, edge_3_1)))
+                    * (MT * g(euc(4, hedge6), euc(4, hedge7))
+                        + gamma(euc(4, hedge6), euc(4, hedge7), mink(4, edge_5_1))
+                            * Q(5, mink(4, edge_5_1)))
+                    * (MT * g(euc(4, hedge9), euc(4, hedge10))
+                        + gamma(euc(4, hedge9), euc(4, hedge10), mink(4, edge_7_1))
+                            * Q(7, mink(4, edge_7_1)))
+                    * (MT * g(euc(4, hedge11), euc(4, hedge12))
+                        + gamma(euc(4, hedge11), euc(4, hedge12), mink(4, edge_8_1))
+                            * Q(8, mink(4, edge_8_1)))
+                    * (MT * g(euc(4, hedge13), euc(4, hedge14))
+                        + gamma(euc(4, hedge13), euc(4, hedge14), mink(4, edge_9_1))
+                            * Q(9, mink(4, edge_9_1)))
+                    * (MT * g(euc(4, hedge16), euc(4, hedge17))
+                        + gamma(euc(4, hedge16), euc(4, hedge17), mink(4, edge_11_1))
+                            * Q(11, mink(4, edge_11_1)))
+                    * gamma(euc(4, hedge4), euc(4, hedge6), mink(4, hedge5))
+                    * gamma(euc(4, hedge7), euc(4, hedge9), mink(4, hedge8))
+                    * gamma(euc(4, hedge10), euc(4, hedge11), mink(4, hedge0))
+                    * gamma(euc(4, hedge12), euc(4, hedge13), mink(4, hedge1))
+                    * gamma(euc(4, hedge14), euc(4, hedge16), mink(4, hedge15))
+                    * gamma(euc(4, hedge17), euc(4, hedge3), mink(4, hedge2))
+                    * ϵ(0, mink(4, hedge0))
+                    * ϵ(1, mink(4, hedge1))
+                    * ϵbar(2, mink(4, hedge2))
+                    * ϵbar(4, mink(4, hedge5))
+                    * ϵbar(6, mink(4, hedge8))
+                    * ϵbar(10, mink(4, hedge15))
+        );
+        let lib: DummyLibrary<_, DummyKey> = DummyLibrary::<_, _>::new();
+        println!("Hi");
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+
+        println!("{}", expr);
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        net.execute::<StepsDebug<6>, SmallestDegree, _, _>(&lib)
+            .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+            net.result().unwrap()
+        {
+            assert_eq!(expr, tensor.expression);
+        } else {
+            panic!("Not tensor")
+        }
+    }
+
     #[test]
     fn parse_neg_tensors() {
         initialize();

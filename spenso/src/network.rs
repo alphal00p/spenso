@@ -594,7 +594,7 @@ where
                         .map(|r| r.to_lib())
                         .collect::<Vec<_>>();
                     let q = Permutation::sort(&n_reps);
-                    println!("p{p}q{q}");
+                    // println!("p{p}q{q}");
                     assert_eq!(n_reps, reps);
                 }
                 NetworkNode::Leaf(NetworkLeaf::LocalTensor(k)) => {
@@ -974,8 +974,8 @@ where
         Store: ExecuteOp<L, K, Aind>,
     {
         self.merge_ops();
-        println!("Hi");
-        println!("{}", self.graph.dot());
+        // println!("Hi");
+        // println!("{}", self.graph.dot());
         // Ok(())
         Strat::execute_all::<C>(&mut self.store, &mut self.graph, lib)
     }
@@ -1068,7 +1068,7 @@ where
                 }
             }
             NetworkOp::Product => {
-                println!("Doing Product");
+                // println!("Doing Product");
                 let (graph, _) = C::contract(self, graph, lib)?;
                 Ok(graph)
             }
@@ -1262,7 +1262,7 @@ where
         let mut other = None;
         let mut include_head = true;
         let mut head = None;
-        println!("{}", graph.dot());
+        // println!("{}", graph.dot());
 
         let (mut scalars, mut scalar_nodes): (Vec<_>, Vec<_>) = graph
             .graph
@@ -1292,7 +1292,7 @@ where
             })
             .collect();
 
-        println!("Scalars {scalars:?} nodes {scalar_nodes:?}");
+        // println!("Scalars {scalars:?} nodes {scalar_nodes:?}");
 
         if let Some(f) = scalars.pop() {
             let mut acc = executor.scalar[f].clone();
@@ -1401,10 +1401,10 @@ where
     where
         K: Display,
     {
-        println!("Contracting scalars");
+        // println!("Contracting scalars");
         let (mut graph, mut didsmth) = ContractScalars::contract(executor, graph, lib)?;
 
-        println!("Contracted scalars");
+        // println!("Contracted scalars");
 
         while {
             let (newgraph, smth) = SingleSmallestDegree::<false>::contract(executor, graph, lib)?;

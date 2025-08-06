@@ -41,6 +41,8 @@ pub struct AindSymbols {
     pub uind: Symbol,
     pub dind: Symbol,
     pub selfdualind: Symbol,
+    pub cind: Symbol,
+    pub find: Symbol,
 }
 
 #[cfg(feature = "shadowing")]
@@ -99,6 +101,8 @@ mod test {
 #[cfg(feature = "shadowing")]
 pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
     std::sync::LazyLock::new(|| AindSymbols {
+        cind: symbol!(super::concrete_index::CONCRETEIND),
+        find: symbol!(super::concrete_index::FLATIND),
         aind: symbol!(ABSTRACTIND),
         uind: symbol!(UPIND;;|view,out|{
             if let AtomView::Fun(f)=view{

@@ -148,16 +148,16 @@ impl AsRef<[ConcreteIndex]> for ExpandedIndex {
     }
 }
 
-// #[cfg(feature = "shadowing")]
-// impl From<ExpandedIndex> for Atom {
-//     fn from(value: ExpandedIndex) -> Self {
-//         let mut cind = FunctionBuilder::new(Symbol::new(CONCRETEIND));
-//         for i in value.iter() {
-//             cind = cind.add_arg(Atom::num(*i as i64).as_atom_view());
-//         }
-//         cind.finish()
-//     }
-// }
+#[cfg(feature = "shadowing")]
+impl From<ExpandedIndex> for Atom {
+    fn from(value: ExpandedIndex) -> Self {
+        let mut cind = FunctionBuilder::new(super::abstract_index::AIND_SYMBOLS.cind);
+        for i in value.iter() {
+            cind = cind.add_arg(Atom::num(*i as i64).as_atom_view());
+        }
+        cind.finish()
+    }
+}
 
 impl Deref for ExpandedIndex {
     type Target = [ConcreteIndex];

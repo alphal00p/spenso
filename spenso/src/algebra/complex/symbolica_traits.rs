@@ -4,7 +4,7 @@ use symbolica::{
         float::{Complex as SymComplex, NumericalFloatLike, Real, SingleFloat},
         rational::Rational,
     },
-    evaluate::CompiledEvaluatorFloat,
+    evaluate::{CompiledEvaluatorFloat, ExportNumber},
 };
 
 use crate::algebra::algebraic_traits::{RefOne, RefZero};
@@ -12,7 +12,19 @@ use rand::Rng;
 
 use super::Complex;
 
-#[cfg(feature = "shadowing")]
+impl<T: ExportNumber + SingleFloat> ExportNumber for Complex<T> {
+    fn export(&self) -> String {
+        if self.im.is_zero() {
+            self.re.export()
+        } else {
+            format!("{}, {}", self.re.export(), self.im.export())
+        }
+    }
+
+    fn is_real(&self) -> bool {
+        self.im.is_zero()
+    }
+}
 impl<T: SingleFloat> SingleFloat for Complex<T>
 where
     T: for<'a> RefMul<&'a T, Output = T>

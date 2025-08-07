@@ -2503,9 +2503,9 @@ impl<T, S> EvalTensor<ExpressionEvaluator<T>, S> {
 
 #[derive(Debug, Clone)]
 pub struct SerializableCompiledEvaluator {
-    evaluator: CompiledEvaluator,
-    library_filename: String,
-    function_name: String,
+    pub evaluator: CompiledEvaluator,
+    pub library_filename: String,
+    pub function_name: String,
 }
 
 impl Encode for SerializableCompiledEvaluator {

@@ -446,8 +446,10 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
                 for h in self.graph.iter_crown(nid) {
                     subgraph.add(h);
                 }
+                // println!("{nid}");
 
                 for child in tt.iter_children(nid, &self.graph) {
+                    // println!("{child}");
                     has_children = true;
                     match &self.graph[child] {
                         NetworkNode::Leaf(_) => {}
@@ -565,6 +567,10 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
         self.delete(&sub);
 
         self.graph.node_store.check_and_set_nodes().unwrap();
+        // println!(
+        //     "identify_nodes_without_self_edges res:{}",
+        //     self.dot_simple()
+        // );
         n
     }
 
@@ -573,24 +579,36 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
         nodes: &[NodeIndex],
         node_data: NetworkNode<K>,
     ) -> NodeIndex {
+        // println!("Identifying:{:?}", nodes);
         let (n, mut sub) = self
             .graph
             .identify_nodes_without_self_edges::<BitVec>(nodes, node_data);
-        let mut first = false;
+
+        let mut first = true;
         for h in self.graph.iter_crown(n) {
             // println!("{h}");
-            if self.graph[[&h]].is_head() {
+            if self.graph[[&h]].is_head() && self.graph.inv(h) != h {
                 if first {
+                    first = false;
+                } else {
                     sub.add(h);
                     sub.add(self.graph.inv(h));
                 }
-                first = true;
             }
         }
+
+        // println!(
+        //     "Deleting: res:{}",
+        //     self.dot_impl_of(&sub, |i| i.to_string(), |_| "".into(), |i| i.to_string())
+        // );
         self.graph.forget_identification_history();
         self.graph.node_store.check_and_set_nodes().unwrap();
         self.delete(&sub);
         self.graph.node_store.check_and_set_nodes().unwrap();
+        // println!(
+        //     "identify_nodes_without_self_edges_merge_heads res:{}",
+        //     self.dot_simple()
+        // );
 
         n
     }
@@ -990,8 +1008,10 @@ impl<K, Aind: AbsInd> NetworkGraph<K, Aind> {
             };
         }
 
-        self.graph.delete_hedges(&to_del);
+        // println!("{}", self.graph.dot(&to_del));
+
         self.graph.forget_identification_history();
+        self.graph.delete_hedges(&to_del);
     }
     pub fn simplify_identity_ops(&mut self) {}
 

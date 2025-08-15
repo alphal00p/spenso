@@ -379,16 +379,28 @@ pub trait ColorSimplifier {
     ///   explicit color index structures (like `cof(...)`, `coad(...)`). The partially
     ///   simplified `Atom` is included in the error.
     fn simplify_color(&self) -> Atom;
+
+    fn wrap_color(&self, symbol: Symbol) -> Atom;
 }
 impl ColorSimplifier for Atom {
     fn simplify_color(&self) -> Atom {
         color_simplify_impl(self.as_atom_view())
+    }
+
+    fn wrap_color(&self, symbol: Symbol) -> Atom {
+        self.as_view().wrap_color(symbol)
     }
 }
 
 impl ColorSimplifier for AtomView<'_> {
     fn simplify_color(&self) -> Atom {
         color_simplify_impl(self.as_atom_view())
+    }
+
+    fn wrap_color(&self, symbol: Symbol) -> Atom {
+        self.expand_color()
+            .into_iter()
+            .fold(Atom::Zero, |a, (c, s)| a + function!(symbol, c) * s)
     }
 }
 

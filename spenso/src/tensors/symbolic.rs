@@ -11,7 +11,7 @@ use crate::{
         },
         parsing::ShadowedStructure,
         store::NetworkStore,
-        Network, Ref, TensorNetworkError,
+        Network, Ref, StructureLessDisplay, TensorNetworkError,
     },
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
@@ -20,7 +20,7 @@ use crate::{
         representation::{LibraryRep, LibrarySlot},
         slot::{AbsInd, DummyAind},
         HasName, HasStructure, MergeInfo, NamedStructure, OrderedStructure, PermutedStructure,
-        StructureContract, TensorShell, TensorStructure, ToSymbolic,
+        ScalarStructure, ScalarTensor, StructureContract, TensorShell, TensorStructure, ToSymbolic,
     },
     tensors::parametric::MixedTensor,
 };
@@ -34,6 +34,14 @@ use delegate::delegate;
 
 use symbolica::atom::{Atom, AtomCore, AtomView, Symbol};
 
+impl StructureLessDisplay for Vec<Atom> {
+    fn display(&self) -> String {
+        self.iter()
+            .map(|t| t.to_string())
+            .collect::<Vec<String>>()
+            .join(", ")
+    }
+}
 /// A fully symbolic tensor, with no concrete values.
 ///
 /// This tensor is used to represent the structure of a tensor, and is used to perform symbolic contraction.
@@ -54,6 +62,15 @@ impl<Aind: AbsInd> Ref for SymbolicTensor<Aind> {
 
     fn refer(&self) -> Self::Ref<'_> {
         self
+    }
+}
+
+impl ScalarTensor for SymbolicTensor {
+    fn new_scalar(scalar: Self::Scalar) -> Self {
+        SymbolicTensor {
+            structure: OrderedStructure::scalar_structure(),
+            expression: scalar,
+        }
     }
 }
 

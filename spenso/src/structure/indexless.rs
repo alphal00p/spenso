@@ -17,6 +17,7 @@ use super::{
 use anyhow::{anyhow, Result};
 use delegate::delegate;
 
+use crate::network::StructureLessDisplay;
 #[cfg(feature = "shadowing")]
 use crate::{
     shadowing::symbolica_utils::IntoSymbol,
@@ -44,6 +45,12 @@ use symbolica::atom::{Atom, FunctionBuilder, Symbol};
 pub struct IndexLess<T: RepName = LibraryRep, Aind = AbstractIndex> {
     pub structure: Vec<Representation<T>>,
     ind: PhantomData<Aind>,
+}
+
+impl<T: RepName, Aind> StructureLessDisplay for IndexLess<T, Aind> {
+    fn display(&self) -> String {
+        String::new()
+    }
 }
 
 impl<R: RepName<Dual = R>, Aind: AbsInd> PermuteTensor for IndexLess<R, Aind> {

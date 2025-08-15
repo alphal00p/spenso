@@ -300,6 +300,7 @@ pub mod test {
 
     use super::*;
     use library::{DummyKey, DummyLibrary};
+    use linnet::half_edge::swap::Swap;
     use symbolica::{atom::AtomCore, parse, parse_lit, symbol};
 
     #[test]
@@ -856,12 +857,22 @@ pub mod test {
         // Write the RON string to a file
         // let mut file = File::create("graph.ron").unwrap();
         // file.write_all(ron_string.as_bytes()).unwrap();
+        net.graph.merge_ops();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         );
 
-        net.execute::<StepsDebug<1>, SmallestDegree, _, _>(&lib)
+        let node: NodeIndex = net.graph.graph.len();
+        println!("Nnodes: {node}");
+
+        net.graph.graph.iter_crown(NodeIndex(200)).for_each(|h| {
+            println!("Hedge: {:?}", h);
+        });
+
+        // return;
+
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
             .unwrap();
         println!(
             "{}",
@@ -985,5 +996,214 @@ pub mod test {
         );
         net.execute::<Sequential, SmallestDegree, _, _>(&lib)
             .unwrap();
+    }
+
+    #[test]
+    fn gammaloop_input() {
+        initialize();
+        let expr = parse_lit!(
+            16 / 81 * ee
+                ^ 4 * (MT * g(euc(4, hedge_3), euc(4, hedge_4))
+                    + gamma(euc(4, hedge_3), euc(4, hedge_4), mink(4, edge_3_1))
+                        * Q(3, mink(4, edge_3_1)))
+                    * (MT * g(euc(4, hedge_6), euc(4, hedge_7))
+                    + gamma(euc(4, hedge_6), euc(4, hedge_7), mink(4, edge_5_1))
+                            * Q(5, mink(4, edge_5_1)))
+                    * (MT * g(euc(4, hedge_10), euc(4, hedge_11))
+                    + gamma(euc(4, hedge_10), euc(4, hedge_11), mink(4, edge_8_1))
+                            * Q(8, mink(4, edge_8_1)))
+                    // * (-1 / 8 * (-Q(1, cind(0)) + Q(7, cind(0)) + OSE(8))
+                    //     ^ -1 * (-Q(1, cind(0)) + Q(2, cind(0)) + Q(7, cind(0)) + OSE(3))
+                    //     ^ -1 * (-Q(1, cind(0))
+                    //         + Q(2, cind(0))
+                    //         + Q(4, cind(0))
+                    //         + Q(7, cind(0))
+                    //         + OSE(5))
+                    //     ^ -1 * delta_σ(1, 1, 1, 1, 1, 1, 1, 1, 1) * OSE(3)
+                    //     ^ -1 * OSE(5)
+                    //     ^ -1 * OSE(8)
+                    //     ^ -1 - 1 / 8 * (-Q(1, cind(0)) + Q(7, cind(0)) + OSE(8))
+                    //     ^ -1 * (-Q(1, cind(0)) + Q(2, cind(0)) + Q(7, cind(0)) + OSE(3))
+                    //     ^ -1 * (Q(1, cind(0)) - Q(2, cind(0)) - Q(4, cind(0)) - Q(7, cind(0))
+                    //         + OSE(5))
+                    //     ^ -1 * delta_σ(1, 1, 1, 1, 1, -1, 1, 1, 1) * OSE(3)
+                    //     ^ -1 * OSE(5)
+                    //     ^ -1 * OSE(8)
+                    //     ^ -1 - 1 / 8 * (-Q(1, cind(0)) + Q(7, cind(0)) + OSE(8))
+                    //     ^ -1 * (Q(1, cind(0)) - Q(2, cind(0)) - Q(7, cind(0)) + OSE(3))
+                    //     ^ -1 * (-Q(1, cind(0))
+                    //         + Q(2, cind(0))
+                    //         + Q(4, cind(0))
+                    //         + Q(7, cind(0))
+                    //         + OSE(5))
+                    //     ^ -1 * delta_σ(1, 1, 1, -1, 1, 1, 1, 1, 1) * OSE(3)
+                    //     ^ -1 * OSE(5)
+                    //     ^ -1 * OSE(8)
+                    //     ^ -1 - 1 / 8 * (-Q(1, cind(0)) + Q(7, cind(0)) + OSE(8))
+                    //     ^ -1 * (Q(1, cind(0)) - Q(2, cind(0)) - Q(7, cind(0)) + OSE(3))
+                    //     ^ -1 * (Q(1, cind(0)) - Q(2, cind(0)) - Q(4, cind(0)) - Q(7, cind(0))
+                    //         + OSE(5))
+                    //     ^ -1 * delta_σ(1, 1, 1, -1, 1, -1, 1, 1, 1) * OSE(3)
+                    //     ^ -1 * OSE(5)
+                    //     ^ -1 * OSE(8)
+                    //     ^ -1 - 1 / 8 * (Q(1, cind(0)) - Q(7, cind(0)) + OSE(8))
+                    //     ^ -1 * (-Q(1, cind(0)) + Q(2, cind(0)) + Q(7, cind(0)) + OSE(3))
+                    //     ^ -1 * (-Q(1, cind(0))
+                    //         + Q(2, cind(0))
+                    //         + Q(4, cind(0))
+                    //         + Q(7, cind(0))
+                    //         + OSE(5))
+                    //     ^ -1 * delta_σ(1, 1, 1, 1, 1, 1, 1, 1, -1) * OSE(3)
+                    //     ^ -1 * OSE(5)
+                    //     ^ -1 * OSE(8)
+                    //     ^ -1 - 1 / 8 * (Q(1, cind(0)) - Q(7, cind(0)) + OSE(8))
+                    //     ^ -1 * (-Q(1, cind(0)) + Q(2, cind(0)) + Q(7, cind(0)) + OSE(3))
+                    //     ^ -1 * (Q(1, cind(0)) - Q(2, cind(0)) - Q(4, cind(0)) - Q(7, cind(0))
+                    //         + OSE(5))
+                    //     ^ -1 * delta_σ(1, 1, 1, 1, 1, -1, 1, 1, -1) * OSE(3)
+                    //     ^ -1 * OSE(5)
+                    //     ^ -1 * OSE(8)
+                    //     ^ -1 - 1 / 8 * (Q(1, cind(0)) - Q(7, cind(0)) + OSE(8))
+                    //     ^ -1 * (Q(1, cind(0)) - Q(2, cind(0)) - Q(7, cind(0)) + OSE(3))
+                    //     ^ -1 * (-Q(1, cind(0))
+                    //         + Q(2, cind(0))
+                    //         + Q(4, cind(0))
+                    //         + Q(7, cind(0))
+                    //         + OSE(5))
+                    //     ^ -1 * delta_σ(1, 1, 1, -1, 1, 1, 1, 1, -1) * OSE(3)
+                    //     ^ -1 * OSE(5)
+                    //     ^ -1 * OSE(8)
+                    //     ^ -1 - 1 / 8 * (Q(1, cind(0)) - Q(7, cind(0)) + OSE(8))
+                    //     ^ -1 * (Q(1, cind(0)) - Q(2, cind(0)) - Q(7, cind(0)) + OSE(3))
+                    //     ^ -1 * (Q(1, cind(0)) - Q(2, cind(0)) - Q(4, cind(0)) - Q(7, cind(0))
+                    //         + OSE(5))
+                    //     ^ -1 * delta_σ(1, 1, 1, -1, 1, -1, 1, 1, -1) * OSE(3)
+                    //     ^ -1 * OSE(5)
+                    //     ^ -1 * OSE(8)
+                    //     ^ -1)
+                    * g(dind(cof(3, hedge_8)), cof(3, hedge_1))
+                    * gamma(euc(4, hedge_1), euc(4, hedge_10), mink(4, hedge_9))
+                    * gamma(euc(4, hedge_4), euc(4, hedge_6), mink(4, hedge_5))
+                    * gamma(euc(4, hedge_7), euc(4, hedge_8), mink(4, hedge_0))
+                    * gamma(euc(4, hedge_11), euc(4, hedge_3), mink(4, hedge_2))
+                    * ubar(6, euc(4, hedge_8))
+                    * u(1, euc(4, hedge_1))
+                    * ϵ(0, mink(4, hedge_0))
+                    * ϵbar(2, mink(4, hedge_2))
+                    * ϵbar(4, mink(4, hedge_5))
+                    * ϵbar(7, mink(4, hedge_9))
+        );
+
+        let lib = DummyLibrary::<_>::new();
+        let mut net =
+            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
+                .unwrap();
+        println!("{}", expr);
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        net.execute::<Steps<14>, SmallestDegree, _, _>(&lib)
+            .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+    }
+    #[test]
+    fn wrapping() {
+        initialize();
+        let expr = parse_lit!(A * g(euc(4, hedge_3), euc(4, hedge_5)));
+
+        let expr2 = parse_lit!(B * gg(euc(4, hedge_3), euc(4, hedge_4)));
+        let expr3 = parse_lit!(C * ggg(euc(4, hedge_5), euc(4, hedge_4)));
+
+        let lib = DummyLibrary::<SymbolicTensor>::new();
+        let net = dummy_lib_parse(expr.as_view());
+        let net2 = dummy_lib_parse(expr2.as_view());
+        let net3 = dummy_lib_parse(expr3.as_view());
+
+        let mut acc = Network::one();
+        println!("{}", expr);
+
+        acc *= net;
+        acc *= net2;
+        acc *= net3;
+        println!(
+            "{}",
+            acc.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        acc.merge_ops();
+
+        println!(
+            "{}",
+            acc.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+
+        // acc.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        //     .unwrap();
+
+        acc.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
+        println!(
+            "{}",
+            acc.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        );
+        let obt: Atom = acc.result_scalar().unwrap().into();
+        assert_eq!(obt, expr * expr2 * expr3)
+    }
+    #[test]
+    fn scalar_mult() {
+        initialize();
+        let expr = parse_lit!(A * B * C * g(euc(4, hedge_3)));
+
+        let expr2 = parse_lit!(B * gg(euc(4, hedge_3)));
+        let expr3 = parse_lit!(C * ggg(euc(4, hedge_5)) * g(euc(4, hedge_4)));
+        let expr4 = parse_lit!(A * B * ggg(euc(4, hedge_5)) * g(euc(4, hedge_4)));
+        let lib = DummyLibrary::<SymbolicTensor>::new();
+
+        for ex in [expr, expr2, expr3, expr4] {
+            println!("Expr:{ex}");
+            let mut acc = dummy_lib_parse(&ex);
+            // acc *= net3;
+            println!(
+                "{}",
+                acc.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+            );
+
+            acc.execute::<Steps<1>, ContractScalars, _, _>(&lib)
+                .unwrap();
+
+            println!(
+                "{}",
+                acc.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+            );
+            acc.execute::<Sequential, SmallestDegree, _, _>(&lib)
+                .unwrap();
+
+            println!(
+                "{}",
+                acc.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+            );
+
+            if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
+                acc.result().unwrap()
+            {
+                // println!("YaY:{}", (&expr - &tensor.expression).expand());
+                assert_eq!(ex, tensor.expression);
+            } else {
+                panic!("Not tensor")
+            }
+        }
+    }
+
+    fn dummy_lib_parse(
+        atom: impl AtomCore,
+    ) -> Network<NetworkStore<SymbolicTensor, Atom>, DummyKey> {
+        let lib = DummyLibrary::<SymbolicTensor>::new();
+        Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(atom.as_atom_view(), &lib)
+            .unwrap()
     }
 }

@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::{borrow::Cow, fmt::Display, sync::Arc};
 
 use ahash::{AHashMap, AHashSet, HashMap};
 
@@ -52,8 +52,18 @@ use crate::{
 
 use super::{
     store::{NetworkStore, TensorScalarStore, TensorScalarStoreMapping},
-    Network, TensorNetworkError,
+    ExecutionResult, Network, TensorNetworkError,
 };
+
+impl<'a> From<ExecutionResult<Cow<'a, Atom>>> for Atom {
+    fn from(value: ExecutionResult<Cow<'a, Atom>>) -> Self {
+        match value {
+            ExecutionResult::One => Atom::num(1),
+            ExecutionResult::Zero => Atom::Zero,
+            ExecutionResult::Val(v) => v.into_owned(),
+        }
+    }
+}
 
 impl<
         Store: TensorScalarStore<Tensor = MixedTensor<T, S>, Scalar: AtomCore>,
@@ -80,6 +90,7 @@ where
     where
         K: Clone,
     {
+        // println!("Replacing");
         self.map_ref(
             |a| a.replace_multiple(replacements),
             |a| a.replace_multiple(replacements),

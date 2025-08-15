@@ -357,7 +357,6 @@
           pkgs.quarto
           pkgs.nodejs
           pkgs.uv
-
           pkgs.marimo
           pkgs.python313
           pkgs.deno

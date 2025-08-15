@@ -18,6 +18,6 @@ spenso = { path = "./spenso" }
 idenso = { path = "./idenso" }
 spenso-macros = { path = "./spenso-macros" }
 # linnet = { path = "../linnet" }
-# linnet = { git = "https://github.com/alphal00p/linnet", rev = "13b0b37e23bd2a203d559fe3bce771c12ade172c" }
+linnet = { git = "https://github.com/alphal00p/linnet", rev = "6a13c34b2e58021aebec7ed0c78bc70c50c72283" }
 # symbolica = { path = "../symbolica" }
 # symbolica = { git = "https://github.com/benruijl/symbolica", branch = "complex_coeff" }

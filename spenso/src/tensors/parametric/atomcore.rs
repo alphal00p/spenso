@@ -38,7 +38,7 @@ use crate::{
     tensors::data::{DataTensor, DenseTensor, SparseTensor, StorageTensor},
 };
 
-use super::{EvalTensor, EvalTreeTensor, ParamTensor};
+use super::{EvalTensor, EvalTreeTensor, MixedTensor, ParamOrConcrete, ParamTensor};
 
 pub trait PatternReplacement {
     fn replace_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self;
@@ -159,6 +159,17 @@ impl<'b, R, Phantom> ReplaceBuilderGeneric<'b, R, Phantom> {
         }
     }
 
+    pub fn with_target<RR, P2>(&self, target: RR) -> ReplaceBuilderGeneric<'b, RR, P2> {
+        ReplaceBuilderGeneric {
+            target,
+            pattern: self.pattern.clone(),
+            conditions: self.conditions.clone(),
+            settings: self.settings.clone(),
+            repeat: self.repeat,
+            _marker: PhantomData,
+        }
+    }
+
     pub fn update_symbolica_builder<'c, 'a>(
         &'c self,
         builder: ReplaceBuilder<'a, 'b>,
@@ -226,6 +237,15 @@ impl<'b, R, Phantom> ReplaceBuilderGeneric<'b, R, Phantom> {
     pub fn repeat(mut self) -> Self {
         self.repeat = true;
         self
+    }
+}
+
+impl<'b, 'a, Phantom> From<ReplaceBuilderGeneric<'b, AtomView<'a>, Phantom>>
+    for ReplaceBuilder<'a, 'b>
+{
+    fn from(builder: ReplaceBuilderGeneric<'b, AtomView<'a>, Phantom>) -> Self {
+        let rep = ReplaceBuilder::new(builder.target, builder.pattern);
+        rep
     }
 }
 
@@ -494,6 +514,253 @@ pub trait TensorAtomMaps {
     // ) -> Self::ContainerData<ReplaceIterator<'a, 'a>>;
 }
 
+// impl<T: ReplaceWithBuilder + Clone + PartialEq, K: Clone, Aind: AbsInd> ReplaceWithBuilder
+//     for Network<NetworkStore<T, Atom>, K, Aind>
+// // where
+// //     for<'a> T::Ref<'a>: Clone + PartialEq,
+// //     for<'a> T::RefMut<'a>: Clone + PartialEq,
+// {
+//     type Ref<'a>
+//         = &'a Self
+//     where
+//         Self: 'a;
+//     type RefMut<'a>
+//         = &'a mut Self
+//     where
+//         Self: 'a;
+
+//     fn ref_mut(&mut self) -> Self::RefMut<'_> {
+//         self
+//     }
+
+//     fn recycled(ref_self: Self::Ref<'_>) -> Self {
+//         Network::zero()
+//     }
+
+//     fn with<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+//         replacement: &'a ReplaceBuilderGeneric<'c, Self::Ref<'a>, Self>,
+//         with: C,
+//     ) -> Self {
+//         let new_store = replacement.target.store.map_ref(
+//             |a| ReplaceBuilder::from(replacement.with_target(a.as_atom_view())).with(with),
+//             |t| {
+//                 replacement
+//                     .with_target::<T, T::Ref<'a>>(t.clone())
+//                     .with(with)
+//             },
+//         );
+
+//         Network {
+//             graph: replacement.target.graph.clone(),
+//             store: new_store,
+//         }
+//     }
+// }
+
+impl<T: Clone + PartialEq, S: TensorStructure + Clone + PartialEq> ReplaceWithBuilder
+    for MixedTensor<T, S>
+{
+    type Ref<'a>
+        = &'a Self
+    where
+        Self: 'a;
+    type RefMut<'a>
+        = &'a mut Self
+    where
+        Self: 'a;
+
+    fn ref_mut(&mut self) -> Self::RefMut<'_> {
+        self
+    }
+
+    fn recycled(ref_self: Self::Ref<'_>) -> Self {
+        match ref_self {
+            ParamOrConcrete::Param(a) => ParamOrConcrete::param(
+                <DataTensor<Atom, S> as ReplaceWithBuilder>::recycled(a.tensor.reference()),
+            ),
+            _ => ref_self.clone(),
+        }
+    }
+    fn reference(&self) -> Self::Ref<'_> {
+        self
+    }
+
+    fn with<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: &'a ReplaceBuilderGeneric<'c, Self::Ref<'a>, Self>,
+        with: C,
+    ) -> Self {
+        let with: BorrowedOrOwned<'c, Pattern> = with.into();
+
+        let with_borrowed = with.borrow();
+        match replacement.target {
+            ParamOrConcrete::Param(a) => ParamOrConcrete::Param(a.map_data_ref_self(|a| {
+                let rep =
+                    replacement.update_symbolica_builder(a.replace(replacement.pattern.borrow()));
+                rep.with(with_borrowed)
+            })),
+            _ => replacement.target.clone(),
+        }
+    }
+
+    fn with_map<'a, 'c: 'a, M: MatchMap + 'static + Clone>(
+        replacement: &'a ReplaceBuilderGeneric<'c, Self::Ref<'a>, Self>,
+        rhs: M,
+    ) -> Self {
+        match replacement.target {
+            ParamOrConcrete::Param(a) => ParamOrConcrete::Param(a.map_data_ref_self(|a| {
+                let rep =
+                    replacement.update_symbolica_builder(a.replace(replacement.pattern.borrow()));
+                rep.with_map(dyn_clone::clone_box(&rhs))
+            })),
+            _ => replacement.target.clone(),
+        }
+    }
+
+    fn with_into<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: &'a ReplaceBuilderGeneric<'c, Self::Ref<'a>, Self>,
+        with: C,
+        into: &mut Self,
+    ) -> bool {
+        let with: BorrowedOrOwned<'c, Pattern> = with.into();
+
+        let with_borrowed = with.borrow();
+        *into = match replacement.target {
+            ParamOrConcrete::Param(a) => ParamOrConcrete::Param(a.map_data_ref_self(|a| {
+                let rep =
+                    replacement.update_symbolica_builder(a.replace(replacement.pattern.borrow()));
+                rep.with(with_borrowed)
+            })),
+            _ => replacement.target.clone(),
+        };
+        replacement.target == into
+    }
+
+    fn with_mut<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: &'a mut ReplaceBuilderGeneric<'c, Self::RefMut<'a>, Self>,
+        with: C,
+    ) {
+        let with: BorrowedOrOwned<'c, Pattern> = with.into();
+
+        let with_borrowed = with.borrow();
+        // let pattern = replacement.pattern.borrow().clone();
+        let pattern_borrowed = replacement.pattern.borrow();
+        if let ParamOrConcrete::Param(a) = &mut replacement.target {
+            a.map_data_mut(|a| {
+                let builder = a.replace(pattern_borrowed);
+
+                let builder = if replacement.repeat {
+                    builder.repeat()
+                } else {
+                    builder
+                };
+
+                let builder = if let Some(conditions) = &replacement.conditions {
+                    builder.when(conditions.borrow())
+                } else {
+                    builder
+                }
+                .non_greedy_wildcards(replacement.settings.non_greedy_wildcards.clone())
+                .allow_new_wildcards_on_rhs(replacement.settings.allow_new_wildcards_on_rhs)
+                .level_range(replacement.settings.level_range)
+                .level_is_tree_depth(replacement.settings.level_is_tree_depth)
+                .rhs_cache_size(replacement.settings.rhs_cache_size);
+                *a = builder.with(with_borrowed);
+            })
+        }
+    }
+
+    fn with_mut_map<'a, 'c: 'a, M: MatchMap + 'static + Clone>(
+        replacement: &'a mut ReplaceBuilderGeneric<'c, Self::RefMut<'a>, Self>,
+        rhs: M,
+    ) {
+        if let ParamOrConcrete::Param(a) = &mut replacement.target {
+            a.map_data_mut(|a| {
+                let builder = a.replace(replacement.pattern.borrow());
+
+                let builder = if replacement.repeat {
+                    builder.repeat()
+                } else {
+                    builder
+                };
+
+                let builder = if let Some(conditions) = &replacement.conditions {
+                    builder.when(conditions.borrow())
+                } else {
+                    builder
+                }
+                .non_greedy_wildcards(replacement.settings.non_greedy_wildcards.clone())
+                .allow_new_wildcards_on_rhs(replacement.settings.allow_new_wildcards_on_rhs)
+                .level_range(replacement.settings.level_range)
+                .level_is_tree_depth(replacement.settings.level_is_tree_depth)
+                .rhs_cache_size(replacement.settings.rhs_cache_size);
+                *a = builder.with_map(dyn_clone::clone_box(&rhs));
+            })
+        }
+    }
+
+    fn with_owned<'a, 'c, C: Into<BorrowedOrOwned<'c, Pattern>>>(
+        replacement: ReplaceBuilderGeneric<'c, Self, Self>,
+        with: C,
+    ) -> Self {
+        let with: BorrowedOrOwned<'c, Pattern> = with.into();
+
+        let with_borrowed = with.borrow();
+        match replacement.target {
+            ParamOrConcrete::Param(a) => ParamOrConcrete::Param(a.map_data_ref_self(|a| {
+                let builder = a.replace(replacement.pattern.borrow());
+
+                let builder = if replacement.repeat {
+                    builder.repeat()
+                } else {
+                    builder
+                };
+
+                let builder = if let Some(conditions) = &replacement.conditions {
+                    builder.when(conditions.borrow())
+                } else {
+                    builder
+                }
+                .non_greedy_wildcards(replacement.settings.non_greedy_wildcards.clone())
+                .allow_new_wildcards_on_rhs(replacement.settings.allow_new_wildcards_on_rhs)
+                .level_range(replacement.settings.level_range)
+                .level_is_tree_depth(replacement.settings.level_is_tree_depth)
+                .rhs_cache_size(replacement.settings.rhs_cache_size);
+                builder.with(with_borrowed)
+            })),
+            a => a.clone(),
+        }
+    }
+
+    fn with_owned_map<'a, 'c: 'a, M: MatchMap + 'static + Clone>(
+        replacement: ReplaceBuilderGeneric<'c, Self, Self>,
+        rhs: M,
+    ) -> Self {
+        match replacement.target {
+            ParamOrConcrete::Param(a) => ParamOrConcrete::Param(a.map_data_self(|a| {
+                let builder = a.replace(replacement.pattern.borrow());
+
+                let builder = if replacement.repeat {
+                    builder.repeat()
+                } else {
+                    builder
+                };
+
+                let builder = if let Some(conditions) = &replacement.conditions {
+                    builder.when(conditions.borrow())
+                } else {
+                    builder
+                }
+                .non_greedy_wildcards(replacement.settings.non_greedy_wildcards.clone())
+                .allow_new_wildcards_on_rhs(replacement.settings.allow_new_wildcards_on_rhs)
+                .level_range(replacement.settings.level_range)
+                .level_is_tree_depth(replacement.settings.level_is_tree_depth)
+                .rhs_cache_size(replacement.settings.rhs_cache_size);
+                builder.with_map(dyn_clone::clone_box(&rhs))
+            })),
+            a => a,
+        }
+    }
+}
 impl<S: StorageTensor<Data = Atom> + Clone + PartialEq> ReplaceWithBuilder for S {
     type Ref<'a>
         = &'a Self

@@ -287,7 +287,6 @@ where
 #[cfg(test)]
 pub mod test {
     use core::panic;
-    use std::{fs::File, io::Write};
 
     use crate::{
         structure::{
@@ -595,31 +594,31 @@ pub mod test {
                     * gamma(euc(4, hedge12), euc(4, hedge13), mink(4, hedge1))
                     * gamma(euc(4, hedge14), euc(4, hedge16), mink(4, hedge15))
                     * gamma(euc(4, hedge17), euc(4, hedge3), mink(4, hedge2))
-                    * ϵ(0, mink(4, hedge0))
-                    * ϵ(1, mink(4, hedge1))
-                    * ϵbar(2, mink(4, hedge2))
-                    * ϵbar(4, mink(4, hedge5))
-                    * ϵbar(6, mink(4, hedge8))
-                    * ϵbar(10, mink(4, hedge15))
+                    * eps(0, mink(4, hedge0))
+                    * eps(1, mink(4, hedge1))
+                    * epsbar(2, mink(4, hedge2))
+                    * epsbar(4, mink(4, hedge5))
+                    * epsbar(6, mink(4, hedge8))
+                    * epsbar(10, mink(4, hedge15))
         );
         let lib: DummyLibrary<_, DummyKey> = DummyLibrary::<_, _>::new();
-        println!("Hi");
+        // println!("Hi");
         let mut net =
             Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
                 .unwrap();
 
-        println!("{}", expr);
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
+        // println!("{}", expr);
+        // println!(
+        //     "{}",
+        //     net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        // );
 
-        net.execute::<StepsDebug<6>, SmallestDegree, _, _>(&lib)
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
             .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        );
+        // println!(
+        //     "{}",
+        //     net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+        // );
         if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
             net.result().unwrap()
         {
@@ -1088,10 +1087,10 @@ pub mod test {
                     * gamma(euc(4, hedge_11), euc(4, hedge_3), mink(4, hedge_2))
                     * ubar(6, euc(4, hedge_8))
                     * u(1, euc(4, hedge_1))
-                    * ϵ(0, mink(4, hedge_0))
-                    * ϵbar(2, mink(4, hedge_2))
-                    * ϵbar(4, mink(4, hedge_5))
-                    * ϵbar(7, mink(4, hedge_9))
+                    * eps(0, mink(4, hedge_0))
+                    * eps(2, mink(4, hedge_2))
+                    * eps(4, mink(4, hedge_5))
+                    * eps(7, mink(4, hedge_9))
         );
 
         let lib = DummyLibrary::<_>::new();

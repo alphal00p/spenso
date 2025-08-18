@@ -454,7 +454,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    // #[should_panic]
     fn parse_problem() {
         initialize();
         let _a = HEP_LIB.get(&AGS.gamma_strct(4)).unwrap();

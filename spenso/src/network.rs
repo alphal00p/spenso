@@ -1,6 +1,5 @@
 use graph::{NAdd, NMul, NetworkEdge, NetworkGraph, NetworkLeaf, NetworkNode, NetworkOp};
 use linnet::half_edge::NodeIndex;
-use linnet::permutation::Permutation;
 use serde::{Deserialize, Serialize};
 
 use library::{Library, LibraryError};
@@ -584,14 +583,14 @@ where
                         .into_iter()
                         .map(|s| s.rep())
                         .collect::<Vec<_>>();
-                    let p = Permutation::sort(&reps);
+                    // let p = Permutation::sort(&reps);
 
                     let n_reps = k
                         .structure
                         .external_reps_iter()
                         .map(|r| r.to_lib())
                         .collect::<Vec<_>>();
-                    let q = Permutation::sort(&n_reps);
+                    // let q = Permutation::sort(&n_reps);
                     // println!("p{p}q{q}");
                     assert_eq!(n_reps, reps);
                 }

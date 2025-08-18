@@ -787,7 +787,13 @@ mod test {
         )
         .simplify_gamma();
 
-        assert_eq!(expr, id!(bis(1), bis(2)) * 4, "got {:#}", expr);
+        assert_eq!(
+            expr,
+            id!(spenso::bis(1), spenso::bis(2)) * 4,
+            "got {:#} expected {:#}",
+            expr,
+            id!(spenso::bis(1), spenso::bis(2)) * 4
+        );
 
         let expr = parse_lit!(
             p(mink(4, nu1))
@@ -807,19 +813,21 @@ mod test {
         )
         .simplify_gamma()
         .expand()
-        .replace(symbol!("nu3"))
-        .with(symbol!("nu1"));
+        .replace(symbol!("spenso::nu3"))
+        .with(symbol!("spenso::dummy"))
+        .replace(symbol!("spenso::nu1"))
+        .with(symbol!("spenso::dummy"));
         assert_eq!(
             expr,
             parse_lit!(
-                -4 * g(mink(4, mu), mink(4, nu)) * p(mink(4, nu1))
+                -4 * g(mink(4, mu), mink(4, nu)) * p(mink(4, dummy))
                     ^ 2 + 8 * p(mink(4, mu)) * p(mink(4, nu))
                         + 4 * p(mink(4, mu)) * q(mink(4, nu))
                         + 4 * p(mink(4, nu)) * q(mink(4, mu))
-                        - 4 * g(mink(4, mu), mink(4, nu)) * p(mink(4, nu1)) * q(mink(4, nu1)),
+                        - 4 * g(mink(4, mu), mink(4, nu)) * p(mink(4, dummy)) * q(mink(4, dummy)),
                 "spenso"
             ),
-            "got \n{:>}",
+            "got \n{:#>}",
             expr
         );
 
@@ -855,14 +863,18 @@ mod test {
             "spenso"
         )
         .simplify_gamma()
-        .replace(symbol!("nu3"))
-        .with(symbol!("nu1"));
+        .replace(symbol!("spenso::nu3"))
+        .with(symbol!("dummy"))
+        .replace(symbol!("spenso::nu1"))
+        .with(symbol!("dummy"));
         assert_eq!(
             expr,
             parse_lit!(
-                4 * g(mink(4, mu), mink(4, nu)) * p(mink(4, nu1))
+                4 * g(mink(4, mu), mink(4, nu)) * p(mink(4, idenso::dummy))
                     ^ 2 + 4 * p(mink(4, mu)) * q(mink(4, nu)) - 4 * q(mink(4, mu)) * p(mink(4, nu))
-                        + 4 * g(mink(4, mu), mink(4, nu)) * p(mink(4, nu1)) * q(mink(4, nu1)),
+                        + 4 * g(mink(4, mu), mink(4, nu))
+                            * p(mink(4, idenso::dummy))
+                            * q(mink(4, idenso::dummy)),
                 "spenso"
             ),
             "got \n{:>+}",
@@ -891,7 +903,7 @@ mod test {
         assert_eq!(
             expr.expand(),
             parse_lit!(
-                4 * dim * p(mink(dim, nu3)) ^ 2 + 4 * dim * p(mink(dim, nu3)) * q(mink(dim, nu3)),
+                4 * dim * p(mink(dim, nu1)) ^ 2 + 4 * dim * p(mink(dim, nu1)) * q(mink(dim, nu1)),
                 "spenso"
             ),
             "got {:#}",
@@ -920,13 +932,13 @@ mod test {
         assert_eq!(
             expr.expand(),
             parse_lit!(
-                8 * p(mink(dim, nu3))
-                    ^ 2 - 4 * dim * p(mink(dim, nu3))
-                    ^ 2 + 8 * p(mink(dim, nu3)) * q(mink(dim, nu3))
-                        - 4 * dim * p(mink(dim, nu3)) * q(mink(dim, nu3)),
+                8 * p(mink(dim, nu1))
+                    ^ 2 - 4 * dim * p(mink(dim, nu1))
+                    ^ 2 + 8 * p(mink(dim, nu1)) * q(mink(dim, nu1))
+                        - 4 * dim * p(mink(dim, nu1)) * q(mink(dim, nu1)),
                 "spenso"
             ),
-            "got {}",
+            "got {:#}",
             expr
         );
 
@@ -977,14 +989,10 @@ mod test {
         .simplify_gamma()
         .to_dots();
 
-        let dim = Atom::var(symbol!("dim"));
-        assert_eq!(
-            expr,
-            &dim * id!(bis(4, 1), bis(4, 2)) * 2
-                - dim.pow(Atom::num(2)) * id!(bis(4, 1), bis(4, 2)),
-            "got {:#}",
-            expr
-        );
+        let dim = Atom::var(symbol!("spenso::dim"));
+        let exp = &dim * id!(spenso::bis(4, 1), spenso::bis(4, 2)) * 2
+            - dim.pow(Atom::num(2)) * id!(spenso::bis(4, 1), spenso::bis(4, 2));
+        assert_eq!(expr, exp, "got {:#} instead of {:#}", expr, exp);
     }
     #[test]
     fn gamma_alg_structures() {
@@ -1063,7 +1071,7 @@ mod test {
             * (mink.g(1, 2) * mink.g(3, 4) - mink.g(1, 3) * mink.g(2, 4)))
         .simplify_gamma();
 
-        assert_eq!(expr, parse_lit!(-dim + dim ^ 3, "spenso"), "got {}", expr);
+        assert_eq!(expr, parse_lit!(-dim + dim ^ 3), "got {:#}", expr);
 
         let expr = (p(1)
             * (p(3) + q(3))
@@ -1115,10 +1123,12 @@ mod test {
         assert_eq!(
             expr,
             parse_lit!(
-                8 * dot(p, q) ^ 2 - 4 * dot(p, p) * dot(q, q) + 4 * dot(p, q) * dot(q, q),
+                8 * dot(idenso::p, idenso::q)
+                    ^ 2 - 4 * dot(idenso::p, idenso::p) * dot(idenso::q, idenso::q)
+                        + 4 * dot(idenso::p, idenso::q) * dot(idenso::q, idenso::q),
                 "spenso"
             ),
-            "got {}",
+            "got {:#}",
             expr
         );
     }

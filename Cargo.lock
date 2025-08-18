@@ -797,7 +797,7 @@ checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
 
 [[package]]
 name = "idenso"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1722,7 +1722,7 @@ dependencies = [
 
 [[package]]
 name = "spenso"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1764,7 +1764,7 @@ dependencies = [
 
 [[package]]
 name = "spenso-hep-lib"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "ahash",
  "idenso",
@@ -1776,7 +1776,7 @@ dependencies = [
 
 [[package]]
 name = "spenso-macros"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "linnet",
  "proc-macro2",

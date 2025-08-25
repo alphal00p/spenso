@@ -750,93 +750,52 @@ pub mod test {
     fn parse_problem() {
         initialize();
         let expr = parse_lit!(
-            (-1 * G
-                ^ 2 * P(0, mink(4, 0))
-                    // * P(2, mink(4, 26))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 1))
-                    // * PP(mink(4, 26))
-                    + -1 * G
-                ^ 3 * P(1, mink(4, 1))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 0))
-                    // * PP(mink(4, 26))
-                    + -1 * G
-                ^ 3 * P(0, mink(4, 26))
-                    * P(1, mink(4, 5))
-                    * g(mink(4, 0), mink(4, 1))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 5))
-                    * PP(mink(4, 26))
-                    + -1 * G
-                ^ 3 * P(0, mink(4, 5))
-                    * P(2, mink(4, 26))
-                    * g(mink(4, 0), mink(4, 1))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 26))
-                    * PP(mink(4, 5))
-                    + -1 * G
-                ^ 3 * P(1, mink(4, 1))
-                    * P(1, mink(4, 26))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 26))
-                    * PP(mink(4, 0))
-                    + -1 * G
-                ^ 3 * P(1, mink(4, 26))
-                    * P(1, mink(4, 5))
-                    * g(mink(4, 0), mink(4, 1))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 26))
-                    * PP(mink(4, 5))
-                    + -2 * G
-                ^ 3 * P(0, mink(4, 1))
-                    * P(0, mink(4, 26))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 26))
-                    * PP(mink(4, 0))
-                    + -2 * G
-                ^ 3 * P(0, mink(4, 1))
-                    * P(1, mink(4, 26))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 26))
-                    * PP(mink(4, 0))
-                    + -2 * G
-                ^ 3 * P(0, mink(4, 5))
-                    * Q(0, mink(4, 5))
-                    * g(mink(4, 0), mink(4, 1))
-                    * PP(mink(4, 4))
-                    + -2 * G
-                ^ 3 * P(1, mink(4, 0)) * P(1, mink(4, 1)) * PP(mink(4, 4)) + -2 * G
-                ^ 3 * P(1, mink(4, 0))
-                    * P(2, mink(4, 26))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 26))
-                    * PP(mink(4, 1))
-                    + -2 * G
-                ^ 3 * P(1, mink(4, 1)) * P(2, mink(4, 0)) * PP(mink(4, 4)) + -2 * G
-                ^ 3 * P(1, mink(4, 5))
-                    * P(2, mink(4, 5))
-                    * g(mink(4, 0), mink(4, 1))
-                    * PP(mink(4, 4))
-                    + -4 * G
-                ^ 3 * P(0, mink(4, 1)) * P(2, mink(4, 0)) * PP(mink(4, 4)) + 2 * G
-                ^ 3 * P(0, mink(4, 0)) * P(0, mink(4, 1)) * PP(mink(4, 4)) + 2 * G
-                ^ 3 * P(0, mink(4, 0)) * P(2, mink(4, 1)) * PP(mink(4, 4)) + 2 * G
-                ^ 2 * P(0, mink(4, 1)) * P(2) * PP(mink(4, 4)) * P(2, 2) * PP(mink(4, 0)) + 2 * G
-                ^ 3 * P(1, mink(4, 0)) * PP(mink(4, 4)) * PP(mink(4, 1)) + 2 * G
-                ^ 3 * P(0, mink(4, 5))
-                    * P(2, mink(4, 5))
-                    * g(mink(4, 0), mink(4, 1))
-                    * PP(mink(4, 4))
-                    + 2 * G
-                ^ 3 * P(1, mink(4, 0)) * P(1, 1) * PP(mink(4, 4)) * PP(1) * PP(mink(4, 1)) + 2 * G
-                ^ 3 * P(1, mink(4, i))
-                ^ 2 * g(mink(4, 0), mink(4, 1)) * PP(mink(4, 4)) + G
-                ^ 3 * P(1, mink(4, 1))
-                    * P(2, mink(4, 26))
-                    * PP(mink(4, 4))
-                    * PP(mink(4, 26))
-                    * PP(mink(4, 0))),
+            1 / 18 * ee
+                ^ 2 * G
+                ^ 4 * ((mUV
+                    ^ 2 - (mUV ^ 2 - dot(Q3(3), Q3(3))) - dot(Q3(3), Q3(3))
+                        + OSE(3, Q3(3), mUV ^ 2, mUV ^ 2 - dot(Q3(3), Q3(3))))
+                    ^ (1 / 2)
+                        + (mUV
+                            ^ 2 - (mUV ^ 2 - dot(Q3(3), Q3(3))) - dot(Q3(3), Q3(3))
+                                + OSE(4, -Q3(3), mUV ^ 2, mUV ^ 2 - dot(Q3(3), Q3(3))))
+                    ^ (1 / 2))
+                ^ -1 * ((mUV
+                    ^ 2 - (mUV ^ 2 - dot(Q3(3), Q3(3))) - dot(Q3(3), Q3(3))
+                        + OSE(3, Q3(3), mUV ^ 2, mUV ^ 2 - dot(Q3(3), Q3(3))))
+                    ^ (1 / 2)
+                        + (mUV
+                            ^ 2 - (mUV ^ 2 - dot(Q3(3), Q3(3))) - dot(Q3(3), Q3(3))
+                                + OSE(5, -Q3(3), mUV ^ 2, mUV ^ 2 - dot(Q3(3), Q3(3))))
+                    ^ (1 / 2))
+                ^ -1 * (-Q3(3, mink(4, edge_4_1))
+                    + (mUV
+                        ^ 2 - (mUV ^ 2 - dot(Q3(3), Q3(3))) - dot(Q3(3), Q3(3))
+                            + OSE(4, -Q3(3), mUV ^ 2, mUV ^ 2 - dot(Q3(3), Q3(3))))
+                    ^ (1 / 2) * σ(4) * delta(cind(0), mink(4, edge_4_1)))
+                    * (-Q3(3, mink(4, edge_5_1))
+                        + (mUV
+                            ^ 2 - (mUV ^ 2 - dot(Q3(3), Q3(3))) - dot(Q3(3), Q3(3))
+                                + OSE(5, -Q3(3), mUV ^ 2, mUV ^ 2 - dot(Q3(3), Q3(3))))
+                        ^ (1 / 2) * σ(5) * delta(cind(0), mink(4, edge_5_1)))
+                    * (mUV
+                        ^ 2 - (mUV ^ 2 - dot(Q3(3), Q3(3))) - dot(Q3(3), Q3(3))
+                            + OSE(3, Q3(3), mUV ^ 2, mUV ^ 2 - dot(Q3(3), Q3(3))))
+                ^ (-1 / 2)
+                    * (mUV
+                        ^ 2 - (mUV ^ 2 - dot(Q3(3), Q3(3))) - dot(Q3(3), Q3(3))
+                            + OSE(4, -Q3(3), mUV ^ 2, mUV ^ 2 - dot(Q3(3), Q3(3))))
+                ^ (-1 / 2)
+                    * (mUV
+                        ^ 2 - (mUV ^ 2 - dot(Q3(3), Q3(3))) - dot(Q3(3), Q3(3))
+                            + OSE(5, -Q3(3), mUV ^ 2, mUV ^ 2 - dot(Q3(3), Q3(3))))
+                ^ (-1 / 2)
+                    * g(mink(4, hedge_3), mink(4, hedge_4))
+                    * gamma(bis(4, hedge(1)), bis(4, hedge(8)), mink(4, hedge_4))
+                ^ 2 * gamma(bis(4, hedge(5)), bis(4, hedge(0)), mink(4, hedge_3))
+                ^ 2 * gamma(bis(4, hedge(6)), bis(4, hedge(5)), mink(4, edge_4_1))
+                    * gamma(bis(4, hedge(7)), bis(4, hedge(6)), mink(4, hedge_2))
+                ^ 2 * gamma(bis(4, hedge(8)), bis(4, hedge(7)), mink(4, edge_5_1)),
             "spenso"
         );
 

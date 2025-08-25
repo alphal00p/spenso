@@ -719,6 +719,7 @@ mod tests {
 
     #[test]
     fn gamma_algebra_validate() {
+        initialize();
         let mut const_map = HashMap::new();
         let pt: DenseTensor<Atom, _> = ShadowedStructure::<AbstractIndex>::from_iter(
             [Minkowski {}.new_slot(4, 1)],

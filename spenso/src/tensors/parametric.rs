@@ -3,6 +3,7 @@ extern crate derive_more;
 use std::{
     fmt::{Debug, Display},
     io::Cursor,
+    path::{Path, PathBuf},
 };
 
 use crate::structure::PermutedStructure;
@@ -2504,24 +2505,24 @@ impl<T, S> EvalTensor<ExpressionEvaluator<T>, S> {
 #[derive(Debug, Clone)]
 pub struct SerializableCompiledEvaluator {
     pub evaluator: CompiledEvaluator,
-    pub library_filename: String,
-    pub function_name: String,
+    pub compiled_code: SerializableCompiledCode,
 }
 
 impl Encode for SerializableCompiledEvaluator {
     fn encode<E: bincode::enc::Encoder>(
         &self,
-        _encoder: &mut E,
+        encoder: &mut E,
     ) -> std::result::Result<(), bincode::error::EncodeError> {
-        todo!()
+        self.compiled_code.encode(encoder)
     }
 }
 
 impl<C> Decode<C> for SerializableCompiledEvaluator {
     fn decode<D: bincode::de::Decoder<Context = C>>(
-        _decoder: &mut D,
+        decoder: &mut D,
     ) -> std::result::Result<Self, bincode::error::DecodeError> {
-        todo!()
+        let a = SerializableCompiledCode::decode(decoder)?;
+        Ok(a.load().unwrap())
     }
 }
 
@@ -2530,10 +2531,7 @@ impl Serialize for SerializableCompiledEvaluator {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("SerializableCompiledEvaluator", 2)?;
-        state.serialize_field("library_filename", &self.library_filename)?;
-        state.serialize_field("function_name", &self.function_name)?;
-        state.end()
+        self.compiled_code.serialize(serializer)
     }
 }
 
@@ -2542,20 +2540,8 @@ impl<'d> Deserialize<'d> for SerializableCompiledEvaluator {
     where
         D: serde::Deserializer<'d>,
     {
-        #[derive(Deserialize)]
-        struct Temp {
-            library_filename: String,
-            function_name: String,
-        }
+        let compiled = SerializableCompiledCode::deserialize(deserializer)?;
 
-        let temp = Temp::deserialize(deserializer)?;
-
-        let compiled = SerializableCompiledCode {
-            library_filename: temp.library_filename,
-            function_name: temp.function_name,
-        };
-
-        // Load the CompiledEvaluator during deserialization
         let evaluator = compiled.load().map_err(de::Error::custom)?;
 
         Ok(evaluator)
@@ -2564,21 +2550,23 @@ impl<'d> Deserialize<'d> for SerializableCompiledEvaluator {
 
 impl SerializableCompiledEvaluator {
     /// Load a new function from the same library.
-    pub fn load_new_function(&self, function_name: &str) -> Result<Self, String> {
+    pub fn load_new_function(&self, function_name: impl AsRef<str>) -> Result<Self> {
         Ok(SerializableCompiledEvaluator {
-            evaluator: self.evaluator.load_new_function(function_name)?,
-            library_filename: self.library_filename.clone(),
-            function_name: function_name.to_string(),
+            evaluator: self
+                .evaluator
+                .load_new_function(function_name.as_ref())
+                .map_err(|a| anyhow!("{a}"))?,
+            compiled_code: self.compiled_code.clone(),
         })
     }
 
     /// Load a compiled evaluator from a shared library.
-    pub fn load(file: &str, function_name: &str) -> Result<Self, String> {
-        Ok(SerializableCompiledEvaluator {
-            evaluator: CompiledEvaluator::load(file, function_name)?,
-            library_filename: file.to_string(),
-            function_name: function_name.to_string(),
-        })
+    pub fn load(file: impl AsRef<Path>, function_name: impl AsRef<str>) -> Result<Self> {
+        let compiled_code = SerializableCompiledCode {
+            library_filename: file.as_ref().to_path_buf(),
+            function_name: function_name.as_ref().to_string(),
+        };
+        compiled_code.load()
     }
     #[inline(always)]
     pub fn evaluate<T: CompiledEvaluatorFloat>(&mut self, args: &[T], out: &mut [T]) {
@@ -2631,7 +2619,7 @@ impl SerializableExportedCode {
     /// Compile the code to a shared library.
     pub fn compile(
         &self,
-        out: &str,
+        out: impl AsRef<Path>,
         options: CompileOptions,
     ) -> Result<SerializableCompiledCode, std::io::Error> {
         let mut builder = std::process::Command::new(&options.compiler);
@@ -2652,7 +2640,7 @@ impl SerializableExportedCode {
 
         let r = builder
             .arg("-o")
-            .arg(out)
+            .arg(out.as_ref())
             .arg(&self.source_filename)
             .output()?;
 
@@ -2667,26 +2655,26 @@ impl SerializableExportedCode {
         }
 
         Ok(SerializableCompiledCode {
-            library_filename: out.to_string(),
+            library_filename: out.as_ref().to_path_buf(),
             function_name: self.function_name.clone(),
         })
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct SerializableCompiledCode {
-    library_filename: String,
-    function_name: String,
+    pub library_filename: PathBuf,
+    pub function_name: String,
 }
 
 impl SerializableCompiledCode {
     pub fn load(&self) -> Result<SerializableCompiledEvaluator> {
-        let eval = CompiledEvaluator::load(&self.library_filename, &self.function_name)
-            .map_err(|s| anyhow!(s))?;
+        let eval =
+            CompiledEvaluator::load(self.library_filename.to_str().unwrap(), &self.function_name)
+                .map_err(|s| anyhow!(s))?;
         Ok(SerializableCompiledEvaluator {
             evaluator: eval,
-            library_filename: self.library_filename.clone(),
-            function_name: self.function_name.clone(),
+            compiled_code: self.clone(),
         })
     }
 }

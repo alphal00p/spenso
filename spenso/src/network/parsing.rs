@@ -824,9 +824,9 @@ pub mod test {
         let node: NodeIndex = net.graph.graph.len();
         println!("Nnodes: {node}");
 
-        net.graph.graph.iter_crown(NodeIndex(200)).for_each(|h| {
-            println!("Hedge: {:?}", h);
-        });
+        // net.graph.graph.iter_crown(NodeIndex(200)).for_each(|h| {
+        //     println!("Hedge: {:?}", h);
+        // });
 
         // return;
 

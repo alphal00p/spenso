@@ -1380,7 +1380,7 @@ pub trait TensorAtomOps: HasStructure {
         &self,
         fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
-        optimization_settings: OptimizationSettings,
+        optimization_settings: &OptimizationSettings,
     ) -> Result<EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, Self::Structure>, String>;
 
     /// Get all symbols in the expression, optionally including function symbols.
@@ -1464,17 +1464,12 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DenseTensor<Atom, S> {
         &self,
         fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
-        optimization_settings: OptimizationSettings,
+        optimization_settings: &OptimizationSettings,
     ) -> Result<EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, Self::Structure>, String>
     {
         let mut tree = self.to_evaluation_tree(fn_map, params)?;
 
-        Ok(tree.optimize(
-            optimization_settings.horner_iterations,
-            optimization_settings.n_cores,
-            optimization_settings.hot_start.clone(),
-            optimization_settings.verbose,
-        ))
+        Ok(tree.optimize(optimization_settings))
     }
 
     fn is_polynomial(
@@ -1557,17 +1552,12 @@ impl<S: TensorStructure + Clone> TensorAtomOps for SparseTensor<Atom, S> {
         &self,
         fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
-        optimization_settings: OptimizationSettings,
+        optimization_settings: &OptimizationSettings,
     ) -> Result<EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, Self::Structure>, String>
     {
         let mut tree = self.to_evaluation_tree(fn_map, params)?;
 
-        Ok(tree.optimize(
-            optimization_settings.horner_iterations,
-            optimization_settings.n_cores,
-            optimization_settings.hot_start.clone(),
-            optimization_settings.verbose,
-        ))
+        Ok(tree.optimize(optimization_settings))
     }
 
     fn is_polynomial(
@@ -1607,7 +1597,7 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DataTensor<Atom, S> {
         &self,
         fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
-        optimization_settings: OptimizationSettings,
+        optimization_settings: &OptimizationSettings,
     ) -> Result<EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, Self::Structure>, String>
     {
         match self {
@@ -1676,7 +1666,7 @@ impl<S: TensorStructure + Clone> TensorAtomOps for ParamTensor<S> {
         &self,
         fn_map: &FunctionMap<SymComplex<Rational>>,
         params: &[Atom],
-        optimization_settings: OptimizationSettings,
+        optimization_settings: &OptimizationSettings,
     ) -> Result<EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, Self::Structure>, String>
     {
         self.tensor.evaluator(fn_map, params, optimization_settings)

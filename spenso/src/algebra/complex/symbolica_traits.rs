@@ -1,10 +1,15 @@
+use std::mem::transmute;
+
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use symbolica::{
     domains::{
         float::{Complex as SymComplex, NumericalFloatLike, Real, SingleFloat},
         rational::Rational,
     },
-    evaluate::{CompiledEvaluatorFloat, ExportNumber},
+    evaluate::{
+        CompiledComplexEvaluator, CompiledNumber, EvaluatorLoader, ExportNumber, ExportSettings,
+        ExpressionEvaluator,
+    },
 };
 
 use crate::algebra::algebraic_traits::{RefOne, RefZero};
@@ -317,39 +322,41 @@ where
     }
 }
 
-impl<T> CompiledEvaluatorFloat for Complex<T>
-where
-    f64: From<T>,
-    T: From<f64> + Copy,
-{
-    #[allow(clippy::useless_conversion)]
-    fn evaluate(
-        eval: &mut symbolica::evaluate::CompiledEvaluator,
-        args: &[Self],
-        out: &mut [Self],
-    ) {
-        let args: Vec<SymComplex<f64>> = args
-            .iter()
-            .map(|&c| SymComplex {
-                re: c.re.into(),
-                im: c.im.into(),
-            })
-            .collect();
-        let mut castout: Vec<SymComplex<f64>> = out
-            .iter()
-            .map(|&c| SymComplex {
-                re: c.re.into(),
-                im: c.im.into(),
-            })
-            .collect();
+pub struct CompiledComplexEvaluatorSpenso(CompiledComplexEvaluator);
 
-        eval.evaluate_complex(&args, &mut castout);
-
-        for (o, &c) in out.iter_mut().zip(castout.iter()) {
-            *o = Complex {
-                re: c.re.into(),
-                im: c.im.into(),
-            };
+impl CompiledComplexEvaluatorSpenso {
+    pub fn evaluate(&mut self, args: &[Complex<f64>], out: &mut [Complex<f64>]) {
+        unsafe {
+            self.0.evaluate(
+                transmute::<&[Complex<f64>], &[SymComplex<f64>]>(args),
+                transmute::<&mut [Complex<f64>], &mut [SymComplex<f64>]>(out),
+            );
         }
+    }
+}
+
+impl EvaluatorLoader<Complex<f64>> for CompiledComplexEvaluatorSpenso {
+    fn load_with_settings(
+        file: impl AsRef<std::path::Path>,
+        function_name: &str,
+        settings: (),
+    ) -> Result<Self, String> {
+        Ok(CompiledComplexEvaluatorSpenso(
+            CompiledComplexEvaluator::load_with_settings(file, function_name, settings)?,
+        ))
+    }
+}
+
+impl CompiledNumber for Complex<f64> {
+    type Evaluator = CompiledComplexEvaluatorSpenso;
+    type Settings = ();
+    const SUFFIX: &'static str = "complexf64";
+
+    fn export_cpp<N: ExportNumber + SingleFloat>(
+        eval: &ExpressionEvaluator<N>,
+        function_name: &str,
+        settings: ExportSettings,
+    ) -> Result<String, String> {
+        SymComplex::<f64>::export_cpp(eval, function_name, settings)
     }
 }

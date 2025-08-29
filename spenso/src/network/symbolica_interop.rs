@@ -1,7 +1,8 @@
-use std::{borrow::Cow, fmt::Display, sync::Arc};
+use std::{borrow::Cow, fmt::Display, path::Path, sync::Arc};
 
 use ahash::{AHashMap, AHashSet, HashMap};
 
+use anyhow::anyhow;
 use symbolica::{
     atom::{Atom, AtomCore, AtomView, KeyLookup, Symbol},
     coefficient::ConvertToRing,
@@ -15,8 +16,8 @@ use symbolica::{
         EuclideanDomain, InternalOrdering,
     },
     evaluate::{
-        CompileOptions, EvalTree, EvaluationFn, ExportNumber, ExpressionEvaluator, FunctionMap,
-        InlineASM,
+        CompileOptions, CompiledCode, CompiledNumber, EvalTree, EvaluationFn, ExportNumber,
+        ExportSettings, ExportedCode, ExpressionEvaluator, FunctionMap,
     },
     id::{BorrowReplacement, Pattern},
     poly::{
@@ -28,7 +29,10 @@ use symbolica::{
 };
 
 use crate::{
-    algebra::{complex::Complex, upgrading_arithmetic::TrySmallestUpgrade},
+    algebra::{
+        complex::{symbolica_traits::CompiledComplexEvaluatorSpenso, Complex},
+        upgrading_arithmetic::TrySmallestUpgrade,
+    },
     iterators::IteratableTensor,
     shadowing::{
         symbolica_utils::{IntoArgs, IntoSymbol},
@@ -44,8 +48,7 @@ use crate::{
         parametric::{
             atomcore::{PatternReplacement, ReplaceBuilderGeneric, TensorAtomMaps, TensorAtomOps},
             AtomViewOrConcrete, CompiledEvalTensor, EvalTensor, EvalTreeTensor, MixedTensor,
-            ParamTensor, SerializableCompiledCode, SerializableCompiledEvaluator,
-            SerializableExportedCode,
+            ParamTensor,
         },
     },
 };
@@ -648,12 +651,16 @@ impl<
     pub fn linearize(
         self,
         cpe_rounds: Option<usize>,
+        verbose: bool,
     ) -> Network<Store::Store<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>, K, Aind>
     where
         T: Clone + Default + PartialEq,
         S: Clone,
     {
-        self.map(|a| a.linearize(cpe_rounds), |a| a.linearize(cpe_rounds))
+        self.map(
+            |a| a.linearize(cpe_rounds, verbose),
+            |a| a.linearize(cpe_rounds, verbose),
+        )
     }
 
     pub fn common_subexpression_elimination(&mut self)
@@ -712,18 +719,13 @@ impl<
     > Network<Store, K, Aind>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
-    pub fn export_cpp(
+    pub fn export_cpp<F: CompiledNumber>(
         &self,
-        filename: &str,
+        path: impl AsRef<Path>,
         function_name: &str,
-        include_header: bool,
-        inline_asm: InlineASM,
+        settings: ExportSettings,
     ) -> Result<
-        Network<
-            Store::Store<EvalTensor<SerializableExportedCode, S>, SerializableExportedCode>,
-            K,
-            Aind,
-        >,
+        Network<Store::Store<EvalTensor<ExportedCode<F>, S>, ExportedCode<F>>, K, Aind>,
         TensorNetworkError<K>,
     >
     where
@@ -733,22 +735,12 @@ impl<
         // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!
 
         self.map_ref_result_enumerate(
-            |(id, a)| {
-                let function_name = format!("{function_name}_{}", id);
-                let filename = format!("{filename}_{}.cpp", id);
-                SerializableExportedCode::export_cpp(
-                    a,
-                    &filename,
-                    &function_name,
-                    include_header,
-                    inline_asm,
-                )
-                .map_err(|a| TensorNetworkError::InOut(a))
+            |(_, a)| {
+                a.export_cpp(path.as_ref(), function_name, settings.clone())
+                    .map_err(|a| TensorNetworkError::InOut(a))
             },
-            |(id, a)| {
-                let function_name = format!("{function_name}_{}", id);
-                let filename = format!("{filename}_{}.cpp", id);
-                a.export_cpp(&filename, &function_name, include_header, inline_asm)
+            |(_, a)| {
+                a.export_cpp(path.as_ref(), function_name, settings.clone())
                     .map_err(|a| TensorNetworkError::InOut(a))
             },
         )
@@ -756,10 +748,8 @@ impl<
 }
 
 impl<
-        Store: TensorScalarStore<
-            Tensor = EvalTensor<SerializableExportedCode, S>,
-            Scalar = SerializableExportedCode,
-        >,
+        F: CompiledNumber,
+        Store: TensorScalarStore<Tensor = EvalTensor<ExportedCode<F>, S>, Scalar = ExportedCode<F>>,
         S: TensorStructure,
         K: Clone + Display,
         Aind: AbsInd,
@@ -771,11 +761,7 @@ impl<
         out: &str,
         options: CompileOptions,
     ) -> Result<
-        Network<
-            Store::Store<EvalTensor<SerializableCompiledCode, S>, SerializableCompiledCode>,
-            K,
-            Aind,
-        >,
+        Network<Store::Store<EvalTensor<CompiledCode<F>, S>, CompiledCode<F>>, K, Aind>,
         TensorNetworkError<K>,
     >
     where
@@ -799,41 +785,46 @@ impl<
         out: &str,
         options: CompileOptions,
     ) -> Result<
-        Network<
-            Store::Store<
-                EvalTensor<SerializableCompiledEvaluator, S>,
-                SerializableCompiledEvaluator,
-            >,
-            K,
-            Aind,
-        >,
+        Network<Store::Store<EvalTensor<F::Evaluator, S>, F::Evaluator>, K, Aind>,
         TensorNetworkError<K>,
     >
     where
         S: Clone,
     {
         self.map_ref_result(
-            |a| Ok(a.compile(out, options.clone())?.load()?),
-            |a| Ok(a.compile(out, options.clone())?.load()?),
+            |a| {
+                a.compile(out, options.clone())?
+                    .load()
+                    .map_err(|a| TensorNetworkError::Other(anyhow!("Loading error:{a}")))
+            },
+            |a| {
+                a.compile(out, options.clone())?
+                    .load()
+                    .map_err(|a| TensorNetworkError::Other(anyhow!("Loading error:{a}")))
+            },
         )
     }
 }
 
-impl<
-        T: symbolica::evaluate::CompiledEvaluatorFloat + Default + Clone,
-        S: TensorStructure,
-        K: Clone,
-        Aind: AbsInd,
-    > Evaluate<NetworkStore<CompiledEvalTensor<S>, SerializableCompiledEvaluator>, K, S, T, Aind>
-    for Network<NetworkStore<CompiledEvalTensor<S>, SerializableCompiledEvaluator>, K, Aind>
+impl<S: TensorStructure, K: Clone, Aind: AbsInd>
+    Evaluate<
+        NetworkStore<CompiledEvalTensor<S>, CompiledComplexEvaluatorSpenso>,
+        K,
+        S,
+        Complex<f64>,
+        Aind,
+    > for Network<NetworkStore<CompiledEvalTensor<S>, CompiledComplexEvaluatorSpenso>, K, Aind>
 {
-    fn evaluate(&mut self, params: &[T]) -> Network<NetworkStore<DataTensor<T, S>, T>, K, Aind>
+    fn evaluate(
+        &mut self,
+        params: &[Complex<f64>],
+    ) -> Network<NetworkStore<DataTensor<Complex<f64>, S>, Complex<f64>>, K, Aind>
     where
         S: TensorStructure + Clone,
     {
         self.map_ref_mut(
             |a| {
-                let mut out = [T::default()];
+                let mut out = [Complex::default()];
                 a.evaluate(params, &mut out);
                 let [o] = out;
                 o

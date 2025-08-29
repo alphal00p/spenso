@@ -104,55 +104,64 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
         cind: symbol!(super::concrete_index::CONCRETEIND),
         find: symbol!(super::concrete_index::FLATIND),
         aind: symbol!(ABSTRACTIND),
-        uind: symbol!(UPIND;;|view,out|{
-            if let AtomView::Fun(f)=view{
-                if f.get_nargs()==1{
-                    *out=f.iter().next().unwrap().to_owned();
-                    true
-                }else{
-                    // panic!("can only take one argument")
+        uind: symbol!(
+            UPIND,
+            norm = |view, out| {
+                if let AtomView::Fun(f) = view {
+                    if f.get_nargs() == 1 {
+                        *out = f.iter().next().unwrap().to_owned();
+                        true
+                    } else {
+                        // panic!("can only take one argument")
+                        false
+                    }
+                } else {
                     false
                 }
-            } else{
-                false
             }
-        }),
-        dind: symbol!(DOWNIND;;|view,out|{
-            if let AtomView::Fun(dind1)=view{
-                if dind1.get_nargs()==1{
-                    let arg = dind1.iter().next().unwrap();
-                    if let AtomView::Fun(arg)=arg{
-                        if arg.get_nargs()==1{
-                            if arg.get_symbol()==symbol!(DOWNIND){
-                                *out=arg.iter().next().unwrap().to_owned();
-                            return true;
-                            }else {
-                                return false;
+        ),
+        dind: symbol!(
+            DOWNIND,
+            norm = |view, out| {
+                if let AtomView::Fun(dind1) = view {
+                    if dind1.get_nargs() == 1 {
+                        let arg = dind1.iter().next().unwrap();
+                        if let AtomView::Fun(arg) = arg {
+                            if arg.get_nargs() == 1 {
+                                if arg.get_symbol() == symbol!(DOWNIND) {
+                                    *out = arg.iter().next().unwrap().to_owned();
+                                    return true;
+                                } else {
+                                    return false;
+                                }
                             }
                         }
+                        false
+                    } else {
+                        // panic!("can only take one argument")
+                        false
                     }
-                    false
-                }else{
-                    // panic!("can only take one argument")
+                } else {
                     false
                 }
-            } else{
-                false
             }
-        }),
-        selfdualind: symbol!(SELFDUALIND;;|view,out|{
-            if let AtomView::Fun(f)=view{
-                if f.get_nargs()==1{
-                    *out=f.iter().next().unwrap().to_owned();
-                    true
-                }else{
-                    // panic!("can only take one argument")
+        ),
+        selfdualind: symbol!(
+            SELFDUALIND,
+            norm = |view, out| {
+                if let AtomView::Fun(f) = view {
+                    if f.get_nargs() == 1 {
+                        *out = f.iter().next().unwrap().to_owned();
+                        true
+                    } else {
+                        // panic!("can only take one argument")
+                        false
+                    }
+                } else {
                     false
                 }
-            } else{
-                false
             }
-        }),
+        ),
     });
 
 static DUMMYCOUNTER: AtomicUsize = AtomicUsize::new(0);

@@ -24,13 +24,14 @@ use symbolica::{
         InternalOrdering,
     },
     evaluate::{
-        CompileOptions, CompiledCode, CompiledEvaluator, EvalTree, ExportNumber, ExportedCode,
-        ExpressionEvaluator, FunctionMap, InlineASM,
+        CompileOptions, CompiledCode, CompiledNumber, EvalTree, ExportNumber, ExportSettings,
+        ExportedCode, ExpressionEvaluator, FunctionMap,
     },
 };
 
 #[cfg(feature = "shadowing")]
 use crate::{
+    algebra::complex::symbolica_traits::CompiledComplexEvaluatorSpenso,
     tensors::data::{DataIterator, DenseTensor, SetTensorData, SparseTensor},
     tensors::parametric::ParamTensor,
 };
@@ -102,7 +103,7 @@ pub type EvalTensorNetworkSet<T, S, K, Aind, Str> =
 
 #[cfg(feature = "shadowing")]
 pub type CompiledTensorNetworkSet<S, K, Aind, Str> =
-    SharedTensorNetworkSet<CompiledEvaluator, S, K, Aind, Str>;
+    SharedTensorNetworkSet<CompiledComplexEvaluatorSpenso, S, K, Aind, Str>;
 
 #[derive(Debug, Clone)]
 pub struct SharedTensorNetworkSet<
@@ -309,13 +310,17 @@ impl<
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self, cpe_rounds: Option<usize>) -> EvalTensorNetworkSet<T, S, K, Aind, Store>
+    pub fn linearize(
+        self,
+        cpe_rounds: Option<usize>,
+        verbose: bool,
+    ) -> EvalTensorNetworkSet<T, S, K, Aind, Store>
     where
         T: Clone + Default + PartialEq,
     {
         EvalTensorNetworkSet {
             networks: self.networks,
-            shared_data: self.shared_data.linearize(cpe_rounds),
+            shared_data: self.shared_data.linearize(cpe_rounds, verbose),
             len: self.len,
         }
     }
@@ -432,38 +437,32 @@ impl<
     /// high-performance inline ASM code will be generated for most
     /// evaluation instructions. This often gives better performance than
     /// the `O3` optimization level and results in very fast compilation.
-    pub fn export_cpp(
+    pub fn export_cpp<F: CompiledNumber>(
         &self,
-        filename: &str,
+        path: impl AsRef<std::path::Path>,
         function_name: &str,
-        include_header: bool,
-        inline_asm: InlineASM,
-    ) -> Result<SharedTensorNetworkSet<ExportedCode, S, K, Aind, Store>, std::io::Error>
+        settings: ExportSettings,
+    ) -> Result<SharedTensorNetworkSet<ExportedCode<F>, S, K, Aind, Store>, std::io::Error>
     where
         T: ExportNumber + SingleFloat,
     {
         Ok(SharedTensorNetworkSet {
             networks: self.networks.clone(),
-            shared_data: self.shared_data.export_cpp(
-                filename,
-                function_name,
-                include_header,
-                inline_asm,
-            )?,
+            shared_data: self.shared_data.export_cpp(path, function_name, settings)?,
             len: self.len,
         })
     }
 }
 
 #[cfg(feature = "shadowing")]
-impl<S: TensorStructure + Clone, K: Clone, Aind: AbsInd>
-    SharedTensorNetworkSet<ExportedCode, S, K, Aind>
+impl<F: CompiledNumber, S: TensorStructure + Clone, K: Clone, Aind: AbsInd>
+    SharedTensorNetworkSet<ExportedCode<F>, S, K, Aind>
 {
     pub fn compile(
         &self,
-        out: &str,
+        out: impl AsRef<std::path::Path>,
         options: CompileOptions,
-    ) -> Result<SharedTensorNetworkSet<CompiledCode, S, K, Aind>, std::io::Error> {
+    ) -> Result<SharedTensorNetworkSet<CompiledCode<F>, S, K, Aind>, std::io::Error> {
         Ok(SharedTensorNetworkSet {
             networks: self.networks.clone(),
             shared_data: self.shared_data.compile(out, options)?,
@@ -473,10 +472,10 @@ impl<S: TensorStructure + Clone, K: Clone, Aind: AbsInd>
 }
 
 #[cfg(feature = "shadowing")]
-impl<S: TensorStructure + Clone, K: Clone, Aind: AbsInd>
-    SharedTensorNetworkSet<CompiledCode, S, K, Aind>
+impl<F: CompiledNumber, S: TensorStructure + Clone, K: Clone, Aind: AbsInd>
+    SharedTensorNetworkSet<CompiledCode<F>, S, K, Aind>
 {
-    pub fn load(&self) -> Result<SharedTensorNetworkSet<CompiledEvaluator, S, K, Aind>, String> {
+    pub fn load(&self) -> Result<SharedTensorNetworkSet<F::Evaluator, S, K, Aind>, String> {
         Ok(SharedTensorNetworkSet {
             networks: self.networks.clone(),
             shared_data: self.shared_data.load()?,
@@ -493,14 +492,22 @@ impl<
         Aind: AbsInd,
     > CompiledTensorNetworkSet<S, K, Aind, Store>
 {
-    pub fn evaluate<T: symbolica::evaluate::CompiledEvaluatorFloat + Default + Clone>(
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
+    pub fn evaluate(
         &mut self,
-        params: &[T],
-    ) -> TensorNetworkSet<Store::Store<DataTensor<T, S>, T>, K, Aind>
+        params: &[crate::algebra::complex::Complex<f64>],
+    ) -> TensorNetworkSet<
+        Store::Store<
+            DataTensor<crate::algebra::complex::Complex<f64>, S>,
+            crate::algebra::complex::Complex<f64>,
+        >,
+        K,
+        Aind,
+    >
     where
         S: TensorStructure + Clone,
     {
-        let zero = T::default();
+        let zero = crate::algebra::complex::Complex::default();
         let mut data = vec![zero; self.len];
 
         let mut networks = vec![];
@@ -508,21 +515,21 @@ impl<
         self.shared_data.evaluate(params, &mut data);
         for net in self.networks.iter() {
             let data_net = net.map_ref(
-                |s| data[*s].clone(),
+                |s| data[*s],
                 |p| {
                     let structure = p.structure().clone();
                     match &p {
                         DataTensor::Dense(d) => {
                             let mut t_data = vec![];
                             for (_, &a) in d.flat_iter() {
-                                t_data.push(data[a].clone());
+                                t_data.push(data[a]);
                             }
                             DataTensor::Dense(DenseTensor::from_data(t_data, structure).unwrap())
                         }
                         DataTensor::Sparse(s) => {
                             let mut t = SparseTensor::empty(structure);
                             for (i, &a) in s.flat_iter() {
-                                t.set_flat(i, data[a].clone()).unwrap();
+                                t.set_flat(i, data[a]).unwrap();
                             }
                             DataTensor::Sparse(t)
                         }

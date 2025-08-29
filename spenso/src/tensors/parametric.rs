@@ -3,14 +3,17 @@ extern crate derive_more;
 use std::{
     fmt::{Debug, Display},
     io::Cursor,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
-use crate::structure::PermutedStructure;
 use crate::structure::{dimension::Dimension, representation::RepName};
 use crate::structure::{permuted::PermuteTensor, representation::Representation};
 use crate::structure::{slot::AbsInd, StructureError};
 use crate::structure::{slot::IsAbstractSlot, IndexLess};
+use crate::{
+    algebra::complex::symbolica_traits::CompiledComplexEvaluatorSpenso,
+    structure::PermutedStructure,
+};
 use ahash::HashMap;
 use delegate::delegate;
 
@@ -21,7 +24,7 @@ use atomcore::{ReplaceBuilderGeneric, TensorAtomMaps};
 // use anyhow::Ok;
 use enum_try_as_inner::EnumTryAsInner;
 use log::trace;
-use serde::{de, ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use to_param::ToAtom;
 
 use crate::{
@@ -57,9 +60,9 @@ use symbolica::{
         InternalOrdering,
     },
     evaluate::{
-        CompileOptions, CompiledCode, CompiledEvaluator, CompiledEvaluatorFloat, EvalTree,
-        EvaluationFn, ExportNumber, ExportedCode, Expression, ExpressionEvaluator, FunctionMap,
-        InlineASM,
+        CompileOptions, CompiledCode, CompiledNumber, EvalTree, EvaluationFn, ExportNumber,
+        ExportSettings, ExportedCode, Expression, ExpressionEvaluator, FunctionMap,
+        OptimizationSettings,
     },
     id::Pattern,
     state::State,
@@ -94,9 +97,7 @@ pub trait TensorCoefficient: Display {
             .zip(self.cooked_name())
             .ok_or(format!("unnamed {}", self))?;
 
-        fn_map
-            .add_tagged_function(name, self.tags(), cooked_name, vec![], body)
-            .map_err(String::from)
+        fn_map.add_tagged_function(name, self.tags(), cooked_name, vec![], body)
     }
 }
 
@@ -2018,13 +2019,9 @@ impl<S: Clone + TensorStructure> EvalTreeTensorSet<SymComplex<Rational>, S> {
     pub fn horner_scheme(&mut self) {
         self.eval.0.horner_scheme()
     }
-    pub fn optimize_horner_scheme(&mut self, iterations: usize, n_cores: usize, verbose: bool) {
-        let scheme = self.eval.1.take();
-        self.eval.1 = Some(
-            self.eval
-                .0
-                .optimize_horner_scheme(iterations, n_cores, scheme, verbose),
-        );
+    pub fn optimize_horner_scheme(&mut self, settings: &OptimizationSettings) {
+        let _scheme = self.eval.1.take();
+        self.eval.1 = Some(self.eval.0.optimize_horner_scheme(settings));
     }
 }
 
@@ -2046,12 +2043,13 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
     pub fn linearize(
         self,
         cpe_rounds: Option<usize>,
+        verbose: bool,
     ) -> EvalTensorSet<(ExpressionEvaluator<T>, Option<Vec<Expression<T>>>), S>
     where
         T: Clone + Default + PartialEq,
     {
         EvalTensorSet {
-            eval: (self.eval.0.linearize(cpe_rounds), self.eval.1),
+            eval: (self.eval.0.linearize(cpe_rounds, verbose), self.eval.1),
             tensors: self.tensors,
             size: self.size,
         }
@@ -2094,25 +2092,18 @@ impl<S: Clone> EvalTreeTensor<SymComplex<Rational>, S> {
 
     pub fn optimize_horner_scheme(
         &mut self,
-        iterations: usize,
-        n_cores: usize,
-        scheme: Option<Vec<Expression<SymComplex<Rational>>>>,
-        verbose: bool,
+        settings: &OptimizationSettings,
     ) -> Vec<Expression<SymComplex<Rational>>> {
-        self.eval
-            .optimize_horner_scheme(iterations, n_cores, scheme, verbose)
+        self.eval.optimize_horner_scheme(settings)
     }
 
     pub fn optimize(
         &mut self,
-        iterations: usize,
-        n_cores: usize,
-        start_scheme: Option<Vec<Expression<SymComplex<Rational>>>>,
-        verbose: bool,
+        settings: &OptimizationSettings,
     ) -> EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, S> {
-        let _ = self.optimize_horner_scheme(iterations, n_cores, start_scheme, verbose);
+        let _ = self.optimize_horner_scheme(settings);
         self.common_subexpression_elimination();
-        self.clone().linearize(None)
+        self.clone().linearize(None, false)
     }
 }
 
@@ -2179,12 +2170,16 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(self, cpe_rounds: Option<usize>) -> EvalTensor<ExpressionEvaluator<T>, S>
+    pub fn linearize(
+        self,
+        cpe_rounds: Option<usize>,
+        verbose: bool,
+    ) -> EvalTensor<ExpressionEvaluator<T>, S>
     where
         T: Clone + Default + PartialEq,
     {
         EvalTensor {
-            eval: self.eval.linearize(cpe_rounds),
+            eval: self.eval.linearize(cpe_rounds, verbose),
             structure: self.structure,
             indexmap: self.indexmap,
         }
@@ -2421,22 +2416,18 @@ impl<S: TensorStructure + Clone>
     pub fn push_optimize(
         &mut self,
         mut tensor: EvalTreeTensor<SymComplex<Rational>, S>,
-        cpe_rounds: Option<usize>,
-        iterations: usize,
-        n_cores: usize,
-        verbose: bool,
+        settings: &OptimizationSettings,
     ) {
         let usize_tensor = tensor.usize_tensor(self.size);
         trace!("adding a tensor to the list of {} tensors", self.len());
         self.size += usize_tensor.actual_size();
         self.tensors.push(usize_tensor);
-        self.eval.1 =
-            Some(tensor.optimize_horner_scheme(iterations, n_cores, self.eval.1.take(), verbose));
+        self.eval.1 = Some(tensor.optimize_horner_scheme(settings));
         tensor.common_subexpression_elimination();
 
         self.eval
             .0
-            .merge(tensor.linearize(cpe_rounds).eval, cpe_rounds)
+            .merge(tensor.linearize(None, settings.verbose).eval, None)
             .unwrap();
     }
 }
@@ -2456,25 +2447,18 @@ impl<T, S> EvalTensor<ExpressionEvaluator<T>, S> {
         }
         // self.map_data_ref(|x| x.map_coeff(f))
     }
-    pub fn export_cpp(
+    pub fn export_cpp<F: CompiledNumber>(
         &self,
-        filename: &str,
+        path: impl AsRef<Path>,
         function_name: &str,
-        include_header: bool,
-        inline_asm: InlineASM,
-    ) -> Result<EvalTensor<SerializableExportedCode, S>, std::io::Error>
+        settings: ExportSettings,
+    ) -> Result<EvalTensor<ExportedCode<F>, S>, std::io::Error>
     where
         T: ExportNumber + SingleFloat,
         S: Clone,
     {
         Ok(EvalTensor {
-            eval: SerializableExportedCode::export_cpp(
-                &self.eval,
-                filename,
-                function_name,
-                include_header,
-                inline_asm,
-            )?,
+            eval: self.eval.export_cpp(path, function_name, settings)?,
             indexmap: self.indexmap.clone(),
             structure: self.structure.clone(),
         })
@@ -2502,198 +2486,12 @@ impl<T, S> EvalTensor<ExpressionEvaluator<T>, S> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct SerializableCompiledEvaluator {
-    pub evaluator: CompiledEvaluator,
-    pub compiled_code: SerializableCompiledCode,
-}
-
-impl Encode for SerializableCompiledEvaluator {
-    fn encode<E: bincode::enc::Encoder>(
-        &self,
-        encoder: &mut E,
-    ) -> std::result::Result<(), bincode::error::EncodeError> {
-        self.compiled_code.encode(encoder)
-    }
-}
-
-impl<C> Decode<C> for SerializableCompiledEvaluator {
-    fn decode<D: bincode::de::Decoder<Context = C>>(
-        decoder: &mut D,
-    ) -> std::result::Result<Self, bincode::error::DecodeError> {
-        let a = SerializableCompiledCode::decode(decoder)?;
-        Ok(a.load().unwrap())
-    }
-}
-
-impl Serialize for SerializableCompiledEvaluator {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        self.compiled_code.serialize(serializer)
-    }
-}
-
-impl<'d> Deserialize<'d> for SerializableCompiledEvaluator {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'d>,
-    {
-        let compiled = SerializableCompiledCode::deserialize(deserializer)?;
-
-        let evaluator = compiled.load().map_err(de::Error::custom)?;
-
-        Ok(evaluator)
-    }
-}
-
-impl SerializableCompiledEvaluator {
-    /// Load a new function from the same library.
-    pub fn load_new_function(&self, function_name: impl AsRef<str>) -> Result<Self> {
-        Ok(SerializableCompiledEvaluator {
-            evaluator: self
-                .evaluator
-                .load_new_function(function_name.as_ref())
-                .map_err(|a| anyhow!("{a}"))?,
-            compiled_code: self.compiled_code.clone(),
-        })
-    }
-
-    /// Load a compiled evaluator from a shared library.
-    pub fn load(file: impl AsRef<Path>, function_name: impl AsRef<str>) -> Result<Self> {
-        let compiled_code = SerializableCompiledCode {
-            library_filename: file.as_ref().to_path_buf(),
-            function_name: function_name.as_ref().to_string(),
-        };
-        compiled_code.load()
-    }
-    #[inline(always)]
-    pub fn evaluate<T: CompiledEvaluatorFloat>(&mut self, args: &[T], out: &mut [T]) {
-        self.evaluator.evaluate(args, out)
-    }
-
-    /// Evaluate the compiled code with double-precision floating point numbers.
-    #[inline(always)]
-    pub fn evaluate_double(&mut self, args: &[f64], out: &mut [f64]) {
-        self.evaluator.evaluate_double(args, out)
-    }
-
-    /// Evaluate the compiled code with complex numbers.
-    #[inline(always)]
-    pub fn evaluate_complex(&mut self, args: &[SymComplex<f64>], out: &mut [SymComplex<f64>]) {
-        self.evaluator.evaluate_complex(args, out)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SerializableExportedCode {
-    pub source_filename: String,
-    pub function_name: String,
-}
-impl SerializableExportedCode {
-    pub fn export_cpp<T: ExportNumber + SingleFloat>(
-        expr: &ExpressionEvaluator<T>,
-        filename: &str,
-        function_name: &str,
-        include_header: bool,
-        inline_asm: InlineASM,
-    ) -> Result<Self, std::io::Error> {
-        let mut filename = filename.to_string();
-        if !filename.ends_with(".cpp") {
-            filename += ".cpp";
-        }
-
-        let cpp = match inline_asm {
-            InlineASM::X64 => expr.export_asm_str(function_name, include_header, inline_asm),
-            InlineASM::None => expr.export_cpp_str(function_name, include_header),
-            InlineASM::AArch64 => expr.export_asm_str(function_name, include_header, inline_asm),
-        };
-
-        std::fs::write(&filename, cpp)?;
-        Ok(SerializableExportedCode {
-            source_filename: filename,
-            function_name: function_name.to_string(),
-        })
-    }
-    /// Compile the code to a shared library.
-    pub fn compile(
-        &self,
-        out: impl AsRef<Path>,
-        options: CompileOptions,
-    ) -> Result<SerializableCompiledCode, std::io::Error> {
-        let mut builder = std::process::Command::new(&options.compiler);
-        builder
-            .arg("-shared")
-            .arg("-fPIC")
-            .arg(format!("-O{}", options.optimization_level));
-        if options.fast_math {
-            builder.arg("-ffast-math");
-        }
-        if options.unsafe_math {
-            builder.arg("-funsafe-math-optimizations");
-        }
-
-        for c in &options.custom {
-            builder.arg(c);
-        }
-
-        let r = builder
-            .arg("-o")
-            .arg(out.as_ref())
-            .arg(&self.source_filename)
-            .output()?;
-
-        if !r.status.success() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!(
-                    "Could not compile code: {}",
-                    String::from_utf8_lossy(&r.stderr)
-                ),
-            ));
-        }
-
-        Ok(SerializableCompiledCode {
-            library_filename: out.as_ref().to_path_buf(),
-            function_name: self.function_name.clone(),
-        })
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
-pub struct SerializableCompiledCode {
-    pub library_filename: PathBuf,
-    pub function_name: String,
-}
-
-impl SerializableCompiledCode {
-    pub fn load(&self) -> Result<SerializableCompiledEvaluator> {
-        let eval =
-            CompiledEvaluator::load(self.library_filename.to_str().unwrap(), &self.function_name)
-                .map_err(|s| anyhow!(s))?;
-        Ok(SerializableCompiledEvaluator {
-            evaluator: eval,
-            compiled_code: self.clone(),
-        })
-    }
-}
-// impl Clone for SerializableCompiledEvaluator {
-//     fn clone(&self) -> Self {
-//         Self {
-//             evaluator: self.evaluator.clone(),
-//             library_filename: self.library_filename.clone(),
-//             function_name: self.function_name.clone(),
-//         }
-//     }
-// }
-
-impl<S: TensorStructure> EvalTensor<SerializableExportedCode, S> {
+impl<S: TensorStructure, F: CompiledNumber> EvalTensor<ExportedCode<F>, S> {
     pub fn compile(
         &self,
         out: &str,
         options: CompileOptions,
-    ) -> Result<EvalTensor<SerializableCompiledCode, S>, std::io::Error>
+    ) -> Result<EvalTensor<CompiledCode<F>, S>, std::io::Error>
     where
         S: Clone,
     {
@@ -2705,38 +2503,8 @@ impl<S: TensorStructure> EvalTensor<SerializableExportedCode, S> {
     }
 }
 
-impl<S: TensorStructure> EvalTensor<ExportedCode, S> {
-    pub fn compile(
-        &self,
-        out: &str,
-        options: CompileOptions,
-    ) -> Result<EvalTensor<CompiledCode, S>, std::io::Error>
-    where
-        S: Clone,
-    {
-        Ok(EvalTensor {
-            eval: self.eval.compile(out, options)?,
-            indexmap: self.indexmap.clone(),
-            structure: self.structure.clone(),
-        })
-    }
-}
-
-impl<S: TensorStructure> EvalTensor<CompiledCode, S> {
-    pub fn load(&self) -> Result<EvalTensor<CompiledEvaluator, S>, String>
-    where
-        S: Clone,
-    {
-        Ok(EvalTensor {
-            eval: self.eval.load()?,
-            indexmap: self.indexmap.clone(),
-            structure: self.structure.clone(),
-        })
-    }
-}
-
-impl<S: TensorStructure> EvalTensor<SerializableCompiledCode, S> {
-    pub fn load(&self) -> Result<CompiledEvalTensor<S>>
+impl<S: TensorStructure, F: CompiledNumber> EvalTensor<CompiledCode<F>, S> {
+    pub fn load(&self) -> Result<EvalTensor<F::Evaluator, S>, String>
     where
         S: Clone,
     {
@@ -2765,25 +2533,18 @@ impl<T, S: TensorStructure> LinearizedEvalTensorSet<T, S> {
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn export_cpp(
+    pub fn export_cpp<F: CompiledNumber>(
         &self,
-        filename: &str,
+        path: impl AsRef<Path>,
         function_name: &str,
-        include_header: bool,
-        inline_asm: InlineASM,
-    ) -> Result<EvalTensorSet<SerializableExportedCode, S>, std::io::Error>
+        settings: ExportSettings,
+    ) -> Result<EvalTensorSet<ExportedCode<F>, S>, std::io::Error>
     where
         T: ExportNumber + SingleFloat,
         S: Clone,
     {
         Ok(EvalTensorSet {
-            eval: SerializableExportedCode::export_cpp(
-                &self.eval.0,
-                filename,
-                function_name,
-                include_header,
-                inline_asm,
-            )?,
+            eval: self.eval.0.export_cpp(path, function_name, settings)?,
             tensors: self.tensors.clone(),
             size: self.size,
         })
@@ -2813,12 +2574,12 @@ impl<T, S: TensorStructure> LinearizedEvalTensorSet<T, S> {
     }
 }
 
-impl<S: TensorStructure> EvalTensorSet<SerializableExportedCode, S> {
+impl<S: TensorStructure, F: CompiledNumber> EvalTensorSet<ExportedCode<F>, S> {
     pub fn compile(
         &self,
-        out: &str,
+        out: impl AsRef<Path>,
         options: CompileOptions,
-    ) -> Result<EvalTensorSet<SerializableCompiledCode, S>, std::io::Error>
+    ) -> Result<EvalTensorSet<CompiledCode<F>, S>, std::io::Error>
     where
         S: Clone,
     {
@@ -2830,25 +2591,8 @@ impl<S: TensorStructure> EvalTensorSet<SerializableExportedCode, S> {
     }
 }
 
-impl<S: TensorStructure> EvalTensorSet<ExportedCode, S> {
-    pub fn compile(
-        &self,
-        out: &str,
-        options: CompileOptions,
-    ) -> Result<EvalTensorSet<CompiledCode, S>, std::io::Error>
-    where
-        S: Clone,
-    {
-        Ok(EvalTensorSet {
-            eval: self.eval.compile(out, options)?,
-            tensors: self.tensors.clone(),
-            size: self.size,
-        })
-    }
-}
-
-impl<S: TensorStructure> EvalTensorSet<SerializableCompiledCode, S> {
-    pub fn load(&self) -> Result<CompiledEvalTensorSet<S>>
+impl<S: TensorStructure, F: CompiledNumber> EvalTensorSet<CompiledCode<F>, S> {
+    pub fn load(&self) -> Result<EvalTensorSet<F::Evaluator, S>, String>
     where
         S: Clone,
     {
@@ -2860,28 +2604,15 @@ impl<S: TensorStructure> EvalTensorSet<SerializableCompiledCode, S> {
     }
 }
 
-impl<S: TensorStructure> EvalTensorSet<CompiledCode, S> {
-    pub fn load(&self) -> Result<EvalTensorSet<CompiledEvaluator, S>, String>
-    where
-        S: Clone,
-    {
-        Ok(EvalTensorSet {
-            eval: self.eval.load()?,
-            tensors: self.tensors.clone(),
-            size: self.size,
-        })
-    }
-}
-
-pub type CompiledEvalTensor<S> = EvalTensor<SerializableCompiledEvaluator, S>;
+pub type CompiledEvalTensor<S> = EvalTensor<CompiledComplexEvaluatorSpenso, S>;
 
 impl<S> CompiledEvalTensor<S> {
-    pub fn evaluate_float(&mut self, params: &[f64]) -> DataTensor<f64, S>
+    pub fn evaluate(&mut self, params: &[Complex<f64>]) -> DataTensor<Complex<f64>, S>
     where
         S: TensorStructure + Clone,
     {
         if let Some(ref indexmap) = self.indexmap {
-            let mut elements = vec![0.; indexmap.len()];
+            let mut elements: Vec<Complex<f64>> = vec![Complex::default(); indexmap.len()];
             self.eval.evaluate(params, &mut elements);
             let s = SparseTensor {
                 elements: indexmap.iter().cloned().zip(elements.drain(0..)).collect(),
@@ -2889,110 +2620,21 @@ impl<S> CompiledEvalTensor<S> {
             };
             DataTensor::Sparse(s)
         } else {
-            let mut out_data = DenseTensor::repeat(self.structure.clone(), 0.);
-            self.eval.evaluate(params, &mut out_data.data);
-            DataTensor::Dense(out_data)
-        }
-    }
-
-    pub fn evaluate_complex(&mut self, params: &[SymComplex<f64>]) -> DataTensor<SymComplex<f64>, S>
-    where
-        S: TensorStructure + Clone,
-    {
-        if let Some(ref indexmap) = self.indexmap {
-            let mut elements: Vec<SymComplex<f64>> = vec![SymComplex::new_zero(); indexmap.len()];
-            self.eval.evaluate_complex(params, &mut elements);
-            let s = SparseTensor {
-                elements: indexmap.iter().cloned().zip(elements.drain(0..)).collect(),
-                structure: self.structure.clone(),
-            };
-            DataTensor::Sparse(s)
-        } else {
-            let mut out_data = DenseTensor::repeat(self.structure.clone(), SymComplex::new_zero());
-            self.eval.evaluate_complex(params, &mut out_data.data);
-            DataTensor::Dense(out_data)
-        }
-    }
-
-    pub fn evaluate<T: CompiledEvaluatorFloat + Default + Clone>(
-        &mut self,
-        params: &[T],
-    ) -> DataTensor<T, S>
-    where
-        S: TensorStructure + Clone,
-    {
-        if let Some(ref indexmap) = self.indexmap {
-            let mut elements: Vec<T> = vec![T::default(); indexmap.len()];
-            self.eval.evaluate(params, &mut elements);
-            let s = SparseTensor {
-                elements: indexmap.iter().cloned().zip(elements.drain(0..)).collect(),
-                structure: self.structure.clone(),
-            };
-            DataTensor::Sparse(s)
-        } else {
-            let mut out_data = DenseTensor::repeat(self.structure.clone(), T::default());
+            let mut out_data = DenseTensor::repeat(self.structure.clone(), Complex::default());
             self.eval.evaluate(params, &mut out_data.data);
             DataTensor::Dense(out_data)
         }
     }
 }
 
-pub type CompiledEvalTensorSet<S> = EvalTensorSet<SerializableCompiledEvaluator, S>;
+pub type CompiledEvalTensorSet<S> = EvalTensorSet<CompiledComplexEvaluatorSpenso, S>;
 
 impl<S: TensorStructure> CompiledEvalTensorSet<S> {
-    pub fn evaluate_float(&mut self, params: &[f64]) -> TensorSet<DataTensor<f64, S>>
+    pub fn evaluate(&mut self, params: &[Complex<f64>]) -> TensorSet<DataTensor<Complex<f64>, S>>
     where
         S: TensorStructure + Clone,
     {
         let zero = params[0].zero();
-
-        let mut elements = vec![zero; self.size];
-        self.eval.evaluate_double(params, &mut elements);
-
-        match &self.tensors {
-            TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
-            TensorsOrScalars::Tensors(t) => {
-                let mut out_tensors = Vec::with_capacity(t.len());
-                for t in t.iter() {
-                    out_tensors.push(t.map_data_ref(|&i| elements[i]));
-                }
-                TensorSet::Tensors(out_tensors)
-            }
-        }
-    }
-
-    pub fn evaluate_complex(
-        &mut self,
-        params: &[SymComplex<f64>],
-    ) -> TensorSet<DataTensor<SymComplex<f64>, S>>
-    where
-        S: TensorStructure + Clone,
-    {
-        let zero = params[0].zero();
-
-        let mut elements = vec![zero; self.size];
-        self.eval.evaluate_complex(params, &mut elements);
-
-        match &self.tensors {
-            TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
-            TensorsOrScalars::Tensors(t) => {
-                let mut out_tensors = Vec::with_capacity(t.len());
-                for t in t.iter() {
-                    out_tensors.push(t.map_data_ref(|&i| elements[i]));
-                }
-                TensorSet::Tensors(out_tensors)
-            }
-        }
-    }
-
-    pub fn evaluate<T: CompiledEvaluatorFloat + Default + Clone>(
-        &mut self,
-        params: &[T],
-    ) -> TensorSet<DataTensor<T, S>>
-    where
-        S: TensorStructure + Clone,
-    {
-        let zero = T::default();
 
         let mut elements = vec![zero; self.size];
         self.eval.evaluate(params, &mut elements);
@@ -3001,9 +2643,8 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
             TensorsOrScalars::Scalars => TensorSet::Scalars(elements),
             TensorsOrScalars::Tensors(t) => {
                 let mut out_tensors = Vec::with_capacity(t.len());
-                trace!("Evaluating {} tensors using compiled eval", t.len());
                 for t in t.iter() {
-                    out_tensors.push(t.map_data_ref(|&i| elements[i].clone()));
+                    out_tensors.push(t.map_data_ref(|&i| elements[i]));
                 }
                 TensorSet::Tensors(out_tensors)
             }

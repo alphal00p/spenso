@@ -48,7 +48,7 @@ use super::{
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "LibraryTensor")]
+#[pyclass(name = "LibraryTensor", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub struct LibrarySpensor {
     pub tensor: PermutedStructure<MixedTensor<f64, ExplicitKey<AbstractIndex>>>,

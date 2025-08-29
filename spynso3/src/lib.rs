@@ -33,7 +33,7 @@ use spenso::{
         parametric::{LinearizedEvalTensor, MixedTensor},
     },
 };
-use structure::{ConvertibleToStructure, SpensoIndices};
+use structure::{ConvertibleToStructure, SpensoIndices, SpensoName};
 use symbolica::{
     api::python::SymbolicaCommunityModule,
     atom::Atom,
@@ -75,9 +75,7 @@ pub(crate) fn initialize_spenso(m: &Bound<'_, PyModule>) -> PyResult<()> {
     use network::ExecutionMode;
 
     SpensoNet::init(m)?;
-
     ExecutionMode::init(m)?;
-    SpensoNet::init(m)?;
     Spensor::init(m)?;
     LibrarySpensor::init(m)?;
     SpensoIndices::init(m)?;
@@ -90,9 +88,9 @@ pub(crate) fn initialize_spenso(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// It can be instantiated with data using the `sparse_empty` or `dense` module functions.
 #[cfg_attr(
     feature = "python_stubgen",
-    gen_stub_pyfunction(module = "symbolica.community.spenso")
+    gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "Tensor")]
+#[pyclass(name = "Tensor", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub struct Spensor {
     tensor: PermutedStructure<MixedTensor<f64, ShadowedStructure<AbstractIndex>>>,
@@ -118,7 +116,7 @@ pub enum SliceOrIntOrExpanded<'a> {
 }
 
 #[cfg(feature = "python_stubgen")]
-impl<'a> PyStubType for SliceOrIntOrExpanded<'a> {
+impl PyStubType for SliceOrIntOrExpanded<'_> {
     fn type_input() -> pyo3_stub_gen::TypeInfo {
         TypeInfo::builtin("slice") | usize::type_input() | TypeInfo::list_of::<usize>()
     }
@@ -463,9 +461,9 @@ impl From<MixedTensor<f64, ShadowedStructure<AbstractIndex>>> for Spensor {
 /// An optimized evaluator for tensors.
 #[cfg_attr(
     feature = "python_stubgen",
-    gen_stub_pyfunction(module = "symbolica.community.spenso")
+    gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "TensorEvaluator")]
+#[pyclass(name = "TensorEvaluator", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub struct SpensoExpressionEvaluator {
     pub eval_rat: LinearizedEvalTensor<SymComplex<Rational>, ShadowedStructure<AbstractIndex>>,
@@ -571,9 +569,12 @@ impl SpensoExpressionEvaluator {
 /// A compiled and optimized evaluator for tensors.
 #[cfg_attr(
     feature = "python_stubgen",
-    gen_stub_pyfunction(module = "symbolica.community.spenso")
+    gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "CompiledTensorEvaluator")]
+#[pyclass(
+    name = "CompiledTensorEvaluator",
+    module = "symbolica.community.spenso"
+)]
 #[derive(Clone)]
 pub struct SpensoCompiledExpressionEvaluator {
     pub eval: EvalTensor<CompiledComplexEvaluatorSpenso, ShadowedStructure<AbstractIndex>>,

@@ -25,9 +25,9 @@ use super::ModuleInit;
 
 #[cfg_attr(
     feature = "python_stubgen",
-    gen_stub_pyfunction(module = "symbolica.community.spenso")
+    gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "TensorLibrary")]
+#[pyclass(name = "TensorLibrary", module = "symbolica.community.spenso")]
 pub struct SpensorLibrary {
     pub(crate) library: TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>,
 }
@@ -71,7 +71,7 @@ impl<'a> FromPyObject<'a> for ConvertibleToSymbol {
 #[cfg(feature = "python_stubgen")]
 impl PyStubType for ConvertibleToSymbol {
     fn type_output() -> pyo3_stub_gen::TypeInfo {
-        ConvertibleToExpression::type_output() | String::type_input()
+        symbolica::api::python::ConvertibleToExpression::type_output() | String::type_input()
     }
 }
 
@@ -104,7 +104,6 @@ impl PyStubType for ConvertibleToLibraryTensor {
 #[pymethods]
 impl SpensorLibrary {
     #[new]
-
     pub fn constuct() -> Self {
         let mut a = Self {
             library: TensorLibrary::new(),
@@ -139,9 +138,12 @@ impl SpensorLibrary {
     feature = "python_stubgen",
     gen_stub_pyclass_enum(module = "symbolica.community.spenso")
 )]
-#[pyclass(eq, eq_int)]
+#[pyclass(eq, eq_int, module = "symbolica.community.spenso")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TensorNamespace {
     Weyl,
     Algebra,
 }
+
+#[cfg(feature = "python_stubgen")]
+pyo3_stub_gen::define_stub_info_gatherer!(stub_info);

@@ -38,7 +38,7 @@ use pyo3_stub_gen::{PyStubType, derive::*};
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "TensorNetwork")]
+#[pyclass(name = "TensorNetwork", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 #[allow(clippy::type_complexity)]
 /// A tensor network.
@@ -57,7 +57,7 @@ pub struct SpensoNet {
     feature = "python_stubgen",
     gen_stub_pyclass_enum(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "ExecutionMode")]
+#[pyclass(name = "ExecutionMode", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub enum ExecutionMode {
     Single,
@@ -444,3 +444,6 @@ impl SpensoNet {
     //     Ok(self.network.pow(&rhs).into())
     // }
 }
+
+#[cfg(feature = "python_stubgen")]
+pyo3_stub_gen::define_stub_info_gatherer!(stub_info);

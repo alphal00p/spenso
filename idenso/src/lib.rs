@@ -12,6 +12,8 @@ pub mod color;
 pub mod gamma;
 pub mod metric;
 pub mod parsing_ind;
+#[cfg(feature = "python")]
+pub mod python;
 pub mod rep_symbols;
 pub mod representations;
 

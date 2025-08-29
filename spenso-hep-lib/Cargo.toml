@@ -9,10 +9,10 @@ repository.workspace = true
 
 [dependencies]
 
-spenso = { version = "0.5.2", features = ["shadowing"] }
+spenso = { version = "0.5", features = ["shadowing"] }
 symbolica = { version = "0.18.0", default-features = false }
-spenso-macros = { version = "0.2.0" }
-idenso = "0.2.0"
+spenso-macros = { version = "0.2" }
+idenso = "0.2"
 
 
 ahash = { version = "0.8.11", features = ["serde"] }

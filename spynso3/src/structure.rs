@@ -117,7 +117,7 @@ impl PyStubType for SpensoSlotOrArgOrRep {
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "TensorName")]
+#[pyclass(name = "TensorName", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 /// The name of a tensor.
 pub struct SpensoName {
@@ -298,40 +298,40 @@ impl SpensoName {
     }
 
     #[classattr]
-    fn g() -> Self {
-        Self { name: ETS.metric }
+    fn g() -> SpensoName {
+        SpensoName { name: ETS.metric }
     }
     #[classattr]
-    fn flat() -> Self {
-        Self { name: ETS.flat }
+    fn flat() -> SpensoName {
+        SpensoName { name: ETS.flat }
     }
     #[classattr]
-    fn gamma() -> Self {
-        Self { name: AGS.gamma }
+    fn gamma() -> SpensoName {
+        SpensoName { name: AGS.gamma }
     }
     #[classattr]
-    fn gamma5() -> Self {
-        Self { name: AGS.gamma5 }
+    fn gamma5() -> SpensoName {
+        SpensoName { name: AGS.gamma5 }
     }
     #[classattr]
-    fn projm() -> Self {
-        Self { name: AGS.projm }
+    fn projm() -> SpensoName {
+        SpensoName { name: AGS.projm }
     }
     #[classattr]
-    fn projp() -> Self {
-        Self { name: AGS.projp }
+    fn projp() -> SpensoName {
+        SpensoName { name: AGS.projp }
     }
     #[classattr]
-    fn sigma() -> Self {
-        Self { name: AGS.sigma }
+    fn sigma() -> SpensoName {
+        SpensoName { name: AGS.sigma }
     }
     #[classattr]
-    fn f() -> Self {
-        Self { name: CS.f }
+    fn f() -> SpensoName {
+        SpensoName { name: CS.f }
     }
     #[classattr]
-    fn t() -> Self {
-        Self { name: CS.t }
+    fn t() -> SpensoName {
+        SpensoName { name: CS.t }
     }
 }
 
@@ -339,7 +339,7 @@ impl SpensoName {
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "TensorIndices")]
+#[pyclass(name = "TensorIndices", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 /// A structure that can be used to represent the "shape" of a tensor, along with a list of abstract indices.
 /// This has an optional name, and accompanying symbolica expressions that are considered as additional non-indexed arguments.
@@ -635,7 +635,7 @@ impl SpensoIndices {
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "TensorStructure", module = "symbolica_community.tensors")]
+#[pyclass(name = "TensorStructure", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 /// A structure that can be used to represent the "shape" of a tensor.
 /// This has an optional name, and accompanying symbolica expressions that are considered as additional non-indexed arguments.
@@ -1081,7 +1081,7 @@ impl PyStubType for PossiblyIndexed {
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "Representation")]
+#[pyclass(name = "Representation", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 /// A representation class in the sense of representation theory. This class is used to represent the representation of a tensor. It is essentially a pair of a name and a dimension.
 /// New representations are registered when constructing.
@@ -1340,7 +1340,7 @@ impl SpensoRepresentation {
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
-#[pyclass(name = "Slot", module = "symbolica_community.tensors")]
+#[pyclass(name = "Slot", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub struct SpensoSlot {
     pub slot: Slot<LibraryRep>,
@@ -1406,3 +1406,6 @@ impl SpensoSlot {
         PythonExpression::from(self.slot.to_atom())
     }
 }
+
+#[cfg(feature = "python_stubgen")]
+pyo3_stub_gen::define_stub_info_gatherer!(stub_info);

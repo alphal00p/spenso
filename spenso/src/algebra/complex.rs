@@ -51,9 +51,17 @@ duplicate! {
     bincode_trait_derive::Encode,
     bincode_trait_derive::Decode,
 )]
+
 pub struct Complex<T> {
     pub re: T,
     pub im: T,
+}
+
+#[cfg(feature = "python")]
+impl pyo3_stub_gen::PyStubType for Complex<f64> {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::builtin("complex")
+    }
 }
 
 #[cfg(feature = "python")]

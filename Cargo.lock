@@ -872,6 +872,8 @@ dependencies = [
  "bincode-trait-derive",
  "itertools 0.14.0",
  "linnet",
+ "pyo3",
+ "pyo3-stub-gen",
  "spenso",
  "spenso-macros",
  "symbolica 0.18.0",
@@ -1966,6 +1968,7 @@ dependencies = [
  "num",
  "once_cell",
  "pyo3",
+ "pyo3-stub-gen",
  "rand 0.9.1",
  "rand_xoshiro 0.6.0",
  "rayon",
@@ -2020,7 +2023,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "spysno3"
+name = "spynso3"
 version = "0.1.0"
 dependencies = [
  "ahash",

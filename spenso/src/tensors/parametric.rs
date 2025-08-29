@@ -60,9 +60,9 @@ use symbolica::{
         InternalOrdering,
     },
     evaluate::{
-        CompileOptions, CompiledCode, CompiledNumber, EvalTree, EvaluationFn, ExportNumber,
-        ExportSettings, ExportedCode, Expression, ExpressionEvaluator, FunctionMap,
-        OptimizationSettings,
+        CompileOptions, CompiledCode, CompiledComplexEvaluator, CompiledNumber, EvalTree,
+        EvaluationFn, ExportNumber, ExportSettings, ExportedCode, Expression, ExpressionEvaluator,
+        FunctionMap, OptimizationSettings,
     },
     id::Pattern,
     state::State,
@@ -2606,7 +2606,7 @@ impl<S: TensorStructure, F: CompiledNumber> EvalTensorSet<CompiledCode<F>, S> {
 
 pub type CompiledEvalTensor<S> = EvalTensor<CompiledComplexEvaluatorSpenso, S>;
 
-impl<S> CompiledEvalTensor<S> {
+impl<S> EvalTensor<CompiledComplexEvaluatorSpenso, S> {
     pub fn evaluate(&mut self, params: &[Complex<f64>]) -> DataTensor<Complex<f64>, S>
     where
         S: TensorStructure + Clone,
@@ -2621,6 +2621,27 @@ impl<S> CompiledEvalTensor<S> {
             DataTensor::Sparse(s)
         } else {
             let mut out_data = DenseTensor::repeat(self.structure.clone(), Complex::default());
+            self.eval.evaluate(params, &mut out_data.data);
+            DataTensor::Dense(out_data)
+        }
+    }
+}
+
+impl<S> EvalTensor<CompiledComplexEvaluator, S> {
+    pub fn evaluate(&mut self, params: &[SymComplex<f64>]) -> DataTensor<SymComplex<f64>, S>
+    where
+        S: TensorStructure + Clone,
+    {
+        if let Some(ref indexmap) = self.indexmap {
+            let mut elements: Vec<SymComplex<f64>> = vec![SymComplex::default(); indexmap.len()];
+            self.eval.evaluate(params, &mut elements);
+            let s = SparseTensor {
+                elements: indexmap.iter().cloned().zip(elements.drain(0..)).collect(),
+                structure: self.structure.clone(),
+            };
+            DataTensor::Sparse(s)
+        } else {
+            let mut out_data = DenseTensor::repeat(self.structure.clone(), SymComplex::default());
             self.eval.evaluate(params, &mut out_data.data);
             DataTensor::Dense(out_data)
         }

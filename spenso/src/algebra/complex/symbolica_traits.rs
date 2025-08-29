@@ -322,6 +322,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct CompiledComplexEvaluatorSpenso(CompiledComplexEvaluator);
 
 impl CompiledComplexEvaluatorSpenso {

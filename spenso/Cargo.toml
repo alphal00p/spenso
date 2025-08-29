@@ -76,5 +76,8 @@ rayon = "1.10.0"
 tabled = "0.20.0"
 approx-derive = "0.2.6"
 
+pyo3 = { version = "0.25.1", optional = true }
+
 [features]
+python = ["dep:pyo3"]
 shadowing = ["dep:symbolica", "spenso-macros/shadowing"]

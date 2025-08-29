@@ -8,6 +8,8 @@ use crate::network::Ref;
 use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
 use num::{Float, One, Zero};
+#[cfg(feature = "python")]
+use pyo3::types::{PyAnyMethods, PyComplex, PyComplexMethods};
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "shadowing")]
@@ -52,6 +54,21 @@ duplicate! {
 pub struct Complex<T> {
     pub re: T,
     pub im: T,
+}
+
+#[cfg(feature = "python")]
+impl<'a> pyo3::FromPyObject<'a> for Complex<f64> {
+    fn extract_bound(ob: &pyo3::Bound<'a, pyo3::PyAny>) -> pyo3::PyResult<Self> {
+        if let Ok(a) = ob.downcast::<PyComplex>() {
+            Ok(Complex::new(a.real(), a.imag()))
+        } else if let Ok(a) = ob.extract::<f64>() {
+            Ok(Complex::new(a, 0.))
+        } else {
+            Err(pyo3::exceptions::PyValueError::new_err(
+                "Not a valid complex number",
+            ))
+        }
+    }
 }
 
 impl<T> Complex<T> {

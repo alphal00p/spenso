@@ -322,7 +322,7 @@ where
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, bincode_trait_derive::Encode, bincode_trait_derive::Decode)]
 pub struct CompiledComplexEvaluatorSpenso(CompiledComplexEvaluator);
 
 impl CompiledComplexEvaluatorSpenso {

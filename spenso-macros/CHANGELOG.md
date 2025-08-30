@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2](https://github.com/alphal00p/spenso/compare/spenso-macros-v0.2.1...spenso-macros-v0.2.2) - 2025-08-30
+
+### Other
+
+- update to symbolica 0.18.0
+- Remove symbolica default features
+
 ## [0.2.1](https://github.com/alphal00p/spenso/compare/spenso-macros-v0.2.0...spenso-macros-v0.2.1) - 2025-08-18
 
 ### Other

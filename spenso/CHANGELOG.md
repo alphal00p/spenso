@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4](https://github.com/alphal00p/spenso/compare/spenso-v0.5.3...spenso-v0.5.4) - 2025-08-30
+
+### Other
+
+- added idenso pyo3 bindings
+- derive more for compiled evaluator
+- added spynso3
+- update to symbolica 0.18.0
+- Remove symbolica default features
+- Fix serialization and deserialization for compiled evaluators
+
 ## [0.5.3](https://github.com/alphal00p/spenso/compare/spenso-v0.5.2...spenso-v0.5.3) - 2025-08-18
 
 ### Other

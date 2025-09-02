@@ -8,8 +8,16 @@ use pyo3::{
     types::{PyFloat, PyType},
 };
 
+#[cfg(feature = "python_stubgen")]
+use pyo3_stub_gen::{
+    generate::MethodType,
+    impl_stub_type,
+    inventory::submit,
+    type_info::{ArgInfo, MethodInfo, PyMethodsInfo},
+    PyStubType, TypeInfo,
+};
 use spenso::{
-    algebra::complex::RealOrComplex,
+    algebra::complex::{Complex, RealOrComplex},
     tensors::{
         data::{DenseTensor, GetTensorData, SetTensorData, SparseOrDense, SparseTensor},
         parametric::{ConcreteOrParam, ParamOrConcrete, ParamTensor},
@@ -20,8 +28,8 @@ use crate::SliceOrIntOrExpanded;
 use spenso::{
     network::library::symbolic::ExplicitKey,
     structure::{
-        HasStructure, PermutedStructure, ScalarTensor, TensorStructure,
-        abstract_index::AbstractIndex, permuted::Perm,
+        abstract_index::AbstractIndex, permuted::Perm, HasStructure, PermutedStructure,
+        ScalarTensor, TensorStructure,
     },
     tensors::{
         complex::RealOrComplexTensor,
@@ -29,7 +37,7 @@ use spenso::{
         parametric::MixedTensor,
     },
 };
-use symbolica::{atom::Atom, domains::float::Complex};
+use symbolica::atom::Atom;
 
 use symbolica::api::python::PythonExpression;
 
@@ -37,8 +45,8 @@ use symbolica::api::python::PythonExpression;
 use pyo3_stub_gen::{define_stub_info_gatherer, derive::*};
 
 use super::{
-    ModuleInit, TensorElements,
     structure::{ConvertibleToIndexLess, SpensoStructure},
+    ModuleInit, TensorElements,
 };
 
 /// A library tensor class optimized for use in tensor libraries and networks.
@@ -89,6 +97,32 @@ impl Deref for LibrarySpensor {
 }
 
 impl ModuleInit for LibrarySpensor {}
+
+pub enum AtomsOrFloats {
+    Atoms(Vec<Atom>),
+    Floats(Vec<f64>),
+    Complex(Vec<Complex<f64>>),
+}
+
+impl<'py> FromPyObject<'py> for AtomsOrFloats {
+    fn extract_bound(aind: &Bound<'py, PyAny>) -> PyResult<Self> {
+        let aind = if let Ok(i) = aind.extract::<Vec<f64>>() {
+            AtomsOrFloats::Floats(i)
+        } else if let Ok(i) = aind.extract::<Vec<Complex<f64>>>() {
+            AtomsOrFloats::Complex(i)
+        } else if let Ok(i) = aind.extract::<Vec<PythonExpression>>() {
+            AtomsOrFloats::Atoms(i.into_iter().map(|e| e.expr).collect())
+        } else {
+            return Err(PyTypeError::new_err(
+                "Argument must be a list of floats, complex numbers, or Atoms",
+            ));
+        };
+        Ok(aind)
+    }
+}
+
+#[cfg(feature = "python_stubgen")]
+impl_stub_type!(AtomsOrFloats = Vec<PythonExpression> | Vec<f64> | Vec<Complex<f64>>);
 
 #[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
 #[pymethods]
@@ -200,19 +234,23 @@ impl LibrarySpensor {
     /// print(sym_tensor)
     ///
     /// ```
-    pub fn dense(structure: ConvertibleToIndexLess, data: Bound<'_, PyAny>) -> PyResult<Self> {
-        let dense = if let Ok(d) = data.extract::<Vec<f64>>() {
-            DenseTensor::<f64, _>::from_data(d, structure.0.structure.structure)
-                .map_err(|e| PyOverflowError::new_err(e.to_string()))?
-                .into()
-        } else if let Ok(d) = data.extract::<Vec<PythonExpression>>() {
-            let data = d.into_iter().map(|e| e.expr).collect();
-            ParamOrConcrete::Param(ParamTensor::from(
-                DenseTensor::<Atom, _>::from_data(data, structure.0.structure.structure)
+    pub fn dense(structure: ConvertibleToIndexLess, data: AtomsOrFloats) -> PyResult<Self> {
+        let dense = match data {
+            AtomsOrFloats::Floats(f) => {
+                DenseTensor::<f64, _>::from_data(f, structure.0.structure.structure)
+                    .map_err(|e| PyOverflowError::new_err(e.to_string()))?
+                    .into()
+            }
+            AtomsOrFloats::Atoms(a) => ParamOrConcrete::Param(ParamTensor::from(
+                DenseTensor::<Atom, _>::from_data(a, structure.0.structure.structure)
                     .map_err(|e| PyOverflowError::new_err(e.to_string()))?,
-            ))
-        } else {
-            return Err(PyTypeError::new_err("Only float type supported"));
+            )),
+            AtomsOrFloats::Complex(c) => {
+                MixedTensor::Concrete(RealOrComplexTensor::Complex(DataTensor::Dense(
+                    DenseTensor::<Complex<f64>, _>::from_data(c, structure.0.structure.structure)
+                        .map_err(|e| PyOverflowError::new_err(e.to_string()))?,
+                )))
+            }
         };
 
         let dense = PermutedStructure {
@@ -456,9 +494,122 @@ impl From<DataTensor<Complex<f64>, ExplicitKey<AbstractIndex>>> for LibrarySpens
     fn from(value: DataTensor<Complex<f64>, ExplicitKey<AbstractIndex>>) -> Self {
         LibrarySpensor {
             tensor: PermutedStructure::identity(MixedTensor::Concrete(
-                RealOrComplexTensor::Complex(value.map_data(|c| c.into())),
+                RealOrComplexTensor::Complex(value.map_data(|c| c)),
             )),
         }
+    }
+}
+
+#[cfg(feature = "python_stubgen")]
+submit! {
+    PyMethodsInfo {
+        struct_id: std::any::TypeId::of::<LibrarySpensor>,
+        attrs: &[],
+        getters: &[],
+        setters: &[],
+        methods: &[
+            MethodInfo {
+                name: "__getitem__",
+                args: &[
+                    ArgInfo {
+                        name: "item",
+                        signature: None,
+                        r#type: || TypeInfo::builtin("slice"),
+                    },
+                ],
+                r#type: MethodType::Instance,
+                r#return: Vec::<TensorElements>::type_output,
+                doc:r##"
+                Get library tensor elements at the specified range of indices.
+
+                # Args:
+                    item: Index specification:
+                        - slice: Slice object defining the range of indices
+
+                # Returns:
+                    The tensor element(s) at the specified index:
+                        - list of complex or float
+                        - list of Expressions
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            },
+            MethodInfo {
+                name: "__getitem__",
+                args: &[
+                    ArgInfo {
+                        name: "item",
+                        signature: None,
+                        r#type: || Vec::<usize>::type_input()|usize::type_input()
+                    },
+                ],
+                r#type: MethodType::Instance,
+                r#return: TensorElements::type_output,
+                doc:r##"
+                Get library tensor element at the specified index or indices.
+
+                # Args:
+                    item: Index specification:
+                        - int: Flat index into the tensor
+                        - List[int]: Multi-dimensional index coordinates
+
+                # Returns:
+                    The tensor element(s) at the specified index:
+                        - complex or float: Numerical value
+                        - Expression: Symbolic expression
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            },
+            MethodInfo {
+                name: "__setitem__",
+                args: &[
+                    ArgInfo {
+                        name: "item",
+                        signature: None,
+                        r#type: ||Vec::<usize>::type_input()|usize::type_input()
+                    },
+                    ArgInfo {
+                        name: "value",
+                        signature: None,
+                        r#type: ||TensorElements::type_input()
+                    },
+                ],
+                r#type: MethodType::Instance,
+                r#return: TypeInfo::none,
+                doc:r##"
+                Set library tensor element(s) at the specified index or indices.
+
+                # Args:
+                    item: Index specification:
+                        - int: Flat index into the tensor
+                        - List[int]: Multi-dimensional index coordinates
+                    value: The value to set:
+                        - float: Numerical value
+                        - Expression: Symbolic expression
+
+                # Examples:
+                ```python
+                from symbolica.community.spenso import LibraryTensor, TensorStructure, Representation
+
+                rep = Representation.euc(2)
+                structure = TensorStructure(rep, rep)
+                tensor = LibraryTensor.sparse(structure, float)
+
+                # Set using flat index
+                tensor[0] = 1.0
+
+                # Set using coordinates
+                tensor[1, 1] = 2.0
+                ```
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            },
+        ]
     }
 }
 

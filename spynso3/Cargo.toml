@@ -21,9 +21,21 @@ xpct = "0.5.1"
 
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 pyo3 = { version = "0.25", features = ["anyhow"] }
+
+pyo3-stub-gen-derive = { git = "https://github.com/benruijl/pyo3-stub-gen", branch = "patched", package = "pyo3-stub-gen-derive", default-features = false }
+
 pyo3-stub-gen = { version = "0.13", default-features = false, optional = true }
 itertools = "0.14.0"
 thiserror = "2.0.16"
 
 [features]
-python_stubgen = ["symbolica/python_stubgen", "dep:pyo3-stub-gen","spenso/python_stubgen"]
+
+python_stubgen = [
+    "symbolica/python_stubgen",
+    "dep:pyo3-stub-gen",
+    "spenso/python_stubgen",
+]
+
+
+[patch.crates-io]
+pyo3-stub-gen = { git = "https://github.com/benruijl/pyo3-stub-gen", branch = "patched" }

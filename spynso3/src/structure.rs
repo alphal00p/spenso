@@ -3,13 +3,22 @@ use std::ops::Deref;
 use idenso::representations::{ColorAdjoint, ColorFundamental, ColorSextet};
 use itertools::Itertools;
 
-use pyo3::types::IntoPyDict;
+#[cfg(not(feature = "python_stubgen"))]
+use pyo3_stub_gen_derive::remove_gen_stub;
 
 use pyo3::{
     exceptions::{self, PyIndexError, PyRuntimeError, PyTypeError, PyValueError},
     prelude::*,
     pybacked::PyBackedStr,
     types::{PyList, PyTuple},
+};
+
+#[cfg(feature = "python_stubgen")]
+use pyo3_stub_gen::{
+    TypeInfo,
+    generate::MethodType,
+    inventory::submit,
+    type_info::{ArgInfo, MethodInfo, PyMethodsInfo, SignatureArg},
 };
 use spenso::structure::slot::DualSlotTo;
 use spenso::{
@@ -35,7 +44,6 @@ use symbolica::{
         Atom, AtomView, DefaultNamespace, FunctionAttribute, FunctionBuilder, NamespacedSymbol,
         Symbol,
     },
-    printer::PrintOptions,
     state::Workspace,
     symbol,
     transformer::{Transformer, TransformerState},
@@ -48,6 +56,8 @@ use thiserror::Error;
 use idenso::{
     IndexTooling, color::CS, gamma::AGS, metric::PermuteWithMetric, representations::Bispinor,
 };
+
+use crate::{EMPTY, FALSE, NONE, TensorElements};
 
 use super::{ModuleInit, SliceOrIntOrExpanded};
 
@@ -62,7 +72,7 @@ impl<'py> FromPyObject<'py> for ConvertibleToSpensoName {
             Ok(ConvertibleToSpensoName(structure))
         } else if let Ok(s) = structure.extract::<String>() {
             Ok(ConvertibleToSpensoName(
-                SpensoName::symbol_shorthand(s, None, None, None, None, None, None).unwrap(),
+                SpensoName::symbol_shorthand(s, None, None, None, None, None).unwrap(),
             ))
         } else if let Ok(s) = structure.extract::<PythonExpression>() {
             if let AtomView::Var(a) = s.as_view() {
@@ -83,7 +93,7 @@ impl<'py> FromPyObject<'py> for ConvertibleToSpensoName {
 #[cfg(feature = "python_stubgen")]
 impl PyStubType for ConvertibleToSpensoName {
     fn type_output() -> pyo3_stub_gen::TypeInfo {
-        SpensoIndices::type_output() | <Vec<SpensoSlot>>::type_output()
+        SpensoName::type_output() | String::type_output() | PythonExpression::type_output()
     }
 }
 pub enum SpensoSlotOrArgOrRep {
@@ -151,9 +161,10 @@ pub struct SpensoName {
 
 #[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
 #[pymethods]
+#[cfg_attr(not(feature = "python_stubgen"), remove_gen_stub)]
 impl SpensoName {
     #[new]
-    #[pyo3(signature = (name,is_symmetric=None,is_antisymmetric=None,is_cyclesymmetric=None,is_linear=None,custom_normalization=None,custom_print=None))]
+    #[pyo3(signature = (name,is_symmetric=None,is_antisymmetric=None,is_cyclesymmetric=None,is_linear=None,custom_normalization=None))]
     /// Create a new tensor name with optional mathematical properties.
     ///
     /// # Args:
@@ -191,7 +202,7 @@ impl SpensoName {
         is_cyclesymmetric: Option<bool>,
         is_linear: Option<bool>,
         custom_normalization: Option<PythonTransformer>,
-        custom_print: Option<PyObject>,
+        // custom_print: Option<PyObject>,
     ) -> PyResult<Self> {
         let namespace = DefaultNamespace {
             namespace: "spenso_python".into(),
@@ -204,7 +215,7 @@ impl SpensoName {
             && is_cyclesymmetric.is_none()
             && is_linear.is_none()
             && custom_normalization.is_none()
-            && custom_print.is_none()
+        // && custom_print.is_none()
         {
             let id = Symbol::new(namespace.attach_namespace(&name))
                 .build()
@@ -267,23 +278,23 @@ impl SpensoName {
             ))
         }
 
-        if let Some(f) = custom_print {
-            symbol = symbol.with_print_function(Box::new(
-                move |input: AtomView<'_>, opts: &PrintOptions| {
-                    Python::with_gil(|py| {
-                        let kwargs = opts.into_py_dict(py).unwrap();
-                        f.call(
-                            py,
-                            (PythonExpression::from(input.to_owned()),),
-                            Some(&kwargs),
-                        )
-                        .unwrap()
-                        .extract::<Option<String>>(py)
-                        .unwrap()
-                    })
-                },
-            ))
-        }
+        // if let Some(f) = custom_print {
+        //     symbol = symbol.with_print_function(Box::new(
+        //         move |input: AtomView<'_>, opts: &PrintOptions| {
+        //             Python::with_gil(|py| {
+        //                 let kwargs = opts.into_py_dict(py).unwrap();
+        //                 f.call(
+        //                     py,
+        //                     (PythonExpression::from(input.to_owned()),),
+        //                     Some(&kwargs),
+        //                 )
+        //                 .unwrap()
+        //                 .extract::<Option<String>>(py)
+        //                 .unwrap()
+        //             })
+        //         },
+        //     ))
+        // }
 
         let symbol = symbol
             .build()
@@ -328,6 +339,7 @@ impl SpensoName {
     /// print(tensor_with_args)
     /// ```
     #[pyo3(signature = (*args))]
+    #[gen_stub(skip)]
     fn __call__(&self, args: &Bound<'_, PyTuple>) -> PyResult<PossiblyIndexed> {
         let mut add_args: Vec<Atom> = Vec::new();
         let mut slots: Vec<_> = Vec::new();
@@ -608,6 +620,7 @@ impl PyStubType for ConvertibleToStructure {
 
 #[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
 #[pymethods]
+#[cfg_attr(not(feature = "python_stubgen"), remove_gen_stub)]
 impl SpensoIndices {
     /// Create tensor structure from slots and optional arguments.
     ///
@@ -640,16 +653,17 @@ impl SpensoIndices {
     #[new]
     #[pyo3(signature =
            (
-           *additional_args,name=None))]
+           *slots,name=None))]
+    #[gen_stub(skip)]
     pub fn from_list(
-        additional_args: &Bound<'_, PyTuple>,
+        slots: &Bound<'_, PyTuple>,
         name: Option<ConvertibleToSpensoName>,
     ) -> PyResult<Self> {
         let mut args = Vec::new();
-        let mut slots = Vec::new();
-        for a in additional_args {
+        let mut true_slots = Vec::new();
+        for a in slots {
             if let Ok(s) = a.extract::<SpensoSlot>() {
-                slots.push(s.slot);
+                true_slots.push(s.slot);
             } else if let Ok(arg) = a.extract::<PythonExpression>() {
                 args.push(arg.expr);
             } else {
@@ -661,7 +675,7 @@ impl SpensoIndices {
 
         let args = if args.is_empty() { None } else { Some(args) };
         let mut a: PermutedStructure<ShadowedStructure<AbstractIndex>> =
-            PermutedStructure::<OrderedStructure>::from_iter(slots).map_structure(Into::into);
+            PermutedStructure::<OrderedStructure>::from_iter(true_slots).map_structure(Into::into);
         if let Some(name) = name {
             a.structure.set_name(name.0.name);
         };
@@ -778,6 +792,7 @@ impl SpensoIndices {
         self.structure.structure.size().unwrap()
     }
 
+    #[gen_stub(skip)]
     fn __getitem__(&self, item: SliceOrIntOrExpanded) -> PyResult<Py<PyAny>> {
         match item {
             SliceOrIntOrExpanded::Int(i) => {
@@ -966,20 +981,20 @@ pub enum SpensoError {
 
 #[pymethods]
 #[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
+#[cfg_attr(not(feature = "python_stubgen"), remove_gen_stub)]
 impl SpensoStructure {
     #[new]
-    #[pyo3(signature =
-           (
-           *additional_args,name=None))]
+    #[pyo3(signature =(*reps_and_additional_args,name=None))]
+    #[gen_stub(skip)]
     pub fn from_list(
-        additional_args: &Bound<'_, PyTuple>,
+        reps_and_additional_args: &Bound<'_, PyTuple>,
         name: Option<ConvertibleToSpensoName>,
     ) -> PyResult<Self> {
         let mut args = Vec::new();
-        let mut slots = Vec::new();
-        for a in additional_args {
+        let mut actual_slots = Vec::new();
+        for a in reps_and_additional_args {
             if let Ok(s) = a.extract::<SpensoRepresentation>() {
-                slots.push(s.representation);
+                actual_slots.push(s.representation);
             } else if let Ok(arg) = a.extract::<PythonExpression>() {
                 args.push(arg.expr);
             } else {
@@ -992,7 +1007,7 @@ impl SpensoStructure {
         let args = if args.is_empty() { None } else { Some(args) };
 
         let mut a: PermutedStructure<ExplicitKey<AbstractIndex>> =
-            PermutedStructure::<IndexLess>::from_iter(slots).map_structure(Into::into);
+            PermutedStructure::<IndexLess>::from_iter(actual_slots).map_structure(Into::into);
         if let Some(name) = name {
             a.structure.set_name(name.0.name);
         };
@@ -1049,6 +1064,7 @@ impl SpensoStructure {
         self.size().unwrap()
     }
 
+    #[gen_stub(skip)]
     fn __getitem__(&self, item: SliceOrIntOrExpanded) -> PyResult<Py<PyAny>> {
         match item {
             SliceOrIntOrExpanded::Int(i) => {
@@ -1106,26 +1122,12 @@ impl SpensoStructure {
         }
     }
 
+    // #[cfg_attr(not(feature = "python_stubgen"), remove_gen_stub)]
     #[pyo3(signature = (*args, extra_args=None))]
-    /// Convenience method for creating symbolic expressions.
-    ///
-    /// This is a shorthand for calling `symbolic(*args, extra_args=extra_args)`.
-    /// Creates a symbolic Expression representing this tensor structure.
-    ///
-    /// # Args:
-    ///     *args: Positional arguments (indices and additional args)
-    ///     extra_args: Optional list of additional non-tensorial arguments
-    ///
-    /// # Returns:
-    ///     A symbolic Expression representing the tensor
-    ///
-    /// # Examples:
-    /// ```python
-    /// structure = TensorStructure(rep, rep, name="T")
-    /// expr = structure('mu', 'nu')  # Same as structure.symbolic('mu', 'nu')
-    /// ```
+    #[gen_stub(skip)]
     fn __call__(
         &self,
+        // #[gen_stub(override_type(type_repr = "int | float | complex | str |"))]
         args: &Bound<'_, PyTuple>,
         extra_args: Option<&Bound<'_, PyList>>,
     ) -> PyResult<PythonExpression> {
@@ -1134,45 +1136,7 @@ impl SpensoStructure {
     }
 
     #[pyo3(signature = (*args, extra_args=None))]
-    /// Create a symbolic expression representing this tensor structure.
-    ///
-    /// Builds a symbolic tensor expression with the specified indices. Arguments can be
-    /// separated using a semicolon (';') to distinguish between additional arguments
-    /// and tensor indices.
-    ///
-    /// # Args:
-    ///     *args: Positional arguments, can include:
-    ///         - int, str, Symbol, Expression: Tensor indices
-    ///         - ';': Separator between additional args and indices
-    ///     extra_args: Optional list of additional non-tensorial arguments
-    ///
-    /// # Returns:
-    ///     A symbolic Expression representing the tensor with indices
-    ///
-    /// # Raises:
-    ///     ValueError: If index count doesn't match structure order
-    ///     TypeError: If arguments have unexpected types
-    ///     RuntimeError: If the structure has no name
-    ///
-    /// # Examples:
-    /// ```python
-    /// import symbolica as sp
-    /// from symbolica.community.spenso import TensorStructure, Representation, TensorName
-    ///
-    /// rep = Representation.euc(3)
-    /// T = TensorName("T")
-    /// structure = TensorStructure([rep, rep], name=T)
-    ///
-    /// # Basic usage
-    /// expr = structure.symbolic('mu', 'nu')  # T(mu, nu)
-    ///
-    /// # With additional arguments
-    /// x = sp.S('x')
-    /// expr = structure.symbolic(x, ';', 'mu', 'nu')  # T(x; mu, nu)
-    ///
-    /// # Using extra_args parameter
-    /// expr = structure.symbolic('mu', 'nu', extra_args=[x])  # T(x; mu, nu)
-    /// ```
+    #[gen_stub(skip)]
     fn symbolic(
         &self,
         args: &Bound<'_, PyTuple>,
@@ -1223,41 +1187,7 @@ impl SpensoStructure {
     }
 
     #[pyo3(signature = (*args, extra_args=None, cook_indices=false))]
-    /// Create an indexed tensor (TensorIndices) from this structure.
-    ///
-    /// Converts this structure template into a concrete indexed tensor by assigning
-    /// specific abstract indices to each representation slot.
-    ///
-    /// # Args:
-    ///     *args: Positional arguments:
-    ///         - Indices (int, str, Symbol, Expression)
-    ///         - ';': Separator between additional args and indices
-    ///     extra_args: Optional list of additional non-tensorial arguments
-    ///     cook_indices: If True, attempt to convert expressions to valid indices
-    ///
-    /// # Returns:
-    ///     A TensorIndices object with concrete index assignments
-    ///
-    /// # Raises:
-    ///     ValueError: If index count doesn't match or conversion fails
-    ///     TypeError: If arguments have unexpected types
-    ///
-    /// # Examples:
-    /// ```python
-    /// import symbolica as sp
-    /// from symbolica.community.spenso import TensorStructure, Representation, TensorName
-    ///
-    /// rep = Representation.cof(3)
-    /// T = TensorName("T")
-    /// structure = TensorStructure([rep, rep], name=T)
-    ///
-    /// # Create indexed tensor
-    /// indices = structure.index('mu', 'nu')  # T with indices mu, nu
-    ///
-    /// # With additional arguments
-    /// x = sp.S('x')
-    /// indices = structure.index(x, ';', 'mu', 'nu')  # T(x; mu, nu)
-    /// ```
+    #[gen_stub(skip)]
     fn index(
         &self,
         args: &Bound<'_, PyTuple>,
@@ -1515,11 +1445,10 @@ impl_stub_type!(ConvertibleToDimension = usize | PythonExpression | PyBackedStr)
 
 #[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
 #[pymethods]
+#[cfg_attr(not(feature = "python_stubgen"), remove_gen_stub)]
 impl SpensoRepresentation {
     #[new]
-    #[pyo3(signature =
-           (
-           name,dimension,is_self_dual=true))]
+    #[pyo3(signature =(name,dimension,is_self_dual=true))]
     /// Create and register a new representation with specified properties.
     ///
     /// # Args:
@@ -1547,12 +1476,10 @@ impl SpensoRepresentation {
     /// general = Representation("General", n, is_self_dual=True)
     /// ```
     pub fn register_new(
-        name: Bound<'_, PyAny>,
+        name: String,
         dimension: ConvertibleToDimension,
         is_self_dual: bool,
     ) -> PyResult<Self> {
-        let name = name.extract::<PyBackedStr>()?;
-
         let dim = dimension.0;
 
         let rep = if is_self_dual {
@@ -1591,6 +1518,7 @@ impl SpensoRepresentation {
     /// x = sp.S('x')
     /// sym_rep = rep(x)         # Symbolic representation
     /// ```
+    #[gen_stub(skip)]
     fn __call__(&self, py: Python<'_>, aind: ConvertibleToAbstractIndex) -> PyResult<Py<PyAny>> {
         match aind {
             ConvertibleToAbstractIndex::Separator => {
@@ -1871,9 +1799,7 @@ impl SpensoSlot {
     }
 
     #[new]
-    #[pyo3(signature =
-           (
-           name,dimension,aind,dual=false))]
+    #[pyo3(signature =(name,dimension,aind,dual=false))]
     /// Create a new slot with a custom representation and index.
     ///
     /// # Args:
@@ -1901,41 +1827,37 @@ impl SpensoSlot {
     /// symbolic_slot = Slot("Custom", 3, sym_index, dual=False)
     /// ```
     pub fn register_new(
-        name: Bound<'_, PyAny>,
+        name: String,
         dimension: usize,
-        aind: Bound<'_, PyAny>,
+        aind: ConvertibleToAbstractIndex,
         dual: bool,
     ) -> PyResult<Self> {
-        let name = name.extract::<PyBackedStr>()?;
         let rep = if dual {
             LibraryRep::new_dual(&name).unwrap().new_rep(dimension)
         } else {
             LibraryRep::new_self_dual(&name).unwrap().new_rep(dimension)
         };
-        if let Ok(i) = aind.extract::<isize>() {
-            Ok(SpensoSlot { slot: rep.slot(i) })
-        } else if let Ok(expr) = aind.extract::<PythonExpression>() {
-            let id = match expr.expr.as_view() {
-                AtomView::Var(v) => v.get_symbol(),
-                _ => {
-                    return Err(exceptions::PyTypeError::new_err(
-                        "Only symbols can be abstract indices",
-                    ));
+
+        match aind {
+            ConvertibleToAbstractIndex::Aind(a) => {
+                let mut slot = rep.slot(a);
+                if dual {
+                    slot = slot.dual();
                 }
-            };
-
-            let aind = AbstractIndex::Symbol(id.into());
-            Ok(SpensoSlot {
-                slot: rep.slot(aind),
-            })
-        } else if let Ok(s) = aind.extract::<PyBackedStr>() {
-            let id = symbol!(&s);
-
-            Ok(SpensoSlot {
-                slot: rep.slot(AbstractIndex::Symbol(id.into())),
-            })
-        } else {
-            Err(PyTypeError::new_err("aind must be an integer or a symbol"))
+                Ok(SpensoSlot { slot })
+            }
+            ConvertibleToAbstractIndex::Atom(a) => match a.expr.as_view() {
+                AtomView::Var(v) => {
+                    let slot = rep.slot(AbstractIndex::Symbol(v.get_symbol().into()));
+                    Ok(SpensoSlot { slot })
+                }
+                _ => Err(exceptions::PyTypeError::new_err(
+                    "Only symbols can be abstract indices",
+                )),
+            },
+            ConvertibleToAbstractIndex::Separator => {
+                Err(PyValueError::new_err("separator cannot be an index"))
+            }
         }
     }
 
@@ -1952,6 +1874,507 @@ impl SpensoSlot {
     /// ```
     fn to_expression(&self) -> PythonExpression {
         PythonExpression::from(self.slot.to_atom())
+    }
+}
+
+#[cfg(feature = "python_stubgen")]
+submit! {
+    PyMethodsInfo {
+        struct_id: std::any::TypeId::of::<SpensoName>,
+        attrs: &[],
+        getters: &[],
+        setters: &[],
+        methods: &[
+            MethodInfo {
+                name: "__call__",
+                args: &[
+                    ArgInfo {
+                        name: "args: Slot | Expression | int | str | float | complex",
+                        signature: Some(SignatureArg::Args),
+                        r#type: || SpensoSlot::type_input()| ConvertibleToExpression::type_input(),
+                    },
+                ],
+                r#type: MethodType::Instance,
+                r#return: SpensoIndices::type_output,
+                doc:r##"
+                Call the tensor name with arguments to create tensor structures.
+
+                Accepts a mix of slots and symbolic expressions (for additional arguments)
+
+                # Args:
+                    *args:
+                        - Slot objects: Create indexed tensor structure (TensorIndices)
+                        - Expressions: Additional non-tensorial arguments
+
+                # Returns:
+                   TensorIndices
+
+                # Examples:
+                ```python
+                from symbolica.community.spenso import TensorName, Slot, Representation
+                import symbolica as sp
+
+                T = TensorName("T")
+                rep = Representation.euc(3)
+                # With slots (creates TensorIndices)
+                mu = rep("mu")
+                nu = rep("nu")
+                indexed_tensor = T(mu, nu)
+                ```
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            },
+            MethodInfo {
+                name: "__call__",
+                args: &[
+                    ArgInfo {
+                        name: "args: Representation | Expression",
+                        signature: Some(SignatureArg::Args),
+                        r#type: || SpensoRepresentation::type_input()| PythonExpression::type_input(),
+                    },
+                ],
+                r#type: MethodType::Instance,
+                r#return: SpensoStructure::type_output,
+                doc:r##"
+                Call the tensor name with arguments to create a TensorStructure.
+
+                Accepts a mix of representations and symbolic expressions (for additional arguments).
+
+                # Args:
+                    *args: Mixed arguments:
+                        - Representation objects: Create indexless structure (TensorStructure)
+                        - Expressions: Additional non-tensorial arguments
+
+                # Returns:
+                    TensorStructure
+
+                # Examples:
+                ```python
+                from symbolica.community.spenso import TensorName, Slot, Representation
+                import symbolica as sp
+
+                T = TensorName("T")
+                rep = Representation.euc(3)
+                structure_tensor = T(rep, rep)
+                ```
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            }
+        ]
+    }
+}
+
+#[cfg(feature = "python_stubgen")]
+submit! {
+PyMethodsInfo {
+    struct_id: std::any::TypeId::of::<SpensoIndices>,
+    attrs: &[],
+    getters: &[],
+    setters: &[],
+    methods: &[
+        MethodInfo{
+            name:"new",
+            args:&[
+                ArgInfo{
+                    name:"slots: Slots | Expression | int | str | float | complex",
+                    signature:Some(SignatureArg::Args),
+                    r#type:ConvertibleToExpression::type_input,
+                },
+                ArgInfo{
+                    name:"name",
+                    signature:Some(SignatureArg::Assign { default: &NONE }),
+                    r#type:||ConvertibleToSpensoName::type_input() | TypeInfo::none(),
+                },
+            ]
+            ,r#type: MethodType::New,
+            r#return: SpensoStructure::type_output,
+            doc:r##"
+             Create tensor structure from slots and optional arguments.
+
+             # Args:
+                 *additional_args: Mixed arguments:
+                     - Slot objects: Define the tensor representation structure
+                     - Expressions: Additional non-indexed arguments
+                 name: Optional tensor name to assign to the structure
+
+             # Returns:
+                 A new TensorStructure object
+
+             # Examples:
+             ```python
+             from symbolica import S
+             from symbolica.community.spenso import TensorStructure, Representation, TensorName
+
+             # Create from representations
+             rep = Representation.euc(3)
+             structure = TensorStructure(rep, rep)  # 3x3 tensor
+
+             # With additional arguments
+             x = S('x')
+             structure_with_args = TensorStructure(rep, rep, x)
+
+             # With name
+             T = TensorName("T")
+             named_structure = TensorStructure(rep, rep, name=T)
+             ```
+                "##,
+            is_async: false,
+            deprecated: None,
+            type_ignored: None,
+        },
+        MethodInfo {
+            name: "__getitem__",
+            args: &[
+                ArgInfo {
+                    name: "item",
+                    signature: None,
+                    r#type: || TypeInfo::builtin("slice"),
+                },
+            ],
+            r#type: MethodType::Instance,
+            r#return: Vec::<TensorElements>::type_output,
+            doc:r##"
+            Get expanded indices at the specified range of flatend indices.
+
+            # Args:
+                item: Index specification:
+                    - slice: Slice object defining the range of indices
+
+            # Returns:
+                The tensor element(s) at the specified index:
+                    - list of expanded indices (list of indices themselves)
+            "##,
+            is_async: false,
+            deprecated: None,
+            type_ignored: None,
+        },
+        MethodInfo {
+            name: "__getitem__",
+            args: &[
+                ArgInfo {
+                    name: "item",
+                    signature: None,
+                    r#type:  Vec::<usize>::type_input
+                },
+            ],
+            r#type: MethodType::Instance,
+            r#return: TensorElements::type_output,
+            doc:r##"
+            Get flattened index associated to this expanded index
+
+            # Args:
+                item: Index specification:
+                    - List[int]: Multi-dimensional index coordinates
+
+            # Returns:
+                the flat index: int
+            "##,
+            is_async: false,
+            deprecated: None,
+            type_ignored: None,
+        }, MethodInfo {
+            name: "__getitem__",
+            args: &[
+                ArgInfo {
+                    name: "item",
+                    signature: None,
+                    r#type:  usize::type_input
+                },
+            ],
+            r#type: MethodType::Instance,
+            r#return: TensorElements::type_output,
+            doc:r##"
+            Get expanded index associated to this flat index
+
+            # Args:
+                item: Index specification:
+                    - int: Flat index into the tensor
+
+            # Returns:
+                List[int]: Multi-dimensional index coordinates
+
+            "##,
+            is_async: false,
+            deprecated: None,
+            type_ignored: None,
+        },
+    ]
+}
+}
+
+#[cfg(feature = "python_stubgen")]
+submit! {
+    PyMethodsInfo {
+        struct_id: std::any::TypeId::of::<SpensoStructure>,
+        attrs: &[],
+        getters: &[],
+        setters: &[],
+        methods: &[
+            MethodInfo{
+                name:"new",
+                args:&[
+                    ArgInfo{
+                        name:"reps_and_additional_args: Representation |  Expression | int | str | float | complex",
+                        signature:Some(SignatureArg::Args),
+                        r#type:ConvertibleToStructure::type_input,
+                    },
+                    ArgInfo{
+                        name:"name",
+                        signature:Some(SignatureArg::Assign { default: &NONE }),
+                        r#type:||ConvertibleToSpensoName::type_input() | TypeInfo::none(),
+                    },
+                ]
+                ,r#type: MethodType::New,
+                r#return: SpensoStructure::type_output,
+                doc:r##"
+                Constuct a new TensorStructure with the given representations.
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            },
+
+            MethodInfo {
+                name: "__getitem__",
+                args: &[
+                    ArgInfo {
+                        name: "item",
+                        signature: None,
+                        r#type: || TypeInfo::builtin("slice"),
+                    },
+                ],
+                r#type: MethodType::Instance,
+                r#return: Vec::<TensorElements>::type_output,
+                doc:r##"
+                Get expanded indices at the specified range of flatend indices.
+
+                # Args:
+                    item: Index specification:
+                        - slice: Slice object defining the range of indices
+
+                # Returns:
+                    The tensor element(s) at the specified index:
+                        - list of expanded indices (list of indices themselves)
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            },
+            MethodInfo {
+                name: "__getitem__",
+                args: &[
+                    ArgInfo {
+                        name: "item",
+                        signature: None,
+                        r#type:  Vec::<usize>::type_input
+                    },
+                ],
+                r#type: MethodType::Instance,
+                r#return: TensorElements::type_output,
+                doc:r##"
+                Get flattened index associated to this expanded index
+
+                # Args:
+                    item: Index specification:
+                        - List[int]: Multi-dimensional index coordinates
+
+                # Returns:
+                    the flat index: int
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            }, MethodInfo {
+                name: "__getitem__",
+                args: &[
+                    ArgInfo {
+                        name: "item",
+                        signature: None,
+                        r#type:  usize::type_input
+                    },
+                ],
+                r#type: MethodType::Instance,
+                r#return: TensorElements::type_output,
+                doc:r##"
+                Get expanded index associated to this flat index
+
+                # Args:
+                    item: Index specification:
+                        - int: Flat index into the tensor
+
+                # Returns:
+                    List[int]: Multi-dimensional index coordinates
+
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            },
+            MethodInfo {
+                name: "__call__",
+                args: &[
+                    ArgInfo {
+                        name: "args: builtins.int | Expression | str",
+                        signature: Some(SignatureArg::Args),
+                        r#type: ConvertibleToAbstractIndex::type_input,
+                    },
+                    ArgInfo {
+                        name: "extra_args",
+                        signature: Some(SignatureArg::Assign { default: &EMPTY }),
+                        r#type: Vec::<ConvertibleToExpression>::type_input,
+                    },
+                ],
+                r#type: MethodType::Instance,
+                r#return: PythonExpression::type_output,
+                doc:r##"Convenience method for creating symbolic expressions.
+
+                This is a shorthand for calling `symbolic(*args, extra_args=extra_args)`.
+                Creates a symbolic Expression representing this tensor structure.
+
+                # Args:
+                    *args: Positional arguments (indices and additional args)
+                    extra_args: Optional list of additional non-tensorial arguments
+
+                # Returns:
+                    A symbolic Expression representing the tensor
+
+                # Examples:
+                ```python
+                structure = TensorStructure(rep, rep, name="T")
+                expr = structure('mu', 'nu')  # Same as structure.symbolic('mu', 'nu')
+                ```
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            },
+            MethodInfo {
+                name: "symbolic",
+                args: &[
+                    ArgInfo {
+                        name: "args: builtins.int | Expression | str",
+                        signature: Some(SignatureArg::Args),
+                        r#type: ConvertibleToAbstractIndex::type_input,
+                    },
+                    ArgInfo {
+                        name: "extra_args",
+                        signature: Some(SignatureArg::Assign { default: &EMPTY }),
+                        r#type: Vec::<ConvertibleToExpression>::type_input,
+                    },
+                ],
+                r#type: MethodType::Instance,
+                r#return: PythonExpression::type_output,
+                doc:r##"Create a symbolic expression representing this tensor structure.
+
+                 Builds a symbolic tensor expression with the specified indices. Arguments can be
+                 separated using a semicolon (';') to distinguish between additional arguments
+                 and tensor indices.
+
+                 # Args:
+                     *args: Positional arguments, can include:
+                         - int, str, Symbol, Expression: Tensor indices
+                         - ';': Separator between additional args and indices
+                     extra_args: Optional list of additional non-tensorial arguments
+
+                 # Returns:
+                     A symbolic Expression representing the tensor with indices
+
+                 # Raises:
+                     ValueError: If index count doesn't match structure order
+                     TypeError: If arguments have unexpected types
+                     RuntimeError: If the structure has no name
+
+                 # Examples:
+                 ```python
+                 import symbolica as sp
+                 from symbolica.community.spenso import TensorStructure, Representation, TensorName
+
+                 rep = Representation.euc(3)
+                 T = TensorName("T")
+                 structure = TensorStructure([rep, rep], name=T)
+
+                 # Basic usage
+                 expr = structure.symbolic('mu', 'nu')  # T(mu, nu)
+
+                 # With additional arguments
+                 x = sp.S('x')
+                 expr = structure.symbolic(x, ';', 'mu', 'nu')  # T(x; mu, nu)
+
+                 # Using extra_args parameter
+                 expr = structure.symbolic('mu', 'nu', extra_args=[x])  # T(x; mu, nu)
+                 ```
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            },
+
+            MethodInfo {
+                name: "index",
+                args: &[
+                    ArgInfo {
+                        name: "args: builtins.int | Expression | str",
+                        signature: Some(SignatureArg::Args),
+                        r#type: ConvertibleToAbstractIndex::type_input,
+                    },
+                    ArgInfo {
+                        name: "extra_args",
+                        signature: Some(SignatureArg::Assign { default: &EMPTY }),
+                        r#type: std::vec::Vec::<PythonExpression>::type_input,
+                    },
+                    ArgInfo {
+                        name: "cook_indices",
+                            signature: Some(SignatureArg::Assign { default: &FALSE }),
+                            r#type: bool::type_input
+                    }
+                ],
+                r#type: MethodType::Instance,
+                r#return: SpensoIndices::type_output,
+                doc:r##"Create an indexed tensor (TensorIndices) from this structure.
+
+                 Converts this structure template into a concrete indexed tensor by assigning
+                 specific abstract indices to each representation slot.
+
+                 # Args:
+                     *args: Positional arguments:
+                         - Indices (int, str, Symbol, Expression)
+                         - ';': Separator between additional args and indices
+                     extra_args: Optional list of additional non-tensorial arguments
+                     cook_indices: If True, attempt to convert expressions to valid indices
+
+                 # Returns:
+                     A TensorIndices object with concrete index assignments
+
+                 # Raises:
+                     ValueError: If index count doesn't match or conversion fails
+                     TypeError: If arguments have unexpected types
+
+                 # Examples:
+                 ```python
+                 import symbolica as sp
+                 from symbolica.community.spenso import TensorStructure, Representation, TensorName
+
+                 rep = Representation.cof(3)
+                 T = TensorName("T")
+                 structure = TensorStructure([rep, rep], name=T)
+
+                 # Create indexed tensor
+                 indices = structure.index('mu', 'nu')  # T with indices mu, nu
+
+                 # With additional arguments
+                 x = sp.S('x')
+                 indices = structure.index(x, ';', 'mu', 'nu')  # T(x; mu, nu)
+                 ```
+                "##,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+            },
+        ]
     }
 }
 

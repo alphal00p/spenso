@@ -156,6 +156,7 @@ impl PyStubType for ConvertibleToSpensoNet {
 // #[gen_stub_pymethods]
 
 #[pymethods]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
 impl SpensoNet {
     #[new]
     /// Create a tensor network by parsing an arithmetic expression.

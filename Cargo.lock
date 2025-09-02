@@ -865,7 +865,7 @@ dependencies = [
 
 [[package]]
 name = "idenso"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1941,7 +1941,7 @@ dependencies = [
 
 [[package]]
 name = "spenso"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1986,18 +1986,6 @@ dependencies = [
 [[package]]
 name = "spenso-hep-lib"
 version = "0.1.3"
-dependencies = [
- "ahash",
- "idenso",
- "spenso",
- "spenso-macros",
- "symbolica 0.18.0",
- "xpct",
-]
-
-[[package]]
-name = "spenso-hep-lib"
-version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e8023c37b4fdd6d0700ad44b5dc40792e7eda7835e38ccf5165f0c544964269"
 dependencies = [
@@ -2010,8 +1998,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "spenso-hep-lib"
+version = "0.1.4"
+dependencies = [
+ "ahash",
+ "idenso",
+ "spenso",
+ "spenso-macros",
+ "symbolica 0.18.0",
+ "xpct",
+]
+
+[[package]]
 name = "spenso-macros"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "linnet",
  "proc-macro2",
@@ -2033,7 +2033,7 @@ dependencies = [
  "pyo3",
  "pyo3-stub-gen",
  "spenso",
- "spenso-hep-lib 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spenso-hep-lib 0.1.3",
  "spenso-macros",
  "symbolica 0.18.0",
  "thiserror 2.0.16",

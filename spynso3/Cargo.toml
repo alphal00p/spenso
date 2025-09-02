@@ -10,11 +10,11 @@ repository.workspace = true
 [dependencies]
 
 spenso = { version = "0.5", features = ["shadowing", "python"] }
-symbolica = { version = "0.18.0", default-features = false, features = [
+symbolica = { version = "0.18", default-features = false, features = [
     "python_export",
 ] }
-spenso-macros = { version = "0.2.0" }
-spenso-hep-lib = { version = "0.1.3" }
+spenso-macros = { version = "0.2" }
+spenso-hep-lib = { version = "0.1" }
 idenso = "0.2"
 ahash = { version = "0.8.11", features = ["serde"] }
 xpct = "0.5.1"

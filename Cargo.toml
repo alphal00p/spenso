@@ -17,6 +17,7 @@ lto = "fat"
 spenso = { path = "./spenso" }
 idenso = { path = "./idenso" }
 spenso-macros = { path = "./spenso-macros" }
+spenso-hep-lib = {path="./spenso-hep-lib"}
 # linnet = { path = "../linnet" }
 # linnet = { git = "https://github.com/alphal00p/linnet", rev = "6a13c34b2e58021aebec7ed0c78bc70c50c72283" }
 # symbolica = { path = "../symbolica" }

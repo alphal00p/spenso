@@ -103,34 +103,6 @@ impl ModuleInit for SpensoNet {
     }
 }
 
-/// Convert an arithmetic expression to a tensor network.
-///
-/// # Args:
-///     a: The arithmetic expression or tensor structure to convert
-///     library: Optional tensor library for resolving tensor references
-///
-/// # Returns:
-///     A TensorNetwork representing the expression
-///
-/// # Examples:
-/// ```python
-/// import symbolica as sp
-/// from symbolica.community.spenso import to_net, TensorLibrary
-///
-/// # Convert expression to network
-/// x = sp.symbol('x')
-/// expr = x * sp.symbol('T')(sp.symbol('mu'))
-/// network = to_net(expr)
-/// ```
-#[cfg_attr(feature = "python_stubgen", gen_stub_pyfunction)]
-#[pyfunction(name = "to_net")]
-pub fn python_to_tensor_network(
-    a: ArithmeticStructure,
-    library: Option<&SpensorLibrary>,
-) -> anyhow::Result<SpensoNet> {
-    SpensoNet::from_expression(a, library)
-}
-
 pub type ParsingNet = Network<
     NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
     ExplicitKey<AbstractIndex>,

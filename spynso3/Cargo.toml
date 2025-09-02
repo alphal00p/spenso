@@ -26,4 +26,4 @@ itertools = "0.14.0"
 thiserror = "2.0.16"
 
 [features]
-python_stubgen = ["symbolica/python_stubgen", "dep:pyo3-stub-gen"]
+python_stubgen = ["symbolica/python_stubgen", "dep:pyo3-stub-gen","spenso/python_stubgen"]

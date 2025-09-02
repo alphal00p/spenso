@@ -1,5 +1,6 @@
 use std::ops::Deref;
 
+use idenso::representations::{ColorAdjoint, ColorFundamental, ColorSextet};
 use itertools::Itertools;
 
 use pyo3::types::IntoPyDict;
@@ -10,6 +11,7 @@ use pyo3::{
     pybacked::PyBackedStr,
     types::{PyList, PyTuple},
 };
+use spenso::structure::slot::DualSlotTo;
 use spenso::{
     network::{
         library::symbolic::{ETS, ExplicitKey},
@@ -113,13 +115,35 @@ impl PyStubType for SpensoSlotOrArgOrRep {
     }
 }
 
+/// A symbolic name for tensor functions and structures.
+///
+/// TensorName represents named tensor functions that can be called with indices and arguments
+/// to create tensor structures. Names can have various mathematical properties like symmetry,
+/// antisymmetry, and custom normalization or printing behavior.
+///
+/// # Examples:
+/// ```python
+/// from symbolica.community.spenso import TensorName, Slot, Representation
+///
+/// # Create a simple tensor name
+/// T = TensorName("T")
+///
+/// # Create tensor with symmetry properties
+/// symmetric_T = TensorName("S", is_symmetric=True)
+/// antisymmetric_T = TensorName("A", is_antisymmetric=True)
+///
+/// # Use with slots to create indexed structures
+/// rep = Representation.cof(3)
+/// mu = rep('mu')
+/// nu = rep('nu')
+/// tensor_structure = T(mu, nu)  # Creates TensorIndices
+/// ```
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
 #[pyclass(name = "TensorName", module = "symbolica.community.spenso")]
 #[derive(Clone)]
-/// The name of a tensor.
 pub struct SpensoName {
     pub name: Symbol,
     // pub args: Vec<Atom>,
@@ -130,7 +154,36 @@ pub struct SpensoName {
 impl SpensoName {
     #[new]
     #[pyo3(signature = (name,is_symmetric=None,is_antisymmetric=None,is_cyclesymmetric=None,is_linear=None,custom_normalization=None,custom_print=None))]
-    /// Shorthand notation for :func:`Expression.symbol`.
+    /// Create a new tensor name with optional mathematical properties.
+    ///
+    /// # Args:
+    ///     name: The string name for the tensor function
+    ///     is_symmetric: If True, tensor is symmetric under index permutation
+    ///     is_antisymmetric: If True, tensor is antisymmetric under index permutation
+    ///     is_cyclesymmetric: If True, tensor is symmetric under cyclic permutations
+    ///     is_linear: If True, tensor is linear in its arguments
+    ///     custom_normalization: Custom normalization function (advanced)
+    ///     custom_print: Custom printing function (advanced)
+    ///
+    /// # Returns:
+    ///     A new TensorName with the specified properties
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import TensorName
+    ///
+    /// # Basic tensor name
+    /// T = TensorName("T")
+    ///
+    /// # Symmetric tensor (like metric)
+    /// g = TensorName("g", is_symmetric=True)
+    ///
+    /// # Antisymmetric tensor (like field strength)
+    /// F = TensorName("F", is_antisymmetric=True)
+    ///
+    /// # Linear operator
+    /// D = TensorName("D", is_linear=True)
+    /// ```
     fn symbol_shorthand(
         name: String,
         is_symmetric: Option<bool>,
@@ -242,6 +295,38 @@ impl SpensoName {
         })
     }
 
+    /// Call the tensor name with arguments to create tensor structures.
+    ///
+    /// Accepts a mix of slots (for indexed tensors), representations (for indexless tensors),
+    /// and symbolic expressions (for additional arguments). Cannot mix slots and representations.
+    ///
+    /// # Args:
+    ///     *args: Mixed arguments:
+    ///         - Slot objects: Create indexed tensor structure (TensorIndices)
+    ///         - Representation objects: Create indexless structure (TensorStructure)
+    ///         - Expressions: Additional non-tensorial arguments
+    ///
+    /// # Returns:
+    ///     PossiblyIndexed: Either TensorIndices (if slots provided) or TensorStructure (if reps provided)
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import TensorName, Slot, Representation
+    /// import symbolica as sp
+    ///
+    /// T = TensorName("T")
+    /// rep = Representation.euc(3)
+    /// # With slots (creates TensorIndices)
+    /// mu = rep("mu")
+    /// nu = rep("nu")
+    /// indexed_tensor = T(mu, nu)
+    /// # With representations (creates TensorStructure)
+    /// structure_tensor = T(rep, rep)
+    /// # With additional arguments
+    /// x = sp.S("x")
+    /// tensor_with_args = T(mu, nu, x)  # T(mu, nu; x)
+    /// print(tensor_with_args)
+    /// ```
     #[pyo3(signature = (*args))]
     fn __call__(&self, args: &Bound<'_, PyTuple>) -> PyResult<PossiblyIndexed> {
         let mut add_args: Vec<Atom> = Vec::new();
@@ -293,57 +378,136 @@ impl SpensoName {
         format!("{}", self.name)
     }
 
+    /// Convert the tensor name to a symbolic expression.
+    ///
+    /// # Returns:
+    ///     A symbolic Expression representing this tensor name
+    ///
+    /// # Examples:
+    /// ```python
+    /// T = TensorName("T")
+    /// expr = T.to_expression()  # Symbol T as expression
+    /// ```
     fn to_expression(&self) -> PythonExpression {
         PythonExpression::from(Atom::var(self.name))
     }
 
+    /// Predefined metric tensor name.
+    ///
+    /// # Returns:
+    ///     TensorName for the metric tensor 'g'
     #[classattr]
     fn g() -> SpensoName {
         SpensoName { name: ETS.metric }
     }
+
+    /// Predefined musical isomorphis tensor name. This enables dualizing  self dual indices.
+    ///
+    /// # Returns:
+    ///     TensorName for the flat musical isomorphism
     #[classattr]
     fn flat() -> SpensoName {
         SpensoName { name: ETS.flat }
     }
+
+    /// Predefined gamma matrix name.
+    ///
+    /// # Returns:
+    ///     TensorName for Dirac gamma matrices
     #[classattr]
     fn gamma() -> SpensoName {
         SpensoName { name: AGS.gamma }
     }
+
+    /// Predefined gamma5 matrix name.
+    ///
+    /// # Returns:
+    ///     TensorName for the gamma5 matrix
     #[classattr]
     fn gamma5() -> SpensoName {
         SpensoName { name: AGS.gamma5 }
     }
+
+    /// Predefined left chiral projector name.
+    ///
+    /// # Returns:
+    ///     TensorName for the left projector P_L
     #[classattr]
     fn projm() -> SpensoName {
         SpensoName { name: AGS.projm }
     }
+
+    /// Predefined right chiral projector name.
+    ///
+    /// # Returns:
+    ///     TensorName for the right projector P_R
     #[classattr]
     fn projp() -> SpensoName {
         SpensoName { name: AGS.projp }
     }
+
+    /// Predefined sigma matrix name.
+    ///
+    /// # Returns:
+    ///     TensorName for Pauli sigma matrices
     #[classattr]
     fn sigma() -> SpensoName {
         SpensoName { name: AGS.sigma }
     }
+
+    /// Predefined color structure constant name.
+    ///
+    /// # Returns:
+    ///     TensorName for SU(N) structure constants f^abc
     #[classattr]
     fn f() -> SpensoName {
         SpensoName { name: CS.f }
     }
+
+    /// Predefined color generator name.
+    ///
+    /// # Returns:
+    ///     TensorName for SU(N) generators T^a
     #[classattr]
     fn t() -> SpensoName {
         SpensoName { name: CS.t }
     }
 }
 
+/// A tensor structure with abstract indices for symbolic tensor operations.
+///
+/// TensorIndices represents the index structure of tensors with named abstract indices
+/// that can be contracted, manipulated symbolically, and converted to expressions.
+/// It maintains both the representation structure and index assignments.
+///
+/// # Examples:
+/// ```python
+/// from symbolica.community.spenso import TensorIndices, Slot, Representation, TensorName
+///
+/// # Create from slots
+/// rep = Representation.euc(3)
+/// mu = rep('mu')
+/// nu = rep('nu')
+/// indices = TensorIndices(mu, nu)
+///
+/// # Create with name
+/// T = TensorName("T")
+/// named_indices = T(mu, nu)  # Creates TensorIndices with name "T"
+///
+/// # Access elements
+/// print(len(indices))       # Number of elements
+/// print(indices[0])         # First element's coordinates
+/// print(indices[1, 2])      # Flat index for coordinates [1, 2]
+///
+/// # Convert to expression
+/// expr = named_indices.to_expression()  # Symbolic tensor expression
+/// ```
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
 #[pyclass(name = "TensorIndices", module = "symbolica.community.spenso")]
 #[derive(Clone)]
-/// A structure that can be used to represent the "shape" of a tensor, along with a list of abstract indices.
-/// This has an optional name, and accompanying symbolica expressions that are considered as additional non-indexed arguments.
-/// The structure is essentially a list of `Slots` that are used to define the structure of the tensor.
 pub struct SpensoIndices {
     pub structure: PermutedStructure<ShadowedStructure<AbstractIndex>>,
 }
@@ -445,6 +609,34 @@ impl PyStubType for ConvertibleToStructure {
 #[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
 #[pymethods]
 impl SpensoIndices {
+    /// Create tensor structure from slots and optional arguments.
+    ///
+    /// # Args:
+    ///     *additional_args: Mixed arguments:
+    ///         - Slot objects: Define the tensor representation structure
+    ///         - Expressions: Additional non-indexed arguments
+    ///     name: Optional tensor name to assign to the structure
+    ///
+    /// # Returns:
+    ///     A new TensorStructure object
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica import S
+    /// from symbolica.community.spenso import TensorStructure, Representation, TensorName
+    ///
+    /// # Create from representations
+    /// rep = Representation.euc(3)
+    /// structure = TensorStructure(rep, rep)  # 3x3 tensor
+    ///
+    /// # With additional arguments
+    /// x = S('x')
+    /// structure_with_args = TensorStructure(rep, rep, x)
+    ///
+    /// # With name
+    /// T = TensorName("T")
+    /// named_structure = TensorStructure(rep, rep, name=T)
+    /// ```
     #[new]
     #[pyo3(signature =
            (
@@ -478,10 +670,35 @@ impl SpensoIndices {
         Ok(SpensoIndices { structure: a })
     }
 
+    /// Set the tensor name for this structure.
+    ///
+    /// # Args:
+    ///     name: The tensor name to assign
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import TensorStructure, TensorName, Representation
+    ///
+    /// rep = Representation.euc(3)
+    /// structure = TensorStructure(rep, rep)
+    ///
+    /// T = TensorName("T")
+    /// structure.set_name(T)
+    /// ```
     fn set_name(&mut self, name: ConvertibleToSpensoName) {
         self.structure.structure.set_name(name.0.name);
     }
 
+    /// Get the tensor name of this structure.
+    ///
+    /// # Returns:
+    ///     The tensor name if set, None otherwise
+    ///
+    /// # Examples:
+    /// ```python
+    /// # For a named tensor structure
+    /// name = structure.get_name()  # Returns TensorName object or None
+    /// ```
     fn get_name(&self) -> Option<SpensoName> {
         self.structure
             .structure
@@ -518,6 +735,30 @@ impl SpensoIndices {
         }
     }
 
+    /// Convert the tensor indices to a symbolic expression.
+    ///
+    /// Creates a symbolic representation of the tensor with its indices that can be
+    /// used in algebraic manipulations and pattern matching.
+    ///
+    /// # Returns:
+    ///     A symbolic Expression representing this indexed tensor
+    ///
+    /// # Raises:
+    ///     RuntimeError: If the tensor structure has no name
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import TensorName, Representation
+    ///
+    /// T = TensorName("T")
+    /// rep = Representation.euc(3)
+    /// mu = rep('mu')
+    /// nu = rep('nu')
+    /// indices = T(mu, nu)
+    ///
+    /// expr = indices.to_expression()  # T(mu, nu) as symbolic expression
+    /// print(expr)  # Can be used in symbolic computations
+    /// ```
     fn to_expression(&self) -> PyResult<PythonExpression> {
         if self.structure.structure.name().is_none() {
             return Err(PyRuntimeError::new_err("No name"));
@@ -631,15 +872,36 @@ impl SpensoIndices {
     }
 }
 
+/// A tensor structure without abstract indices, defined purely by representations.
+///
+/// TensorStructure represents the shape and representation structure of tensors
+/// without specific index assignments. It's used for defining tensor templates
+/// in libraries and for creating indexless tensor computations.
+///
+/// # Examples:
+/// ```python
+/// from symbolica.community.spenso import TensorStructure, Representation, TensorName
+///
+/// # Create from representations
+/// rep = Representation.euc(3)  # Color fundamental
+/// structure = TensorStructure(rep, rep)  # 3x3 matrix structure
+///
+/// # With name for library registration
+/// T = TensorName("T")
+/// named_structure = TensorStructure(rep, rep, name=T)
+///
+/// # Use to create indexed tensor
+/// indices = structure.index('mu', 'nu')  # Assign specific indices
+///
+/// # Create symbolic expression
+/// expr = structure.symbolic('a', 'b')  # T(a, b)
+/// ```
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
 )]
 #[pyclass(name = "TensorStructure", module = "symbolica.community.spenso")]
 #[derive(Clone)]
-/// A structure that can be used to represent the "shape" of a tensor.
-/// This has an optional name, and accompanying symbolica expressions that are considered as additional non-indexed arguments.
-/// The structure is essentially a list of `Representation` that are used to define the structure of the tensor.
 pub struct SpensoStructure {
     pub structure: PermutedStructure<ExplicitKey<AbstractIndex>>,
 }
@@ -845,10 +1107,23 @@ impl SpensoStructure {
     }
 
     #[pyo3(signature = (*args, extra_args=None))]
-    /// Convenience method. Calls `symbolic(*args, extra_args=extra_args)`.
+    /// Convenience method for creating symbolic expressions.
     ///
-    /// Creates a symbolic `Expression` representing this tensor structure. See the
-    /// `symbolic` method documentation for details on argument handling.
+    /// This is a shorthand for calling `symbolic(*args, extra_args=extra_args)`.
+    /// Creates a symbolic Expression representing this tensor structure.
+    ///
+    /// # Args:
+    ///     *args: Positional arguments (indices and additional args)
+    ///     extra_args: Optional list of additional non-tensorial arguments
+    ///
+    /// # Returns:
+    ///     A symbolic Expression representing the tensor
+    ///
+    /// # Examples:
+    /// ```python
+    /// structure = TensorStructure(rep, rep, name="T")
+    /// expr = structure('mu', 'nu')  # Same as structure.symbolic('mu', 'nu')
+    /// ```
     fn __call__(
         &self,
         args: &Bound<'_, PyTuple>,
@@ -859,27 +1134,45 @@ impl SpensoStructure {
     }
 
     #[pyo3(signature = (*args, extra_args=None))]
-    /// Creates a symbolic `Expression` representing this tensor structure with the given arguments.
+    /// Create a symbolic expression representing this tensor structure.
+    ///
+    /// Builds a symbolic tensor expression with the specified indices. Arguments can be
+    /// separated using a semicolon (';') to distinguish between additional arguments
+    /// and tensor indices.
     ///
     /// # Args:
-    ///     *args (int | str | Symbol | Expression | ';'): Positional arguments. Can include
-    ///         indices, expressions, or the semicolon separator.
-    ///     extra_args (list[Expression], optional): Explicit list of additional non-tensorial args.
-    ///
-    /// Interprets positional arguments (`*args`) as potential indices. Arguments
-    /// before a semicolon separator (`;`) and arguments provided via the `extra_args`
-    /// keyword argument are combined and treated as additional non-tensorial arguments.
-    /// Arguments after the semicolon (or all positional arguments if no separator is used)
-    /// are treated as the symbolic tensor indices.
-    ///
+    ///     *args: Positional arguments, can include:
+    ///         - int, str, Symbol, Expression: Tensor indices
+    ///         - ';': Separator between additional args and indices
+    ///     extra_args: Optional list of additional non-tensorial arguments
     ///
     /// # Returns:
-    ///     Expression: A symbolic expression representing the tensor.
+    ///     A symbolic Expression representing the tensor with indices
     ///
     /// # Raises:
-    ///     ValueError: If index count mismatches or separator is misused.
-    ///     TypeError: If arguments have unexpected types.
-    ///     RuntimeError: If the structure does not have a name.
+    ///     ValueError: If index count doesn't match structure order
+    ///     TypeError: If arguments have unexpected types
+    ///     RuntimeError: If the structure has no name
+    ///
+    /// # Examples:
+    /// ```python
+    /// import symbolica as sp
+    /// from symbolica.community.spenso import TensorStructure, Representation, TensorName
+    ///
+    /// rep = Representation.euc(3)
+    /// T = TensorName("T")
+    /// structure = TensorStructure([rep, rep], name=T)
+    ///
+    /// # Basic usage
+    /// expr = structure.symbolic('mu', 'nu')  # T(mu, nu)
+    ///
+    /// # With additional arguments
+    /// x = sp.S('x')
+    /// expr = structure.symbolic(x, ';', 'mu', 'nu')  # T(x; mu, nu)
+    ///
+    /// # Using extra_args parameter
+    /// expr = structure.symbolic('mu', 'nu', extra_args=[x])  # T(x; mu, nu)
+    /// ```
     fn symbolic(
         &self,
         args: &Bound<'_, PyTuple>,
@@ -930,29 +1223,41 @@ impl SpensoStructure {
     }
 
     #[pyo3(signature = (*args, extra_args=None, cook_indices=false))]
-    /// Creates an indexed tensor instance (`TensorIndices`) from this structure.
+    /// Create an indexed tensor (TensorIndices) from this structure.
     ///
-    /// Interprets positional arguments (`*args`) as potential indices. Arguments
-    /// before a semicolon separator (`;`) and arguments provided via the `extra_args`
-    /// keyword argument are combined and treated as additional non-tensorial arguments.
-    /// Arguments after the semicolon (or all positional arguments if no separator is used)
-    /// are treated as the tensor indices.
+    /// Converts this structure template into a concrete indexed tensor by assigning
+    /// specific abstract indices to each representation slot.
     ///
     /// # Args:
-    ///     *args: Positional arguments. Can include indices (int, str, Symbol, Expression),
-    ///            or a single semicolon string (`;`).
-    ///     extra_args (list[Expression], optional): An explicit list of additional non-tensorial
-    ///         arguments. Defaults to None.
-    ///     cook_indices (bool, optional): If True, attempt to "cook" non-index arguments
-    ///         intended as tensor indices into valid `AbstractIndex` representations.
-    ///         Defaults to False.
+    ///     *args: Positional arguments:
+    ///         - Indices (int, str, Symbol, Expression)
+    ///         - ';': Separator between additional args and indices
+    ///     extra_args: Optional list of additional non-tensorial arguments
+    ///     cook_indices: If True, attempt to convert expressions to valid indices
     ///
     /// # Returns:
-    ///     TensorIndices: An object representing the tensor structure with concrete indices assigned.
+    ///     A TensorIndices object with concrete index assignments
     ///
     /// # Raises:
-    ///     ValueError: If index resolution fails, counts mismatch, or separator is misused.
-    ///     TypeError: If arguments have unexpected types.
+    ///     ValueError: If index count doesn't match or conversion fails
+    ///     TypeError: If arguments have unexpected types
+    ///
+    /// # Examples:
+    /// ```python
+    /// import symbolica as sp
+    /// from symbolica.community.spenso import TensorStructure, Representation, TensorName
+    ///
+    /// rep = Representation.cof(3)
+    /// T = TensorName("T")
+    /// structure = TensorStructure([rep, rep], name=T)
+    ///
+    /// # Create indexed tensor
+    /// indices = structure.index('mu', 'nu')  # T with indices mu, nu
+    ///
+    /// # With additional arguments
+    /// x = sp.S('x')
+    /// indices = structure.index(x, ';', 'mu', 'nu')  # T(x; mu, nu)
+    /// ```
     fn index(
         &self,
         args: &Bound<'_, PyTuple>,
@@ -1083,24 +1388,45 @@ impl PyStubType for PossiblyIndexed {
 )]
 #[pyclass(name = "Representation", module = "symbolica.community.spenso")]
 #[derive(Clone)]
-/// A representation class in the sense of representation theory. This class is used to represent the representation of a tensor. It is essentially a pair of a name and a dimension.
-/// New representations are registered when constructing.
-/// Some representations are dualizable, meaning that they have a dual representation.
-/// Indices will only ever match across dual representations.
-/// There are some already registered representations, such as:
-///  EUCLIDEAN: Rep = Rep::SelfDual(0);
-///  BISPINOR: Rep = Rep::SelfDual(1);
-///  COLORADJ: Rep = Rep::SelfDual(2);
-///  MINKOWSKI: Rep = Rep::SelfDual(3);
+/// A representation in the sense of group representation theory for tensor indices.
 ///
-///  LORENTZ_UP: Rep = Rep::Dualizable(1);
-///  LORENTZ_DOWN: Rep = Rep::Dualizable(-1);
-///  SPINFUND: Rep = Rep::Dualizable(2);
-///  SPINANTIFUND: Rep = Rep::Dualizable(-2);
-///  COLORFUND: Rep = Rep::Dualizable(3);
-///  COLORANTIFUND: Rep = Rep::Dualizable(-3);
-///  COLORSEXT: Rep = Rep::Dualizable(4);
-///  COLORANTISEXT: Rep = Rep::Dualizable(-4);
+/// Representations define the transformation properties of tensor indices under group operations.
+/// They specify the dimension and duality structure, determining which indices can contract.
+///
+/// Key concepts:
+/// - **Self-dual**: Indices can contract with other indices of the same representation
+/// - **Dualizable**: Indices can only contract with their dual representation
+/// - **Dimension**: Size of the representation space
+///
+/// # Predefined Representations:
+/// Common physics representations are available as class methods:
+/// - `Representation.euc(d)`: Euclidean space (self-dual)
+/// - `Representation.mink(d)`: Minkowski space (self-dual)
+/// - `Representation.bis(d)`: Bispinor (self-dual)
+/// - `Representation.cof(d)`: Color fundamental (dualizable)
+/// - `Representation.coad(d)`: Color adjoint (self-dual)
+/// - `Representation.cos(d)`: Color sextet (dualizable)
+///
+/// # Examples:
+/// ```python
+/// from symbolica.community.spenso import Representation
+///
+/// # Standard representations
+/// euclidean = Representation.euc(4)      # 4D Euclidean
+/// lorentz = Representation.mink(4)       # 4D Minkowski
+/// color = Representation.cof(3)          # SU(3) fundamental
+/// adjoint = Representation.coad(8)       # SU(3) adjoint
+///
+/// # Custom representation
+/// custom = Representation("MyRep", 5, is_self_dual=True)
+///
+/// # Create slots with indices
+/// mu_slot = euclidean('mu')              # Euclidean index μ
+/// a_slot = color('a')                    # Color index a
+///
+/// # Generate metric tensors
+/// metric = euclidean.g('mu', 'nu')       # g_μν
+/// ```
 ///
 pub struct SpensoRepresentation {
     pub representation: Representation<LibraryRep>,
@@ -1194,7 +1520,32 @@ impl SpensoRepresentation {
     #[pyo3(signature =
            (
            name,dimension,is_self_dual=true))]
-    /// Register a new representation with the given name and dimension. If dual is true, the representation will be dualizable, else it will be self-dual.
+    /// Create and register a new representation with specified properties.
+    ///
+    /// # Args:
+    ///     name: String name for the representation
+    ///     dimension: Size of the representation (int or symbolic)
+    ///     is_self_dual: If True, creates self-dual representation; if False, creates dualizable pair
+    ///
+    /// # Returns:
+    ///     A new Representation object
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import Representation
+    /// import symbolica as sp
+    ///
+    /// # Self-dual representation (indices contract with themselves)
+    /// euclidean = Representation("Euclidean", 4, is_self_dual=True)
+    ///
+    /// # Dualizable representation (needs dual partner for contraction)
+    /// vector_up = Representation("VectorUp", 4, is_self_dual=False)
+    ///
+    /// vector_down =vector_up.dual()  # Get dual representation
+    /// # Symbolic dimension
+    /// n = sp.S('n')
+    /// general = Representation("General", n, is_self_dual=True)
+    /// ```
     pub fn register_new(
         name: Bound<'_, PyAny>,
         dimension: ConvertibleToDimension,
@@ -1214,7 +1565,32 @@ impl SpensoRepresentation {
         })
     }
 
-    /// Generate a new slot with the given index, from this representation
+    /// Create a slot or symbolic expression from this representation.
+    ///
+    /// # Args:
+    ///     aind: The index specification:
+    ///         - Abstract index (int, str, Symbol): Creates a Slot
+    ///         - Expression: Creates symbolic representation
+    ///
+    /// # Returns:
+    ///     Either a Slot object (for indices) or Expression (for symbolic args)
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import Representation
+    /// import symbolica as sp
+    ///
+    /// rep = Representation.euc(3)
+    ///
+    /// # Create slots with different index types
+    /// slot1 = rep('mu')        # String index
+    /// slot2 = rep(1)           # Integer index
+    /// slot3 = rep(sp.S('nu'))  # Symbolic index
+    ///
+    /// # Create symbolic expression
+    /// x = sp.S('x')
+    /// sym_rep = rep(x)         # Symbolic representation
+    /// ```
     fn __call__(&self, py: Python<'_>, aind: ConvertibleToAbstractIndex) -> PyResult<Py<PyAny>> {
         match aind {
             ConvertibleToAbstractIndex::Separator => {
@@ -1234,6 +1610,20 @@ impl SpensoRepresentation {
         }
     }
 
+    /// Create a metric tensor for this representation.
+    ///
+    /// # Args:
+    ///     i: First index
+    ///     j: Second index
+    ///
+    /// # Returns:
+    ///     TensorIndices representing the metric tensor g_ij
+    ///
+    /// # Examples:
+    /// ```python
+    /// rep = Representation.mink(4)
+    /// metric = rep.g('mu', 'nu')  # Minkowski metric g_μν
+    /// ```
     fn g(
         &self,
         i: ConvertibleToAbstractIndex,
@@ -1253,6 +1643,20 @@ impl SpensoRepresentation {
         }
     }
 
+    /// Create a musical isomorphism tensor for this representation.
+    ///
+    /// # Args:
+    ///     i: First index
+    ///     j: Second index
+    ///
+    /// # Returns:
+    ///     TensorIndices representing the flat musical isomorphism tensor ♭_ij
+    ///
+    /// # Examples:
+    /// ```python
+    /// rep = Representation.mink(4)
+    /// flat = rep.flat('mu', 'nu')  # Flat isomorphism ♭_μν
+    /// ```
     fn flat(
         &self,
         i: ConvertibleToAbstractIndex,
@@ -1272,6 +1676,20 @@ impl SpensoRepresentation {
         }
     }
 
+    /// Create an identity tensor for this representation.
+    ///
+    /// # Args:
+    ///     i: First index
+    ///     j: Second index
+    ///
+    /// # Returns:
+    ///     TensorIndices representing the identity tensor δ_ij
+    ///
+    /// # Examples:
+    /// ```python
+    /// rep = Representation.cof(3)
+    /// identity = rep.id('a', 'b')  # Color identity δ_ab
+    /// ```
     fn id(
         &self,
         i: ConvertibleToAbstractIndex,
@@ -1280,7 +1698,10 @@ impl SpensoRepresentation {
         match (i, j) {
             (ConvertibleToAbstractIndex::Aind(i), ConvertibleToAbstractIndex::Aind(j)) => {
                 let structure = ShadowedStructure::<AbstractIndex>::from_iter(
-                    [self.representation.slot(i), self.representation.slot(j)],
+                    [
+                        self.representation.slot(i).dual(),
+                        self.representation.slot(j),
+                    ],
                     ETS.metric,
                     None,
                 );
@@ -1299,10 +1720,21 @@ impl SpensoRepresentation {
         format!("{}", self.representation.to_symbolic([]))
     }
 
+    /// Convert the representation to a symbolic expression.
+    ///
+    /// # Returns:
+    ///     A symbolic Expression representing this representation
     fn to_expression(&self) -> PythonExpression {
         PythonExpression::from(self.representation.to_symbolic([]))
     }
 
+    /// Create a bispinor representation.
+    ///
+    /// # Args:
+    ///     dimension: The dimension of the bispinor space
+    ///
+    /// # Returns:
+    ///     A bispinor Representation
     #[staticmethod]
     fn bis(dimension: ConvertibleToDimension) -> Self {
         let dim = dimension.0;
@@ -1312,6 +1744,13 @@ impl SpensoRepresentation {
         }
     }
 
+    /// Create a Euclidean space representation.
+    ///
+    /// # Args:
+    ///     dimension: The dimension of the Euclidean space
+    ///
+    /// # Returns:
+    ///     A Euclidean Representation
     #[staticmethod]
     fn euc(dimension: ConvertibleToDimension) -> Self {
         let dim = dimension.0;
@@ -1321,6 +1760,13 @@ impl SpensoRepresentation {
         }
     }
 
+    /// Create a Minkowski space representation.
+    ///
+    /// # Args:
+    ///     dimension: The dimension of the Minkowski space
+    ///
+    /// # Returns:
+    ///     A Minkowski Representation
     #[staticmethod]
     fn mink(dimension: ConvertibleToDimension) -> Self {
         let dim = dimension.0;
@@ -1329,13 +1775,80 @@ impl SpensoRepresentation {
             representation: rep,
         }
     }
+
+    /// Create a color fundamental representation.
+    ///
+    /// # Args:
+    ///     dimension: The dimension of the color group (e.g., 3 for SU(3))
+    ///
+    /// # Returns:
+    ///     A color fundamental Representation
+    #[staticmethod]
+    fn cof(dimension: ConvertibleToDimension) -> Self {
+        let dim = dimension.0;
+        let rep = ColorFundamental {}.new_rep(dim).cast();
+        Self {
+            representation: rep,
+        }
+    }
+
+    /// Create a color adjoint representation.
+    ///
+    /// # Args:
+    ///     dimension: The dimension of the adjoint representation (e.g., 8 for SU(3))
+    ///
+    /// # Returns:
+    ///     A color adjoint Representation
+    #[staticmethod]
+    fn coad(dimension: ConvertibleToDimension) -> Self {
+        let dim = dimension.0;
+        let rep = ColorAdjoint {}.new_rep(dim).cast();
+        Self {
+            representation: rep,
+        }
+    }
+
+    /// Create a color sextet representation.
+    ///
+    /// # Args:
+    ///     dimension: The dimension of the sextet representation (e.g., 6 for SU(3))
+    ///
+    /// # Returns:
+    ///     A color sextet Representation
+    #[staticmethod]
+    fn cos(dimension: ConvertibleToDimension) -> Self {
+        let dim = dimension.0;
+        let rep = ColorSextet {}.new_rep(dim).cast();
+        Self {
+            representation: rep,
+        }
+    }
 }
 
-/// An abstract index slot for a tensor.
-/// This is essentially a tuple of a `Representation` and an abstract index id.
+/// A tensor index slot combining a representation with an abstract index.
 ///
-/// The abstract index id can be either an integer or a symbol.
-/// This is the building block for creating tensor structures that can be contracted.
+/// Slots are the building blocks for tensor structures, pairing a representation
+/// (which defines transformation properties) with an abstract index identifier.
+/// Slots with matching representations and indices can be contracted.
+///
+/// # Examples:
+/// ```python
+/// from symbolica.community.spenso import Slot, Representation
+/// import symbolica as sp
+///
+/// # Create representation and slots
+/// rep = Representation.euc(3)
+/// slot1 = rep('mu')           # Slot with string index
+/// slot2 = rep(1)              # Slot with integer index
+/// slot3 = rep(sp.S('nu')) # Slot with symbolic index
+///
+/// # Create custom slot
+/// custom_slot = Slot("MyRep", 4, 'alpha', dual=False)
+///
+/// # Use in tensor structures
+/// from symbolica.community.spenso import TensorIndices
+/// tensor_structure = TensorIndices(slot1, slot2)
+/// ```
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
@@ -1361,8 +1874,32 @@ impl SpensoSlot {
     #[pyo3(signature =
            (
            name,dimension,aind,dual=false))]
-    /// Create a new slot from a name of a representation, a dimension and an abstract index.
-    ///  If dual is true, the representation will be dualizable, else it will be self-dual.
+    /// Create a new slot with a custom representation and index.
+    ///
+    /// # Args:
+    ///     name: String name for the representation
+    ///     dimension: Size of the representation space
+    ///     aind: The abstract index (int, str, or Symbol)
+    ///     dual: If True, creates dualizable representation; if False, self-dual
+    ///
+    /// # Returns:
+    ///     A new Slot object
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import Slot
+    /// import symbolica as sp
+    ///
+    /// # Self-dual slot
+    /// euclidean_slot = Slot("Euclidean", 4, 'mu', dual=False)
+    ///
+    /// # Dualizable slot
+    /// vector_slot = Slot("Vector", 4, 'nu', dual=True)
+    ///
+    /// # With symbolic index
+    /// sym_index = sp.S('alpha')
+    /// symbolic_slot = Slot("Custom", 3, sym_index, dual=False)
+    /// ```
     pub fn register_new(
         name: Bound<'_, PyAny>,
         dimension: usize,
@@ -1402,6 +1939,17 @@ impl SpensoSlot {
         }
     }
 
+    /// Convert the slot to a symbolic expression.
+    ///
+    /// # Returns:
+    ///     A symbolic Expression representing this slot
+    ///
+    /// # Examples:
+    /// ```python
+    /// rep = Representation.euc(3)
+    /// slot = rep('mu')
+    /// expr = slot.to_expression()  # Symbolic representation of the slot
+    /// ```
     fn to_expression(&self) -> PythonExpression {
         PythonExpression::from(self.slot.to_atom())
     }

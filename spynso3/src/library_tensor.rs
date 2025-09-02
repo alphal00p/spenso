@@ -41,9 +41,35 @@ use super::{
     structure::{ConvertibleToIndexLess, SpensoStructure},
 };
 
-/// A tensor class that can be either dense or sparse.
-/// The data is either float or complex or a symbolica expression
-/// It can be instantiated with data using the `sparse_empty` or `dense` module functions.
+/// A library tensor class optimized for use in tensor libraries and networks.
+///
+/// Library tensors are similar to regular tensors but use explicit keys for efficient
+/// lookup and storage in tensor libraries. They can be either dense or sparse and
+/// store data as floats, complex numbers, or symbolic expressions.
+///
+/// LibraryTensors are designed for:
+/// - Registration in TensorLibrary instances
+/// - Use in tensor networks where structure reuse is important
+/// - Efficient symbolic manipulation and pattern matching
+///
+/// # Examples:
+/// ```python
+/// from symbolica.community.spenso import (
+///     LibraryTensor,
+///     TensorStructure,
+///     Representation,
+/// )
+///
+/// # Create a structure for a color matrix
+/// rep = Representation.euc(3)  # 3x3 color fundamental
+/// structure = TensorStructure(rep, rep, name="T")
+/// # Create dense library tensor
+/// data = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]  # Identity matrix
+/// tensor = LibraryTensor.dense(structure, data)
+/// # Create sparse library tensor
+/// sparse_tensor = LibraryTensor.sparse(structure, float)
+///
+/// ```
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
@@ -78,9 +104,40 @@ impl LibrarySpensor {
     }
 
     #[staticmethod]
-    /// Create a new sparse empty tensor with the given structure and type.
-    /// The type is either a float or a symbolica expression.
+    /// Create a new sparse empty library tensor with the given structure and data type.
     ///
+    /// Creates a sparse tensor that initially contains no non-zero elements.
+    /// Elements can be set individually using indexing operations.
+    ///
+    /// # Args:
+    ///     structure: The tensor structure (TensorStructure, list of Representations, or list of integers)
+    ///     type_info: The data type - either `float` or `Expression` class
+    ///
+    /// # Returns:
+    ///     A new sparse library tensor with all elements initially zero
+    ///
+    /// # Examples:
+    /// ```python
+    /// import symbolica as sp
+    /// from symbolica.community.spenso import (
+    ///     LibraryTensor,
+    ///     TensorStructure,
+    ///     Representation,
+    /// )
+    ///
+    /// # Create structure from representations
+    /// rep = Representation.euc(3)
+    /// structure = TensorStructure(rep, rep)
+    /// # Create sparse float tensor
+    /// sparse_float = LibraryTensor.sparse(structure, float)
+    /// # Create sparse symbolic tensor
+    /// sparse_sym = LibraryTensor.sparse(structure, sp.Expression)
+    /// # Set individual elements
+    /// sparse_float[0, 0] = 1.0
+    /// sparse_float[1, 1] = 2.0
+    /// print(sparse_float)
+    ///
+    /// ```
     pub fn sparse(
         structure: ConvertibleToIndexLess,
         type_info: Bound<'_, PyType>,
@@ -104,13 +161,45 @@ impl LibrarySpensor {
     }
 
     #[staticmethod]
-    /// Create a new dense tensor with the given structure and data.
-    /// The structure can be a list of integers, a list of representations, or a list of slots.
-    /// In the first two cases, no "indices" are assumed, and thus the tensor is indexless (i.e.) it has a shape but no proper way to contract it.
-    /// The structure can also be a proper `TensorIndices` object or `TensorStructure` object.
+    /// Create a new dense library tensor with the given structure and data.
     ///
-    /// The data is either a list of floats or a list of symbolica expressions, of length equal to the number of elements in the structure, in row-major order.
+    /// Dense tensors store all elements explicitly in row-major order. The structure
+    /// defines the tensor's shape and indexing properties.
     ///
+    /// # Args:
+    ///     structure: The tensor structure, can be:
+    ///         - TensorStructure object (proper library structure)
+    ///         - List of Representations (creates library structure)
+    ///         - List of integers (creates indexless shape)
+    ///     data: The tensor data in row-major order:
+    ///         - List of floats for numerical tensors
+    ///         - List of Expressions for symbolic tensors
+    ///
+    /// # Returns:
+    ///     A new dense library tensor with the specified data
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica import S
+    /// from symbolica.community.spenso import (
+    ///     LibraryTensor,
+    ///     TensorStructure,
+    ///     Representation,
+    /// )
+    ///
+    /// # Create a 2x2 color matrix
+    /// rep = Representation.euc(2)
+    /// sigma = S("sigma")
+    /// structure = TensorStructure(rep, rep, name=sigma)
+    /// data = [0.0, 1.0, 1.0, 0.0]  # Pauli matrix σ_x
+    /// tensor = LibraryTensor.dense(structure, data)
+    /// # Create symbolic tensor
+    /// x, y = S("x", "y")
+    /// sym_data = [x, y, -y, x]  # 2x2 matrix with symbolic entries
+    /// sym_tensor = LibraryTensor.dense(structure, sym_data)
+    /// print(sym_tensor)
+    ///
+    /// ```
     pub fn dense(structure: ConvertibleToIndexLess, data: Bound<'_, PyAny>) -> PyResult<Self> {
         let dense = if let Ok(d) = data.extract::<Vec<f64>>() {
             DenseTensor::<f64, _>::from_data(d, structure.0.structure.structure)
@@ -137,6 +226,18 @@ impl LibrarySpensor {
         })
     }
     #[staticmethod]
+    /// Create a scalar library tensor with value 1.0.
+    ///
+    /// # Returns:
+    ///     A scalar library tensor containing the value 1.0
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import LibraryTensor
+    ///
+    /// one = LibraryTensor.one()
+    /// print(one)  # Scalar library tensor with value 1.0
+    /// ```
     pub fn one() -> Self {
         Self {
             tensor: PermutedStructure::identity(ParamOrConcrete::new_scalar(
@@ -146,6 +247,18 @@ impl LibrarySpensor {
     }
 
     #[staticmethod]
+    /// Create a scalar library tensor with value 0.0.
+    ///
+    /// # Returns:
+    ///     A scalar library tensor containing the value 0.0
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import LibraryTensor
+    ///
+    /// zero = LibraryTensor.zero()
+    /// print(zero)  # Scalar library tensor with value 0.0
+    /// ```
     pub fn zero() -> Self {
         Self {
             tensor: PermutedStructure::identity(ParamOrConcrete::new_scalar(
@@ -155,11 +268,41 @@ impl LibrarySpensor {
     }
 
     #[allow(clippy::wrong_self_convention)]
+    /// Convert this library tensor to dense storage format.
+    ///
+    /// Converts sparse tensors to dense format in-place. Dense tensors are unchanged.
+    /// This allocates memory for all tensor elements.
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import LibraryTensor, TensorStructure, Representation
+    ///
+    /// rep = Representation.cof(2)
+    /// structure = TensorStructure([rep, rep])
+    /// tensor = LibraryTensor.sparse(structure, float)
+    /// tensor[0, 0] = 1.0
+    /// tensor.to_dense()  # Now stores all 4 elements explicitly
+    /// ```
     fn to_dense(&mut self) {
         self.tensor.structure = self.tensor.structure.clone().to_dense();
     }
 
     #[allow(clippy::wrong_self_convention)]
+    /// Convert this library tensor to sparse storage format.
+    ///
+    /// Converts dense tensors to sparse format in-place, only storing non-zero elements.
+    /// This can save memory for tensors with many zero elements.
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import LibraryTensor, TensorStructure, Representation
+    ///
+    /// rep = Representation.euc(2)
+    /// structure = TensorStructure(rep, rep)
+    /// data = [1.0, 0.0, 0.0, 2.0]
+    /// tensor = LibraryTensor.dense(structure, data)
+    /// tensor.to_sparse()  # Now only stores 2 non-zero elements
+    /// ```
     fn to_sparse(&mut self) {
         self.tensor.structure = self.tensor.structure.clone().to_sparse();
     }
@@ -228,6 +371,30 @@ impl LibrarySpensor {
         })
     }
 
+    /// Set library tensor element(s) at the specified index or indices.
+    ///
+    /// # Args:
+    ///     item: Index specification:
+    ///         - int: Flat index into the tensor
+    ///         - List[int]: Multi-dimensional index coordinates
+    ///     value: The value to set:
+    ///         - float: Numerical value
+    ///         - Expression: Symbolic expression
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import LibraryTensor, TensorStructure, Representation
+    ///
+    /// rep = Representation.euc(2)
+    /// structure = TensorStructure(rep, rep)
+    /// tensor = LibraryTensor.sparse(structure, float)
+    ///
+    /// # Set using flat index
+    /// tensor[0] = 1.0
+    ///
+    /// # Set using coordinates
+    /// tensor[1, 1] = 2.0
+    /// ```
     fn __setitem__<'py>(
         &mut self,
         item: Bound<'py, PyAny>,
@@ -250,6 +417,21 @@ impl LibrarySpensor {
         }
     }
 
+    /// Extract the scalar value from a rank-0 (scalar) library tensor.
+    ///
+    /// # Returns:
+    ///     The scalar expression contained in this tensor
+    ///
+    /// # Raises:
+    ///     RuntimeError: If the tensor is not a scalar
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import LibraryTensor
+    ///
+    /// scalar_tensor = LibraryTensor.one()
+    /// value = scalar_tensor.scalar()  # Returns expression "1"
+    /// ```
     fn scalar(&self) -> PyResult<PythonExpression> {
         self.tensor
             .structure

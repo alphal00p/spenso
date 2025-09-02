@@ -57,7 +57,7 @@ pub struct Complex<T> {
     pub im: T,
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python_stubgen")]
 impl pyo3_stub_gen::PyStubType for Complex<f64> {
     fn type_output() -> pyo3_stub_gen::TypeInfo {
         pyo3_stub_gen::TypeInfo::builtin("complex")

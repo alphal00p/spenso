@@ -33,7 +33,7 @@ use spenso::{
         parametric::{LinearizedEvalTensor, MixedTensor},
     },
 };
-use structure::{ConvertibleToStructure, SpensoIndices, SpensoName};
+use structure::{ConvertibleToStructure, SpensoIndices};
 use symbolica::{
     api::python::SymbolicaCommunityModule,
     atom::Atom,
@@ -83,9 +83,26 @@ pub(crate) fn initialize_spenso(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-/// A tensor class that can be either dense or sparse.
-/// The data is either float or complex or a symbolica expression
-/// It can be instantiated with data using the `sparse_empty` or `dense` module functions.
+/// A tensor class that can be either dense or sparse with flexible data types.
+///
+/// The tensor can store data as floats, complex numbers, or symbolic expressions (Symbolica atoms).
+/// Tensors have an associated structure that defines their shape and index properties.
+///
+/// # Examples
+/// ```python
+/// from symbolica.community.spenso import (
+///     Tensor,
+///     TensorIndices,
+///     Representation,
+/// )
+/// # Create a structure for a 2x2 matrix
+/// structure = TensorIndices(Representation.euc(4)(1))  # 4 elements total
+/// # Create a dense tensor with float data
+/// data = [1.0, 2.0, 3.0, 4.0]
+/// tensor = Tensor.dense(structure, data)
+/// # Create a sparse tensor
+/// sparse_tensor = Tensor.sparse(structure, float)
+/// ```
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
@@ -167,9 +184,28 @@ impl Spensor {
     }
 
     #[staticmethod]
-    /// Create a new sparse empty tensor with the given structure and type.
-    /// The type is either a float or a symbolica expression.
+    /// Create a new sparse empty tensor with the given structure and data type.
     ///
+    /// # Args:
+    ///     structure: The tensor structure (TensorIndices or list of Slots)
+    ///     type_info: The data type - either `float` or `Expression` class
+    ///
+    /// # Returns:
+    ///     A new sparse tensor with all elements initially zero
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import Tensor, TensorIndices,Representation as R
+    ///
+    /// # Create structure
+    /// structure = TensorIndices(R.euc(3)(1), R.euc(3)(2))  # 3x3 tensor
+    ///
+    /// # Create sparse float tensor
+    /// sparse_float = Tensor.sparse(structure, float)
+    ///
+    /// # Create sparse symbolic tensor
+    /// sparse_sym = Tensor.sparse(structure, symbolica.Expression)
+    /// ```
     pub fn sparse(
         structure: ConvertibleToStructure,
         type_info: Bound<'_, PyType>,
@@ -194,12 +230,36 @@ impl Spensor {
 
     #[staticmethod]
     /// Create a new dense tensor with the given structure and data.
-    /// The structure can be a list of integers, a list of representations, or a list of slots.
-    /// In the first two cases, no "indices" are assumed, and thus the tensor is indexless (i.e.) it has a shape but no proper way to contract it.
-    /// The structure can also be a proper `TensorIndices` object or `TensorStructure` object.
     ///
-    /// The data is either a list of floats or a list of symbolica expressions, of length equal to the number of elements in the structure, in row-major order.
+    /// # Args:
+    ///     structure: The tensor structure (TensorIndices or list of Slots)
+    ///     data: The tensor data in row-major order:
+    ///         - List of floats for numerical tensors
+    ///         - List of Expressions for symbolic tensors
     ///
+    /// # Returns:
+    ///     A new dense tensor with the specified data
+    ///
+    /// # Examples:
+    /// ```python
+    /// import symbolica as sp
+    /// from symbolica import S
+    /// from symbolica.community.spenso import (
+    ///     Tensor,
+    ///     TensorIndices,
+    ///     Representation as R,
+    /// )
+    /// # Create a 2x2 matrix
+    /// structure = TensorIndices(R.euc(2)(1), R.euc(2)(2))
+    /// data = [1.0, 2.0, 3.0, 4.0]  # [[1,2], [3,4]]
+    /// tensor = Tensor.dense(structure, data)
+    /// # Create symbolic tensor
+    /// x, y = S("x", "y")
+    /// sym_data = [x, y, x * y, x + y]
+    /// sym_tensor = Tensor.dense(structure, sym_data)
+    /// print(tensor)
+    /// print(sym_tensor)
+    /// ```
     pub fn dense(structure: ConvertibleToStructure, data: Bound<'_, PyAny>) -> PyResult<Spensor> {
         let dense = if let Ok(d) = data.extract::<Vec<f64>>() {
             DenseTensor::<f64, _>::from_data(d, structure.0.structure.structure)
@@ -226,6 +286,18 @@ impl Spensor {
         })
     }
     #[staticmethod]
+    /// Create a scalar tensor with value 1.0.
+    ///
+    /// # Returns:
+    ///     A scalar tensor containing the value 1.0
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import Tensor
+    ///
+    /// one = Tensor.one()
+    /// print(one)  # Scalar tensor with value 1.0
+    /// ```
     pub fn one() -> Spensor {
         Spensor {
             tensor: PermutedStructure::identity(ParamOrConcrete::new_scalar(
@@ -235,6 +307,18 @@ impl Spensor {
     }
 
     #[staticmethod]
+    /// Create a scalar tensor with value 0.0.
+    ///
+    /// # Returns:
+    ///     A scalar tensor containing the value 0.0
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import Tensor
+    ///
+    /// zero = Tensor.zero()
+    /// print(zero)  # Scalar tensor with value 0.0
+    /// ```
     pub fn zero() -> Spensor {
         Spensor {
             tensor: PermutedStructure::identity(ParamOrConcrete::new_scalar(
@@ -244,11 +328,40 @@ impl Spensor {
     }
 
     #[allow(clippy::wrong_self_convention)]
+    /// Convert this tensor to dense storage format.
+    ///
+    /// Converts sparse tensors to dense format in-place. Dense tensors are unchanged.
+    /// This allocates memory for all tensor elements.
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import Tensor, TensorIndices,Representation as R
+    ///
+    /// structure = TensorIndices(R.euc(4)(2))
+    /// tensor = Tensor.sparse(structure, float)
+    /// tensor[0] = 1.0
+    /// tensor.to_dense()  # Now stores all 4 elements explicitly
+    /// ```
     fn to_dense(&mut self) {
         self.tensor.structure = self.tensor.structure.clone().to_dense();
     }
 
     #[allow(clippy::wrong_self_convention)]
+    /// Convert this tensor to sparse storage format.
+    ///
+    /// Converts dense tensors to sparse format in-place, only storing non-zero elements.
+    /// This can save memory for tensors with many zero elements.
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import Tensor, TensorIndices,Representation as R
+    ///
+    /// structure = TensorIndices(R.euc(2)(2),R.euc(2)(1))
+    /// data = [1.0, 0.0, 0.0, 2.0]
+    /// tensor = Tensor.dense(structure, data)
+    /// tensor.to_sparse()  # Now only stores 2 non-zero elements
+    /// print(tensor)
+    /// ```
     fn to_sparse(&mut self) {
         self.tensor.structure = self.tensor.structure.clone().to_sparse();
     }
@@ -317,6 +430,35 @@ impl Spensor {
         })
     }
 
+    /// Set tensor element(s) at the specified index or indices.
+    ///
+    /// # Args:
+    ///     item: Index specification:
+    ///         - int: Flat index into the tensor
+    ///         - List[int]: Multi-dimensional index coordinates
+    ///     value: The value to set:
+    ///         - float: Numerical value
+    ///         - Expression: Symbolic expression
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import (
+    ///     Tensor,
+    ///     TensorIndices,
+    ///     Representation as R,
+    /// )
+    /// structure = TensorIndices(R.euc(2)(2), R.euc(2)(1))
+    /// data = [1.0, 0.0, 0.0, 2.0]
+    /// tensor = Tensor.dense(structure, data)
+    /// tensor.to_sparse()  # Now only stores 2 non-zero elements
+    /// print(tensor)
+    /// tensor = Tensor.sparse(structure, float)
+    /// # Set using flat index
+    /// tensor[0] = 4.0
+    /// # Set using coordinates
+    /// tensor[1, 1] = 1.0
+    /// print(tensor)
+    /// ```
     fn __setitem__<'py>(
         &mut self,
         item: Bound<'py, PyAny>,
@@ -347,6 +489,42 @@ impl Spensor {
            n_cores = 4,
            verbose = false),
            )]
+    /// Create an optimized evaluator for symbolic tensor expressions.
+    ///
+    /// Compiles the symbolic expressions in this tensor into an optimized evaluation tree
+    /// that can efficiently compute numerical values for different parameter inputs.
+    ///
+    /// # Args:
+    ///     constants: Dict mapping symbolic expressions to their constant numerical values
+    ///     funs: Dict mapping function signatures to their symbolic definitions
+    ///     params: List of symbolic parameters that will be varied during evaluation
+    ///     iterations: Number of optimization iterations for Horner scheme (default: 100)
+    ///     n_cores: Number of CPU cores to use for optimization (default: 4)
+    ///     verbose: Whether to print optimization progress (default: False)
+    ///
+    /// # Returns:
+    ///     A TensorEvaluator object for efficient numerical evaluation
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica import S
+    /// from symbolica.community.spenso import (
+    ///     Tensor,
+    ///     TensorIndices,
+    ///     Representation as R,
+    /// )
+    /// # Create symbolic tensor
+    /// x, y = S("x", "y")
+    /// structure = TensorIndices(R.euc(2)(1))
+    /// tensor = Tensor.dense(structure, [x * y, x + y])
+    /// # Create evaluator
+    /// evaluator = tensor.evaluator(
+    ///     constants={}, funs={}, params=[x, y], iterations=50
+    /// )
+    /// # Use evaluator
+    /// results = evaluator.evaluate_complex([[1.0, 2.0], [3.0, 4.0]])
+    /// print(results)
+    /// ```
     pub fn evaluator(
         &self,
         constants: HashMap<PythonExpression, PythonExpression>,
@@ -421,6 +599,21 @@ impl Spensor {
         })
     }
 
+    /// Extract the scalar value from a rank-0 (scalar) tensor.
+    ///
+    /// # Returns:
+    ///     The scalar expression contained in this tensor
+    ///
+    /// # Raises:
+    ///     RuntimeError: If the tensor is not a scalar
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica.community.spenso import Tensor
+    ///
+    /// scalar_tensor = Tensor.one()
+    /// value = scalar_tensor.scalar()  # Returns expression "1"
+    /// ```
     fn scalar(&self) -> PyResult<PythonExpression> {
         self.tensor
             .structure
@@ -458,7 +651,21 @@ impl From<MixedTensor<f64, ShadowedStructure<AbstractIndex>>> for Spensor {
     }
 }
 
-/// An optimized evaluator for tensors.
+/// An optimized evaluator for symbolic tensor expressions.
+///
+/// This class provides efficient numerical evaluation of symbolic tensor expressions
+/// after optimization. It supports both real and complex-valued evaluations.
+///
+/// Create instances using the `Tensor.evaluator()` method rather than directly.
+///
+/// # Examples:
+/// ```python
+/// # Created from a symbolic tensor
+/// evaluator = my_tensor.evaluator(constants={}, funs={}, params=[x, y])
+///
+/// # Evaluate for multiple parameter sets
+/// results = evaluator.evaluate([[1.0, 2.0], [3.0, 4.0]])
+/// ```
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
@@ -474,7 +681,27 @@ pub struct SpensoExpressionEvaluator {
 #[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
 #[pymethods]
 impl SpensoExpressionEvaluator {
-    /// Evaluate the expression for multiple inputs and return the results.
+    /// Evaluate the tensor expression for multiple real-valued parameter inputs.
+    ///
+    /// # Args:
+    ///     inputs: List of parameter value lists, where each inner list contains
+    ///             numerical values for all parameters in the same order as specified
+    ///             when creating the evaluator
+    ///
+    /// # Returns:
+    ///     List of evaluated tensors, one for each input parameter set
+    ///
+    /// # Raises:
+    ///     ValueError: If the evaluator contains complex coefficients
+    ///
+    /// # Examples:
+    /// ```python
+    /// # Evaluate for two different parameter sets
+    /// results = evaluator.evaluate([
+    ///     [1.0, 2.0],  # x=1.0, y=2.0
+    ///     [3.0, 4.0]   # x=3.0, y=4.0
+    /// ])
+    /// ```
     fn evaluate(&mut self, inputs: Vec<Vec<f64>>) -> PyResult<Vec<Spensor>> {
         let eval = self.eval.as_mut().ok_or(exceptions::PyValueError::new_err(
             "Evaluator contains complex coefficients. Use evaluate_complex instead.",
@@ -490,7 +717,56 @@ impl SpensoExpressionEvaluator {
         inputs.iter().map(|s| eval.evaluate(s).into()).collect()
     }
 
-    /// Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
+    /// Compile the evaluator to a shared library using C++ for maximum performance.
+    ///
+    /// Generates optimized C++ code with optional inline assembly and compiles it
+    /// into a shared library that can be loaded for extremely fast evaluation.
+    ///
+    /// # Args:
+    ///     function_name: Name for the generated C++ function
+    ///     filename: Path for the generated C++ source file
+    ///     library_name: Name for the compiled shared library
+    ///     inline_asm: Type of inline assembly optimization:
+    ///                  - "default": Platform-appropriate assembly
+    ///                  - "x64": x86-64 specific optimizations
+    ///                  - "aarch64": ARM64 specific optimizations
+    ///                  - "none": No inline assembly
+    ///     optimization_level: Compiler optimization level 0-3 (default: 3)
+    ///     compiler_path: Path to specific C++ compiler (default: system default)
+    ///     custom_header: Additional C++ header code to include
+    ///
+    /// # Returns:
+    ///     A CompiledTensorEvaluator for maximum performance evaluation
+    ///
+    /// # Examples:
+    /// ```python
+    /// from symbolica import S
+    /// from symbolica.community.spenso import (
+    ///     Tensor,
+    ///     TensorIndices,
+    ///     Representation as R,
+    /// )
+    /// # Create symbolic tensor
+    /// x, y = S("x", "y")
+    /// structure = TensorIndices(R.euc(2)(1))
+    /// tensor = Tensor.dense(structure, [x * y, x + y])
+    /// # Create evaluator
+    /// evaluator = tensor.evaluator(
+    ///     constants={}, funs={}, params=[x, y], iterations=50
+    /// )
+    /// inputs = [[1.0, 2.0], [3.0, 4.0]]
+    /// # Use evaluator
+    /// results = evaluator.evaluate_complex(inputs)
+    /// print(results)
+    /// compiled = evaluator.compile(
+    ///     function_name="fast_eval",
+    ///     filename="tensor_eval.cpp",
+    ///     library_name="tensor_lib",
+    ///     optimization_level=3,
+    /// )
+    /// # Use compiled evaluator
+    /// results = compiled.evaluate_complex(inputs)
+    /// ```
     #[pyo3(signature =
         (function_name,
         filename,
@@ -566,7 +842,22 @@ impl SpensoExpressionEvaluator {
     }
 }
 
-/// A compiled and optimized evaluator for tensors.
+/// A compiled and optimized evaluator for maximum performance tensor evaluation.
+///
+/// This class wraps a compiled C++ shared library for extremely fast numerical
+/// evaluation of tensor expressions. It only supports complex-valued evaluation
+/// as this is the most general case.
+///
+/// Create instances using the `TensorEvaluator.compile()` method.
+///
+/// # Examples:
+/// ```python
+/// # Created from a TensorEvaluator
+/// compiled = evaluator.compile("eval_func", "code.cpp", "lib")
+///
+/// # Use for high-performance evaluation
+/// results = compiled.evaluate_complex(large_input_batch)
+/// ```
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
@@ -583,7 +874,30 @@ pub struct SpensoCompiledExpressionEvaluator {
 #[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
 #[pymethods]
 impl SpensoCompiledExpressionEvaluator {
-    /// Evaluate the expression for multiple inputs and return the results.
+    /// Evaluate the tensor expression for multiple complex-valued parameter inputs.
+    ///
+    /// Uses the compiled C++ code for maximum performance evaluation with complex numbers.
+    ///
+    /// # Args:
+    ///     inputs: List of parameter value lists, where each inner list contains
+    ///             complex values for all parameters in the same order as specified
+    ///             when creating the original evaluator
+    ///
+    /// # Returns:
+    ///     List of evaluated tensors, one for each input parameter set
+    ///
+    /// # Examples:
+    /// ```python
+    /// import symbolica as sp
+    /// from symbolica.community.spenso import Tensor
+    ///
+    /// # Use compiled evaluator for complex inputs
+    /// complex_inputs = [
+    ///     [1.0+2.0j, 3.0+0.0j],  # x=1+2i, y=3
+    ///     [0.0+1.0j, 2.0+1.0j]   # x=i, y=2+i
+    /// ]
+    /// results = compiled_evaluator.evaluate_complex(complex_inputs)
+    /// ```
     fn evaluate_complex(&mut self, inputs: Vec<Vec<Complex<f64>>>) -> Vec<Spensor> {
         inputs
             .iter()

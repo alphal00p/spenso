@@ -80,5 +80,6 @@ pyo3 = { version = "0.25.1", optional = true }
 
 pyo3-stub-gen = { version = "0.13", default-features = false, optional = true }
 [features]
-python = ["dep:pyo3", "dep:pyo3-stub-gen"]
+python = ["dep:pyo3"]
+python_stubgen = ["dep:pyo3-stub-gen", "python"]
 shadowing = ["dep:symbolica", "spenso-macros/shadowing"]

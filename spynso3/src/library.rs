@@ -32,26 +32,16 @@ use super::ModuleInit;
 /// reused across tensor networks and expressions. It manages tensor structures with their
 /// associated names and can resolve symbolic references to registered tensors.
 ///
-/// # Examples:
 /// ```python
 /// import symbolica
-/// from symbolica.community.spenso import (
-///     TensorLibrary,
-///     LibraryTensor,
-///     TensorStructure,
-/// )
-/// from symbolica.community.spenso import Representation
-/// # Create a new library
+/// from symbolica.community.spenso import TensorLibrary, LibraryTensor, TensorStructure, Representation
+///
 /// lib = TensorLibrary()
-/// # Register a tensor structure
-/// rep = Representation.euc(3)  # Color fundamental representation
+/// rep = Representation.euc(3)
 /// name = symbolica.S("my_tensor")
 /// structure = TensorStructure(rep, rep, name=name)
-/// tensor = LibraryTensor.dense(
-///     structure, [1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-/// )
+/// tensor = LibraryTensor.dense(structure, [1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
 /// lib.register(tensor)
-/// # Access registered tensor structure
 /// tensor_ref = lib[name]
 /// ```
 #[cfg_attr(
@@ -144,14 +134,10 @@ impl SpensorLibrary {
     /// Initializes an empty library ready for registering tensor structures.
     /// The library automatically manages internal tensor IDs.
     ///
-    /// # Returns:
-    ///     A new empty TensorLibrary instance
-    ///
     /// # Examples:
     /// ```python
     /// from symbolica.community.spenso import TensorLibrary
     ///
-    /// # Create new library
     /// lib = TensorLibrary()
     /// ```
     pub fn constuct() -> Self {
@@ -168,28 +154,21 @@ impl SpensorLibrary {
     /// in tensor networks and symbolic expressions. The tensor must have a name
     /// set in its structure.
     ///
-    /// # Args:
-    ///     tensor: The tensor to register - can be a LibraryTensor or regular Tensor
+    /// # Parameters:
+    /// - tensor: The tensor to register - can be a LibraryTensor or regular Tensor
     ///
     /// # Examples:
     /// ```python
     /// import symbolica
-    /// from symbolica.community.spenso import (
-    ///     TensorLibrary,
-    ///     LibraryTensor,
-    ///     TensorStructure,
-    /// )
-    /// from symbolica.community.spenso import Representation
-    /// # Create a new library
+    /// from symbolica.community.spenso import TensorLibrary, LibraryTensor, TensorStructure, Representation
+    ///
     /// lib = TensorLibrary()
-    /// # Register a tensor structure
-    /// rep = Representation.euc(3)  # Color fundamental representation
+    /// rep = Representation.euc(3)
     /// name = symbolica.S("my_tensor")
     /// structure = TensorStructure(rep, rep, name=name)
-    /// tensor = LibraryTensor.dense(
-    ///     structure, [1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-    /// )
+    /// tensor = LibraryTensor.dense(structure, [1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
     /// lib.register(tensor)
+    ///
     /// # Access registered tensor structure
     /// tensor_ref = lib[name]
     /// ```
@@ -203,14 +182,8 @@ impl SpensorLibrary {
     /// Looks up a previously registered tensor by its name and returns
     /// a reference structure that can be used to create new tensor instances.
     ///
-    /// # Args:
-    ///     key: The tensor name - can be a string or symbolic expression
-    ///
-    /// # Returns:
-    ///     A TensorStructure representing the registered tensor template
-    ///
-    /// # Raises:
-    ///     Error: If the tensor name is not found in the library
+    /// # Parameters:
+    /// - key: The tensor name - can be a string or symbolic expression
     ///
     /// # Examples:
     /// ```python
@@ -233,19 +206,16 @@ impl SpensorLibrary {
     /// color generators, metric tensors, and other commonly used structures in
     /// particle physics calculations.
     ///
-    /// # Returns:
-    ///     A TensorLibrary pre-populated with HEP tensor definitions
-    ///
     /// # Examples:
     /// ```python
     /// import symbolica
     /// from symbolica.community.spenso import TensorLibrary, TensorName
+    ///
     /// # Get HEP library with standard tensors
     /// hep_lib = TensorLibrary.hep_lib()
+    ///
     /// # Access standard tensors like gamma matrices
     /// gamma_structure = hep_lib[symbolica.S("spenso::gamma")]
-    /// print(gamma_structure)
-    /// print(gamma_structure(7, 3, 4))
     /// ```
     pub fn hep_lib() -> Self {
         Self {
@@ -260,8 +230,8 @@ impl SpensorLibrary {
 /// commonly used in theoretical physics calculations.
 ///
 /// # Variants:
-///     Weyl: Tensors related to Weyl spinors and chiral representations
-///     Algebra: Tensors related to algebraic structures and Lie algebras
+/// - Weyl: Tensors related to Weyl spinors and chiral representations
+/// - Algebra: Tensors related to algebraic structures and Lie algebras
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyclass_enum(module = "symbolica.community.spenso")

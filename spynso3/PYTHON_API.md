@@ -33,7 +33,7 @@ from symbolica.community.spenso import (
     TensorLibrary,
 )
 
-# Create a representation (e.g., 3D color space)
+# Create a 3D Minkowski representation
 lor = Representation.mink(3)
 
 # Create tensor structure with indices
@@ -41,19 +41,14 @@ mu = lor("mu")
 nu = lor("nu")
 indices = TensorIndices(mu, nu)
 
-# Create dense tensor
-data = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]  # Identity matrix
+# Create dense tensor (3x3 identity matrix)
+data = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
 tensor = Tensor.dense(indices, data)
-
-# Access elements
-print(tensor[0, 0])  # 1.0
-print(len(tensor))  # 9
 
 # Create symbolic tensors
 x, y = S("x", "y")
 T = TensorName("T")
 symbolic_tensor = T(mu, nu)
-print(symbolic_tensor)
 ```
 
 ## Core Classes
@@ -67,9 +62,7 @@ from symbolica import S
 from symbolica.community.spenso import Representation, Tensor, TensorIndices
 
 # Dense tensor creation
-
 euc3 = Representation.euc(3)
-print(euc3(1))
 structure = TensorIndices(euc3(1), euc3(2))  # 3x3 tensor
 data = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
 tensor = Tensor.dense(structure, data)
@@ -86,9 +79,7 @@ euc2 = Representation.euc(2)
 structure_2x2 = TensorIndices(euc2(1), euc2(2))
 sym_tensor = Tensor.dense(structure_2x2, sym_data)
 
-# Element access and manipulation
-print(tensor[0])  # First element
-print(tensor[1:3])  # Slice
+# Element access
 tensor[0] = 10.0  # Set element
 tensor.to_sparse()  # Convert to sparse storage
 ```
@@ -112,13 +103,11 @@ custom = Representation("MyRep", 5, is_self_dual=False)
 
 # Create slots (representation + index)
 mu_slot = euclidean("mu")
-# a_slot = color_fund("a")
 
 # Metric tensors
 metric = euclidean.g("mu", "nu")  # Metric tensor g_μν
 flat_metric = euclidean.flat("mu", "nu")  # Flat metric η_μν
 identity = custom.id("mu", "nu")  # Identity δ_μν
-print(identity)
 ```
 
 ### TensorName
@@ -143,7 +132,6 @@ rep = Representation.mink(3)
 mu = rep("mu")
 nu = rep("nu")
 tensor_expr = T(mu, nu)  # Creates TensorIndices T(μ,ν)
-print(tensor_expr)
 ```
 
 ### TensorIndices and TensorStructure
@@ -180,8 +168,6 @@ symbolic_expr = named_structure.symbolic("mu", "nu")  # T(μ,ν)
 # With additional arguments
 x = S("x")
 expr_with_args = named_structure.symbolic(x, ";", "mu", "nu")  # T(x; μ,ν)
-print(symbolic_expr)
-print(expr_with_args)
 ```
 
 ### TensorNetwork
@@ -207,10 +193,7 @@ expr = x * T(mu, nu)
 network = TensorNetwork(expr)
 # Controlled execution
 network.execute(mode=ExecutionMode.Scalar)  # Only scalar operations
-# network.execute(n_steps=5)
-print(network)
-print(network.result_tensor())
-
+result = network.result_tensor()
 ```
 
 ### TensorLibrary
@@ -240,7 +223,7 @@ lib.register(pauli_x)
 
 # Access registered tensors
 sigma_structure = lib[sigma_x]
-print(sigma_structure)
+
 # HEP library with standard physics tensors
 hep_lib = TensorLibrary.hep_lib()
 gamma_structure = hep_lib[N.gamma]
@@ -305,19 +288,16 @@ t_a = TensorName.t  # SU(N) generators
 
 # Representations
 lorentz = Representation.mink(4)  # Lorentz indices
-# color = Representation.cof(3)  # Color indices
 spinor = Representation.bis(4)  # Dirac spinor
 
 # Build physics expressions
 mu = lorentz("mu")
 nu = lorentz("nu")
-# a = color("a")
 alpha = spinor("alpha")
 beta = spinor("beta")
 
 # Gamma matrix trace: Tr(γᵘγᵥ)
 gamma_trace = gamma(alpha, beta, mu) * gamma(beta, alpha, nu)
-print(gamma_trace)
 ```
 
 ### Tensor Contractions
@@ -343,22 +323,8 @@ contraction = g(mu, nu) * g(mu, nu)  # Repeated indices contract
 network = TensorNetwork(contraction)
 network.execute()
 result = network.result_scalar()  # Should give 4 for 4D
-print(result)
 ```
 
-## Advanced Features
-
-### Pattern Matching and Replacement
-
-```python
-# Define patterns for algebraic simplification
-x = sp.symbol('x')
-pattern = x * sp.symbol('T_')  # T_ is wildcard
-replacement = sp.Integer(0)    # Replace xT with 0
-
-network = TensorNetwork(some_expression)
-simplified = network.replace(pattern, replacement)
-```
 
 # Best Practices
 
@@ -367,4 +333,4 @@ simplified = network.replace(pattern, replacement)
 3. **Choose representations carefully**: Self-dual vs dualizable affects contraction rules
 4. **Optimize evaluation**: Use compiled evaluators for performance-critical code
 5. **Leverage libraries**: Use `TensorLibrary.hep_lib()` for standard physics tensors
-6. **Cook your indices**: indices have to be symbols or numbers. To that end, use the cook_indices function from idenso.
+6. **Cook your indices**: Indices have to be symbols or numbers. To that end, use the cook_indices function from idenso.

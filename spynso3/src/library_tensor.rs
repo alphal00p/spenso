@@ -62,21 +62,18 @@ use super::{
 ///
 /// # Examples:
 /// ```python
-/// from symbolica.community.spenso import (
-///     LibraryTensor,
-///     TensorStructure,
-///     Representation,
-/// )
+/// from symbolica.community.spenso import LibraryTensor, TensorStructure, Representation
 ///
 /// # Create a structure for a color matrix
 /// rep = Representation.euc(3)  # 3x3 color fundamental
 /// structure = TensorStructure(rep, rep, name="T")
+///
 /// # Create dense library tensor
 /// data = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]  # Identity matrix
 /// tensor = LibraryTensor.dense(structure, data)
+///
 /// # Create sparse library tensor
 /// sparse_tensor = LibraryTensor.sparse(structure, float)
-///
 /// ```
 #[cfg_attr(
     feature = "python_stubgen",
@@ -143,34 +140,28 @@ impl LibrarySpensor {
     /// Creates a sparse tensor that initially contains no non-zero elements.
     /// Elements can be set individually using indexing operations.
     ///
-    /// # Args:
-    ///     structure: The tensor structure (TensorStructure, list of Representations, or list of integers)
-    ///     type_info: The data type - either `float` or `Expression` class
-    ///
-    /// # Returns:
-    ///     A new sparse library tensor with all elements initially zero
+    /// # Parameters:
+    /// - structure: The tensor structure (TensorStructure, list of Representations, or list of integers)
+    /// - type_info: The data type - either `float` or `Expression` class
     ///
     /// # Examples:
     /// ```python
     /// import symbolica as sp
-    /// from symbolica.community.spenso import (
-    ///     LibraryTensor,
-    ///     TensorStructure,
-    ///     Representation,
-    /// )
+    /// from symbolica.community.spenso import LibraryTensor, TensorStructure, Representation
     ///
     /// # Create structure from representations
     /// rep = Representation.euc(3)
     /// structure = TensorStructure(rep, rep)
+    ///
     /// # Create sparse float tensor
     /// sparse_float = LibraryTensor.sparse(structure, float)
+    ///
     /// # Create sparse symbolic tensor
     /// sparse_sym = LibraryTensor.sparse(structure, sp.Expression)
+    ///
     /// # Set individual elements
     /// sparse_float[0, 0] = 1.0
     /// sparse_float[1, 1] = 2.0
-    /// print(sparse_float)
-    ///
     /// ```
     pub fn sparse(
         structure: ConvertibleToIndexLess,
@@ -200,26 +191,14 @@ impl LibrarySpensor {
     /// Dense tensors store all elements explicitly in row-major order. The structure
     /// defines the tensor's shape and indexing properties.
     ///
-    /// # Args:
-    ///     structure: The tensor structure, can be:
-    ///         - TensorStructure object (proper library structure)
-    ///         - List of Representations (creates library structure)
-    ///         - List of integers (creates indexless shape)
-    ///     data: The tensor data in row-major order:
-    ///         - List of floats for numerical tensors
-    ///         - List of Expressions for symbolic tensors
-    ///
-    /// # Returns:
-    ///     A new dense library tensor with the specified data
+    /// # Parameters:
+    /// - structure: The tensor structure (TensorStructure, list of Representations, or list of integers)
+    /// - data: The tensor data in row-major order (list of floats, complex numbers, or Expressions)
     ///
     /// # Examples:
     /// ```python
     /// from symbolica import S
-    /// from symbolica.community.spenso import (
-    ///     LibraryTensor,
-    ///     TensorStructure,
-    ///     Representation,
-    /// )
+    /// from symbolica.community.spenso import LibraryTensor, TensorStructure, Representation
     ///
     /// # Create a 2x2 color matrix
     /// rep = Representation.euc(2)
@@ -227,12 +206,11 @@ impl LibrarySpensor {
     /// structure = TensorStructure(rep, rep, name=sigma)
     /// data = [0.0, 1.0, 1.0, 0.0]  # Pauli matrix σ_x
     /// tensor = LibraryTensor.dense(structure, data)
+    ///
     /// # Create symbolic tensor
     /// x, y = S("x", "y")
     /// sym_data = [x, y, -y, x]  # 2x2 matrix with symbolic entries
     /// sym_tensor = LibraryTensor.dense(structure, sym_data)
-    /// print(sym_tensor)
-    ///
     /// ```
     pub fn dense(structure: ConvertibleToIndexLess, data: AtomsOrFloats) -> PyResult<Self> {
         let dense = match data {
@@ -266,15 +244,11 @@ impl LibrarySpensor {
     #[staticmethod]
     /// Create a scalar library tensor with value 1.0.
     ///
-    /// # Returns:
-    ///     A scalar library tensor containing the value 1.0
-    ///
     /// # Examples:
     /// ```python
     /// from symbolica.community.spenso import LibraryTensor
     ///
     /// one = LibraryTensor.one()
-    /// print(one)  # Scalar library tensor with value 1.0
     /// ```
     pub fn one() -> Self {
         Self {
@@ -287,15 +261,11 @@ impl LibrarySpensor {
     #[staticmethod]
     /// Create a scalar library tensor with value 0.0.
     ///
-    /// # Returns:
-    ///     A scalar library tensor containing the value 0.0
-    ///
     /// # Examples:
     /// ```python
     /// from symbolica.community.spenso import LibraryTensor
     ///
     /// zero = LibraryTensor.zero()
-    /// print(zero)  # Scalar library tensor with value 0.0
     /// ```
     pub fn zero() -> Self {
         Self {
@@ -411,13 +381,9 @@ impl LibrarySpensor {
 
     /// Set library tensor element(s) at the specified index or indices.
     ///
-    /// # Args:
-    ///     item: Index specification:
-    ///         - int: Flat index into the tensor
-    ///         - List[int]: Multi-dimensional index coordinates
-    ///     value: The value to set:
-    ///         - float: Numerical value
-    ///         - Expression: Symbolic expression
+    /// # Parameters:
+    /// - item: Index specification (int for flat index, List[int] for coordinates)
+    /// - value: The value to set (float or Expression)
     ///
     /// # Examples:
     /// ```python
@@ -457,18 +423,12 @@ impl LibrarySpensor {
 
     /// Extract the scalar value from a rank-0 (scalar) library tensor.
     ///
-    /// # Returns:
-    ///     The scalar expression contained in this tensor
-    ///
-    /// # Raises:
-    ///     RuntimeError: If the tensor is not a scalar
-    ///
     /// # Examples:
     /// ```python
     /// from symbolica.community.spenso import LibraryTensor
     ///
     /// scalar_tensor = LibraryTensor.one()
-    /// value = scalar_tensor.scalar()  # Returns expression "1"
+    /// value = scalar_tensor.scalar()
     /// ```
     fn scalar(&self) -> PyResult<PythonExpression> {
         self.tensor
@@ -521,14 +481,10 @@ submit! {
                 r#return: Vec::<TensorElements>::type_output,
                 doc:r##"Get library tensor elements at the specified range of indices.
 
-# Args:
-    item: Index specification:
-        - slice: Slice object defining the range of indices
+# Parameters:
+- item: Slice object defining the range of indices
 
-# Returns:
-    The tensor element(s) at the specified index:
-        - list of complex or float
-        - list of Expressions
+Returns list of complex numbers, floats, or Expressions.
 "##,
                 is_async: false,
                 deprecated: None,
@@ -547,15 +503,10 @@ submit! {
                 r#return: TensorElements::type_output,
                 doc:r##"Get library tensor element at the specified index or indices.
 
-# Args:
-    item: Index specification:
-        - int: Flat index into the tensor
-        - List[int]: Multi-dimensional index coordinates
+# Parameters:
+- item: Index specification (int for flat index, List[int] for coordinates)
 
-# Returns:
-    The tensor element(s) at the specified index:
-        - complex or float: Numerical value
-        - Expression: Symbolic expression
+Returns complex number, float, or Expression.
 "##,
                 is_async: false,
                 deprecated: None,
@@ -579,13 +530,9 @@ submit! {
                 r#return: TypeInfo::none,
                 doc:r##"Set library tensor element(s) at the specified index or indices.
 
-# Args:
-    item: Index specification:
-        - int: Flat index into the tensor
-        - List[int]: Multi-dimensional index coordinates
-    value: The value to set:
-        - float: Numerical value
-        - Expression: Symbolic expression
+# Parameters:
+- item: Index specification (int for flat index, List[int] for coordinates)
+- value: The value to set (float or Expression)
 
 # Examples:
 ```python

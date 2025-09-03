@@ -951,27 +951,26 @@ submit! {
                 ],
                 r#type: MethodType::Instance,
                 r#return: SpensoSlot::type_output,
-                doc:"
-                Create a slot from this representation, by specifying an index
+                doc:r##"Create a slot from this representation, by specifying an index
 
-                # Args:
-                    aind: The index specification:
-                        - Abstract index (int, str, Symbol)
+# Args:
+aind: The index specification:
+    - Abstract index (int, str, Symbol)
 
-                # Returns:
-                    Slot
-                # Examples:
-                ```python
-                from symbolica.community.spenso import Representation
-                import symbolica as sp
+# Returns:
+    Slot
+# Examples:
+```python
+from symbolica.community.spenso import Representation
+import symbolica as sp
 
-                rep = Representation.euc(3)
+rep = Representation.euc(3)
 
-                # Create slots with different index types
-                slot1 = rep('mu')        # String index
-                slot2 = rep(1)           # Integer index
-                slot3 = rep(sp.S('nu'))  # Symbolic index
-                ```",
+# Create slots with different index types
+slot1 = rep('mu')        # String index
+slot2 = rep(1)           # Integer index
+slot3 = rep(sp.S('nu'))  # Symbolic index
+```"##,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
@@ -987,25 +986,24 @@ submit! {
                 ],
                 r#type: MethodType::Instance,
                 r#return: || PythonExpression::type_output()| SpensoSlot::type_output(),
-                doc:r##"
-                Create a slot or symbolic expression from this representation.
+                doc:r##"Create a slot or symbolic expression from this representation.
 
-                # Args:
-                    aind: The index specification:
-                        Expression: Creates symbolic representation
+# Args:
+aind: The index specification:
+    Expression: Creates symbolic representation
 
-                # Returns:
-                    Expression
+# Returns:
+    Expression
 
-                # Examples:
-                ```python
-                from symbolica.community.spenso import Representation
-                import symbolica as sp
+# Examples:
+```python
+from symbolica.community.spenso import Representation
+import symbolica as sp
 
-                rep = Representation.euc(3)
+rep = Representation.euc(3)
 
-                expr = rep(sp.E("cos(x)"))
-                ```"##,
+expr = rep(sp.E("cos(x)"))
+```"##,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
@@ -1037,18 +1035,17 @@ submit! {
                 ],
                 r#type: MethodType::Instance,
                 r#return: Vec::<TensorElements>::type_output,
-                doc:r##"
-                Get tensor elements at the specified range of indices.
+                doc:r##"Get tensor elements at the specified range of indices.
 
-                # Args:
-                    item: Index specification:
-                        - slice: Slice object defining the range of indices
+# Args:
+    item: Index specification:
+        - slice: Slice object defining the range of indices
 
-                # Returns:
-                    The tensor element(s) at the specified index:
-                        - list of complex or float
-                        - list of Expressions
-                "##,
+# Returns:
+    The tensor element(s) at the specified index:
+        - list of complex or float
+        - list of Expressions
+"##,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
@@ -1064,19 +1061,18 @@ submit! {
                 ],
                 r#type: MethodType::Instance,
                 r#return: TensorElements::type_output,
-                doc:r##"
-                Get tensor element at the specified index or indices.
+                doc:r##"Get tensor element at the specified index or indices.
 
-                # Args:
-                    item: Index specification:
-                        - int: Flat index into the tensor
-                        - List[int]: Multi-dimensional index coordinates
+# Args:
+    item: Index specification:
+        - int: Flat index into the tensor
+        - List[int]: Multi-dimensional index coordinates
 
-                # Returns:
-                    The tensor element(s) at the specified index:
-                        - complex or float: Numerical value
-                        - Expression: Symbolic expression
-                "##,
+# Returns:
+    The tensor element(s) at the specified index:
+        - complex or float: Numerical value
+        - Expression: Symbolic expression
+"##,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
@@ -1097,32 +1093,30 @@ submit! {
                 ],
                 r#type: MethodType::Instance,
                 r#return: TypeInfo::none,
-                doc:r##"
-                Set tensor element at the specified index.
+                doc:r##"Set tensor element at the specified index.
 
-                # Args:
-                    item: Index specification:
-                        - int: Flat index into the tensor
-                        - List[int]: Multi-dimensional index coordinates
-                    value: The value to set:
-                        - float: Numerical value
-                        - Expression: Symbolic expression
+# Args:
+    item: Index specification:
+        - int: Flat index into the tensor
+        - List[int]: Multi-dimensional index coordinates
+    value: The value to set:
+        - float: Numerical value
+        - Expression: Symbolic expression
 
-                # Examples:
-                ```python
-                from symbolica.community.spenso import LibraryTensor, TensorStructure, Representation
+# Examples:
+```python
+from symbolica.community.spenso import LibraryTensor, TensorStructure, Representation
 
-                rep = Representation.euc(2)
-                structure = TensorStructure(rep, rep)
-                tensor = LibraryTensor.sparse(structure, float)
+rep = Representation.euc(2)
+structure = TensorStructure(rep, rep)
+tensor = LibraryTensor.sparse(structure, float)
 
-                # Set using flat index
-                tensor[0] = 1.0
+# Set using flat index
+tensor[0] = 1.0
 
-                # Set using coordinates
-                tensor[1, 1] = 2.0
-                ```
-                "##,
+# Set using coordinates
+tensor[1, 1] = 2.0
+```"##,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,

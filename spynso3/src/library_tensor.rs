@@ -10,11 +10,11 @@ use pyo3::{
 
 #[cfg(feature = "python_stubgen")]
 use pyo3_stub_gen::{
+    PyStubType, TypeInfo,
     generate::MethodType,
     impl_stub_type,
     inventory::submit,
     type_info::{ArgInfo, MethodInfo, PyMethodsInfo},
-    PyStubType, TypeInfo,
 };
 use spenso::{
     algebra::complex::{Complex, RealOrComplex},
@@ -28,8 +28,8 @@ use crate::SliceOrIntOrExpanded;
 use spenso::{
     network::library::symbolic::ExplicitKey,
     structure::{
-        abstract_index::AbstractIndex, permuted::Perm, HasStructure, PermutedStructure,
-        ScalarTensor, TensorStructure,
+        HasStructure, PermutedStructure, ScalarTensor, TensorStructure,
+        abstract_index::AbstractIndex, permuted::Perm,
     },
     tensors::{
         complex::RealOrComplexTensor,
@@ -45,8 +45,8 @@ use symbolica::api::python::PythonExpression;
 use pyo3_stub_gen::{define_stub_info_gatherer, derive::*};
 
 use super::{
-    structure::{ConvertibleToIndexLess, SpensoStructure},
     ModuleInit, TensorElements,
+    structure::{ConvertibleToIndexLess, SpensoStructure},
 };
 
 /// A library tensor class optimized for use in tensor libraries and networks.
@@ -519,18 +519,17 @@ submit! {
                 ],
                 r#type: MethodType::Instance,
                 r#return: Vec::<TensorElements>::type_output,
-                doc:r##"
-                Get library tensor elements at the specified range of indices.
+                doc:r##"Get library tensor elements at the specified range of indices.
 
-                # Args:
-                    item: Index specification:
-                        - slice: Slice object defining the range of indices
+# Args:
+    item: Index specification:
+        - slice: Slice object defining the range of indices
 
-                # Returns:
-                    The tensor element(s) at the specified index:
-                        - list of complex or float
-                        - list of Expressions
-                "##,
+# Returns:
+    The tensor element(s) at the specified index:
+        - list of complex or float
+        - list of Expressions
+"##,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
@@ -546,19 +545,18 @@ submit! {
                 ],
                 r#type: MethodType::Instance,
                 r#return: TensorElements::type_output,
-                doc:r##"
-                Get library tensor element at the specified index or indices.
+                doc:r##"Get library tensor element at the specified index or indices.
 
-                # Args:
-                    item: Index specification:
-                        - int: Flat index into the tensor
-                        - List[int]: Multi-dimensional index coordinates
+# Args:
+    item: Index specification:
+        - int: Flat index into the tensor
+        - List[int]: Multi-dimensional index coordinates
 
-                # Returns:
-                    The tensor element(s) at the specified index:
-                        - complex or float: Numerical value
-                        - Expression: Symbolic expression
-                "##,
+# Returns:
+    The tensor element(s) at the specified index:
+        - complex or float: Numerical value
+        - Expression: Symbolic expression
+"##,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
@@ -579,32 +577,31 @@ submit! {
                 ],
                 r#type: MethodType::Instance,
                 r#return: TypeInfo::none,
-                doc:r##"
-                Set library tensor element(s) at the specified index or indices.
+                doc:r##"Set library tensor element(s) at the specified index or indices.
 
-                # Args:
-                    item: Index specification:
-                        - int: Flat index into the tensor
-                        - List[int]: Multi-dimensional index coordinates
-                    value: The value to set:
-                        - float: Numerical value
-                        - Expression: Symbolic expression
+# Args:
+    item: Index specification:
+        - int: Flat index into the tensor
+        - List[int]: Multi-dimensional index coordinates
+    value: The value to set:
+        - float: Numerical value
+        - Expression: Symbolic expression
 
-                # Examples:
-                ```python
-                from symbolica.community.spenso import LibraryTensor, TensorStructure, Representation
+# Examples:
+```python
+from symbolica.community.spenso import LibraryTensor, TensorStructure, Representation
 
-                rep = Representation.euc(2)
-                structure = TensorStructure(rep, rep)
-                tensor = LibraryTensor.sparse(structure, float)
+rep = Representation.euc(2)
+structure = TensorStructure(rep, rep)
+tensor = LibraryTensor.sparse(structure, float)
 
-                # Set using flat index
-                tensor[0] = 1.0
+# Set using flat index
+tensor[0] = 1.0
 
-                # Set using coordinates
-                tensor[1, 1] = 2.0
-                ```
-                "##,
+# Set using coordinates
+tensor[1, 1] = 2.0
+```
+"##,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,

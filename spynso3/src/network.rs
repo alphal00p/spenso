@@ -36,31 +36,24 @@ use pyo3_stub_gen::{PyStubType, derive::*};
 
 /// A tensor network representing computational graphs of tensor operations.
 ///
-/// A tensor network is a graph-based representation of tensor computations where:
-/// - Nodes represent tensors and operations
-/// - Edges represent tensor contractions and data flow
-/// - The network can be optimized and executed to compute results
+/// A tensor network is a graph-based representation of tensor computations where
+/// nodes represent tensors and operations, edges represent tensor contractions and
+/// data flow, and the network can be optimized and executed to compute results.
 ///
-/// Tensor networks are particularly useful for:
-/// - Symbolic manipulation of complex tensor expressions
-/// - Optimization of tensor contraction orders
-/// - Efficient evaluation of large tensor computations
-/// - Physics calculations involving many-body systems
+/// Tensor networks are particularly useful for symbolic manipulation of complex
+/// tensor expressions, optimization of tensor contraction orders, efficient
+/// evaluation of large tensor computations, and physics calculations involving
+/// many-body systems.
 ///
-/// # Examples:
-/// ```python
-/// from symbolica import S
-/// from symbolica.community.spenso import TensorNetwork, Tensor, TensorIndices
-///
-/// # Create from an expression
-/// x = S('x')
-/// expr = x * S('T')(S('mu'), S('nu'))
-/// network = TensorNetwork(expr)
-///
-/// # Execute the network
-/// network.execute()
-/// result = network.result_tensor()
-/// ```
+/// Examples
+/// --------
+/// >>> import symbolica as sp
+/// >>> from symbolica.community.spenso import TensorNetwork, Tensor, TensorIndices
+/// >>> x = sp.symbol('x')
+/// >>> expr = x * sp.symbol('T')(sp.symbol('mu'), sp.symbol('nu'))
+/// >>> network = TensorNetwork(expr)
+/// >>> network.execute()
+/// >>> result = network.result_tensor()
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyclass(module = "symbolica.community.spenso")
@@ -77,12 +70,13 @@ pub struct SpensoNet {
 
 /// Execution modes for tensor network evaluation.
 ///
-/// Controls how the tensor network execution engine processes the computational graph:
+/// Controls how the tensor network execution engine processes the computational graph.
 ///
-/// # Variants:
-/// - Single: Execute one contraction at a time, useful for debugging
-/// - Scalar: Only contract scalar operations, leaving tensor structure intact
-/// - All: Execute all possible contractions for complete evaluation
+/// Variants
+/// --------
+/// Single : Execute one contraction at a time, useful for debugging
+/// Scalar : Only contract scalar operations, leaving tensor structure intact
+/// All : Execute all possible contractions for complete evaluation
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyclass_enum(module = "symbolica.community.spenso")
@@ -134,7 +128,7 @@ impl<'a> FromPyObject<'a> for ConvertibleToSpensoNet {
             Ok(ConvertibleToSpensoNet(SpensoNet {
                 network: ParsingNet::try_from_view(
                     a.to_expression().expr.as_view(),
-                    &SpensorLibrary::constuct().library,
+                    &SpensorLibrary::construct().library,
                 )
                 .map_err(|a| PyRuntimeError::new_err(a.to_string()))?,
             }))
@@ -164,9 +158,17 @@ impl SpensoNet {
     /// Parses symbolic expressions containing tensor operations and converts them
     /// into an optimizable computational graph representation.
     ///
-    /// # Parameters:
-    /// - expr: The arithmetic expression or tensor structure to parse
-    /// - library: Optional tensor library for resolving named tensor references
+    /// Parameters
+    /// ----------
+    /// expr : ArithmeticStructure
+    ///     The arithmetic expression or tensor structure to parse
+    /// library : TensorLibrary, optional
+    ///     Optional tensor library for resolving named tensor references
+    ///
+    /// Returns
+    /// -------
+    /// TensorNetwork
+    ///     A new TensorNetwork representing the parsed expression
     #[pyo3(signature = (expr, library=None))]
     pub fn from_expression(
         expr: ArithmeticStructure,
@@ -182,13 +184,16 @@ impl SpensoNet {
     #[staticmethod]
     /// Create a tensor network representing the scalar value 1.
     ///
-    /// # Examples:
-    /// ```python
-    /// from symbolica.community.spenso import TensorNetwork
+    /// Returns
+    /// -------
+    /// TensorNetwork
+    ///     A TensorNetwork containing only the scalar 1
     ///
-    /// one_net = TensorNetwork.one()
-    /// result = one_net.result_scalar()
-    /// ```
+    /// Examples
+    /// --------
+    /// >>> from symbolica.community.spenso import TensorNetwork
+    /// >>> one_net = TensorNetwork.one()
+    /// >>> result = one_net.result_scalar()
     pub fn one() -> SpensoNet {
         SpensoNet {
             network: Network::one(),
@@ -198,13 +203,16 @@ impl SpensoNet {
     #[staticmethod]
     /// Create a tensor network representing the scalar value 0.
     ///
-    /// # Examples:
-    /// ```python
-    /// from symbolica.community.spenso import TensorNetwork
+    /// Returns
+    /// -------
+    /// TensorNetwork
+    ///     A TensorNetwork containing only the scalar 0
     ///
-    /// zero_net = TensorNetwork.zero()
-    /// result = zero_net.result_scalar()
-    /// ```
+    /// Examples
+    /// --------
+    /// >>> from symbolica.community.spenso import TensorNetwork
+    /// >>> zero_net = TensorNetwork.zero()
+    /// >>> result = zero_net.result_scalar()
     pub fn zero() -> SpensoNet {
         SpensoNet {
             network: Network::zero(),
@@ -216,15 +224,29 @@ impl SpensoNet {
     /// Applies pattern-based transformations to the network structure, allowing for
     /// symbolic simplifications, substitutions, and algebraic manipulations.
     ///
-    /// # Parameters:
-    /// - pattern: The symbolic pattern to match against
-    /// - rhs: The replacement expression or pattern
-    /// - non_greedy_wildcards: List of wildcard symbols to match non-greedily
-    /// - level_range: Tuple specifying depth range for pattern matching
-    /// - level_is_tree_depth: Whether level refers to tree depth or expression depth
-    /// - allow_new_wildcards_on_rhs: Allow new wildcards in replacement pattern
-    /// - rhs_cache_size: Size of cache for replacement pattern compilation
-    /// - repeat: Whether to repeatedly apply the replacement until no more matches
+    /// Parameters
+    /// ----------
+    /// pattern : Expression
+    ///     The symbolic pattern to match against
+    /// rhs : Expression
+    ///     The replacement expression or pattern
+    /// non_greedy_wildcards : list of Expression, optional
+    ///     List of wildcard symbols to match non-greedily
+    /// level_range : tuple of int, optional
+    ///     Tuple specifying depth range for pattern matching
+    /// level_is_tree_depth : bool, optional
+    ///     Whether level refers to tree depth or expression depth
+    /// allow_new_wildcards_on_rhs : bool, optional
+    ///     Allow new wildcards in replacement pattern
+    /// rhs_cache_size : int, optional
+    ///     Size of cache for replacement pattern compilation
+    /// repeat : bool, optional
+    ///     Whether to repeatedly apply the replacement until no more matches
+    ///
+    /// Returns
+    /// -------
+    /// TensorNetwork
+    ///     A new TensorNetwork with the replacements applied
     #[pyo3(signature = (pattern, rhs, _cond = None, non_greedy_wildcards = None, level_range = None, level_is_tree_depth = None, allow_new_wildcards_on_rhs = None, rhs_cache_size = None, repeat = None))]
     #[allow(clippy::too_many_arguments)]
     pub fn replace(
@@ -338,9 +360,17 @@ impl SpensoNet {
     /// Substitutes symbolic constants and functions with numerical values,
     /// converting symbolic parts of the network to concrete numerical tensors.
     ///
-    /// # Parameters:
-    /// - constants: Dict mapping symbolic expressions to their numerical values
-    /// - functions: Dict mapping function symbols to Python callable objects
+    /// Parameters
+    /// ----------
+    /// constants : dict
+    ///     Dict mapping symbolic expressions to their numerical values
+    /// functions : dict
+    ///     Dict mapping function symbols to Python callable objects
+    ///
+    /// Returns
+    /// -------
+    /// TensorNetwork
+    ///     A new TensorNetwork with symbolic expressions evaluated
     pub fn evaluate(
         &self,
         constants: HashMap<PythonExpression, f64>,
@@ -388,29 +418,24 @@ impl SpensoNet {
     /// contractions, additions, and multiplications. The execution can be controlled
     /// by mode and step limits.
     ///
-    /// # Parameters:
-    /// - library: Optional tensor library for resolving tensor operations
-    /// - n_steps: Maximum number of execution steps (None for complete execution)
-    /// - mode: Execution strategy (ExecutionMode.All, ExecutionMode.Scalar, or ExecutionMode.Single)
+    /// Parameters
+    /// ----------
+    /// library : TensorLibrary, optional
+    ///     Optional tensor library for resolving tensor operations
+    /// n_steps : int, optional
+    ///     Maximum number of execution steps (None for complete execution)
+    /// mode : ExecutionMode, optional
+    ///     Execution strategy (ExecutionMode.All, ExecutionMode.Scalar, or ExecutionMode.Single)
     ///
-    /// # Examples:
-    /// ```python
-    /// from symbolica.community.spenso import TensorNetwork, ExecutionMode, TensorLibrary
-    ///
-    /// # Create and execute network
-    /// network = TensorNetwork(some_expression)
-    /// network.execute()  # Complete execution
-    ///
-    /// # Partial execution
-    /// network.execute(n_steps=5)  # Execute up to 5 steps
-    ///
-    /// # Controlled execution
-    /// network.execute(mode=ExecutionMode.Scalar)  # Only scalar operations
-    ///
-    /// # With library context
-    /// lib = TensorLibrary.hep_lib()
-    /// network.execute(library=lib)
-    /// ```
+    /// Examples
+    /// --------
+    /// >>> from symbolica.community.spenso import TensorNetwork, ExecutionMode, TensorLibrary
+    /// >>> network = TensorNetwork(some_expression)
+    /// >>> network.execute()
+    /// >>> network.execute(n_steps=5)
+    /// >>> network.execute(mode=ExecutionMode.Scalar)
+    /// >>> lib = TensorLibrary.hep_lib()
+    /// >>> network.execute(library=lib)
     #[pyo3(signature = (library=None, n_steps=None, mode=ExecutionMode::All))]
     fn execute(
         &mut self,
@@ -466,22 +491,29 @@ impl SpensoNet {
     /// After network execution, retrieves the computed tensor result. The network
     /// should be executed before calling this method.
     ///
-    /// # Parameters:
-    /// - library: Optional tensor library for resolving tensor structures
+    /// Parameters
+    /// ----------
+    /// library : TensorLibrary, optional
+    ///     Optional tensor library for resolving tensor structures
     ///
-    /// # Examples:
-    /// ```python
-    /// from symbolica.community.spenso import TensorNetwork, TensorLibrary
+    /// Returns
+    /// -------
+    /// Tensor
+    ///     The computed tensor result
     ///
-    /// # Execute network and get result
-    /// network = TensorNetwork(tensor_expression)
-    /// network.execute()
-    /// result = network.result_tensor()
+    /// Raises
+    /// ------
+    /// RuntimeError
+    ///     If the network execution resulted in an error
     ///
-    /// # With library context
-    /// lib = TensorLibrary.hep_lib()
-    /// result_with_lib = network.result_tensor(library=lib)
-    /// ```
+    /// Examples
+    /// --------
+    /// >>> from symbolica.community.spenso import TensorNetwork, TensorLibrary
+    /// >>> network = TensorNetwork(tensor_expression)
+    /// >>> network.execute()
+    /// >>> result = network.result_tensor()
+    /// >>> lib = TensorLibrary.hep_lib()
+    /// >>> result_with_lib = network.result_tensor(library=lib)
     #[pyo3(signature = (library=None))]
     fn result_tensor(&self, library: Option<&SpensorLibrary>) -> PyResult<Spensor> {
         let lib = library.map(|l| &l.library).unwrap_or(HEP_LIB.deref());
@@ -504,15 +536,22 @@ impl SpensoNet {
     /// For networks that evaluate to scalar expressions, retrieves the computed
     /// scalar value. The network should be executed before calling this method.
     ///
-    /// # Examples:
-    /// ```python
-    /// from symbolica.community.spenso import TensorNetwork
+    /// Returns
+    /// -------
+    /// Expression
+    ///     The computed scalar expression
     ///
-    /// # Execute network that results in scalar
-    /// network = TensorNetwork(scalar_expression)
-    /// network.execute()
-    /// scalar_result = network.result_scalar()
-    /// ```
+    /// Raises
+    /// ------
+    /// RuntimeError
+    ///     If the network execution resulted in an error
+    ///
+    /// Examples
+    /// --------
+    /// >>> from symbolica.community.spenso import TensorNetwork
+    /// >>> network = TensorNetwork(scalar_expression)
+    /// >>> network.execute()
+    /// >>> scalar_result = network.result_scalar()
     fn result_scalar(&self) -> PyResult<PythonExpression> {
         Ok(
             match self
@@ -537,15 +576,21 @@ impl SpensoNet {
 
     /// Add two tensor networks element-wise.
     ///
-    /// # Parameters:
-    /// - rhs: The tensor network to add (right-hand side)
+    /// Parameters
+    /// ----------
+    /// rhs : TensorNetwork
+    ///     The tensor network to add (right-hand side)
     ///
-    /// # Examples:
-    /// ```python
-    /// net1 = TensorNetwork(expr1)
-    /// net2 = TensorNetwork(expr2)
-    /// sum_net = net1 + net2
-    /// ```
+    /// Returns
+    /// -------
+    /// TensorNetwork
+    ///     A new TensorNetwork representing the sum
+    ///
+    /// Examples
+    /// --------
+    /// >>> net1 = TensorNetwork(expr1)
+    /// >>> net2 = TensorNetwork(expr2)
+    /// >>> sum_net = net1 + net2
     pub fn __add__(&self, rhs: ConvertibleToSpensoNet) -> PyResult<SpensoNet> {
         let rhs = rhs.to_net();
         Ok((self.network.clone() + rhs.network).into())
@@ -558,15 +603,21 @@ impl SpensoNet {
 
     /// Subtract one tensor network from another element-wise.
     ///
-    /// # Parameters:
-    /// - rhs: The tensor network to subtract (right-hand side)
+    /// Parameters
+    /// ----------
+    /// rhs : TensorNetwork
+    ///     The tensor network to subtract (right-hand side)
     ///
-    /// # Examples:
-    /// ```python
-    /// net1 = TensorNetwork(expr1)
-    /// net2 = TensorNetwork(expr2)
-    /// diff_net = net1 - net2
-    /// ```
+    /// Returns
+    /// -------
+    /// TensorNetwork
+    ///     A new TensorNetwork representing the difference
+    ///
+    /// Examples
+    /// --------
+    /// >>> net1 = TensorNetwork(expr1)
+    /// >>> net2 = TensorNetwork(expr2)
+    /// >>> diff_net = net1 - net2
     pub fn __sub__(&self, rhs: ConvertibleToSpensoNet) -> PyResult<SpensoNet> {
         let rhs = rhs.to_net();
         Ok((self.network.clone() - rhs.network).into())
@@ -580,15 +631,21 @@ impl SpensoNet {
 
     /// Multiply two tensor networks.
     ///
-    /// # Parameters:
-    /// - rhs: The tensor network to multiply with (right-hand side)
+    /// Parameters
+    /// ----------
+    /// rhs : TensorNetwork
+    ///     The tensor network to multiply with (right-hand side)
     ///
-    /// # Examples:
-    /// ```python
-    /// net1 = TensorNetwork(expr1)
-    /// net2 = TensorNetwork(expr2)
-    /// product_net = net1 * net2
-    /// ```
+    /// Returns
+    /// -------
+    /// TensorNetwork
+    ///     A new TensorNetwork representing the product
+    ///
+    /// Examples
+    /// --------
+    /// >>> net1 = TensorNetwork(expr1)
+    /// >>> net2 = TensorNetwork(expr2)
+    /// >>> product_net = net1 * net2
     pub fn __mul__(&self, rhs: ConvertibleToSpensoNet) -> PyResult<SpensoNet> {
         let rhs = rhs.to_net();
         Ok((rhs.network * self.network.clone()).into())

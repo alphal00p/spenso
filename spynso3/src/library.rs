@@ -134,18 +134,40 @@ impl SpensorLibrary {
     /// Initializes an empty library ready for registering tensor structures.
     /// The library automatically manages internal tensor IDs.
     ///
-    /// # Examples:
-    /// ```python
-    /// from symbolica.community.spenso import TensorLibrary
+    /// Returns
+    /// -------
+    /// TensorLibrary
+    ///     A new empty tensor library
     ///
-    /// lib = TensorLibrary()
-    /// ```
-    pub fn constuct() -> Self {
+    /// Examples
+    /// --------
+    /// >>> from symbolica.community.spenso import TensorLibrary
+    /// >>> lib = TensorLibrary()
+    pub fn new() -> Self {
         let mut a = Self {
             library: TensorLibrary::new(),
         };
         a.library.update_ids();
         a
+    }
+
+    #[staticmethod]
+    /// Create a new empty tensor library (static method).
+    ///
+    /// Initializes an empty library ready for registering tensor structures.
+    /// The library automatically manages internal tensor IDs.
+    ///
+    /// Returns
+    /// -------
+    /// TensorLibrary
+    ///     A new empty tensor library
+    ///
+    /// Examples
+    /// --------
+    /// >>> from symbolica.community.spenso import TensorLibrary
+    /// >>> lib = TensorLibrary.construct()
+    pub fn construct() -> Self {
+        Self::new()
     }
 
     /// Register a tensor in the library.
@@ -154,24 +176,22 @@ impl SpensorLibrary {
     /// in tensor networks and symbolic expressions. The tensor must have a name
     /// set in its structure.
     ///
-    /// # Parameters:
-    /// - tensor: The tensor to register - can be a LibraryTensor or regular Tensor
+    /// Parameters
+    /// ----------
+    /// tensor : LibraryTensor or Tensor
+    ///     The tensor to register - can be a LibraryTensor or regular Tensor
     ///
-    /// # Examples:
-    /// ```python
-    /// import symbolica
-    /// from symbolica.community.spenso import TensorLibrary, LibraryTensor, TensorStructure, Representation
-    ///
-    /// lib = TensorLibrary()
-    /// rep = Representation.euc(3)
-    /// name = symbolica.S("my_tensor")
-    /// structure = TensorStructure(rep, rep, name=name)
-    /// tensor = LibraryTensor.dense(structure, [1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
-    /// lib.register(tensor)
-    ///
-    /// # Access registered tensor structure
-    /// tensor_ref = lib[name]
-    /// ```
+    /// Examples
+    /// --------
+    /// >>> import symbolica
+    /// >>> from symbolica.community.spenso import TensorLibrary, LibraryTensor, TensorStructure, Representation
+    /// >>> lib = TensorLibrary()
+    /// >>> rep = Representation.euc(3)
+    /// >>> name = symbolica.S("my_tensor")
+    /// >>> structure = TensorStructure(rep, rep, name=name)
+    /// >>> tensor = LibraryTensor.dense(structure, [1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+    /// >>> lib.register(tensor)
+    /// >>> tensor_ref = lib[name]
     pub fn register(&mut self, tensor: ConvertibleToLibraryTensor) -> PyResult<()> {
         self.library.insert_explicit(tensor.0.tensor);
         Ok(())
@@ -182,14 +202,24 @@ impl SpensorLibrary {
     /// Looks up a previously registered tensor by its name and returns
     /// a reference structure that can be used to create new tensor instances.
     ///
-    /// # Parameters:
-    /// - key: The tensor name - can be a string or symbolic expression
+    /// Parameters
+    /// ----------
+    /// key : str or Expression
+    ///     The tensor name - can be a string or symbolic expression
     ///
-    /// # Examples:
-    /// ```python
-    /// # After registering a tensor named "T"
-    /// structure = lib["T"]  # Get the structure template
-    /// ```
+    /// Returns
+    /// -------
+    /// TensorStructure
+    ///     A TensorStructure representing the registered tensor template
+    ///
+    /// Raises
+    /// ------
+    /// RuntimeError
+    ///     If the tensor name is not found in the library
+    ///
+    /// Examples
+    /// --------
+    /// >>> structure = lib["T"]
     pub fn __getitem__(&self, key: ConvertibleToSymbol) -> anyhow::Result<SpensoStructure> {
         let symbol = key.symbol()?;
         let key = self.library.get_key_from_name(symbol)?;
@@ -206,17 +236,17 @@ impl SpensorLibrary {
     /// color generators, metric tensors, and other commonly used structures in
     /// particle physics calculations.
     ///
-    /// # Examples:
-    /// ```python
-    /// import symbolica
-    /// from symbolica.community.spenso import TensorLibrary, TensorName
+    /// Returns
+    /// -------
+    /// TensorLibrary
+    ///     A TensorLibrary pre-populated with HEP tensor definitions
     ///
-    /// # Get HEP library with standard tensors
-    /// hep_lib = TensorLibrary.hep_lib()
-    ///
-    /// # Access standard tensors like gamma matrices
-    /// gamma_structure = hep_lib[symbolica.S("spenso::gamma")]
-    /// ```
+    /// Examples
+    /// --------
+    /// >>> import symbolica
+    /// >>> from symbolica.community.spenso import TensorLibrary, TensorName
+    /// >>> hep_lib = TensorLibrary.hep_lib()
+    /// >>> gamma_structure = hep_lib[symbolica.S("spenso::gamma")]
     pub fn hep_lib() -> Self {
         Self {
             library: spenso_hep_lib::hep_lib(1., 0.),

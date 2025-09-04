@@ -646,7 +646,6 @@ impl SpensoIndices {
     /// >>> structure = TensorIndices(rep('mu'), rep('nu'))
     /// >>> T = TensorName("T")
     /// >>> structure.set_name(T)
-
     fn set_name(&mut self, name: ConvertibleToSpensoName) {
         self.structure.structure.set_name(name.0.name);
     }
@@ -661,7 +660,6 @@ impl SpensoIndices {
     /// Examples
     /// --------
     /// >>> name = structure.get_name()
-
     fn get_name(&self) -> Option<SpensoName> {
         self.structure
             .structure
@@ -722,7 +720,6 @@ impl SpensoIndices {
     /// >>> nu = rep('nu')
     /// >>> indices = T(mu, nu)
     /// >>> expr = indices.to_expression()
-
     fn to_expression(&self) -> PyResult<PythonExpression> {
         if self.structure.structure.name().is_none() {
             return Err(PyRuntimeError::new_err("No name"));

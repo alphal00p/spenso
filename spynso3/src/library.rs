@@ -125,6 +125,7 @@ impl PyStubType for ConvertibleToLibraryTensor {
     }
 }
 
+#[allow(clippy::new_without_default)]
 #[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
 #[pymethods]
 impl SpensorLibrary {

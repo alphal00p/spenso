@@ -994,10 +994,7 @@ submit! {
                 args: &[],
                 r#type: MethodType::Instance,
                 r#return:||
-                TypeInfo {
-                    name: format!("typing.Iterator[{}]",TensorElements::type_output().name),
-                    import: HashSet::new(),
-                },
+                TypeInfo::any(),
                 doc:r##"Iterator"##,
                 is_async: false,
                 deprecated: None,

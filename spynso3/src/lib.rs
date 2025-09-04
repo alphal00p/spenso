@@ -994,7 +994,10 @@ submit! {
                 args: &[],
                 r#type: MethodType::Instance,
                 r#return:||
-                TypeInfo::any(),
+                TypeInfo {
+                    name: format!("typing.Iterator[typing.Any]"),
+                    import: HashSet::new(),
+                },
                 doc:r##"Iterator"##,
                 is_async: false,
                 deprecated: None,

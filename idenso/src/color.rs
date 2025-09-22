@@ -380,12 +380,18 @@ pub trait ColorSimplifier {
     ///   simplified `Atom` is included in the error.
     fn simplify_color(&self) -> Atom;
 
+    // fn canonize_color(&self) -> Atom;
+
     fn wrap_color(&self, symbol: Symbol) -> Atom;
 }
 impl ColorSimplifier for Atom {
     fn simplify_color(&self) -> Atom {
         color_simplify_impl(self.as_atom_view())
     }
+
+    // fn canonize_color(&self) -> Atom {
+    //     self.as_view().canonize_color()
+    // }
 
     fn wrap_color(&self, symbol: Symbol) -> Atom {
         self.as_view().wrap_color(symbol)
@@ -396,6 +402,10 @@ impl ColorSimplifier for AtomView<'_> {
     fn simplify_color(&self) -> Atom {
         color_simplify_impl(self.as_atom_view())
     }
+
+    // fn canonize_color(&self) -> Atom {
+    //     self..canonize_color()
+    // }
 
     fn wrap_color(&self, symbol: Symbol) -> Atom {
         self.expand_color()

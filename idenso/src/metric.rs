@@ -4,19 +4,23 @@ use std::{
 };
 
 use spenso::{
-    network::library::symbolic::ETS,
+    network::{
+        Network,
+        library::{DummyLibrary, symbolic::ETS},
+        store::NetworkStore,
+    },
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         HasName, PermutedStructure, TensorStructure, ToSymbolic,
         abstract_index::AIND_SYMBOLS,
         permuted::Perm,
         representation::{LibraryRep, LibrarySlot, RepName},
-        slot::{AbsInd, DummyAind},
+        slot::{AbsInd, DualSlotTo, DummyAind, IsAbstractSlot},
     },
     tensors::symbolic::SymbolicTensor,
 };
 use symbolica::{
-    atom::{Atom, AtomCore, AtomType, AtomView, Symbol, representation::FunView},
+    atom::{Atom, AtomCore, AtomType, AtomView, FunctionBuilder, Symbol, representation::FunView},
     coefficient::CoefficientView,
     function,
     id::{
@@ -50,6 +54,44 @@ pub enum CookingError {
     RatCoeff,
     FiniteField,
     Float,
+}
+
+pub fn canonize_impl(view: AtomView) -> Atom {
+    let lib = DummyLibrary::<SymbolicTensor>::new();
+    let mut net =
+        Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(view, &lib).unwrap();
+
+    let mut redual_reps = vec![];
+
+    let mut indices = vec![];
+
+    for t in net.store.tensors.iter_mut() {
+        let mut reps = vec![];
+        let mut pat = FunctionBuilder::new(t.name().unwrap());
+        let mut rhs = pat.clone();
+        for s in t.structure.external_structure_iter() {
+            if !s.rep_name().is_self_dual() && s.rep_name().is_dual() {
+                pat = pat.add_arg(s.rep().dual().to_symbolic([Atom::var(RS.a_)]));
+                indices.push((s.dual().to_atom(), s.dual().rep()));
+                reps.push(Replacement::new(
+                    s.rep().to_symbolic([Atom::var(RS.a_)]).to_pattern(),
+                    s.rep().dual().to_symbolic([Atom::var(RS.a_)]),
+                ));
+            } else {
+                pat = pat.add_arg(s.rep().to_symbolic([Atom::var(RS.a_)]));
+                indices.push((s.to_atom(), s.rep()));
+            }
+            rhs = rhs.add_arg(s.rep().to_symbolic([Atom::var(RS.a_)]));
+        }
+        if !reps.is_empty() {
+            redual_reps.push(Replacement::new(pat.finish().to_pattern(), rhs.finish()));
+            t.expression = t.expression.replace_multiple(&reps);
+        }
+    }
+
+    view.canonize_tensors(&indices)
+        .unwrap()
+        .replace_multiple(&redual_reps)
 }
 
 pub fn cook_function_view(view: AtomView) -> Result<Atom, CookingError> {

@@ -995,7 +995,7 @@ submit! {
                 r#type: MethodType::Instance,
                 r#return:||
                 TypeInfo {
-                    name: format!("typing.Iterator[typing.Any]"),
+                    name: "typing.Iterator[typing.Any]".into(),
                     import: HashSet::new(),
                 },
                 doc:r##"Iterator"##,

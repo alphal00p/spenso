@@ -260,7 +260,7 @@ impl GammaLibrary {
         let dim = dim.into();
         let projp_strct = ExplicitKey::from_iter(
             [Bispinor {}.new_rep(dim), Bispinor {}.new_rep(dim)],
-            self.projm,
+            self.projp,
             None,
         );
 

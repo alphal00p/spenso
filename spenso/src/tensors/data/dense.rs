@@ -1,5 +1,8 @@
 use crate::{
-    algebra::upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
+    algebra::{
+        algebraic_traits::RefZero,
+        upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
+    },
     iterators::IteratableTensor,
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
@@ -55,6 +58,12 @@ impl<T, S> crate::network::Ref for DenseTensor<T, S> {
 
     fn refer(&self) -> Self::Ref<'_> {
         self
+    }
+}
+
+impl<T: RefZero, S: TensorStructure> DenseTensor<T, S> {
+    pub fn ref_zero(&self) -> T {
+        self.data.first().unwrap().ref_zero()
     }
 }
 
@@ -512,7 +521,7 @@ where
     where
         T: Clone + Default + PartialEq,
     {
-        let mut sparse = SparseTensor::empty(self.structure.clone());
+        let mut sparse = SparseTensor::empty(self.structure.clone(), T::default());
         for (i, value) in self.iter_expanded() {
             if *value != T::default() {
                 let _ = sparse.set(&i, value.clone());

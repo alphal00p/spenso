@@ -56,7 +56,7 @@ where
         // println!("{}", new_structure);
         new_structure.trace(trace[0], trace[1]);
 
-        let mut new_result = SparseTensor::empty(new_structure);
+        let mut new_result = SparseTensor::empty(new_structure, self.zero.clone());
         for (idx, t) in self.iter_trace(trace).filter(|(_, t)| !t.is_zero()) {
             new_result.set(&idx, t).unwrap();
         }

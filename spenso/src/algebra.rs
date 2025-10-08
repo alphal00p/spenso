@@ -20,21 +20,9 @@ pub mod sub;
 pub mod sub_assign;
 pub mod upgrading_arithmetic;
 
-impl<T, U, I> AddAssign<&DenseTensor<T, I>> for DenseTensor<U, I>
-where
-    U: for<'a> AddAssign<&'a T>,
-    I: TensorStructure + Clone,
-{
-    fn add_assign(&mut self, rhs: &DenseTensor<T, I>) {
-        for (u, t) in self.data.iter_mut().zip(rhs.data.iter()) {
-            *u += t;
-        }
-    }
-}
-
 impl<T, S: TensorStructure + Clone> Sum for DataTensor<T, S>
 where
-    T: for<'a> AddAssign<&'a T>,
+    T: for<'a> AddAssign<&'a T> + Clone + Default + PartialEq,
 {
     fn sum<I: Iterator<Item = Self>>(mut iter: I) -> Self {
         if let Some(mut i) = iter.next() {
@@ -68,7 +56,7 @@ where
 
 impl<T, S: TensorStructure + Clone> DataTensor<T, S>
 where
-    T: for<'a> AddAssign<&'a T> + Clone,
+    T: for<'a> AddAssign<&'a T> + Clone + Default + PartialEq,
 {
     pub fn sum_ref<I>(mut iter: I) -> Self
     where

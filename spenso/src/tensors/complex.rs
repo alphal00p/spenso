@@ -64,6 +64,15 @@ pub enum RealOrComplexTensor<T, S: TensorStructure> {
     Complex(DataTensor<Complex<T>, S>),
 }
 
+impl<T: RefZero, S: TensorStructure> RealOrComplexTensor<T, S> {
+    pub fn ref_zero(&self) -> T {
+        match self {
+            RealOrComplexTensor::Real(a) => a.ref_zero(),
+            RealOrComplexTensor::Complex(a) => a.ref_zero().re,
+        }
+    }
+}
+
 impl<T, S: TensorStructure> crate::network::Ref for RealOrComplexTensor<T, S> {
     type Ref<'a>
         = &'a RealOrComplexTensor<T, S>
@@ -78,10 +87,13 @@ impl<T, S: TensorStructure> crate::network::Ref for RealOrComplexTensor<T, S> {
 impl<T: RefZero, S: TensorStructure + ScalarStructure + Clone> RealOrComplexTensor<T, S> {
     pub fn to_complex(&mut self) {
         if self.is_real() {
+            let zero = self.ref_zero();
+
             let old = std::mem::replace(
                 self,
                 RealOrComplexTensor::Real(DataTensor::Sparse(SparseTensor::empty(
                     S::scalar_structure(),
+                    zero,
                 ))),
             );
 
@@ -303,6 +315,19 @@ impl<T: Default + Clone + PartialEq, S: TensorStructure + Clone> SparseOrDense
         match self {
             RealOrComplexTensor::Real(d) => RealOrComplexTensor::Real(d.to_sparse()),
             RealOrComplexTensor::Complex(d) => RealOrComplexTensor::Complex(d.to_sparse()),
+        }
+    }
+
+    fn to_dense_mut(&mut self) {
+        match self {
+            RealOrComplexTensor::Real(d) => d.to_dense_mut(),
+            RealOrComplexTensor::Complex(d) => d.to_dense_mut(),
+        }
+    }
+    fn to_sparse_mut(&mut self) {
+        match self {
+            RealOrComplexTensor::Real(d) => d.to_sparse_mut(),
+            RealOrComplexTensor::Complex(d) => d.to_sparse_mut(),
         }
     }
 

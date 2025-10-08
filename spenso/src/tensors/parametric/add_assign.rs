@@ -186,6 +186,7 @@ where
 {
     fn add_assign(&mut self, rhs: &ParamTensor<I>) {
         self.tensor += &rhs.tensor;
+
         self.param_type = ParamOrComposite::Composite;
     }
 }

@@ -109,9 +109,10 @@ where
     type Output = SparseTensor<Out, I>;
     fn add_fallible(&self, rhs: &SparseTensor<T, I>) -> Option<Self::Output> {
         assert!(self.structure().same_external(rhs.structure()));
+
         let rhs_to_self = self.structure().find_permutation(rhs.structure()).unwrap();
         let structure = self.structure().clone();
-        let mut data = SparseTensor::empty(structure);
+        let mut data = SparseTensor::empty(structure, self.zero.add_fallible(&rhs.zero)?);
         for (indices, u) in self.iter_expanded() {
             let permuted_indices = indices.apply_inverse_permutation(&rhs_to_self);
             let t = rhs.get_ref(&permuted_indices);

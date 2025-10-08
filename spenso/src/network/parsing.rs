@@ -134,6 +134,19 @@ where
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ParseSettings {
+    precontract_scalars: bool,
+}
+
+impl Default for ParseSettings {
+    fn default() -> Self {
+        Self {
+            precontract_scalars: true,
+        }
+    }
+}
+
 impl<
         'a,
         Sc,
@@ -150,6 +163,7 @@ where
     pub fn try_from_view<S, Lib: Library<S, Key = K>>(
         value: AtomView<'a>,
         library: &Lib,
+        settings: &ParseSettings,
     ) -> Result<Self, TensorNetworkError<K>>
     where
         S: TensorStructure + Clone + HasName,
@@ -159,10 +173,10 @@ where
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
         match value {
-            AtomView::Mul(m) => Self::try_from_mul(m, library),
-            AtomView::Fun(f) => Self::try_from_fun(f, library),
-            AtomView::Add(a) => Self::try_from_add(a, library),
-            AtomView::Pow(p) => Self::try_from_pow(p, library),
+            AtomView::Mul(m) => Self::try_from_mul(m, library, settings),
+            AtomView::Fun(f) => Self::try_from_fun(f, library, settings),
+            AtomView::Add(a) => Self::try_from_add(a, library, settings),
+            AtomView::Pow(p) => Self::try_from_pow(p, library, settings),
             a => Ok(Network::from_scalar(a.try_into()?)),
         }
     }
@@ -171,6 +185,7 @@ where
     fn try_from_mul<S, Lib: Library<S, Key = K>>(
         value: MulView<'a>,
         library: &Lib,
+        settings: &ParseSettings,
     ) -> Result<Self, TensorNetworkError<K>>
     where
         S: TensorStructure + Clone + HasName,
@@ -181,17 +196,27 @@ where
     {
         let mut iter = value.iter();
 
-        let first = Self::try_from_view(iter.next().unwrap(), library)?;
+        let first = Self::try_from_view(iter.next().unwrap(), library, settings)?;
 
-        let rest: Result<Vec<_>, _> = iter.map(|a| Self::try_from_view(a, library)).collect();
+        let rest: Result<Vec<_>, _> = iter
+            .map(|a| Self::try_from_view(a, library, settings))
+            .collect();
 
-        Ok(first.n_mul(rest?))
+        let res = first.n_mul(rest?);
+        if settings.precontract_scalars {
+            if let NetworkState::PureScalar = res.state {
+                return Ok(Self::from_scalar(value.as_view().try_into()?));
+            }
+        }
+
+        Ok(res)
     }
 
     #[allow(clippy::result_large_err)]
     fn try_from_fun<S, Lib: Library<S, Key = K>>(
         value: FunView<'a>,
         library: &Lib,
+        settings: &ParseSettings,
     ) -> Result<Self, TensorNetworkError<K>>
     where
         S: TensorStructure + Clone + HasName,
@@ -233,6 +258,7 @@ where
     fn try_from_pow<S, Lib: Library<S, Key = K>>(
         value: PowView<'a>,
         library: &Lib,
+        settings: &ParseSettings,
     ) -> std::result::Result<Self, TensorNetworkError<K>>
     where
         S: TensorStructure + Clone + HasName,
@@ -251,9 +277,9 @@ where
                 let one = Atom::num(1);
                 return Ok(Self::from_scalar(one.as_view().try_into()?));
             } else if n == 1 {
-                return Self::try_from_view(base, library);
+                return Self::try_from_view(base, library, settings);
             }
-            let net = Self::try_from_view(base, library)?;
+            let net = Self::try_from_view(base, library, settings)?;
             let cloned_net = net.clone();
 
             Ok(net.n_mul((1..n).map(|_| cloned_net.clone())))
@@ -266,6 +292,7 @@ where
     fn try_from_add<S, Lib: Library<S, Key = K>>(
         value: AddView<'a>,
         library: &Lib,
+        settings: &ParseSettings,
     ) -> Result<Self, TensorNetworkError<K>>
     where
         S: TensorStructure + Clone + HasName,
@@ -276,9 +303,25 @@ where
     {
         let mut iter = value.iter();
 
-        let first = Self::try_from_view(iter.next().unwrap(), library)?;
+        let first_atom = iter.next().unwrap();
 
-        let rest: Result<Vec<_>, _> = iter.map(|a| Self::try_from_view(a, library)).collect();
+        let first = Self::try_from_view(first_atom, library, settings)?;
+
+        let rest: Result<Vec<_>, _> = iter
+            .map(|a| match Self::try_from_view(a, library, settings) {
+                Ok(n) => {
+                    if n.state.is_compatible(&first.state) {
+                        Ok(n)
+                    } else {
+                        Err(TensorNetworkError::IncompatibleSummand(format!(
+                            "{} vs {}",
+                            a, first_atom
+                        )))
+                    }
+                }
+                Err(e) => Err(e),
+            })
+            .collect();
 
         Ok(first.n_add(rest?))
     }
@@ -307,9 +350,12 @@ pub mod test {
         let expr = parse!("1");
 
         let lib = DummyLibrary::<_>::new();
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
 
         net.execute::<Sequential, SmallestDegree, _, _>(&lib)
             .unwrap();
@@ -326,9 +372,12 @@ pub mod test {
         let expr = parse!("c*a*b(mink(4,1))");
 
         let lib = DummyLibrary::<_>::new();
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
         println!(
             "{}",
             net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
@@ -353,9 +402,12 @@ pub mod test {
         let expr = parse!("c*a*b(mink(4,1))*d(mink(4,2))*d(mink(4,1))");
 
         let lib = DummyLibrary::<_>::new();
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
 
         let mut netc = net.clone();
         println!(
@@ -417,9 +469,12 @@ pub mod test {
         let expr = parse!("(y+x(mink(4,1))*y(mink(4,1))) *(1+1+2*x*(3*sin(r))/t)");
 
         let lib = DummyLibrary::<_>::new();
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
 
         println!("{}", expr);
         println!(
@@ -503,9 +558,12 @@ pub mod test {
         let expr = (parse!("a*sin(x/2)") * tensor1 * tensor2 * tensor3 + tensor4) * tensor5;
 
         let lib = DummyLibrary::<_>::new();
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
 
         println!("{}", expr);
         println!(
@@ -538,9 +596,12 @@ pub mod test {
         let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
         let lib = DummyLibrary::<_>::new();
         println!("Hi");
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
 
         println!("{}", expr);
         println!(
@@ -603,9 +664,12 @@ pub mod test {
         );
         let lib: DummyLibrary<_, DummyKey> = DummyLibrary::<_, _>::new();
         // println!("Hi");
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
 
         // println!("{}", expr);
         // println!(
@@ -635,9 +699,12 @@ pub mod test {
             parse!("-d(mink(4,6),mink(4,5))*Q(2,mink(4,7))+d(mink(4,6),mink(4,5))*Q(3,mink(4,7))");
         let lib = DummyLibrary::<_>::new();
         println!("Hi");
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
 
         println!("{}", expr);
         println!(
@@ -671,9 +738,12 @@ pub mod test {
                 * (A(mink(4, r_2), mink(4, r_3)) + B(mink(4, r_3), mink(4, r_2)))
         );
         let lib = DummyLibrary::<_>::new();
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
 
         println!("{}", expr);
         println!(
@@ -728,9 +798,12 @@ pub mod test {
         );
 
         let lib = DummyLibrary::<_>::new();
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
         println!("{}", expr);
         println!(
             "{}",
@@ -800,9 +873,12 @@ pub mod test {
         );
 
         let lib = DummyLibrary::<_>::new();
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
 
         println!("{}", expr);
 
@@ -846,9 +922,12 @@ pub mod test {
             panic!("Not tensor")
         }
 
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
         net.execute::<Sequential, SmallestDegree, _, _>(&lib)
             .unwrap();
         println!(
@@ -930,9 +1009,12 @@ pub mod test {
         // );
 
         let lib = DummyLibrary::<_>::new();
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
 
         let mut net_iter = net.clone();
 
@@ -1053,9 +1135,12 @@ pub mod test {
         );
 
         let lib = DummyLibrary::<_>::new();
-        let mut net =
-            Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(expr.as_view(), &lib)
-                .unwrap();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
         println!("{}", expr);
         println!(
             "{}",
@@ -1161,7 +1246,11 @@ pub mod test {
         atom: impl AtomCore,
     ) -> Network<NetworkStore<SymbolicTensor, Atom>, DummyKey> {
         let lib = DummyLibrary::<SymbolicTensor>::new();
-        Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(atom.as_atom_view(), &lib)
-            .unwrap()
+        Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            atom.as_atom_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap()
     }
 }

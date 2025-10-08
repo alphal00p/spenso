@@ -63,7 +63,7 @@ fn test_sparse_tensor_iterators() {
         OrderedStructure::new(vec![rep.new_slot(2, 0), rep.new_slot(3, 0)]).structure;
 
     // Create a sparse tensor with a few values
-    let mut tensor = SparseTensor::<i32, _>::empty(structure);
+    let mut tensor = SparseTensor::<i32, _>::empty(structure, 0);
 
     // Set a few values
     tensor.set(&[0, 0], 1).unwrap();

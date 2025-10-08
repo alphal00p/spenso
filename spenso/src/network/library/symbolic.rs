@@ -54,8 +54,8 @@ impl<Aind> ExplicitKey<Aind> {
 impl<S: TensorStructure + Clone> LibraryTensor for ParamTensor<S> {
     type WithIndices = ParamTensor<S::Indexed>;
     type Data = Atom;
-    fn empty(key: S) -> Self {
-        ParamTensor::composite(<DataTensor<Atom, S> as LibraryTensor>::empty(key))
+    fn empty(key: S, zero: Atom) -> Self {
+        ParamTensor::composite(<DataTensor<Atom, S> as LibraryTensor>::empty(key, zero))
     }
 
     fn from_dense(key: S, data: Vec<Self::Data>) -> Result<Self> {
@@ -67,9 +67,10 @@ impl<S: TensorStructure + Clone> LibraryTensor for ParamTensor<S> {
     fn from_sparse(
         key: S,
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
+        zero: Atom,
     ) -> Result<Self> {
         Ok(ParamTensor::composite(
-            <DataTensor<Atom, S> as LibraryTensor>::from_sparse(key, data)?,
+            <DataTensor<Atom, S> as LibraryTensor>::from_sparse(key, data, zero)?,
         ))
     }
 
@@ -94,8 +95,14 @@ impl<D: Default + Clone, S: TensorStructure + Clone> LibraryTensor for MixedTens
     type WithIndices = MixedTensor<D, S::Indexed>;
     type Data = ConcreteOrParam<RealOrComplex<D>>;
 
-    fn empty(key: S) -> Self {
-        MixedTensor::Concrete(<RealOrComplexTensor<D, S> as LibraryTensor>::empty(key))
+    fn empty(key: S, zero: Self::Data) -> Self {
+        MixedTensor::Concrete(<RealOrComplexTensor<D, S> as LibraryTensor>::empty(
+            key,
+            match zero {
+                ConcreteOrParam::Concrete(c) => c,
+                ConcreteOrParam::Param(_) => RealOrComplex::Real(D::default()),
+            },
+        ))
     }
 
     fn from_dense(key: S, data: Vec<Self::Data>) -> Result<Self> {
@@ -115,6 +122,7 @@ impl<D: Default + Clone, S: TensorStructure + Clone> LibraryTensor for MixedTens
     fn from_sparse(
         key: S,
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
+        zero: Self::Data,
     ) -> Result<Self> {
         let data: Result<Vec<_>> = data
             .into_iter()
@@ -125,7 +133,14 @@ impl<D: Default + Clone, S: TensorStructure + Clone> LibraryTensor for MixedTens
             .collect();
 
         Ok(MixedTensor::Concrete(
-            <RealOrComplexTensor<D, S> as LibraryTensor>::from_sparse(key, data?)?,
+            <RealOrComplexTensor<D, S> as LibraryTensor>::from_sparse(
+                key,
+                data?,
+                match zero {
+                    ConcreteOrParam::Concrete(c) => c,
+                    ConcreteOrParam::Param(_) => RealOrComplex::Real(D::default()),
+                },
+            )?,
         ))
     }
 
@@ -292,7 +307,7 @@ impl<
 impl<
         Aind: AbsInd,
         T: HasStructure<Structure = ExplicitKey<Aind>>
-            + SetTensorData
+            + SetTensorData<SetData = <T as LibraryTensor>::Data>
             + Clone
             + LibraryTensor
             + PermuteTensor<Permuted = T>,
@@ -323,7 +338,7 @@ impl<
         T::SetData: TensorLibraryData,
     {
         let dim: usize = key.get_dim(0).unwrap().try_into().unwrap();
-        let mut tensor = T::empty(key);
+        let mut tensor = T::empty(key, T::SetData::zero());
 
         for i in 0..dim {
             if i > 0 {
@@ -378,7 +393,7 @@ impl<
         T::SetData: TensorLibraryData,
     {
         let dim: usize = key.get_dim(0).unwrap().try_into().unwrap();
-        let mut tensor = T::empty(key);
+        let mut tensor = T::empty(key, T::SetData::zero());
 
         for i in 0..dim {
             tensor.set(&[i, i], T::SetData::one()).unwrap();
@@ -392,7 +407,7 @@ impl<
     {
         let dim: usize = key.get_dim(0).unwrap().try_into().unwrap();
         let rep = key.get_rep(0).unwrap();
-        let mut tensor = T::empty(key);
+        let mut tensor = T::empty(key, T::SetData::zero());
 
         for i in 0..dim {
             if rep.is_neg(i) {
@@ -430,8 +445,9 @@ impl<
         &mut self,
         key: PermutedStructure<ExplicitKey<Aind>>,
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, T::Data)>,
+        zero: T::Data,
     ) -> Result<()> {
-        let tensor = T::from_sparse(key.structure.clone(), data)?;
+        let tensor = T::from_sparse(key.structure.clone(), data, zero)?;
 
         let perm_tensor = PermutedStructure {
             rep_permutation: key.rep_permutation.clone(),
@@ -471,8 +487,9 @@ mod test {
 
     use crate::{
         network::{
-            parsing::ShadowedStructure, store::NetworkStore, ExecutionResult, Network, Sequential,
-            SmallestDegree, TensorOrScalarOrKey,
+            parsing::{ParseSettings, ShadowedStructure},
+            store::NetworkStore,
+            ExecutionResult, Network, Sequential, SmallestDegree, TensorOrScalarOrKey,
         },
         shadowing::Concretize,
         structure::{
@@ -503,8 +520,12 @@ mod test {
         println!("{}", key.rep_permutation);
 
         let one = ConcreteOrParam::Concrete(RealOrComplex::Real(1.));
-        lib.insert_explicit_sparse((key).clone(), [(vec![0, 0, 1], one)])
-            .unwrap();
+        lib.insert_explicit_sparse(
+            (key).clone(),
+            [(vec![0, 0, 1], one)],
+            ConcreteOrParam::Concrete(RealOrComplex::Real(0.)),
+        )
+        .unwrap();
 
         lib.get(&key.structure).unwrap();
         let indexed = key.clone().reindex([0, 1, 2]).unwrap().structure;
@@ -515,7 +536,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-        >::try_from_view(expr.as_view(), &lib)
+        >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .unwrap();
 
         println!(
@@ -568,6 +589,7 @@ mod test {
                     (vec![1, 1, 0], parse!("g")),
                     (vec![1, 1, 1], parse!("h")),
                 ],
+                Atom::Zero,
             )
             .unwrap()
             .to_dense(),
@@ -590,6 +612,7 @@ mod test {
             parse!("gamma(euc(2,1),euc(2,2),mink(2,0))-gamma(mink(2,0),euc(2,2),euc(2,1))")
                 .as_view(),
             &lib,
+            &ParseSettings::default(),
         )
         .unwrap();
 
@@ -604,7 +627,9 @@ mod test {
             >,
             _,
         >::try_from_view(
-            parse!("gamma(mink(2,0),euc(2,2),euc(2,1))").as_view(), &lib
+            parse!("gamma(mink(2,0),euc(2,2),euc(2,1))").as_view(),
+            &lib,
+            &ParseSettings::default(),
         )
         .unwrap();
 
@@ -636,7 +661,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-        >::try_from_view(expr.as_view(), &lib)
+        >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .unwrap();
 
         println!(
@@ -692,7 +717,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-        >::try_from_view(a.as_view(), &lib)
+        >::try_from_view(a.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();
 
@@ -725,7 +750,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-        >::try_from_view(expr.as_view(), &lib)
+        >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();
 
@@ -775,7 +800,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-        >::try_from_view(expr.as_view(), &lib)
+        >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();
 
@@ -820,7 +845,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-        >::try_from_view(expr.as_view(), &lib)
+        >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();
 
@@ -902,7 +927,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-        >::try_from_view(expr.as_view(), &lib)
+        >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();
 
@@ -930,7 +955,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-        >::try_from_view(expr.as_view(), &lib)
+        >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();
 

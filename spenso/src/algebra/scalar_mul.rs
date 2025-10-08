@@ -31,7 +31,7 @@ where
 {
     type Output = SparseTensor<Out, I>;
     fn scalar_mul(&self, rhs: &T) -> Option<Self::Output> {
-        let mut data = SparseTensor::empty(self.structure().clone());
+        let mut data = SparseTensor::empty(self.structure().clone(), self.zero.mul_fallible(rhs)?);
         for (indices, u) in self.iter_flat() {
             data.set_flat(indices, u.mul_fallible(rhs)?).unwrap();
         }

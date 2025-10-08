@@ -44,6 +44,49 @@ use std::{convert::Infallible, fmt::Debug};
 pub struct Network<S, LibKey, Aind = AbstractIndex> {
     pub graph: NetworkGraph<LibKey, Aind>,
     pub store: S,
+    pub state: NetworkState,
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    bincode_trait_derive::Encode,
+    bincode_trait_derive::Decode,
+    PartialEq,
+    Eq,
+    Copy,
+)]
+pub enum NetworkState {
+    PureScalar,
+    Tensor,
+    Scalar,
+}
+
+impl NetworkState {
+    pub fn is_compatible(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (NetworkState::Tensor, NetworkState::Tensor)
+                | (NetworkState::Scalar, NetworkState::Scalar)
+                | (NetworkState::PureScalar, NetworkState::Scalar)
+                | (NetworkState::Scalar, NetworkState::PureScalar)
+                | (NetworkState::PureScalar, NetworkState::PureScalar)
+        )
+    }
+}
+impl MulAssign for NetworkState {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = match (*self, rhs) {
+            (NetworkState::PureScalar, NetworkState::PureScalar) => NetworkState::PureScalar,
+            (NetworkState::PureScalar, NetworkState::Scalar) => NetworkState::Scalar,
+            (NetworkState::Tensor, _) => NetworkState::Tensor,
+            (NetworkState::Scalar, NetworkState::PureScalar) => NetworkState::Scalar,
+            (_, NetworkState::Tensor) => NetworkState::Tensor,
+            (NetworkState::Scalar, NetworkState::Scalar) => NetworkState::Scalar,
+        }
+    }
 }
 
 // pub type TensorNetwork<T, S, Str: TensorScalarStore<Tensor = T, Scalar = S>, K> = Network<Str, K>;
@@ -92,6 +135,7 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
         Network {
             store: self.store.map(scalar_map, tensor_map),
             graph: self.graph,
+            state: self.state,
         }
     }
 
@@ -103,6 +147,7 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
         Ok(Network {
             store: self.store.map_result(scalar_map, tensor_map)?,
             graph: self.graph,
+            state: self.state,
         })
     }
 
@@ -114,6 +159,7 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
         Network {
             store: self.store.map_ref(scalar_map, tensor_map),
             graph: self.graph.clone(),
+            state: self.state,
         }
     }
 
@@ -125,6 +171,7 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
         Ok(Network {
             store: self.store.map_ref_result(scalar_map, tensor_map)?,
             graph: self.graph.clone(),
+            state: self.state,
         })
     }
 
@@ -136,6 +183,7 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
         Network {
             store: self.store.map_ref_enumerate(scalar_map, tensor_map),
             graph: self.graph.clone(),
+            state: self.state,
         }
     }
 
@@ -149,6 +197,7 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
                 .store
                 .map_ref_result_enumerate(scalar_map, tensor_map)?,
             graph: self.graph.clone(),
+            state: self.state,
         })
     }
 
@@ -160,6 +209,7 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
         Network {
             store: self.store.map_ref_mut(scalar_map, tensor_map),
             graph: self.graph.clone(),
+            state: self.state,
         }
     }
 
@@ -171,6 +221,7 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
         Ok(Network {
             store: self.store.map_ref_mut_result(scalar_map, tensor_map)?,
             graph: self.graph.clone(),
+            state: self.state,
         })
     }
 
@@ -182,6 +233,7 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
         Network {
             store: self.store.map_ref_mut_enumerate(scalar_map, tensor_map),
             graph: self.graph.clone(),
+            state: self.state,
         }
     }
 
@@ -195,6 +247,7 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
                 .store
                 .map_ref_mut_result_enumerate(scalar_map, tensor_map)?,
             graph: self.graph.clone(),
+            state: self.state,
         })
     }
 }
@@ -209,32 +262,47 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> NMul for Network<S, K, Aind> {
     type Output = Self;
     fn n_mul<I: IntoIterator<Item = Self>>(self, iter: I) -> Self::Output {
         let mut store = self.store;
+        let mut state = self.state;
+
         let items = iter.into_iter().map(|mut a| {
             a.graph.shift_scalars(store.n_scalars());
             a.graph.shift_tensors(store.n_tensors());
             store.extend(a.store);
+
+            state *= a.state;
             a.graph
         });
 
+        let graph = self.graph.n_mul(items);
+
+        if let NetworkState::Tensor = state {
+            if graph.dangling_indices().is_empty() {
+                state = NetworkState::Scalar;
+            }
+        }
+
         Network {
-            graph: self.graph.n_mul(items),
+            graph,
             store,
+            state,
         }
     }
 }
 
 impl<S: TensorScalarStore, K, Aind: AbsInd> Mul for Network<S, K, Aind> {
     type Output = Self;
-    fn mul(self, mut other: Self) -> Self::Output {
+    fn mul(mut self, mut other: Self) -> Self::Output {
         let mut store = self.store;
 
         other.graph.shift_scalars(store.n_scalars());
         other.graph.shift_tensors(store.n_tensors());
         store.extend(other.store);
+        self.state *= other.state;
 
         Network {
             graph: self.graph * other.graph,
             store,
+            state: self.state,
         }
     }
 }
@@ -244,7 +312,7 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> MulAssign for Network<S, K, Aind> {
         rhs.graph.shift_scalars(self.store.n_scalars());
         rhs.graph.shift_tensors(self.store.n_tensors());
         self.store.extend(rhs.store);
-
+        self.state *= rhs.state;
         self.graph *= rhs.graph;
     }
 }
@@ -275,6 +343,7 @@ where
         Network {
             graph: self.graph * other.graph,
             store,
+            state: self.state,
         }
     }
 }
@@ -291,6 +360,7 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> Add for Network<S, K, Aind> {
         Network {
             graph: self.graph + other.graph,
             store,
+            state: self.state,
         }
     }
 }
@@ -339,6 +409,7 @@ where
         Network {
             graph: self.graph + other.graph,
             store: self.store,
+            state: self.state,
         }
     }
 }
@@ -358,6 +429,7 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> NAdd for Network<S, K, Aind> {
         Network {
             graph: self.graph.n_add(items),
             store,
+            state: self.state,
         }
     }
 }
@@ -368,6 +440,7 @@ impl<S: TensorScalarStore, K: Clone, Aind: AbsInd> Neg for Network<S, K, Aind> {
         Self {
             store: self.store,
             graph: self.graph.neg(),
+            state: self.state,
         }
     }
 }
@@ -418,6 +491,8 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> Network<S, K, Aind> {
         Network {
             graph: NetworkGraph::scalar(id),
             store,
+
+            state: NetworkState::PureScalar,
         }
     }
 
@@ -434,10 +509,18 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> Network<S, K, Aind> {
         <S::Tensor as TensorStructure>::Slot: IsAbstractSlot<Aind = Aind>,
     {
         let mut store = S::default();
+
+        let state = if tensor.is_scalar() {
+            NetworkState::Scalar
+        } else {
+            NetworkState::Tensor
+        };
         let id = store.add_tensor(tensor);
+
         Network {
             graph: NetworkGraph::tensor(store.get_tensor(id), NetworkLeaf::LocalTensor(id)),
             store,
+            state,
         }
     }
 
@@ -449,6 +532,7 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> Network<S, K, Aind> {
         Network {
             graph: NetworkGraph::tensor(tensor, NetworkLeaf::LibraryKey(key)),
             store: S::default(),
+            state: NetworkState::Tensor,
         }
     }
 
@@ -456,6 +540,7 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> Network<S, K, Aind> {
         Network {
             graph: NetworkGraph::one(),
             store: S::default(),
+            state: NetworkState::PureScalar,
         }
     }
 
@@ -463,6 +548,7 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> Network<S, K, Aind> {
         Network {
             graph: NetworkGraph::zero(),
             store: S::default(),
+            state: NetworkState::PureScalar,
         }
     }
 }
@@ -513,6 +599,8 @@ pub enum TensorNetworkError<K: Display> {
     ScalarLibSum(String),
     #[error("try to sum scalar with a tensor: {0}")]
     SumScalarTensor(String),
+    #[error("Incompatible summands: {0}")]
+    IncompatibleSummand(String),
     #[error("failed to contract")]
     FailedContract(ContractionError),
     #[error("negative exponent not yet supported")]
@@ -550,6 +638,7 @@ pub enum ExecutionResult<T> {
     Zero,
     Val(T),
 }
+
 impl<T: Display> Display for ExecutionResult<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -660,6 +749,7 @@ where
         K: Display + Debug,
         LT: TensorStructure<Indexed = T> + Clone + LibraryTensor<WithIndices = T>,
         T: PermuteTensor<Permuted = T>,
+
         for<'b> &'b S: Into<T::Scalar>,
         <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
             IsAbstractSlot<Aind = Aind>,

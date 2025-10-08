@@ -1,11 +1,13 @@
-use std::ops::AddAssign;
+use std::{collections::hash_map::Entry, ops::AddAssign};
 
 use crate::{
-    algebra::algebraic_traits::RefZero,
-    algebra::complex::Complex,
+    algebra::{algebraic_traits::RefZero, complex::Complex},
+    iterators::IteratableTensor,
     structure::{ScalarStructure, TensorStructure},
-    tensors::complex::RealOrComplexTensor,
-    tensors::data::{DataTensor, DenseTensor, GetTensorData, SparseTensor},
+    tensors::{
+        complex::RealOrComplexTensor,
+        data::{DataTensor, DenseTensor, SparseOrDense, SparseTensor},
+    },
 };
 
 impl<T, U, I> AddAssign<DenseTensor<T, I>> for DenseTensor<U, I>
@@ -14,6 +16,16 @@ where
     I: TensorStructure + Clone,
 {
     fn add_assign(&mut self, rhs: DenseTensor<T, I>) {
+        *self += &rhs;
+    }
+}
+
+impl<T, U, I> AddAssign<&DenseTensor<T, I>> for DenseTensor<U, I>
+where
+    U: for<'a> AddAssign<&'a T>,
+    I: TensorStructure + Clone,
+{
+    fn add_assign(&mut self, rhs: &DenseTensor<T, I>) {
         for (u, t) in self.data.iter_mut().zip(rhs.data.iter()) {
             *u += t;
         }
@@ -22,51 +34,52 @@ where
 
 impl<T, U, I> AddAssign<DenseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: for<'a> AddAssign<&'a T>,
+    U: for<'a> AddAssign<&'a T> + Clone,
     I: TensorStructure + Clone,
 {
     fn add_assign(&mut self, rhs: DenseTensor<T, I>) {
-        for (i, u) in self.elements.iter_mut() {
-            *u += &rhs[*i];
-        }
+        *self += &rhs;
     }
 }
 
 impl<T, U, I> AddAssign<&DenseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: for<'a> AddAssign<&'a T>,
+    U: for<'a> AddAssign<&'a T> + Clone,
     I: TensorStructure + Clone,
 {
     fn add_assign(&mut self, rhs: &DenseTensor<T, I>) {
-        for (i, u) in self.elements.iter_mut() {
-            *u += &rhs[*i];
+        for (i, u) in rhs.iter_flat() {
+            *self.elements.entry(i).or_insert(self.zero.clone()) += u;
         }
     }
 }
 
 impl<T, U, I> AddAssign<SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: for<'a> AddAssign<&'a T>,
+    U: for<'a> AddAssign<&'a T> + Clone,
     I: TensorStructure + Clone,
 {
     fn add_assign(&mut self, rhs: SparseTensor<T, I>) {
-        for (i, u) in self.elements.iter_mut() {
-            if let Some(t) = rhs.get_ref_linear(*i) {
-                *u += t;
-            }
-        }
+        *self += &rhs;
     }
 }
 
 impl<T, U, I> AddAssign<&SparseTensor<T, I>> for SparseTensor<U, I>
 where
-    U: for<'a> AddAssign<&'a T>,
+    U: for<'a> AddAssign<&'a T> + Clone,
     I: TensorStructure + Clone,
 {
     fn add_assign(&mut self, rhs: &SparseTensor<T, I>) {
-        for (i, u) in self.elements.iter_mut() {
-            if let Some(t) = rhs.get_ref_linear(*i) {
-                *u += t;
+        for (flat_index, rhs_value) in &rhs.elements {
+            match self.elements.entry(*flat_index) {
+                Entry::Occupied(mut entry) => {
+                    *entry.get_mut() += rhs_value;
+                }
+                Entry::Vacant(entry) => {
+                    let mut new = self.zero.clone();
+                    new += rhs_value;
+                    entry.insert(new);
+                }
             }
         }
     }
@@ -78,9 +91,7 @@ where
     I: TensorStructure + Clone,
 {
     fn add_assign(&mut self, rhs: SparseTensor<T, I>) {
-        for (i, u) in rhs.elements.iter() {
-            self[*i] += u;
-        }
+        *self += &rhs;
     }
 }
 
@@ -98,10 +109,13 @@ where
 
 impl<T, U, I> AddAssign<DataTensor<T, I>> for DataTensor<U, I>
 where
-    U: for<'a> AddAssign<&'a T>,
+    U: for<'a> AddAssign<&'a T> + Clone + Default + PartialEq,
     I: TensorStructure + Clone,
 {
     fn add_assign(&mut self, rhs: DataTensor<T, I>) {
+        if self.is_sparse() && rhs.is_dense() {
+            self.to_dense_mut();
+        }
         match (self, rhs) {
             (DataTensor::Dense(a), DataTensor::Dense(b)) => {
                 *a += b;
@@ -112,8 +126,9 @@ where
             (DataTensor::Dense(a), DataTensor::Sparse(b)) => {
                 *a += b;
             }
-            (DataTensor::Sparse(a), DataTensor::Dense(b)) => {
-                *a += b;
+
+            _ => {
+                unreachable!("Sparse dense add assign should be turned into dense dense addassign")
             }
         }
     }
@@ -121,10 +136,14 @@ where
 
 impl<T, U, I> AddAssign<&DataTensor<T, I>> for DataTensor<U, I>
 where
-    U: for<'a> AddAssign<&'a T>,
+    U: for<'a> AddAssign<&'a T> + Clone + Default + PartialEq,
     I: TensorStructure + Clone,
 {
     fn add_assign(&mut self, rhs: &DataTensor<T, I>) {
+        if self.is_sparse() && rhs.is_dense() {
+            self.to_dense_mut();
+        }
+
         match (self, rhs) {
             (DataTensor::Dense(a), DataTensor::Dense(b)) => {
                 *a += b;
@@ -135,8 +154,8 @@ where
             (DataTensor::Dense(a), DataTensor::Sparse(b)) => {
                 *a += b;
             }
-            (DataTensor::Sparse(a), DataTensor::Dense(b)) => {
-                *a += b;
+            _ => {
+                unreachable!("Sparse dense add assign should be turned into dense dense addassign")
             }
         }
     }
@@ -144,7 +163,7 @@ where
 
 impl<T, U, I> AddAssign<RealOrComplexTensor<T, I>> for RealOrComplexTensor<U, I>
 where
-    U: for<'a> AddAssign<&'a T> + RefZero,
+    U: for<'a> AddAssign<&'a T> + RefZero + Clone + Default + PartialEq,
     Complex<U>: for<'a> AddAssign<&'a Complex<T>> + for<'a> AddAssign<&'a T>,
     I: TensorStructure + Clone + ScalarStructure,
 {
@@ -169,7 +188,7 @@ where
 
 impl<T, U, I> AddAssign<&RealOrComplexTensor<T, I>> for RealOrComplexTensor<U, I>
 where
-    U: for<'a> AddAssign<&'a T> + RefZero,
+    U: for<'a> AddAssign<&'a T> + RefZero + Clone + Default + PartialEq,
     Complex<U>: for<'a> AddAssign<&'a Complex<T>> + for<'a> AddAssign<&'a T>,
     I: TensorStructure + Clone + ScalarStructure,
 {

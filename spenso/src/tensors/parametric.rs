@@ -767,7 +767,7 @@ impl<S: TensorStructure + Clone> ParamTensorSet<S> {
                             )?)
                         }
                         DataTensor::Sparse(s) => {
-                            let mut t = SparseTensor::empty(structure);
+                            let mut t = SparseTensor::empty(structure, 0);
                             for (i, a) in s.flat_iter() {
                                 t.set_flat(i, id)?;
                                 atoms.push(a.as_view());
@@ -1150,6 +1150,13 @@ impl<S: TensorStructure + Clone> SparseOrDense for ParamTensor<S> {
         }
     }
 
+    fn to_dense_mut(&mut self) {
+        self.tensor.to_dense_mut();
+    }
+    fn to_sparse_mut(&mut self) {
+        self.tensor.to_sparse_mut();
+    }
+
     fn to_sparse(self) -> Self {
         ParamTensor {
             tensor: self.tensor.to_sparse(),
@@ -1167,6 +1174,19 @@ where
         match self {
             ParamOrConcrete::Concrete(x) => ParamOrConcrete::Concrete(x.to_dense()),
             ParamOrConcrete::Param(x) => ParamOrConcrete::Param(x.to_dense()),
+        }
+    }
+
+    fn to_dense_mut(&mut self) {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.to_dense_mut(),
+            ParamOrConcrete::Param(x) => x.to_dense_mut(),
+        }
+    }
+    fn to_sparse_mut(&mut self) {
+        match self {
+            ParamOrConcrete::Concrete(x) => x.to_dense_mut(),
+            ParamOrConcrete::Param(x) => x.to_dense_mut(),
         }
     }
 
@@ -2199,9 +2219,10 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
     {
         let zero = params[0].zero();
         if let Some(ref indexmap) = self.indexmap {
-            let mut elements = vec![zero; indexmap.len()];
+            let mut elements = vec![zero.clone(); indexmap.len()];
             self.eval.evaluate(params, &mut elements);
             let s = SparseTensor {
+                zero: zero.clone(),
                 elements: indexmap.iter().cloned().zip(elements.drain(0..)).collect(),
                 structure: self.structure.clone(),
             };
@@ -2224,7 +2245,7 @@ pub struct EvalTensor<T, S> {
 impl<T, S: TensorStructure + Clone> EvalTensor<T, S> {
     pub fn usize_tensor(&self, shift: usize) -> DataTensor<usize, S> {
         if let Some(ref indexmap) = self.indexmap {
-            let mut sparse_tensor = SparseTensor::empty(self.structure.clone());
+            let mut sparse_tensor = SparseTensor::empty(self.structure.clone(), 0);
             for (i, idx) in indexmap.iter().enumerate() {
                 sparse_tensor.elements.insert(*idx, shift + i);
             }
@@ -2471,9 +2492,10 @@ impl<T, S> EvalTensor<ExpressionEvaluator<T>, S> {
     {
         let zero = params[0].zero();
         if let Some(ref indexmap) = self.indexmap {
-            let mut elements = vec![zero; indexmap.len()];
+            let mut elements = vec![zero.clone(); indexmap.len()];
             self.eval.evaluate(params, &mut elements);
             let s = SparseTensor {
+                zero: zero.clone(),
                 elements: indexmap.iter().cloned().zip(elements.drain(0..)).collect(),
                 structure: self.structure.clone(),
             };
@@ -2615,6 +2637,7 @@ impl<S> EvalTensor<CompiledComplexEvaluatorSpenso, S> {
             let mut elements: Vec<Complex<f64>> = vec![Complex::default(); indexmap.len()];
             self.eval.evaluate(params, &mut elements);
             let s = SparseTensor {
+                zero: Complex::new_zero(),
                 elements: indexmap.iter().cloned().zip(elements.drain(0..)).collect(),
                 structure: self.structure.clone(),
             };
@@ -2636,6 +2659,7 @@ impl<S> EvalTensor<CompiledComplexEvaluator, S> {
             let mut elements: Vec<SymComplex<f64>> = vec![SymComplex::default(); indexmap.len()];
             self.eval.evaluate(params, &mut elements);
             let s = SparseTensor {
+                zero: SymComplex::new_zero(),
                 elements: indexmap.iter().cloned().zip(elements.drain(0..)).collect(),
                 structure: self.structure.clone(),
             };
@@ -2689,6 +2713,8 @@ impl<S: TensorStructure> CompiledEvalTensorSet<S> {
 
 #[cfg(test)]
 pub mod test {
+    use symbolica::atom::Atom;
+
     use crate::{
         structure::{
             representation::{Minkowski, RepName},
@@ -2704,6 +2730,7 @@ pub mod test {
         let a: MixedTensor<f64, OrderedStructure> =
             MixedTensor::param(DataTensor::Sparse(SparseTensor::empty(
                 PermutedStructure::from_iter([Minkowski {}.new_slot(2, 1)]).structure,
+                Atom::Zero,
             )));
 
         assert_eq!(a.size().unwrap(), 2);

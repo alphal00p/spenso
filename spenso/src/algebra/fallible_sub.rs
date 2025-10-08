@@ -125,7 +125,7 @@ where
             rhs.structure().string_rep()
         );
         let structure = self.structure().clone();
-        let mut data = SparseTensor::empty(structure);
+        let mut data = SparseTensor::empty(structure, self.zero.sub_fallible(&rhs.zero)?);
         let self_to_rhs = rhs.structure().find_permutation(self.structure()).unwrap();
 
         for (indices, u) in self.iter_expanded() {

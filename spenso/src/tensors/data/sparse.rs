@@ -1,3 +1,4 @@
+use crate::algebra::algebraic_traits::RefZero;
 use crate::structure::dimension::Dimension;
 use crate::structure::permuted::PermuteTensor;
 use crate::structure::representation::{RepName, Representation};
@@ -45,6 +46,7 @@ use super::{
 pub struct SparseTensor<T, I = OrderedStructure> {
     // #[bincode(with_serde)]
     pub elements: std::collections::HashMap<FlatIndex, T>,
+    pub zero: T,
     pub structure: I,
 }
 
@@ -59,6 +61,12 @@ impl<T, S> crate::network::Ref for SparseTensor<T, S> {
     }
 }
 
+impl<T: RefZero, S: TensorStructure> SparseTensor<T, S> {
+    pub fn ref_zero(&self) -> T {
+        self.zero.ref_zero()
+    }
+}
+
 impl<Aind: AbsInd, T: Clone, S: Clone + Into<IndexLess<R, Aind>>, R: RepName<Dual = R>>
     PermuteTensor for SparseTensor<T, S>
 where
@@ -69,7 +77,7 @@ where
     type Permuted = SparseTensor<T, S>;
 
     fn id(i: Self::IdSlot, j: Self::IdSlot) -> Self::Id {
-        let (_zero, i) = i;
+        let (zero, i) = i;
         let (one, j) = j;
         let s = S::id(i, j);
         let mut elements = std::collections::HashMap::new();
@@ -78,6 +86,7 @@ where
         }
         SparseTensor {
             elements,
+            zero,
             structure: s,
         }
     }
@@ -121,6 +130,7 @@ where
 
         Ok(PermutedStructure {
             structure: SparseTensor {
+                zero: self.zero,
                 structure: res.structure,
                 elements: self.elements,
             },
@@ -164,6 +174,7 @@ impl<T, U: From<T> + Clone, I: TensorStructure + Clone> CastData<SparseTensor<U,
 {
     fn cast_data(self) -> SparseTensor<U, I> {
         SparseTensor {
+            zero: self.zero.into(),
             elements: self
                 .elements
                 .into_iter()
@@ -179,6 +190,7 @@ impl<T, S: TensorStructure, O: From<S> + TensorStructure> CastStructure<SparseTe
 {
     fn cast_structure(self) -> SparseTensor<T, O> {
         SparseTensor {
+            zero: self.zero,
             elements: self.elements,
             structure: self.structure.into(),
         }
@@ -328,6 +340,7 @@ impl<T, S: TensorStructure> SparseTensor<T, S> {
         S2: TensorStructure,
     {
         SparseTensor {
+            zero: self.zero,
             elements: self.elements,
             structure: f(self.structure),
         }
@@ -341,6 +354,7 @@ impl<T, S: TensorStructure> SparseTensor<T, S> {
         S2: TensorStructure,
     {
         Ok(SparseTensor {
+            zero: self.zero,
             elements: self.elements,
             structure: f(self.structure)?,
         })
@@ -354,6 +368,7 @@ impl<T, S: TensorStructure> SparseTensor<T, S> {
     {
         let elements = self.flat_iter().map(|(k, v)| (k, f(v))).collect();
         SparseTensor {
+            zero: f(&self.zero),
             elements,
             structure: self.structure.clone(),
         }
@@ -373,6 +388,7 @@ impl<T, S: TensorStructure> SparseTensor<T, S> {
             .map(|(k, v)| f(v).map(|v| (k, v)))
             .collect();
         Ok(SparseTensor {
+            zero: f(&self.zero)?,
             elements: elements?,
             structure: self.structure.clone(),
         })
@@ -381,6 +397,7 @@ impl<T, S: TensorStructure> SparseTensor<T, S> {
     pub fn map_data<U>(self, f: impl Fn(T) -> U) -> SparseTensor<U, S> {
         let elements = self.elements.into_iter().map(|(k, v)| (k, f(v))).collect();
         SparseTensor {
+            zero: f(self.zero),
             elements,
             structure: self.structure,
         }
@@ -394,6 +411,7 @@ impl<T, S: TensorStructure> SparseTensor<T, S> {
     {
         let elements = self.elements.iter_mut().map(|(k, v)| (*k, f(v))).collect();
         SparseTensor {
+            zero: f(&mut self.zero),
             elements,
             structure: self.structure.clone(),
         }
@@ -516,14 +534,16 @@ where
     }
 }
 
-impl<T, I> ScalarTensor for SparseTensor<T, I>
+impl<T: RefZero, I> ScalarTensor for SparseTensor<T, I>
 where
     I: TensorStructure + ScalarStructure,
 {
     fn new_scalar(scalar: Self::Scalar) -> Self {
         let mut elements = HashMap::new();
+        let zero = scalar.ref_zero();
         elements.insert(0.into(), scalar);
         SparseTensor {
+            zero,
             elements,
             structure: I::scalar_structure(),
         }
@@ -550,6 +570,7 @@ where
         f: impl FnOnce(Self::Structure) -> O,
     ) -> Self::Store<O> {
         SparseTensor {
+            zero: self.zero,
             structure: f(self.structure),
             elements: self.elements,
         }
@@ -560,6 +581,7 @@ where
         f: impl FnOnce(Self::Structure) -> Result<O, Er>,
     ) -> std::result::Result<Self::Store<O>, Er> {
         Ok(SparseTensor {
+            zero: self.zero,
             structure: f(self.structure)?,
             elements: self.elements,
         })
@@ -570,6 +592,7 @@ where
 
     fn map_same_structure(self, f: impl FnOnce(Self::Structure) -> Self::Structure) -> Self {
         SparseTensor {
+            zero: self.zero,
             elements: self.elements,
             structure: f(self.structure),
         }
@@ -625,6 +648,7 @@ where
             })
             .collect();
         Some(Cow::Owned(SparseTensor {
+            zero: self.zero.try_upgrade()?.into_owned(),
             elements: elements?,
             structure,
         }))
@@ -636,8 +660,9 @@ where
     I: TensorStructure,
 {
     /// Create a new empty sparse tensor with the given structure
-    pub fn empty(structure: I) -> Self {
+    pub fn empty(structure: I, zero: T) -> Self {
         SparseTensor {
+            zero,
             elements: HashMap::default(),
             structure,
         }
@@ -661,10 +686,10 @@ where
     /// Converts the sparse tensor to a dense tensor, with the same structure
     pub fn to_dense(&self) -> DenseTensor<T, I>
     where
-        T: Clone + Default,
+        T: Clone,
         I: Clone,
     {
-        self.to_dense_with(&T::default())
+        self.to_dense_with(&self.zero)
     }
 
     pub fn to_dense_with(&self, zero: &T) -> DenseTensor<T, I>
@@ -699,6 +724,7 @@ where
     pub fn from_data(
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, T)>,
         structure: I,
+        zero: T,
     ) -> Result<Self> {
         let mut elements = HashMap::default();
         for (index, value) in data {
@@ -709,6 +735,7 @@ where
         }
 
         Ok(SparseTensor {
+            zero,
             elements,
             structure,
         })
@@ -741,6 +768,7 @@ where
     {
         let elements = self.elements.iter().map(|(k, v)| (*k, v.into())).collect();
         SparseTensor {
+            zero: (&self.zero).into(),
             elements,
             structure: self.structure.clone(),
         }
@@ -765,6 +793,7 @@ impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
             .map(|(k, v)| f(v).map(|v| (*k, v)))
             .collect();
         Ok(SparseTensor {
+            zero: f(&mut self.zero)?,
             elements: elements?,
             structure: self.structure.clone(),
         })
@@ -788,6 +817,7 @@ impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
     fn map_data_ref<U>(&self, f: impl Fn(&T) -> U) -> SparseTensor<U, S> {
         let elements = self.flat_iter().map(|(k, v)| (k, f(v))).collect();
         SparseTensor {
+            zero: f(&self.zero),
             elements,
             structure: self.structure.clone(),
         }
@@ -802,6 +832,7 @@ impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
             .map(|(k, v)| f(v).map(|v| (k, v)))
             .collect();
         Ok(SparseTensor {
+            zero: f(&self.zero)?,
             elements: elements?,
             structure: self.structure.clone(),
         })
@@ -810,6 +841,7 @@ impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
     fn map_data<U>(self, f: impl Fn(T) -> U) -> SparseTensor<U, S> {
         let elements = self.elements.into_iter().map(|(k, v)| (k, f(v))).collect();
         SparseTensor {
+            zero: f(self.zero),
             elements,
             structure: self.structure,
         }
@@ -818,6 +850,7 @@ impl<S: TensorStructure + Clone, T> StorageTensor for SparseTensor<T, S> {
     fn map_data_ref_mut<U>(&mut self, mut f: impl FnMut(&mut T) -> U) -> SparseTensor<U, S> {
         let elements = self.elements.iter_mut().map(|(k, v)| (*k, f(v))).collect();
         SparseTensor {
+            zero: f(&mut self.zero),
             elements,
             structure: self.structure.clone(),
         }

@@ -876,7 +876,7 @@ dependencies = [
  "pyo3-stub-gen",
  "spenso",
  "spenso-macros",
- "symbolica 0.18.0",
+ "symbolica",
 ]
 
 [[package]]
@@ -1989,23 +1989,9 @@ dependencies = [
  "serde_json",
  "slotmap",
  "spenso-macros",
- "symbolica 0.18.0",
+ "symbolica",
  "tabled",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "spenso-hep-lib"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e8023c37b4fdd6d0700ad44b5dc40792e7eda7835e38ccf5165f0c544964269"
-dependencies = [
- "ahash",
- "idenso",
- "spenso",
- "spenso-macros",
- "symbolica 0.17.0",
- "xpct",
 ]
 
 [[package]]
@@ -2016,7 +2002,7 @@ dependencies = [
  "idenso",
  "spenso",
  "spenso-macros",
- "symbolica 0.18.0",
+ "symbolica",
  "xpct",
 ]
 
@@ -2029,7 +2015,7 @@ dependencies = [
  "quote",
  "serde",
  "spenso",
- "symbolica 0.18.0",
+ "symbolica",
  "syn 2.0.106",
 ]
 
@@ -2045,9 +2031,9 @@ dependencies = [
  "pyo3-stub-gen",
  "pyo3-stub-gen-derive 0.13.1 (git+https://github.com/benruijl/pyo3-stub-gen?branch=patched)",
  "spenso",
- "spenso-hep-lib 0.1.3",
+ "spenso-hep-lib",
  "spenso-macros",
- "symbolica 0.18.0",
+ "symbolica",
  "thiserror 2.0.16",
  "xpct",
 ]
@@ -2057,33 +2043,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "symbolica"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bda144440566e5fd07e45ab88ff77723e49f5a840dfcb4c346b4446db6a95600"
-dependencies = [
- "ahash",
- "append-only-vec",
- "brotli",
- "byteorder",
- "bytes",
- "colored 3.0.0",
- "dyn-clone",
- "libloading",
- "once_cell",
- "rand 0.9.1",
- "rand_xoshiro 0.7.0",
- "rayon",
- "rug",
- "self_cell",
- "smallvec",
- "smartstring",
- "tinyjson",
- "tracing",
- "wide",
-]
 
 [[package]]
 name = "symbolica"

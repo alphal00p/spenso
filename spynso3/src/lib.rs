@@ -231,12 +231,15 @@ impl Spensor {
                 tensor: structure
                     .0
                     .structure
-                    .map_structure(|s| SparseTensor::<f64, _>::empty(s).into()),
+                    .map_structure(|s| SparseTensor::<f64, _>::empty(s, 0.0).into()),
             })
         } else if type_info.is_subclass_of::<PythonExpression>()? {
             Ok(Spensor {
                 tensor: structure.0.structure.map_structure(|s| {
-                    ParamOrConcrete::Param(ParamTensor::from(SparseTensor::<Atom, _>::empty(s)))
+                    ParamOrConcrete::Param(ParamTensor::from(SparseTensor::<Atom, _>::empty(
+                        s,
+                        Atom::Zero,
+                    )))
                 }),
             })
         } else {

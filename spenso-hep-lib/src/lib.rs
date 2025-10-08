@@ -22,10 +22,11 @@ where
     N: TensorStructure,
 {
     let c1 = Complex::<T>::new(one.clone(), zero.clone());
+    let z = Complex::<T>::new(zero.clone(), zero.clone());
     let cn1 = Complex::<T>::new(-one.clone(), zero.clone());
     let ci = Complex::<T>::new(zero.clone(), one.clone());
     let cni = Complex::<T>::new(zero.clone(), -one.clone());
-    let mut gamma = SparseTensor::empty(structure);
+    let mut gamma = SparseTensor::empty(structure, z);
     // ! No check on actual structure, should expext mink,bis,bis
 
     // dirac gamma matrices
@@ -59,11 +60,12 @@ where
     T: Neg<Output = T> + Clone,
     N: TensorStructure,
 {
+    let z = Complex::<T>::new(zero.clone(), zero.clone());
     let c1 = Complex::<T>::new(one.clone(), zero.clone());
     let cn1 = Complex::<T>::new(-one.clone(), zero.clone());
     let ci = Complex::<T>::new(zero.clone(), one.clone());
     let cni = Complex::<T>::new(zero.clone(), -one.clone());
-    let mut gamma = SparseTensor::empty(structure);
+    let mut gamma = SparseTensor::empty(structure, z);
     // ! No check on actual structure, should expext mink,bis,bis
 
     // dirac gamma matrices
@@ -96,8 +98,9 @@ where
     T: Clone,
     N: TensorStructure,
 {
-    let c1 = Complex::<T>::new(one, zero);
-    let mut gamma0 = SparseTensor::empty(structure);
+    let c1 = Complex::<T>::new(one, zero.clone());
+    let z = Complex::<T>::new(zero.clone(), zero.clone());
+    let mut gamma0 = SparseTensor::empty(structure, z);
     // ! No check on actual structure, should expext bis,bis,lor
 
     // dirac gamma0 matrices
@@ -115,9 +118,10 @@ where
     T: Clone,
     N: TensorStructure,
 {
-    let c1 = Complex::<T>::new(one, zero);
+    let c1 = Complex::<T>::new(one, zero.clone());
 
-    let mut gamma5 = SparseTensor::empty(structure);
+    let z = Complex::<T>::new(zero.clone(), zero.clone());
+    let mut gamma5 = SparseTensor::empty(structure, z);
 
     gamma5.set(&[0, 2], c1.clone()).unwrap();
     gamma5.set(&[1, 3], c1.clone()).unwrap();
@@ -132,9 +136,10 @@ where
     T: Clone + Neg<Output = T>,
     N: TensorStructure,
 {
+    let z = Complex::<T>::new(zero.clone(), zero.clone());
     let c1 = Complex::<T>::new(one, zero);
 
-    let mut gamma5 = SparseTensor::empty(structure);
+    let mut gamma5 = SparseTensor::empty(structure, z);
 
     gamma5.set(&[0, 0], -c1.clone()).unwrap();
     gamma5.set(&[1, 1], -c1.clone()).unwrap();
@@ -150,11 +155,13 @@ where
     T: Clone + Neg<Output = T>,
     N: TensorStructure,
 {
+    let z = Complex::<T>::new(zero.clone(), zero.clone());
     // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
+
     let chalf = Complex::<T>::new(half.clone(), zero.clone());
     let cnhalf = Complex::<T>::new(-half, zero);
 
-    let mut proj_m = SparseTensor::empty(structure);
+    let mut proj_m = SparseTensor::empty(structure, z);
 
     proj_m.set(&[0, 0], chalf.clone()).unwrap();
     proj_m.set(&[1, 1], chalf.clone()).unwrap();
@@ -175,9 +182,10 @@ where
     T: Clone,
     N: TensorStructure,
 {
+    let z = Complex::<T>::new(zero.clone(), zero.clone());
     // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
     let c1 = Complex::<T>::new(one, zero);
-    let mut proj_m = SparseTensor::empty(structure);
+    let mut proj_m = SparseTensor::empty(structure, z);
 
     proj_m.set(&[0, 0], c1.clone()).unwrap();
     proj_m.set(&[1, 1], c1.clone()).unwrap();
@@ -190,10 +198,11 @@ where
     T: Clone,
     N: TensorStructure,
 {
+    let z = Complex::<T>::new(zero.clone(), zero.clone());
     // ProjP(1,2) Right chirality projector (( 1+γ5)/ 2 )_s1_s2
     let chalf = Complex::<T>::new(half, zero);
 
-    let mut proj_p = SparseTensor::empty(structure);
+    let mut proj_p = SparseTensor::empty(structure, z);
 
     proj_p
         .set(&[0, 0], chalf.clone())
@@ -230,14 +239,15 @@ where
     T: Clone,
     N: TensorStructure,
 {
+    let z = Complex::<T>::new(zero.clone(), zero.clone());
     // ProjM(1,2) Left chirality projector (( 1−γ5)/ 2 )_s1_s2
     let c1 = Complex::<T>::new(one, zero);
-    let mut proj_m = SparseTensor::empty(structure);
+    let mut proj_p = SparseTensor::empty(structure, z);
 
-    proj_m.set(&[2, 2], c1.clone()).unwrap();
-    proj_m.set(&[3, 3], c1.clone()).unwrap();
+    proj_p.set(&[2, 2], c1.clone()).unwrap();
+    proj_p.set(&[3, 3], c1.clone()).unwrap();
 
-    proj_m
+    proj_p
 }
 
 #[allow(clippy::similar_names)]
@@ -246,12 +256,13 @@ where
     T: Clone + Neg<Output = T>,
     N: TensorStructure,
 {
+    let z = Complex::<T>::new(zero.clone(), zero.clone());
     let c1 = Complex::<T>::new(one.clone(), zero.clone());
     let cn1 = Complex::<T>::new(-one.clone(), zero.clone());
     let ci = Complex::<T>::new(zero.clone(), one.clone());
     let cni = Complex::<T>::new(zero.clone(), -one.clone());
 
-    let mut sigma = SparseTensor::empty(structure);
+    let mut sigma = SparseTensor::empty(structure, z);
     sigma.set(&[0, 2, 0, 1], c1.clone()).unwrap();
     sigma.set(&[0, 2, 3, 0], c1.clone()).unwrap();
     sigma.set(&[0, 3, 1, 2], c1.clone()).unwrap();
@@ -355,7 +366,9 @@ mod tests {
         iterators::IteratableTensor,
         network::{
             ExecutionResult, Network, Sequential, SingleSmallestDegree, SmallestDegree,
-            SmallestDegreeIter, Steps, parsing::ShadowedStructure, store::NetworkStore,
+            SmallestDegreeIter, Steps,
+            parsing::{ParseSettings, ShadowedStructure},
+            store::NetworkStore,
         },
         shadowing::Concretize,
         structure::{
@@ -398,7 +411,7 @@ mod tests {
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
             _,
-        >::try_from_view(expr.as_view(), &*HEP_LIB)
+        >::try_from_view(expr.as_view(), &*HEP_LIB, &ParseSettings::default())
         .unwrap();
 
         println!(
@@ -585,7 +598,7 @@ mod tests {
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
             _,
-        >::try_from_view(expr.as_view(), &*HEP_LIB)
+        >::try_from_view(expr.as_view(), &*HEP_LIB, &ParseSettings::default())
         .unwrap();
 
         net.merge_ops();
@@ -662,7 +675,7 @@ mod tests {
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
             _,
-        >::try_from_view(expr.as_view(), &*HEP_LIB)
+        >::try_from_view(expr.as_view(), &*HEP_LIB, &ParseSettings::default())
         .unwrap();
 
         let simplified = expr.simplify_gamma();
@@ -671,7 +684,9 @@ mod tests {
         let mut net_simplified = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
             _,
-        >::try_from_view(simplified.as_view(), &*HEP_LIB)
+        >::try_from_view(
+            simplified.as_view(), &*HEP_LIB, &ParseSettings::default()
+        )
         .unwrap();
 
         net.execute::<Sequential, SmallestDegree, _, _>(&*HEP_LIB)

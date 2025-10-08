@@ -31,7 +31,7 @@ use symbolica::{
 
 #[cfg(feature = "shadowing")]
 use crate::{
-    algebra::complex::symbolica_traits::CompiledComplexEvaluatorSpenso,
+    algebra::complex::{symbolica_traits::CompiledComplexEvaluatorSpenso, Complex},
     tensors::data::{DataIterator, DenseTensor, SetTensorData, SparseTensor},
     tensors::parametric::ParamTensor,
 };
@@ -248,7 +248,7 @@ impl<
                             )
                         }
                         DataTensor::Sparse(s) => {
-                            let mut t = SparseTensor::empty(structure);
+                            let mut t = SparseTensor::empty(structure, 0);
                             for (i, a) in s.flat_iter() {
                                 t.set_flat(i, tensor_id)
                                     .expect("Failed to set value in SparseTensor");
@@ -361,7 +361,7 @@ impl<
                             DataTensor::Dense(DenseTensor::from_data(t_data, structure).unwrap())
                         }
                         DataTensor::Sparse(s) => {
-                            let mut t = SparseTensor::empty(structure);
+                            let mut t = SparseTensor::empty(structure, T::new_zero());
                             for (i, &a) in s.flat_iter() {
                                 t.set_flat(i, data[a].clone()).unwrap();
                             }
@@ -416,7 +416,7 @@ impl<
                             DataTensor::Dense(DenseTensor::from_data(t_data, structure).unwrap())
                         }
                         DataTensor::Sparse(s) => {
-                            let mut t = SparseTensor::empty(structure);
+                            let mut t = SparseTensor::empty(structure, T::new_zero());
                             for (i, &a) in s.flat_iter() {
                                 t.set_flat(i, data[a].clone()).unwrap();
                             }
@@ -527,7 +527,7 @@ impl<
                             DataTensor::Dense(DenseTensor::from_data(t_data, structure).unwrap())
                         }
                         DataTensor::Sparse(s) => {
-                            let mut t = SparseTensor::empty(structure);
+                            let mut t = SparseTensor::empty(structure, Complex::new_zero());
                             for (i, &a) in s.flat_iter() {
                                 t.set_flat(i, data[a]).unwrap();
                             }

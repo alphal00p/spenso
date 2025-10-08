@@ -27,6 +27,7 @@ where
     type Output = SparseTensor<U, S>;
     fn neg(self) -> Self::Output {
         SparseTensor {
+            zero: self.zero.neg(),
             structure: self.structure.clone(),
             elements: self
                 .elements

@@ -78,7 +78,7 @@ impl<T: ToParam + HasStructure<Structure = I>, I: ScalarStructure + TensorStruct
             let old = std::mem::replace(
                 self,
                 ParamOrConcrete::Param(ParamTensor::param(DataTensor::Sparse(
-                    SparseTensor::empty(I::scalar_structure()),
+                    SparseTensor::empty(I::scalar_structure(), Atom::Zero),
                 ))),
             );
 

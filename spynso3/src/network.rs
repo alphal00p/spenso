@@ -10,7 +10,7 @@ use spenso::{
         ContractScalars, ExecutionResult, Network, Sequential, SingleSmallestDegree,
         SmallestDegree, Steps,
         library::symbolic::ExplicitKey,
-        parsing::ShadowedStructure,
+        parsing::{ParseSettings, ShadowedStructure},
         store::{NetworkStore, TensorScalarStoreMapping},
     },
     structure::abstract_index::AbstractIndex,
@@ -129,6 +129,7 @@ impl<'a> FromPyObject<'a> for ConvertibleToSpensoNet {
                 network: ParsingNet::try_from_view(
                     a.to_expression().expr.as_view(),
                     &SpensorLibrary::construct().library,
+                    &ParseSettings::default(),
                 )
                 .map_err(|a| PyRuntimeError::new_err(a.to_string()))?,
             }))
@@ -177,7 +178,11 @@ impl SpensoNet {
         let lib = library.map(|l| &l.library).unwrap_or(HEP_LIB.deref());
 
         Ok(SpensoNet {
-            network: ParsingNet::try_from_view(expr.to_expression()?.as_view(), lib)?,
+            network: ParsingNet::try_from_view(
+                expr.to_expression()?.as_view(),
+                lib,
+                &ParseSettings::default(),
+            )?,
         })
     }
 

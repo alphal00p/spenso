@@ -31,7 +31,10 @@ where
         other: &SparseTensor<T, I>,
         final_structure: I,
     ) -> Result<Self::LCM, ContractionError> {
-        let mut out = SparseTensor::empty(final_structure);
+        let mut out = SparseTensor::empty(
+            final_structure,
+            self.zero.mul_fallible(&other.zero).unwrap(),
+        );
         let stride = other.size()?;
 
         for (i, u) in self.flat_iter() {
@@ -199,6 +202,7 @@ where
             }
         }
         let result = SparseTensor {
+            zero: self.zero.mul_fallible(&other.zero).unwrap(),
             elements: result_data,
             structure: resulting_structure,
         };

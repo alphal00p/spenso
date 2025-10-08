@@ -7,6 +7,7 @@ use spenso::{
     network::{
         Network,
         library::{DummyLibrary, symbolic::ETS},
+        parsing::ParseSettings,
         store::NetworkStore,
     },
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
@@ -58,8 +59,12 @@ pub enum CookingError {
 
 pub fn canonize_impl(view: AtomView) -> Atom {
     let lib = DummyLibrary::<SymbolicTensor>::new();
-    let mut net =
-        Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(view, &lib).unwrap();
+    let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+        view,
+        &lib,
+        &ParseSettings::default(),
+    )
+    .unwrap();
 
     let mut redual_reps = vec![];
 

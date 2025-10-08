@@ -9,7 +9,7 @@ use crate::{
             symbolic::{ExplicitKey, TensorLibrary},
             TensorLibraryData,
         },
-        parsing::ShadowedStructure,
+        parsing::{ParseSettings, ShadowedStructure},
         store::NetworkStore,
         Network, Ref, StructureLessDisplay, TensorNetworkError,
     },
@@ -327,7 +327,11 @@ impl<Aind: AbsInd> SymbolicTensor<Aind> {
             NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
             ExplicitKey<AbstractIndex>,
             AbstractIndex,
-        >::try_from_view(self.expression.as_view(), library)
+        >::try_from_view(
+            self.expression.as_view(),
+            library,
+            &ParseSettings::default(),
+        )
     }
 }
 

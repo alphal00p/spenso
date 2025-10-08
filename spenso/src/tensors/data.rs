@@ -1,5 +1,8 @@
 use crate::{
-    algebra::upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
+    algebra::{
+        algebraic_traits::RefZero,
+        upgrading_arithmetic::{TryFromUpgrade, TrySmallestUpgrade},
+    },
     iterators::{DenseTensorLinearIterator, SparseTensorLinearIterator},
     structure::{
         concrete_index::{ConcreteIndex, ExpandedIndex, FlatIndex},
@@ -197,8 +200,20 @@ impl<T, S> crate::network::Ref for DataTensor<T, S> {
     }
 }
 
+impl<T: RefZero, S: TensorStructure> DataTensor<T, S> {
+    pub fn ref_zero(&self) -> T {
+        match self {
+            DataTensor::Dense(d) => d.ref_zero(),
+            DataTensor::Sparse(s) => s.ref_zero(),
+        }
+    }
+}
+
 pub trait SparseOrDense {
     fn to_sparse(self) -> Self;
+
+    fn to_sparse_mut(&mut self);
+    fn to_dense_mut(&mut self);
     fn to_dense(self) -> Self;
 }
 
@@ -294,7 +309,7 @@ where
 
     pub fn to_bare_dense(self) -> DenseTensor<T, I>
     where
-        T: Clone + Default + PartialEq,
+        T: Clone + PartialEq,
     {
         match self {
             DataTensor::Dense(d) => d,
@@ -306,10 +321,34 @@ where
 impl<T, I> SparseOrDense for DataTensor<T, I>
 where
     I: TensorStructure + Clone,
-    T: Clone + Default + PartialEq,
+    T: Clone + PartialEq + Default,
 {
     fn to_dense(self) -> Self {
         DataTensor::Dense(self.to_bare_dense())
+    }
+
+    fn to_dense_mut(&mut self) {
+        let s = std::mem::replace(
+            self,
+            DataTensor::Dense(DenseTensor {
+                structure: self.structure().clone(),
+                data: vec![],
+            }),
+        );
+
+        *self = s.to_dense();
+    }
+
+    fn to_sparse_mut(&mut self) {
+        let s = std::mem::replace(
+            self,
+            DataTensor::Dense(DenseTensor {
+                structure: self.structure().clone(),
+                data: vec![],
+            }),
+        );
+
+        *self = s.to_sparse();
     }
 
     fn to_sparse(self) -> Self {

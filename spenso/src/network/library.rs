@@ -235,7 +235,7 @@ impl<T: HasStructure + TensorStructure> LibraryTensor for DummyLibraryTensor<T> 
     type WithIndices = T;
     type Data = ();
 
-    fn empty(_key: Self::Structure) -> Self {
+    fn empty(_key: Self::Structure, _zero: ()) -> Self {
         unimplemented!()
     }
 
@@ -246,6 +246,7 @@ impl<T: HasStructure + TensorStructure> LibraryTensor for DummyLibraryTensor<T> 
     fn from_sparse(
         _key: Self::Structure,
         _data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
+        _zero: (),
     ) -> Result<Self> {
         unimplemented!()
     }
@@ -261,13 +262,14 @@ impl<T: HasStructure + TensorStructure> LibraryTensor for DummyLibraryTensor<T> 
 pub trait LibraryTensor: HasStructure + Sized + TensorStructure {
     type WithIndices: HasStructure;
     type Data;
-    fn empty(key: Self::Structure) -> Self;
+    fn empty(key: Self::Structure, zero: Self::Data) -> Self;
 
     fn from_dense(key: Self::Structure, data: Vec<Self::Data>) -> Result<Self>;
 
     fn from_sparse(
         key: Self::Structure,
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
+        zero: Self::Data,
     ) -> Result<Self>;
 
     fn with_indices(
@@ -280,8 +282,8 @@ impl<D: Clone, S: TensorStructure + Clone> LibraryTensor for DataTensor<D, S> {
     type WithIndices = DataTensor<D, S::Indexed>;
     type Data = D;
 
-    fn empty(key: S) -> Self {
-        DataTensor::Sparse(SparseTensor::empty(key))
+    fn empty(key: S, zero: D) -> Self {
+        DataTensor::Sparse(SparseTensor::empty(key, zero))
     }
 
     fn from_dense(key: S, data: Vec<Self::Data>) -> Result<Self> {
@@ -291,8 +293,11 @@ impl<D: Clone, S: TensorStructure + Clone> LibraryTensor for DataTensor<D, S> {
     fn from_sparse(
         key: S,
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
+        zero: Self::Data,
     ) -> Result<Self> {
-        Ok(DataTensor::Sparse(SparseTensor::from_data(data, key)?))
+        Ok(DataTensor::Sparse(SparseTensor::from_data(
+            data, key, zero,
+        )?))
     }
 
     fn with_indices(
@@ -319,8 +324,11 @@ impl<D: Clone + Default, S: TensorStructure + Clone> LibraryTensor for RealOrCom
     type WithIndices = RealOrComplexTensor<D, S::Indexed>;
     type Data = RealOrComplex<D>;
 
-    fn empty(key: S) -> Self {
-        RealOrComplexTensor::Real(DataTensor::Sparse(SparseTensor::empty(key)))
+    fn empty(key: S, zero: Self::Data) -> Self {
+        RealOrComplexTensor::Real(DataTensor::Sparse(SparseTensor::empty(
+            key,
+            zero.to_complex().re,
+        )))
     }
 
     fn from_dense(key: S, data: Vec<Self::Data>) -> Result<Self> {
@@ -334,11 +342,13 @@ impl<D: Clone + Default, S: TensorStructure + Clone> LibraryTensor for RealOrCom
     fn from_sparse(
         key: S,
         data: impl IntoIterator<Item = (Vec<ConcreteIndex>, Self::Data)>,
+        zero: Self::Data,
     ) -> Result<Self> {
         let complex_tensor = <DataTensor<Complex<D>, S> as LibraryTensor>::from_sparse(
             key,
             data.into_iter()
                 .map(|(indices, value)| (indices, value.to_complex())),
+            zero.to_complex(),
         )?;
 
         Ok(RealOrComplexTensor::Complex(complex_tensor))

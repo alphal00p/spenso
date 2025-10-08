@@ -222,8 +222,8 @@ where
         // let _ = final_structure.merge(&other.structure);
         let mut result_data = HashMap::default();
 
-        if let Some((_, s)) = self.flat_iter().next() {
-            let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
+        let zero = self.zero.try_upgrade().unwrap().as_ref().ref_zero();
+        if let Some(_) = self.flat_iter().next() {
             let mut result_index = 0;
 
             let self_iter = self
@@ -283,6 +283,7 @@ where
             }
         }
         let result = SparseTensor {
+            zero,
             elements: result_data,
             structure: final_structure,
         };
@@ -578,9 +579,8 @@ where
         resulting_partition: bitvec::prelude::BitVec,
     ) -> Result<Self::LCM, ContractionError> {
         let mut result_data = HashMap::default();
-        if let Some((_, s)) = self.flat_iter().next() {
-            let zero = s.try_upgrade().unwrap().as_ref().ref_zero();
-
+        let zero = self.zero.try_upgrade().unwrap().as_ref().ref_zero();
+        if let Some(_) = self.flat_iter().next() {
             let self_fiber_class = Fiber::from(&resulting_partition, &resulting_structure); //We use the partition as a filter here, for indices that belong to self, vs those that belong to other
             let (mut self_fiber_class_iter, mut other_fiber_class_iter) =
                 CoreFlatFiberIterator::new_paired_conjugates(&self_fiber_class); // these are iterators over the open indices of self and other, except expressed in the flat indices of the resulting structure
@@ -679,6 +679,7 @@ where
             }
         }
         let result = SparseTensor {
+            zero,
             elements: result_data,
             structure: resulting_structure,
         };

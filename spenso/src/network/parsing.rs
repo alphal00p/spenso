@@ -627,6 +627,127 @@ pub mod test {
     }
 
     #[test]
+    fn equal_duals() {
+        initialize();
+        let loop_tn_expr = parse_lit!(
+            ((_gammaloop::Q(5, spenso::cind(0)))
+                ^ 2 + (_gammaloop::Q(5, spenso::cind(1)))
+                ^ 2 * -1 + (_gammaloop::Q(5, spenso::cind(2)))
+                ^ 2 * -1 + (_gammaloop::Q(5, spenso::cind(3)))
+                ^ 2 * -1)
+                ^ (-1)
+                    * ((_gammaloop::Q(6, spenso::cind(0)))
+                        ^ 2 + (_gammaloop::Q(6, spenso::cind(1)))
+                        ^ 2 * -1 + (_gammaloop::Q(6, spenso::cind(2)))
+                        ^ 2 * -1 + (_gammaloop::Q(6, spenso::cind(3)))
+                        ^ 2 * -1)
+                ^ (-1)
+                    * ((_gammaloop::Q(7, spenso::cind(0)))
+                        ^ 2 + (_gammaloop::Q(7, spenso::cind(1)))
+                        ^ 2 * -1 + (_gammaloop::Q(7, spenso::cind(2)))
+                        ^ 2 * -1 + (_gammaloop::Q(7, spenso::cind(3)))
+                        ^ 2 * -1)
+                ^ (-1)
+                    * ((_gammaloop::Q(8, spenso::cind(0)))
+                        ^ 2 + (_gammaloop::Q(8, spenso::cind(1)))
+                        ^ 2 * -1 + (_gammaloop::Q(8, spenso::cind(2)))
+                        ^ 2 * -1 + (_gammaloop::Q(8, spenso::cind(3)))
+                        ^ 2 * -1)
+                ^ (-1)
+                    * ((_gammaloop::Q(9, spenso::cind(0)))
+                        ^ 2 + (_gammaloop::Q(9, spenso::cind(1)))
+                        ^ 2 * -1 + (_gammaloop::Q(9, spenso::cind(2)))
+                        ^ 2 * -1 + (_gammaloop::Q(9, spenso::cind(3)))
+                        ^ 2 * -1)
+                ^ (-1) * -1𝑖 / 3 * UFO::GC_11
+                ^ 2 * UFO::GC_1
+                ^ 3 * UFO::Gamma(
+                    spenso::mink(4, _gammaloop::hedge_13),
+                    spenso::bis(4, _gammaloop::hedge_11),
+                    2
+                ) * _gammaloop::Q(5, spenso::mink(4, _gammaloop::edge_5_1))
+                    * _gammaloop::Q(6, spenso::mink(4, _gammaloop::edge_6_1))
+                    * _gammaloop::Q(7, spenso::mink(4, _gammaloop::edge_7_1))
+                    * _gammaloop::Q(8, spenso::mink(4, _gammaloop::edge_8_1))
+                    * _gammaloop::u(1)
+                    * _gammaloop::vbar(2, spenso::bis(4, _gammaloop::hedge_2))
+                    * _gammaloop::ϵbar(0, spenso::mink(4, _gammaloop::hedge_0))
+                    * _gammaloop::ϵbar(3, spenso::mink(4, _gammaloop::hedge_3))
+                    * _gammaloop::ϵbar(4, spenso::mink(4, _gammaloop::hedge_4))
+                    * spenso::g(
+                        spenso::cof(3, _gammaloop::hedge_1),
+                        spenso::dind(spenso::cof(3, _gammaloop::hedge_2))
+                    )
+                    * spenso::g(
+                        spenso::mink(4, _gammaloop::hedge_13),
+                        spenso::mink(4, _gammaloop::hedge_14)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, _gammaloop::hedge_10),
+                        spenso::bis(4, _gammaloop::hedge_9),
+                        spenso::mink(4, _gammaloop::edge_8_1)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, _gammaloop::hedge_12),
+                        spenso::bis(4, _gammaloop::hedge_11),
+                        spenso::mink(4, _gammaloop::edge_7_1)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, _gammaloop::hedge_2),
+                        spenso::bis(4, _gammaloop::hedge_10),
+                        spenso::mink(4, _gammaloop::hedge_14)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, _gammaloop::hedge_5),
+                        spenso::bis(4, _gammaloop::hedge_12),
+                        spenso::mink(4, _gammaloop::hedge_3)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, _gammaloop::hedge_6),
+                        spenso::bis(4, _gammaloop::hedge_5),
+                        spenso::mink(4, _gammaloop::edge_5_1)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, _gammaloop::hedge_7),
+                        spenso::bis(4, _gammaloop::hedge_6),
+                        spenso::mink(4, _gammaloop::hedge_4)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, _gammaloop::hedge_8),
+                        spenso::bis(4, _gammaloop::hedge_7),
+                        spenso::mink(4, _gammaloop::edge_6_1)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, _gammaloop::hedge_9),
+                        spenso::bis(4, _gammaloop::hedge_8),
+                        spenso::mink(4, _gammaloop::hedge_0)
+                    )
+                    * spenso::t(
+                        spenso::coad(8, _gammaloop::hedge_13),
+                        spenso::cof(2),
+                        spenso::dind(spenso::cof(3, _gammaloop::hedge_11))
+                    )
+                    * spenso::t(
+                        spenso::coad(8, _gammaloop::hedge_13),
+                        spenso::cof(3, _gammaloop::hedge_11),
+                        spenso::dind(spenso::cof(3, _gammaloop::hedge_2))
+                    )
+        );
+
+        let lib: DummyLibrary<_, DummyKey> = DummyLibrary::<_, _>::new();
+        // println!("Hi");
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+            loop_tn_expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
+
+        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            .unwrap();
+    }
+
+    #[test]
     fn gammaloop_six_photon() {
         initialize();
         let expr = parse_lit!(

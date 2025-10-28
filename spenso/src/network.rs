@@ -252,13 +252,13 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
     }
 }
 
-impl<S: TensorScalarStore, K, Aind: AbsInd> Default for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> Default for Network<S, K, Aind> {
     fn default() -> Self {
         Self::one()
     }
 }
 
-impl<S: TensorScalarStore, K, Aind: AbsInd> NMul for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> NMul for Network<S, K, Aind> {
     type Output = Self;
     fn n_mul<I: IntoIterator<Item = Self>>(self, iter: I) -> Self::Output {
         let mut store = self.store;
@@ -289,7 +289,7 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> NMul for Network<S, K, Aind> {
     }
 }
 
-impl<S: TensorScalarStore, K, Aind: AbsInd> Mul for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> Mul for Network<S, K, Aind> {
     type Output = Self;
     fn mul(mut self, mut other: Self) -> Self::Output {
         let mut store = self.store;
@@ -307,7 +307,7 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> Mul for Network<S, K, Aind> {
     }
 }
 
-impl<S: TensorScalarStore, K, Aind: AbsInd> MulAssign for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> MulAssign for Network<S, K, Aind> {
     fn mul_assign(&mut self, mut rhs: Self) {
         rhs.graph.shift_scalars(self.store.n_scalars());
         rhs.graph.shift_tensors(self.store.n_tensors());
@@ -317,7 +317,8 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> MulAssign for Network<S, K, Aind> {
     }
 }
 
-impl<T: TensorStructure, S, K, Aind: AbsInd> MulAssign<T> for Network<NetworkStore<T, S>, K, Aind>
+impl<T: TensorStructure, S, K: Debug, Aind: AbsInd> MulAssign<T>
+    for Network<NetworkStore<T, S>, K, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -326,7 +327,7 @@ where
     }
 }
 
-impl<T: TensorStructure, S, K, Aind: AbsInd> Mul<T> for Network<NetworkStore<T, S>, K, Aind>
+impl<T: TensorStructure, S, K: Debug, Aind: AbsInd> Mul<T> for Network<NetworkStore<T, S>, K, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -348,7 +349,7 @@ where
     }
 }
 
-impl<S: TensorScalarStore, K, Aind: AbsInd> Add for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> Add for Network<S, K, Aind> {
     type Output = Self;
     fn add(self, mut other: Self) -> Self::Output {
         let mut store = self.store;
@@ -365,7 +366,7 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> Add for Network<S, K, Aind> {
     }
 }
 
-impl<S: TensorScalarStore, K, Aind: AbsInd> AddAssign for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> AddAssign for Network<S, K, Aind> {
     fn add_assign(&mut self, mut rhs: Self) {
         rhs.graph.shift_scalars(self.store.n_scalars());
         rhs.graph.shift_tensors(self.store.n_tensors());
@@ -375,7 +376,8 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> AddAssign for Network<S, K, Aind> {
     }
 }
 
-impl<T: TensorStructure, S, K, Aind: AbsInd> AddAssign<T> for Network<NetworkStore<T, S>, K, Aind>
+impl<T: TensorStructure, S, K: Debug, Aind: AbsInd> AddAssign<T>
+    for Network<NetworkStore<T, S>, K, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -384,7 +386,7 @@ where
     }
 }
 
-impl<T: TensorStructure, S, K, Aind: AbsInd> Add<T> for Network<NetworkStore<T, S>, K, Aind>
+impl<T: TensorStructure, S, K: Debug, Aind: AbsInd> Add<T> for Network<NetworkStore<T, S>, K, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -395,7 +397,7 @@ where
     }
 }
 
-impl<T: TensorStructure, K, Aind: AbsInd> Add<i8> for Network<NetworkStore<T, i8>, K, Aind>
+impl<T: TensorStructure, K: Debug, Aind: AbsInd> Add<i8> for Network<NetworkStore<T, i8>, K, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -414,7 +416,7 @@ where
     }
 }
 
-impl<S: TensorScalarStore, K, Aind: AbsInd> NAdd for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> NAdd for Network<S, K, Aind> {
     type Output = Self;
     fn n_add<I: IntoIterator<Item = Self>>(self, iter: I) -> Self::Output {
         let mut store = self.store;
@@ -434,7 +436,7 @@ impl<S: TensorScalarStore, K, Aind: AbsInd> NAdd for Network<S, K, Aind> {
     }
 }
 
-impl<S: TensorScalarStore, K: Clone, Aind: AbsInd> Neg for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Clone + Debug, Aind: AbsInd> Neg for Network<S, K, Aind> {
     type Output = Self;
     fn neg(self) -> Self::Output {
         Self {
@@ -445,7 +447,7 @@ impl<S: TensorScalarStore, K: Clone, Aind: AbsInd> Neg for Network<S, K, Aind> {
     }
 }
 
-impl<S: TensorScalarStore, K: Clone, Aind: AbsInd> Sub for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Clone + Debug, Aind: AbsInd> Sub for Network<S, K, Aind> {
     type Output = Self;
     fn sub(mut self, rhs: Self) -> Self::Output {
         self -= rhs;
@@ -453,7 +455,7 @@ impl<S: TensorScalarStore, K: Clone, Aind: AbsInd> Sub for Network<S, K, Aind> {
     }
 }
 
-impl<S: TensorScalarStore, K: Clone, Aind: AbsInd> SubAssign for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Clone + Debug, Aind: AbsInd> SubAssign for Network<S, K, Aind> {
     fn sub_assign(&mut self, mut rhs: Self) {
         rhs.graph.shift_scalars(self.store.n_scalars());
         rhs.graph.shift_tensors(self.store.n_tensors());
@@ -463,7 +465,7 @@ impl<S: TensorScalarStore, K: Clone, Aind: AbsInd> SubAssign for Network<S, K, A
     }
 }
 
-impl<T: TensorStructure, S, K: Clone, Aind: AbsInd> SubAssign<T>
+impl<T: TensorStructure, S, K: Clone + Debug, Aind: AbsInd> SubAssign<T>
     for Network<NetworkStore<T, S>, K, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
@@ -473,7 +475,8 @@ where
     }
 }
 
-impl<T: TensorStructure, S, K: Clone, Aind: AbsInd> Sub<T> for Network<NetworkStore<T, S>, K, Aind>
+impl<T: TensorStructure, S, K: Clone + Debug, Aind: AbsInd> Sub<T>
+    for Network<NetworkStore<T, S>, K, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -484,7 +487,7 @@ where
     }
 }
 
-impl<S: TensorScalarStore, K, Aind: AbsInd> Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> Network<S, K, Aind> {
     pub fn from_scalar(scalar: S::Scalar) -> Self {
         let mut store = S::default();
         let id = store.add_scalar(scalar);
@@ -652,7 +655,7 @@ impl<T: Display> Display for ExecutionResult<T> {
 impl<
         T: TensorStructure,
         S,
-        K: Display,
+        K: Display + Debug,
         Str: TensorScalarStore<Tensor = T, Scalar = S>,
         Aind: AbsInd,
     > Network<Str, K, Aind>
@@ -825,7 +828,7 @@ where
     }
 }
 
-impl<S, K: Display, Aind: AbsInd> Network<S, K, Aind> {
+impl<S, K: Display + Debug, Aind: AbsInd> Network<S, K, Aind> {
     pub fn dot(&self) -> std::string::String {
         self.graph.dot()
     }
@@ -851,7 +854,7 @@ impl<S, K: Display, Aind: AbsInd> Network<S, K, Aind> {
     }
 }
 
-impl<T, S, K, Aind: AbsInd> Network<NetworkStore<T, S>, K, Aind> {
+impl<T, S, K: Debug, Aind: AbsInd> Network<NetworkStore<T, S>, K, Aind> {
     pub fn dot_display_impl(
         &self,
         scalar_disp: impl Fn(&S) -> String,
@@ -922,7 +925,8 @@ pub struct Sequential;
 pub struct Steps<const N: usize> {}
 pub struct StepsDebug<const N: usize> {}
 
-impl<const N: usize, E, L, K, Aind: AbsInd> ExecutionStrategy<E, L, K, Aind> for StepsDebug<N>
+impl<const N: usize, E, L, K: Debug, Aind: AbsInd> ExecutionStrategy<E, L, K, Aind>
+    for StepsDebug<N>
 where
     E: ExecuteOp<L, K, Aind>,
     K: Clone,
@@ -968,7 +972,7 @@ where
 impl<const N: usize, E, L, K, Aind: AbsInd> ExecutionStrategy<E, L, K, Aind> for Steps<N>
 where
     E: ExecuteOp<L, K, Aind>,
-    K: Clone,
+    K: Clone + Debug,
 {
     fn execute_all<C: ContractionStrategy<E, L, K, Aind>>(
         executor: &mut E,
@@ -994,7 +998,7 @@ where
 impl<E, L, K, Aind: AbsInd> ExecutionStrategy<E, L, K, Aind> for Sequential
 where
     E: ExecuteOp<L, K, Aind>,
-    K: Clone,
+    K: Clone + Debug,
 {
     fn execute_all<C: ContractionStrategy<E, L, K, Aind>>(
         executor: &mut E,
@@ -1087,7 +1091,7 @@ where
         lib: &L,
     ) -> Result<(), TensorNetworkError<K>>
     where
-        K: Display + Clone,
+        K: Display + Clone + Debug,
         L: Library<S, Key = K, Value = PermutedStructure<LT>> + Sync,
         LT: LibraryTensor<WithIndices = Store::Tensor>,
         Store: ExecuteOp<L, K, Aind>,

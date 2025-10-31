@@ -77,7 +77,7 @@ pub trait IndexTooling {
     ///
     /// # Returns
     /// A new [`Atom`] representing the conjugated expression.
-    fn conj(&self) -> Atom;
+    fn hermitian_conjugate(&self) -> Atom;
 
     /// Identifies and returns a list of dangling (external, uncontracted) indices.
     ///
@@ -103,8 +103,8 @@ impl IndexTooling for Atom {
     fn cook_function(&self) -> Result<Atom, CookingError> {
         self.as_view().cook_function()
     }
-    fn conj(&self) -> Atom {
-        self.as_view().conj()
+    fn hermitian_conjugate(&self) -> Atom {
+        IndexTooling::hermitian_conjugate(&self.as_view())
     }
     fn list_dangling(&self) -> Vec<Atom> {
         self.as_view().list_dangling()
@@ -112,10 +112,11 @@ impl IndexTooling for Atom {
 }
 
 impl IndexTooling for AtomView<'_> {
-    fn conj(&self) -> Atom {
-        pol_conj_impl(gamma_conj_impl(color_conj_impl(*self).as_view()).as_view())
-            .as_view()
-            .conjugate()
+    fn hermitian_conjugate(&self) -> Atom {
+        self.conj()
+        // AtomCore::conj()
+        //     &pol_conj_impl(gamma_conj_impl(color_conj_impl(*self).as_view()).as_view()).as_view(),
+        // )
     }
 
     fn cook_function(&self) -> Result<Atom, CookingError> {

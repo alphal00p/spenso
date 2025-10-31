@@ -109,14 +109,8 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
             norm = |view, out| {
                 if let AtomView::Fun(f) = view {
                     if f.get_nargs() == 1 {
-                        *out = f.iter().next().unwrap().to_owned();
-                        true
-                    } else {
-                        // panic!("can only take one argument")
-                        false
+                        **out = f.iter().next().unwrap().to_owned();
                     }
-                } else {
-                    false
                 }
             }
         ),
@@ -129,20 +123,11 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
                         if let AtomView::Fun(arg) = arg {
                             if arg.get_nargs() == 1 {
                                 if arg.get_symbol() == symbol!(DOWNIND) {
-                                    *out = arg.iter().next().unwrap().to_owned();
-                                    return true;
-                                } else {
-                                    return false;
+                                    **out = arg.iter().next().unwrap().to_owned();
                                 }
                             }
                         }
-                        false
-                    } else {
-                        // panic!("can only take one argument")
-                        false
                     }
-                } else {
-                    false
                 }
             }
         ),
@@ -151,14 +136,8 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
             norm = |view, out| {
                 if let AtomView::Fun(f) = view {
                     if f.get_nargs() == 1 {
-                        *out = f.iter().next().unwrap().to_owned();
-                        true
-                    } else {
-                        // panic!("can only take one argument")
-                        false
+                        **out = f.iter().next().unwrap().to_owned();
                     }
-                } else {
-                    false
                 }
             }
         ),

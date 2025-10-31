@@ -94,8 +94,9 @@ pub fn canonize_impl(view: AtomView) -> Atom {
         }
     }
 
-    view.canonize_tensors(&indices)
+    view.canonize_tensors(indices)
         .unwrap()
+        .canonical_form
         .replace_multiple(&redual_reps)
 }
 
@@ -123,6 +124,8 @@ pub fn cook_function_impl(fun: FunView) -> Result<Symbol, CookingError> {
                 name.push_str(arg_sym.get_stripped_name());
             }
             AtomView::Num(n) => match n.get_coeff_view() {
+                CoefficientView::Indeterminate => name.push_str("ind"),
+                CoefficientView::Infinity(_) => name.push_str("inf"),
                 CoefficientView::FiniteField(_, _) => {
                     return Err(CookingError::FiniteField);
                 }

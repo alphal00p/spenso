@@ -28,15 +28,16 @@ pub struct SmallestDegreeIter<const N: usize>;
 pub struct ContractScalars;
 
 pub struct SingleSmallestDegree<const D: bool>;
-pub trait ContractionStrategy<E, L, K, Aind>: Sized {
+pub trait ContractionStrategy<E, L, K, FK, Aind>: Sized {
     #[allow(clippy::result_large_err)]
     fn contract(
         executor: &mut E,
-        graph: NetworkGraph<K, Aind>,
+        graph: NetworkGraph<K, FK, Aind>,
         lib: &L,
-    ) -> Result<(NetworkGraph<K, Aind>, bool), TensorNetworkError<K>>
+    ) -> Result<(NetworkGraph<K, FK, Aind>, bool), TensorNetworkError<K, FK>>
     where
-        K: Display;
+        K: Display,
+        FK: Display;
 }
 
 impl<
@@ -55,8 +56,9 @@ impl<
             + From<T::Scalar>
             + Ref,
         K: Display + Debug + Clone,
+        FK: Display + Debug + Clone,
         Aind: AbsInd,
-    > ContractionStrategy<NetworkStore<T, Sc>, L, K, Aind> for ContractScalars
+    > ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for ContractScalars
 where
     LT::WithIndices: Contract<LT::WithIndices, LCM = T>
         + ScalarMul<Sc, Output = T>
@@ -70,9 +72,9 @@ where
     /// If there are no other tensors, then reduce to a single scalar and remove the op node
     fn contract(
         executor: &mut NetworkStore<T, Sc>,
-        mut graph: NetworkGraph<K, Aind>,
+        mut graph: NetworkGraph<K, FK, Aind>,
         lib: &L,
-    ) -> Result<(NetworkGraph<K, Aind>, bool), TensorNetworkError<K>>
+    ) -> Result<(NetworkGraph<K, FK, Aind>, bool), TensorNetworkError<K, FK>>
     where
         K: Display,
     {
@@ -222,8 +224,9 @@ impl<
             + From<T::Scalar>
             + Ref,
         K: Display + Debug + Clone,
+        FK: Display + Debug + Clone,
         Aind: AbsInd,
-    > ContractionStrategy<NetworkStore<T, Sc>, L, K, Aind> for SmallestDegree
+    > ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for SmallestDegree
 where
     LT::WithIndices: Contract<LT::WithIndices, LCM = T>
         + ScalarMul<Sc, Output = T>
@@ -235,9 +238,9 @@ where
 {
     fn contract(
         executor: &mut NetworkStore<T, Sc>,
-        graph: NetworkGraph<K, Aind>,
+        graph: NetworkGraph<K, FK, Aind>,
         lib: &L,
-    ) -> Result<(NetworkGraph<K, Aind>, bool), TensorNetworkError<K>>
+    ) -> Result<(NetworkGraph<K, FK, Aind>, bool), TensorNetworkError<K, FK>>
     where
         K: Display,
     {
@@ -276,9 +279,10 @@ impl<
             + From<T::Scalar>
             + Ref,
         K: Display + Debug + Clone,
+        FK: Display + Debug + Clone,
         Aind: AbsInd,
         const N: usize,
-    > ContractionStrategy<NetworkStore<T, Sc>, L, K, Aind> for SmallestDegreeIter<N>
+    > ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for SmallestDegreeIter<N>
 where
     LT::WithIndices: Contract<LT::WithIndices, LCM = T>
         + ScalarMul<Sc, Output = T>
@@ -290,9 +294,9 @@ where
 {
     fn contract(
         executor: &mut NetworkStore<T, Sc>,
-        graph: NetworkGraph<K, Aind>,
+        graph: NetworkGraph<K, FK, Aind>,
         lib: &L,
-    ) -> Result<(NetworkGraph<K, Aind>, bool), TensorNetworkError<K>>
+    ) -> Result<(NetworkGraph<K, FK, Aind>, bool), TensorNetworkError<K, FK>>
     where
         K: Display,
     {
@@ -326,9 +330,10 @@ impl<
             + From<T::Scalar>
             + Ref,
         K: Display + Debug + Clone,
+        FK: Display + Debug + Clone,
         Aind: AbsInd,
         const D: bool,
-    > ContractionStrategy<NetworkStore<T, Sc>, L, K, Aind> for SingleSmallestDegree<D>
+    > ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for SingleSmallestDegree<D>
 where
     LT::WithIndices: Contract<LT::WithIndices, LCM = T>
         + ScalarMul<Sc, Output = T>
@@ -340,9 +345,9 @@ where
 {
     fn contract(
         executor: &mut NetworkStore<T, Sc>,
-        mut graph: NetworkGraph<K, Aind>,
+        mut graph: NetworkGraph<K, FK, Aind>,
         lib: &L,
-    ) -> Result<(NetworkGraph<K, Aind>, bool), TensorNetworkError<K>>
+    ) -> Result<(NetworkGraph<K, FK, Aind>, bool), TensorNetworkError<K, FK>>
     where
         K: Display,
     {

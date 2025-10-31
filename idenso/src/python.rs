@@ -77,7 +77,7 @@ use symbolica::api::python::PythonExpression;
 /// conj_gamma = conj(gamma_expr)  # -gamma(mu, beta, alpha)
 /// ```
 pub fn conj(self_: &PythonExpression) -> PythonExpression {
-    self_.expr.conj().into()
+    self_.expr.hermitian_conjugate().into()
 }
 
 #[cfg_attr(

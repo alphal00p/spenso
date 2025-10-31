@@ -443,11 +443,8 @@ where
         )
     }
 
-    fn coefficients_to_float(&self, f: u32) -> Self::AtomContainer {
-        self.map_ref(
-            |a| a.coefficients_to_float(f),
-            |a| a.coefficients_to_float(f),
-        )
+    fn to_float(&self, f: u32) -> Self::AtomContainer {
+        self.map_ref(|a| a.to_float(f), |a| a.to_float(f))
     }
 
     fn map_terms_single_core(&self, f: impl Fn(AtomView) -> Atom + Clone) -> Self::AtomContainer {
@@ -487,10 +484,10 @@ where
         )
     }
 
-    fn rationalize_coefficients(&self, relative_error: &Rational) -> Self::AtomContainer {
+    fn rationalize(&self, relative_error: &Rational) -> Self::AtomContainer {
         self.map_ref(
-            |a| a.rationalize_coefficients(relative_error),
-            |a| a.rationalize_coefficients(relative_error),
+            |a| a.rationalize(relative_error),
+            |a| a.rationalize(relative_error),
         )
     }
 
@@ -542,8 +539,8 @@ where
     }
 }
 
-pub trait Evaluate<Str: TensorScalarStore, K, S, T, Aind> {
-    fn evaluate(&mut self, params: &[T]) -> Network<Str::Store<DataTensor<T, S>, T>, K, Aind>
+pub trait Evaluate<Str: TensorScalarStore, K, FK, S, T, Aind> {
+    fn evaluate(&mut self, params: &[T]) -> Network<Str::Store<DataTensor<T, S>, T>, K, FK, Aind>
     where
         S: TensorStructure + Clone;
 
@@ -607,11 +604,11 @@ impl<
     }
 }
 
-impl<T: Real, S: TensorStructure, K: Clone, Aind: AbsInd>
-    Evaluate<NetworkStore<EvalTreeTensor<T, S>, EvalTree<T>>, K, S, T, Aind>
-    for Network<NetworkStore<EvalTreeTensor<T, S>, EvalTree<T>>, K, Aind>
+impl<T: Real, S: TensorStructure, K: Clone, FK: Clone, Aind: AbsInd>
+    Evaluate<NetworkStore<EvalTreeTensor<T, S>, EvalTree<T>>, K, FK, S, T, Aind>
+    for Network<NetworkStore<EvalTreeTensor<T, S>, EvalTree<T>>, K, FK, Aind>
 {
-    fn evaluate(&mut self, params: &[T]) -> Network<NetworkStore<DataTensor<T, S>, T>, K, Aind>
+    fn evaluate(&mut self, params: &[T]) -> Network<NetworkStore<DataTensor<T, S>, T>, K, FK, Aind>
     where
         S: TensorStructure + Clone,
     {
@@ -631,14 +628,15 @@ impl<
         T,
         S: TensorStructure,
         K: Clone,
+        FK: Clone,
         Aind: AbsInd,
-    > Network<Store, K, Aind>
+    > Network<Store, K, FK, Aind>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(
         &self,
         f: &F,
-    ) -> Network<Store::Store<EvalTreeTensor<T2, S>, EvalTree<T2>>, K, Aind>
+    ) -> Network<Store::Store<EvalTreeTensor<T2, S>, EvalTree<T2>>, K, FK, Aind>
     where
         T: Clone + PartialEq,
         S: Clone,
@@ -652,7 +650,12 @@ impl<
         self,
         cpe_rounds: Option<usize>,
         verbose: bool,
-    ) -> Network<Store::Store<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>, K, Aind>
+    ) -> Network<
+        Store::Store<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>,
+        K,
+        FK,
+        Aind,
+    >
     where
         T: Clone + Default + PartialEq,
         S: Clone,
@@ -676,10 +679,11 @@ impl<
     }
 }
 
-impl<T: Real, S: TensorStructure + Clone, K: Clone, Aind: AbsInd>
+impl<T: Real, S: TensorStructure + Clone, K: Clone, FK: Clone, Aind: AbsInd>
     Evaluate<
         NetworkStore<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>,
         K,
+        FK,
         S,
         T,
         Aind,
@@ -687,10 +691,11 @@ impl<T: Real, S: TensorStructure + Clone, K: Clone, Aind: AbsInd>
     for Network<
         NetworkStore<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>,
         K,
+        FK,
         Aind,
     >
 {
-    fn evaluate(&mut self, params: &[T]) -> Network<NetworkStore<DataTensor<T, S>, T>, K, Aind>
+    fn evaluate(&mut self, params: &[T]) -> Network<NetworkStore<DataTensor<T, S>, T>, K, FK, Aind>
     where
         S: TensorStructure + Clone,
         T: Real,
@@ -714,9 +719,10 @@ impl<
         >,
         T,
         S: TensorStructure,
+        FK: Clone + Display,
         K: Clone + Display,
         Aind: AbsInd,
-    > Network<Store, K, Aind>
+    > Network<Store, K, FK, Aind>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn export_cpp<F: CompiledNumber>(
@@ -725,8 +731,8 @@ impl<
         function_name: &str,
         settings: ExportSettings,
     ) -> Result<
-        Network<Store::Store<EvalTensor<ExportedCode<F>, S>, ExportedCode<F>>, K, Aind>,
-        TensorNetworkError<K>,
+        Network<Store::Store<EvalTensor<ExportedCode<F>, S>, ExportedCode<F>>, K, FK, Aind>,
+        TensorNetworkError<K, FK>,
     >
     where
         T: NumericalFloatLike + ExportNumber + SingleFloat,
@@ -752,8 +758,9 @@ impl<
         Store: TensorScalarStore<Tensor = EvalTensor<ExportedCode<F>, S>, Scalar = ExportedCode<F>>,
         S: TensorStructure,
         K: Clone + Display,
+        FK: Clone + Display,
         Aind: AbsInd,
-    > Network<Store, K, Aind>
+    > Network<Store, K, FK, Aind>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn compile(
@@ -761,8 +768,8 @@ impl<
         out: &str,
         options: CompileOptions,
     ) -> Result<
-        Network<Store::Store<EvalTensor<CompiledCode<F>, S>, CompiledCode<F>>, K, Aind>,
-        TensorNetworkError<K>,
+        Network<Store::Store<EvalTensor<CompiledCode<F>, S>, CompiledCode<F>>, K, FK, Aind>,
+        TensorNetworkError<K, FK>,
     >
     where
         S: Clone,
@@ -785,8 +792,8 @@ impl<
         out: &str,
         options: CompileOptions,
     ) -> Result<
-        Network<Store::Store<EvalTensor<F::Evaluator, S>, F::Evaluator>, K, Aind>,
-        TensorNetworkError<K>,
+        Network<Store::Store<EvalTensor<F::Evaluator, S>, F::Evaluator>, K, FK, Aind>,
+        TensorNetworkError<K, FK>,
     >
     where
         S: Clone,
@@ -806,19 +813,21 @@ impl<
     }
 }
 
-impl<S: TensorStructure, K: Clone, Aind: AbsInd>
+impl<S: TensorStructure, K: Clone, FK: Clone, Aind: AbsInd>
     Evaluate<
         NetworkStore<CompiledEvalTensor<S>, CompiledComplexEvaluatorSpenso>,
         K,
+        FK,
         S,
         Complex<f64>,
         Aind,
-    > for Network<NetworkStore<CompiledEvalTensor<S>, CompiledComplexEvaluatorSpenso>, K, Aind>
+    >
+    for Network<NetworkStore<CompiledEvalTensor<S>, CompiledComplexEvaluatorSpenso>, K, FK, Aind>
 {
     fn evaluate(
         &mut self,
         params: &[Complex<f64>],
-    ) -> Network<NetworkStore<DataTensor<Complex<f64>, S>, Complex<f64>>, K, Aind>
+    ) -> Network<NetworkStore<DataTensor<Complex<f64>, S>, Complex<f64>>, K, FK, Aind>
     where
         S: TensorStructure + Clone,
     {

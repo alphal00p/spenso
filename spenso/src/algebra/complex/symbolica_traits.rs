@@ -7,8 +7,8 @@ use symbolica::{
         rational::Rational,
     },
     evaluate::{
-        CompiledComplexEvaluator, CompiledNumber, EvaluatorLoader, ExportNumber, ExportSettings,
-        ExpressionEvaluator,
+        CompileOptions, CompiledComplexEvaluator, CompiledNumber, EvaluatorLoader, ExportNumber,
+        ExportSettings, ExpressionEvaluator,
     },
 };
 
@@ -64,6 +64,10 @@ where
         + for<'a> RefSub<&'a T, Output = T>
         + for<'a> RefDiv<&'a T, Output = T>,
 {
+    #[inline(always)]
+    fn is_fully_zero(&self) -> bool {
+        self.re.is_fully_zero() && self.im.is_fully_zero()
+    }
     #[inline]
     fn mul_add(&self, a: &Self, b: &Self) -> Self {
         self.clone() * a + b.clone()
@@ -159,6 +163,10 @@ where
         + RefOne
         + RefZero,
 {
+    #[inline(always)]
+    fn conj(&self) -> Self {
+        Complex::new(self.re.clone(), -self.im.clone())
+    }
     fn i(&self) -> Option<Self> {
         Some(Complex {
             re: self.re.zero(),
@@ -352,6 +360,9 @@ impl CompiledNumber for Complex<f64> {
     type Evaluator = CompiledComplexEvaluatorSpenso;
     type Settings = ();
     const SUFFIX: &'static str = "complexf64";
+    fn get_default_compile_options() -> CompileOptions {
+        CompileOptions::default()
+    }
 
     fn export_cpp<N: ExportNumber + SingleFloat>(
         eval: &ExpressionEvaluator<N>,

@@ -64,7 +64,7 @@ serde_json = "1.0"
 # serde_toml = "0.0.1"
 slotmap = { version = "1.0.7", features = ["serde"] }
 # smartstring = { version = "1.0.1", features = ["serde"] }
-symbolica = { version = "0.18.0", optional = true, features = [
+symbolica = { version = "0.19.0", optional = true, features = [
     "serde",
     "bincode",
 ], default-features = false }
@@ -76,9 +76,9 @@ rayon = "1.10.0"
 tabled = "0.20.0"
 approx-derive = "0.2.6"
 
-pyo3 = { version = "0.25.1", optional = true }
+pyo3 = { version = "0.27", optional = true }
 
-pyo3-stub-gen = { version = "0.13", default-features = false, optional = true }
+pyo3-stub-gen = { version = "0.16", default-features = false, optional = true }
 [features]
 python = ["dep:pyo3"]
 python_stubgen = ["dep:pyo3-stub-gen", "python"]

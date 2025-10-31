@@ -319,13 +319,15 @@ impl<Aind: AbsInd> SymbolicTensor<Aind> {
         Network<
             NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
             ExplicitKey<AbstractIndex>,
+            Symbol,
             AbstractIndex,
         >,
-        TensorNetworkError<ExplicitKey<AbstractIndex>>,
+        TensorNetworkError<ExplicitKey<AbstractIndex>, Symbol>,
     > {
         Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
             ExplicitKey<AbstractIndex>,
+            Symbol,
             AbstractIndex,
         >::try_from_view(
             self.expression.as_view(),

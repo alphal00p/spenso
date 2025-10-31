@@ -65,9 +65,11 @@ impl pyo3_stub_gen::PyStubType for Complex<f64> {
 }
 
 #[cfg(feature = "python")]
-impl<'a> pyo3::FromPyObject<'a> for Complex<f64> {
-    fn extract_bound(ob: &pyo3::Bound<'a, pyo3::PyAny>) -> pyo3::PyResult<Self> {
-        if let Ok(a) = ob.downcast::<PyComplex>() {
+impl<'a> pyo3::FromPyObject<'_, 'a> for Complex<f64> {
+    type Error = pyo3::PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'a, pyo3::PyAny>) -> Result<Self, Self::Error> {
+        if let Ok(a) = ob.cast::<PyComplex>() {
             Ok(Complex::new(a.real(), a.imag()))
         } else if let Ok(a) = ob.extract::<f64>() {
             Ok(Complex::new(a, 0.))

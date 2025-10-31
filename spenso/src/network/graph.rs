@@ -19,6 +19,7 @@ use linnet::{
     tree::{child_pointer::ParentChildStore, child_vec::ChildVecStore},
 };
 use serde::{Deserialize, Serialize};
+use tabled::grid::records::vec_records::Cell;
 use thiserror::Error;
 
 use crate::structure::{
@@ -48,8 +49,8 @@ use super::{
     feature = "shadowing",
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-pub struct NetworkGraph<K, Aind = AbstractIndex> {
-    pub graph: HedgeGraph<NetworkEdge<Aind>, NetworkNode<K>>, //, Forest<NetworkNode<K>, ChildVecStore<()>>>,
+pub struct NetworkGraph<K, FK = i8, Aind = AbstractIndex> {
+    pub graph: HedgeGraph<NetworkEdge<Aind>, NetworkNode<K, FK>>, //, Forest<NetworkNode<K>, ChildVecStore<()>>>,
     pub slot_order: Vec<u8>,
     // #[bincode(with_serde)]
     // uncontracted: BitVec,
@@ -101,13 +102,13 @@ impl<Aind> NetworkEdge<Aind> {
 #[derive(
     Debug, Clone, PartialEq, Eq, Encode, bincode_trait_derive::Decode, Serialize, Deserialize,
 )]
-pub enum NetworkNode<LibKey> {
+pub enum NetworkNode<LibKey, FunKey> {
     Leaf(NetworkLeaf<LibKey>),
-    Op(NetworkOp),
+    Op(NetworkOp<FunKey>),
     // Port,
 }
 
-impl<K> NetworkNode<K> {
+impl<K, FK> NetworkNode<K, FK> {
     pub fn is_leaf(&self) -> bool {
         matches!(self, NetworkNode::Leaf(_))
     }
@@ -125,7 +126,7 @@ impl<K> NetworkNode<K> {
     }
 }
 
-impl<K: Display> Display for NetworkNode<K> {
+impl<K: Display, FK: Display> Display for NetworkNode<K, FK> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NetworkNode::Leaf(l) => write!(f, "{}", l),
@@ -135,18 +136,33 @@ impl<K: Display> Display for NetworkNode<K> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Serialize, Deserialize)]
-pub enum NetworkOp {
+pub enum NetworkOp<FunKey> {
     Sum,
     Neg,
     Product,
+    Power(i8),
+    Function(FunKey),
+}
+impl<FK> NetworkOp<FK> {
+    pub fn display_with(&self, function_map: impl Fn(&FK) -> String) -> String {
+        match self {
+            NetworkOp::Neg => "⊖".into(),
+            NetworkOp::Product => "∏".into(),
+            NetworkOp::Sum => "∑".into(),
+            NetworkOp::Power(p) => format!("^( {p} )"),
+            NetworkOp::Function(fun) => format!("Func({})", function_map(fun)),
+        }
+    }
 }
 
-impl Display for NetworkOp {
+impl<FunKey: Display> Display for NetworkOp<FunKey> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NetworkOp::Neg => write!(f, "⊖"),
             NetworkOp::Product => write!(f, "∏"),
             NetworkOp::Sum => write!(f, "∑"),
+            NetworkOp::Power(p) => write!(f, "^( {p} )"),
+            NetworkOp::Function(fun) => write!(f, "Func({})", fun),
         }
     }
 }
@@ -183,11 +199,11 @@ pub enum NetworkLeafWithInds<K> {
     Scalar(usize),
 }
 
-impl<K: Debug, Aind: AbsInd> From<HedgeGraphBuilder<NetworkEdge<Aind>, NetworkNode<K>>>
-    for NetworkGraph<K, Aind>
+impl<K: Debug, FK: Debug, Aind: AbsInd>
+    From<HedgeGraphBuilder<NetworkEdge<Aind>, NetworkNode<K, FK>>> for NetworkGraph<K, FK, Aind>
 {
-    fn from(builder: HedgeGraphBuilder<NetworkEdge<Aind>, NetworkNode<K>>) -> Self {
-        let graph: HedgeGraph<NetworkEdge<Aind>, NetworkNode<K>> = builder.build();
+    fn from(builder: HedgeGraphBuilder<NetworkEdge<Aind>, NetworkNode<K, FK>>) -> Self {
+        let graph: HedgeGraph<NetworkEdge<Aind>, NetworkNode<K, FK>> = builder.build();
         let slot_order = vec![0; graph.n_hedges()];
         let mut g = Self {
             slot_order,
@@ -204,7 +220,7 @@ pub enum NetworkGraphError {
     NotHeadNode,
 }
 
-impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
+impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
     pub fn slots(&self, nodeid: NodeIndex) -> Vec<LibrarySlot<Aind>> {
         let mut slots = Vec::new();
         let mut ord = Vec::new();
@@ -328,6 +344,7 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
     pub fn extract<S: SubGraph<Base = BitVec>>(&mut self, subgraph: &S) -> Self
     where
         K: Clone + Display,
+        FK: Clone + Display,
     {
         let mut left = Hedge(0);
         let mut extracted = Hedge(self.graph.n_hedges());
@@ -365,9 +382,10 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
         }
     }
 
-    pub fn find_all_ready_ops(&mut self) -> Vec<(Self, NetworkOp, Vec<NetworkLeaf<K>>)>
+    pub fn find_all_ready_ops(&mut self) -> Vec<(Self, NetworkOp<FK>, Vec<NetworkLeaf<K>>)>
     where
         K: Clone + Display,
+        FK: Clone + Display,
     {
         let tt: SimpleTraversalTree<ParentChildStore<()>> = self.expr_tree().cast();
         let head = self.head();
@@ -391,7 +409,7 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
                     }
                 });
                 if ok {
-                    let op = *op;
+                    let op = op.clone();
                     let extracted = self.extract(&subgraph);
 
                     out.push((extracted, op, leaves))
@@ -400,9 +418,10 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
         }
         out
     }
-    pub fn extract_next_ready_op(&mut self) -> Option<(Self, NetworkOp)>
+    pub fn extract_next_ready_op(&mut self) -> Option<(Self, NetworkOp<FK>)>
     where
         K: Clone + Display,
+        FK: Clone + Display,
     {
         // build a traversal over *all* internal edges
         let tt: SimpleTraversalTree<ChildVecStore<()>> = self.expr_tree().cast();
@@ -451,7 +470,7 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
                     }
                 }
                 if all_leaves && has_children {
-                    let op = *op;
+                    let op = op.clone();
 
                     // println!(
                     //     "Extracting the: {}",
@@ -544,7 +563,7 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
     pub fn identify_nodes_without_self_edges(
         &mut self,
         nodes: &[NodeIndex],
-        node_data: NetworkNode<K>,
+        node_data: NetworkNode<K, FK>,
     ) -> NodeIndex {
         let (n, sub) = self
             .graph
@@ -565,7 +584,7 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
     pub fn identify_nodes_without_self_edges_merge_heads(
         &mut self,
         nodes: &[NodeIndex],
-        node_data: NetworkNode<K>,
+        node_data: NetworkNode<K, FK>,
     ) -> NodeIndex {
         // println!("Identifying:{:?}", nodes);
         let (n, mut sub) = self
@@ -604,6 +623,7 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
     pub fn dot(&self) -> String
     where
         K: Display,
+        FK: Display,
     {
         self.graph.dot_impl(
             &self.graph.full_filter(),
@@ -632,6 +652,7 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
         scalar_disp: impl Fn(usize) -> String,
         library_disp: impl Fn(&K) -> String,
         tensor_disp: impl Fn(usize) -> String,
+        function_disp: impl Fn(&FK) -> String,
     ) -> String
 // where
         // K: Display,
@@ -657,7 +678,9 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
                     }
                     NetworkLeaf::Scalar(s) => Some(format!("label = \"S:{}\"", scalar_disp(*s))),
                 },
-                NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
+                NetworkNode::Op(o) => {
+                    Some(format!("label = \"{}\"", o.display_with(&function_disp)))
+                }
             },
         )
     }
@@ -667,6 +690,7 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
         scalar_disp: impl Fn(usize) -> String,
         library_disp: impl Fn(&K) -> String,
         tensor_disp: impl Fn(usize) -> String,
+        function_disp: impl Fn(&FK) -> String,
     ) -> String
 // where
         // K: Display,
@@ -692,7 +716,9 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
                     }
                     NetworkLeaf::Scalar(s) => Some(format!("label = \"S:{}\"", scalar_disp(*s))),
                 },
-                NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
+                NetworkNode::Op(o) => {
+                    Some(format!("label = \"{}\"", o.display_with(&function_disp)))
+                }
             },
         )
     }
@@ -701,7 +727,12 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
 // where
         // K: Display,
     {
-        self.dot_impl(|i| i.to_string(), |_| "".into(), |i| i.to_string())
+        self.dot_impl(
+            |i| i.to_string(),
+            |_| "".into(),
+            |i| i.to_string(),
+            |_| "".into(),
+        )
     }
 
     pub fn zero() -> Self {
@@ -709,9 +740,9 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
     }
 
     fn head_builder(
-        node: NetworkNode<K>,
+        node: NetworkNode<K, FK>,
     ) -> (
-        HedgeGraphBuilder<NetworkEdge<Aind>, NetworkNode<K>>,
+        HedgeGraphBuilder<NetworkEdge<Aind>, NetworkNode<K, FK>>,
         NodeIndex,
     ) {
         let mut graph = HedgeGraphBuilder::new();
@@ -781,7 +812,7 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
         graph.into()
     }
 
-    pub fn tensor<T: TensorStructure>(tensor: &T, node: NetworkLeaf<K>) -> NetworkGraph<K, Aind>
+    pub fn tensor<T: TensorStructure>(tensor: &T, node: NetworkLeaf<K>) -> NetworkGraph<K, FK, Aind>
     where
         T::Slot: IsAbstractSlot<Aind = Aind>,
     {
@@ -884,9 +915,10 @@ impl<K: Debug, Aind: AbsInd> NetworkGraph<K, Aind> {
     #[allow(clippy::result_large_err, clippy::type_complexity)]
     pub fn result(
         &self,
-    ) -> Result<(&NetworkNode<K>, NodeIndex, Vec<LibrarySlot<Aind>>), TensorNetworkError<K>>
+    ) -> Result<(&NetworkNode<K, FK>, NodeIndex, Vec<LibrarySlot<Aind>>), TensorNetworkError<K, FK>>
     where
         K: Display,
+        FK: Display,
     {
         let mut n_heads = 0;
         let _headgraph: BitVec = self.graph.from_filter(|a| match a {
@@ -1032,24 +1064,24 @@ pub trait NMul<Rhs = Self> {
     fn n_mul<I: IntoIterator<Item = Rhs>>(self, iter: I) -> Self::Output;
 }
 
-impl<K: Debug, Aind: AbsInd> NMul for NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
+impl<K: Debug, FK: Debug, Aind: AbsInd> NMul for NetworkGraph<K, FK, Aind> {
+    type Output = NetworkGraph<K, FK, Aind>;
     fn n_mul<I: IntoIterator<Item = Self>>(self, iter: I) -> Self::Output {
         let all = iter.into_iter().collect::<Vec<_>>();
         let mut mul = Self::mul_graph(all.len() + 1);
 
         mul.join_mut(
             self,
-            NetworkGraph::<K, Aind>::match_heads,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::match_heads,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
         for rhs in all {
             mul.join_mut(
                 rhs,
-                NetworkGraph::<K, Aind>::prod_match,
-                NetworkGraph::<K, Aind>::join_heads,
+                NetworkGraph::<K, FK, Aind>::prod_match,
+                NetworkGraph::<K, FK, Aind>::join_heads,
             )
             .unwrap();
         }
@@ -1071,8 +1103,8 @@ pub trait NAdd<Rhs = Self> {
     fn n_add<I: IntoIterator<Item = Rhs>>(self, iter: I) -> Self::Output;
 }
 
-impl<K: Debug, Aind: AbsInd> NAdd for NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
+impl<K: Debug, FK: Debug, Aind: AbsInd> NAdd for NetworkGraph<K, FK, Aind> {
+    type Output = NetworkGraph<K, FK, Aind>;
 
     fn n_add<I: IntoIterator<Item = Self>>(self, iter: I) -> Self::Output {
         let all = iter.into_iter().collect::<Vec<_>>();
@@ -1082,8 +1114,8 @@ impl<K: Debug, Aind: AbsInd> NAdd for NetworkGraph<K, Aind> {
 
         add.join_mut(
             self,
-            NetworkGraph::<K, Aind>::add_match,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::add_match,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
@@ -1097,105 +1129,118 @@ impl<K: Debug, Aind: AbsInd> NAdd for NetworkGraph<K, Aind> {
 
             add.join_mut(
                 rhs,
-                NetworkGraph::<K, Aind>::add_match,
-                NetworkGraph::<K, Aind>::join_heads,
+                NetworkGraph::<K, FK, Aind>::add_match,
+                NetworkGraph::<K, FK, Aind>::join_heads,
             )
             .unwrap();
         }
         debug_assert!(
             slots.len() == add.n_dangling(),
             "addition with non matching dangling: \n{}",
-            add.dot_impl(|_| "".to_string(), |_| "".to_string(), |_| "".to_string())
+            add.dot_impl(
+                |_| "".to_string(),
+                |_| "".to_string(),
+                |_| "".to_string(),
+                |_| "".to_string()
+            )
         );
 
         add
     }
 }
 
-impl<K: Debug, Aind: AbsInd> MulAssign for NetworkGraph<K, Aind> {
+impl<K: Debug, FK: Debug, Aind: AbsInd> MulAssign for NetworkGraph<K, FK, Aind> {
     fn mul_assign(&mut self, rhs: Self) {
         let mul = Self::mul_graph(2);
 
         self.join_mut(
             mul,
-            NetworkGraph::<K, Aind>::match_heads,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::match_heads,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
         self.join_mut(
             rhs,
-            NetworkGraph::<K, Aind>::prod_match,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::prod_match,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
     }
 }
 
-impl<K: Clone + Debug, Aind: AbsInd> MulAssign<&NetworkGraph<K, Aind>> for NetworkGraph<K, Aind> {
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> MulAssign<&NetworkGraph<K, FK, Aind>>
+    for NetworkGraph<K, FK, Aind>
+{
     fn mul_assign(&mut self, rhs: &Self) {
         let mul = NetworkGraph::mul_graph(2);
 
         self.join_mut(
             mul,
-            NetworkGraph::<K, Aind>::match_heads,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::match_heads,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
         self.join_mut(
             rhs.clone(),
-            NetworkGraph::<K, Aind>::prod_match,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::prod_match,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
     }
 }
 
-impl<K: Debug, Aind: AbsInd> Mul for NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
+impl<K: Debug, FK: Debug, Aind: AbsInd> Mul for NetworkGraph<K, FK, Aind> {
+    type Output = NetworkGraph<K, FK, Aind>;
     fn mul(self, rhs: Self) -> Self::Output {
         let mut mul = Self::mul_graph(2);
 
         mul.join_mut(
             self,
-            NetworkGraph::<K, Aind>::match_heads,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::match_heads,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
         mul.join_mut(
             rhs,
-            NetworkGraph::<K, Aind>::prod_match,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::prod_match,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
         mul
     }
 }
-impl<K: Clone + Debug, Aind: AbsInd> Mul<&NetworkGraph<K, Aind>> for NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Mul<&NetworkGraph<K, FK, Aind>>
+    for NetworkGraph<K, FK, Aind>
+{
+    type Output = NetworkGraph<K, FK, Aind>;
     fn mul(self, rhs: &Self) -> Self::Output {
         self * rhs.clone()
     }
 }
 
-impl<'b, K: Clone + Debug, Aind: AbsInd> Mul<&'b NetworkGraph<K, Aind>> for &NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
-    fn mul(self, rhs: &'b NetworkGraph<K, Aind>) -> Self::Output {
+impl<'b, K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Mul<&'b NetworkGraph<K, FK, Aind>>
+    for &NetworkGraph<K, FK, Aind>
+{
+    type Output = NetworkGraph<K, FK, Aind>;
+    fn mul(self, rhs: &'b NetworkGraph<K, FK, Aind>) -> Self::Output {
         self.clone() * rhs
     }
 }
 
-impl<K: Clone + Debug, Aind: AbsInd> Mul<NetworkGraph<K, Aind>> for &NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
-    fn mul(self, rhs: NetworkGraph<K, Aind>) -> Self::Output {
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Mul<NetworkGraph<K, FK, Aind>>
+    for &NetworkGraph<K, FK, Aind>
+{
+    type Output = NetworkGraph<K, FK, Aind>;
+    fn mul(self, rhs: NetworkGraph<K, FK, Aind>) -> Self::Output {
         rhs * self
     }
 }
 
-impl<K: Debug, Aind: AbsInd> AddAssign for NetworkGraph<K, Aind> {
+impl<K: Debug, FK: Debug, Aind: AbsInd> AddAssign for NetworkGraph<K, FK, Aind> {
     fn add_assign(&mut self, rhs: Self) {
         let slots = self.dangling_indices();
         debug_assert!(slots.len() == rhs.n_dangling());
@@ -1204,21 +1249,23 @@ impl<K: Debug, Aind: AbsInd> AddAssign for NetworkGraph<K, Aind> {
 
         self.join_mut(
             add,
-            NetworkGraph::<K, Aind>::add_match,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::add_match,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
         self.join_mut(
             rhs,
-            NetworkGraph::<K, Aind>::add_match,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::add_match,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
     }
 }
 
-impl<K: Clone + Debug, Aind: AbsInd> AddAssign<&NetworkGraph<K, Aind>> for NetworkGraph<K, Aind> {
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> AddAssign<&NetworkGraph<K, FK, Aind>>
+    for NetworkGraph<K, FK, Aind>
+{
     fn add_assign(&mut self, rhs: &Self) {
         let slots = self.dangling_indices();
         debug_assert!(slots.len() == rhs.n_dangling());
@@ -1227,22 +1274,22 @@ impl<K: Clone + Debug, Aind: AbsInd> AddAssign<&NetworkGraph<K, Aind>> for Netwo
 
         self.join_mut(
             add,
-            NetworkGraph::<K, Aind>::add_match,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::add_match,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
         self.join_mut(
             rhs.clone(),
-            NetworkGraph::<K, Aind>::add_match,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::add_match,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
     }
 }
 
-impl<K: Debug, Aind: AbsInd> Add for NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
+impl<K: Debug, FK: Debug, Aind: AbsInd> Add for NetworkGraph<K, FK, Aind> {
+    type Output = NetworkGraph<K, FK, Aind>;
     fn add(self, rhs: Self) -> Self::Output {
         let slots = self.dangling_indices();
         debug_assert!(slots.len() == rhs.n_dangling());
@@ -1251,15 +1298,15 @@ impl<K: Debug, Aind: AbsInd> Add for NetworkGraph<K, Aind> {
 
         add.join_mut(
             self,
-            NetworkGraph::<K, Aind>::add_match,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::add_match,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
         add.join_mut(
             rhs,
-            NetworkGraph::<K, Aind>::add_match,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::add_match,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
@@ -1269,36 +1316,42 @@ impl<K: Debug, Aind: AbsInd> Add for NetworkGraph<K, Aind> {
     }
 }
 
-impl<K: Clone + Debug, Aind: AbsInd> Add<&NetworkGraph<K, Aind>> for NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Add<&NetworkGraph<K, FK, Aind>>
+    for NetworkGraph<K, FK, Aind>
+{
+    type Output = NetworkGraph<K, FK, Aind>;
     fn add(self, rhs: &Self) -> Self::Output {
         self + rhs.clone()
     }
 }
 
-impl<'b, K: Clone + Debug, Aind: AbsInd> Add<&'b NetworkGraph<K, Aind>> for &NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
-    fn add(self, rhs: &'b NetworkGraph<K, Aind>) -> Self::Output {
+impl<'b, K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Add<&'b NetworkGraph<K, FK, Aind>>
+    for &NetworkGraph<K, FK, Aind>
+{
+    type Output = NetworkGraph<K, FK, Aind>;
+    fn add(self, rhs: &'b NetworkGraph<K, FK, Aind>) -> Self::Output {
         self.clone() + rhs
     }
 }
 
-impl<K: Clone + Debug, Aind: AbsInd> Add<NetworkGraph<K, Aind>> for &NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
-    fn add(self, rhs: NetworkGraph<K, Aind>) -> Self::Output {
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Add<NetworkGraph<K, FK, Aind>>
+    for &NetworkGraph<K, FK, Aind>
+{
+    type Output = NetworkGraph<K, FK, Aind>;
+    fn add(self, rhs: NetworkGraph<K, FK, Aind>) -> Self::Output {
         rhs + self
     }
 }
 
-impl<K: Clone + Debug, Aind: AbsInd> Neg for NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Neg for NetworkGraph<K, FK, Aind> {
+    type Output = NetworkGraph<K, FK, Aind>;
     fn neg(self) -> Self::Output {
         let mut neg = Self::neg_graph();
 
         neg.join_mut(
             self,
-            NetworkGraph::<K, Aind>::match_heads,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::match_heads,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
@@ -1306,15 +1359,15 @@ impl<K: Clone + Debug, Aind: AbsInd> Neg for NetworkGraph<K, Aind> {
     }
 }
 
-impl<K: Clone + Debug, Aind: AbsInd> Neg for &NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Neg for &NetworkGraph<K, FK, Aind> {
+    type Output = NetworkGraph<K, FK, Aind>;
     fn neg(self) -> Self::Output {
         let mut neg = NetworkGraph::neg_graph();
 
         neg.join_mut(
             self.clone(),
-            NetworkGraph::<K, Aind>::match_heads,
-            NetworkGraph::<K, Aind>::join_heads,
+            NetworkGraph::<K, FK, Aind>::match_heads,
+            NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();
 
@@ -1322,43 +1375,51 @@ impl<K: Clone + Debug, Aind: AbsInd> Neg for &NetworkGraph<K, Aind> {
     }
 }
 
-impl<K: Clone + Debug, Aind: AbsInd> SubAssign for NetworkGraph<K, Aind> {
-    fn sub_assign(&mut self, rhs: NetworkGraph<K, Aind>) {
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> SubAssign for NetworkGraph<K, FK, Aind> {
+    fn sub_assign(&mut self, rhs: NetworkGraph<K, FK, Aind>) {
         *self += -rhs;
     }
 }
 
-impl<K: Clone + Debug, Aind: AbsInd> SubAssign<&NetworkGraph<K, Aind>> for NetworkGraph<K, Aind> {
-    fn sub_assign(&mut self, rhs: &NetworkGraph<K, Aind>) {
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> SubAssign<&NetworkGraph<K, FK, Aind>>
+    for NetworkGraph<K, FK, Aind>
+{
+    fn sub_assign(&mut self, rhs: &NetworkGraph<K, FK, Aind>) {
         *self += -rhs;
     }
 }
 
-impl<K: Clone + Debug, Aind: AbsInd> Sub for NetworkGraph<K, Aind> {
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Sub for NetworkGraph<K, FK, Aind> {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
         self + -rhs
     }
 }
-impl<K: Clone + Debug, Aind: AbsInd> Sub<&NetworkGraph<K, Aind>> for NetworkGraph<K, Aind> {
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Sub<&NetworkGraph<K, FK, Aind>>
+    for NetworkGraph<K, FK, Aind>
+{
     type Output = Self;
 
     fn sub(self, rhs: &Self) -> Self::Output {
         self + -rhs
     }
 }
-impl<'b, K: Clone + Debug, Aind: AbsInd> Sub<&'b NetworkGraph<K, Aind>> for &NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
+impl<'b, K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Sub<&'b NetworkGraph<K, FK, Aind>>
+    for &NetworkGraph<K, FK, Aind>
+{
+    type Output = NetworkGraph<K, FK, Aind>;
 
-    fn sub(self, rhs: &'b NetworkGraph<K, Aind>) -> Self::Output {
+    fn sub(self, rhs: &'b NetworkGraph<K, FK, Aind>) -> Self::Output {
         -rhs + self
     }
 }
-impl<K: Clone + Debug, Aind: AbsInd> Sub<NetworkGraph<K, Aind>> for &NetworkGraph<K, Aind> {
-    type Output = NetworkGraph<K, Aind>;
+impl<K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Sub<NetworkGraph<K, FK, Aind>>
+    for &NetworkGraph<K, FK, Aind>
+{
+    type Output = NetworkGraph<K, FK, Aind>;
 
-    fn sub(self, rhs: NetworkGraph<K, Aind>) -> Self::Output {
+    fn sub(self, rhs: NetworkGraph<K, FK, Aind>) -> Self::Output {
         -rhs + self
     }
 }
@@ -1412,9 +1473,9 @@ pub mod test {
     #[test]
     fn addition() {
         let one = NetworkGraph::<i8>::one();
-        let zero = NetworkGraph::zero();
+        let zero = NetworkGraph::<i8>::zero();
 
-        let s = NetworkGraph::scalar(2);
+        let s = NetworkGraph::<i8>::scalar(2);
 
         let t = NetworkGraph::<i8>::tensor(
             &PermutedStructure::<OrderedStructure>::from_iter([
@@ -1451,7 +1512,7 @@ pub mod test {
             .structure,
             NetworkLeaf::LocalTensor(2),
         );
-        let s2 = NetworkGraph::scalar(3);
+        let s2 = NetworkGraph::<i8>::scalar(3);
 
         let mut expr = t3b * (&t + &t2) * s2 * (&s + &zero) * (t3 * (t + t2) * s * (one + zero));
 

@@ -93,6 +93,69 @@ where
     gamma //.to_dense()
 }
 
+#[allow(clippy::similar_names)]
+pub fn gamma_transpose_weyl<T, N>(structure: N, one: T, zero: T) -> SparseTensor<Complex<T>, N>
+where
+    T: Neg<Output = T> + Clone,
+    N: TensorStructure,
+{
+    let z = Complex::<T>::new(zero.clone(), zero.clone());
+    let c1 = Complex::<T>::new(one.clone(), zero.clone());
+    let cn1 = Complex::<T>::new(-one.clone(), zero.clone());
+    let ci = Complex::<T>::new(zero.clone(), one.clone());
+    let cni = Complex::<T>::new(zero.clone(), -one.clone());
+    let mut gamma = SparseTensor::empty(structure, z);
+    // ! No check on actual structure, should expext mink,bis,bis
+
+    // dirac gamma matrices
+
+    gamma.set(&[2, 0, 0], c1.clone()).unwrap();
+    gamma.set(&[3, 1, 0], c1.clone()).unwrap();
+    gamma.set(&[0, 2, 0], c1.clone()).unwrap();
+    gamma.set(&[1, 3, 0], c1.clone()).unwrap();
+
+    gamma.set(&[3, 0, 1], c1.clone()).unwrap();
+    gamma.set(&[2, 1, 1], c1.clone()).unwrap();
+    gamma.set(&[1, 2, 1], cn1.clone()).unwrap();
+    gamma.set(&[0, 3, 1], cn1.clone()).unwrap();
+
+    gamma.set(&[3, 0, 2], cni.clone()).unwrap();
+    gamma.set(&[2, 1, 2], ci.clone()).unwrap();
+    gamma.set(&[1, 2, 2], ci.clone()).unwrap();
+    gamma.set(&[0, 3, 2], cni.clone()).unwrap();
+
+    gamma.set(&[2, 0, 3], c1.clone()).unwrap();
+    gamma.set(&[3, 1, 3], cn1.clone()).unwrap();
+    gamma.set(&[0, 2, 3], cn1.clone()).unwrap();
+    gamma.set(&[1, 3, 3], c1.clone()).unwrap();
+
+    gamma //.to_dense()
+}
+
+#[allow(clippy::similar_names)]
+pub fn gamma_conj_data_weyl<T, N>(structure: N, one: T, zero: T) -> SparseTensor<Complex<T>, N>
+where
+    T: Neg<Output = T> + Clone,
+    N: TensorStructure,
+{
+    gamma_data_weyl(structure, one, zero).map_data(|a| {
+        let Complex { re, im } = a;
+        Complex { re, im: -im }
+    })
+}
+
+#[allow(clippy::similar_names)]
+pub fn gamma_adj_data_weyl<T, N>(structure: N, one: T, zero: T) -> SparseTensor<Complex<T>, N>
+where
+    T: Neg<Output = T> + Clone,
+    N: TensorStructure,
+{
+    gamma_transpose_weyl(structure, one, zero).map_data(|a| {
+        let Complex { re, im } = a;
+        Complex { re, im: -im }
+    })
+}
+
 pub fn gamma0_weyl<T, N>(structure: N, one: T, zero: T) -> SparseTensor<Complex<T>, N>
 where
     T: Clone,
@@ -330,6 +393,21 @@ where
     );
     // println!("permutation{}", gamma_key.rep_permutation);
     weyl.insert_explicit(gamma_key);
+    let gamma_conj_key = PermutedStructure::identity(
+        gamma_conj_data_weyl(AGS.gamma_conj_strct::<Aind>(4), one.clone(), zero.clone()).into(),
+    );
+    // println!("permutation{}", gamma_key.rep_permutation);
+    weyl.insert_explicit(gamma_conj_key);
+    let gamma_adj_key = PermutedStructure::identity(
+        gamma_adj_data_weyl(AGS.gamma_adj_strct::<Aind>(4), one.clone(), zero.clone()).into(),
+    );
+    // println!("permutation{}", gamma_key.rep_permutation);
+    weyl.insert_explicit(gamma_adj_key);
+    let gamma0_key = PermutedStructure::identity(
+        gamma0_weyl(AGS.gamma0_strct::<Aind>(4), one.clone(), zero.clone()).into(),
+    );
+    // println!("permutation{}", gamma_key.rep_permutation);
+    weyl.insert_explicit(gamma0_key);
 
     let gamma5_key = PermutedStructure::identity(
         gamma5_weyl_data(AGS.gamma5_strct::<Aind>(4), one.clone(), zero.clone()).into(),
@@ -385,7 +463,7 @@ mod tests {
         },
     };
     use symbolica::{
-        atom::{Atom, Symbol},
+        atom::{Atom, AtomCore, Symbol},
         function,
         id::ConditionResult,
         parse, parse_lit, symbol,
@@ -678,6 +756,7 @@ mod tests {
         >::try_from_view(expr.as_view(), &*HEP_LIB, &ParseSettings::default())
         .unwrap();
 
+        println!("Expression: {}", expr);
         let simplified = expr.simplify_gamma();
 
         println!("Simplified to {}", simplified);
@@ -700,6 +779,7 @@ mod tests {
         if let ExecutionResult::Val(v) = net.result_tensor(&*HEP_LIB).unwrap() {
             if let ExecutionResult::Val(v2) = net_simplified.result_tensor(&*HEP_LIB).unwrap() {
                 let mut res = v.into_owned();
+                println!("{res}");
                 let mut res_simplified = v2.into_owned();
                 res.evaluate_complex(|c| c.into(), &const_map, &function_map);
                 res_simplified.evaluate_complex(|c| c.into(), &const_map, &function_map);
@@ -838,6 +918,61 @@ mod tests {
                 .permute_with_metric()
         }
 
+        fn gammaadj(
+            i: impl Into<AbstractIndex>,
+            j: impl Into<AbstractIndex>,
+            mu: impl Into<AbstractIndex>,
+        ) -> Atom {
+            let gamma_strct = IndexlessNamedStructure::<Symbol, ()>::from_iter(
+                [
+                    Bispinor {}.new_rep(4).to_lib(),
+                    Bispinor {}.new_rep(4).cast(),
+                    Minkowski {}.new_rep(4).cast(),
+                ],
+                AGS.gammaadj,
+                None,
+            );
+            gamma_strct
+                .reindex([i.into(), j.into(), mu.into()])
+                .unwrap()
+                .permute_with_metric()
+        }
+
+        fn gamma0(i: impl Into<AbstractIndex>, j: impl Into<AbstractIndex>) -> Atom {
+            let gamma_strct = IndexlessNamedStructure::<Symbol, ()>::from_iter(
+                [
+                    Bispinor {}.new_rep(4).to_lib(),
+                    Bispinor {}.new_rep(4).cast(),
+                ],
+                AGS.gamma0,
+                None,
+            );
+            gamma_strct
+                .reindex([i.into(), j.into()])
+                .unwrap()
+                .permute_with_metric()
+        }
+
+        fn gammaconj(
+            i: impl Into<AbstractIndex>,
+            j: impl Into<AbstractIndex>,
+            mu: impl Into<AbstractIndex>,
+        ) -> Atom {
+            let gamma_strct = IndexlessNamedStructure::<Symbol, ()>::from_iter(
+                [
+                    Bispinor {}.new_rep(4).to_lib(),
+                    Bispinor {}.new_rep(4).cast(),
+                    Minkowski {}.new_rep(4).cast(),
+                ],
+                AGS.gammaconj,
+                None,
+            );
+            gamma_strct
+                .reindex([i.into(), j.into(), mu.into()])
+                .unwrap()
+                .permute_with_metric()
+        }
+
         fn p(m: impl Into<AbstractIndex>) -> Atom {
             let m_atom: AbstractIndex = m.into();
             let m_atom: Atom = m_atom.into();
@@ -849,6 +984,20 @@ mod tests {
             let m_atom: Atom = m_atom.into();
             let mink = Minkowski {}.new_rep(4);
             function!(symbol!("spenso::q"), mink.to_symbolic([m_atom]))
+        }
+
+        fn u(i: usize, m: impl Into<AbstractIndex>) -> Atom {
+            let m_atom: AbstractIndex = m.into();
+            let m_atom: Atom = m_atom.into();
+            let mink = Bispinor {}.new_rep(4);
+            function!(symbol!("spenso::u"), i, mink.to_symbolic([m_atom]))
+        }
+
+        fn ub(i: usize, m: impl Into<AbstractIndex>) -> Atom {
+            let m_atom: AbstractIndex = m.into();
+            let m_atom: Atom = m_atom.into();
+            let mink = Bispinor {}.new_rep(4);
+            function!(symbol!("spenso::ub"), i, mink.to_symbolic([m_atom]))
         }
 
         // gamma.reindex([1,2,3]).unwrap().map_structure(|a|)
@@ -881,6 +1030,26 @@ mod tests {
         validate_gamma(expr, const_map.clone());
         let expr = gamma(1, 2, 2) * gamma(2, 1, 1) + gamma(1, 2, 1) * gamma(2, 1, 2);
         validate_gamma(expr, const_map.clone());
+
+        let expr = gamma0(1, 2) * gamma(2, 3, 1) * gamma0(3, 4)
+            - gamma0(2, 1) * gammaconj(3, 2, 1) * gamma0(4, 3);
+        // let expr2 = gamma0(1, 2) * gammaconj(3, 2, 1) * gamma0(3, 4);
+
+        validate_gamma(expr, const_map.clone());
+
+        let expr = gammaadj(1, 2, 1) - gamma0(1, 3) * gamma(3, 4, 1) * gamma0(4, 2);
+        // let expr2 = gamma0(1, 2) * gammaconj(3, 2, 1) * gamma0(3, 4);
+
+        validate_gamma(expr, const_map.clone());
+
+        let expr = gammaadj(1, 2, 1) - gammaconj(2, 1, 1);
+        // let expr2 = gamma0(1, 2) * gammaconj(3, 2, 1) * gamma0(3, 4);
+
+        validate_gamma(expr, const_map.clone());
+        let a = u(1, 1) * gamma(1, 2, 1) * ub(2, 2);
+        validate_gamma(a.conj() * a, const_map.clone());
+
+        // validate_gamma(expr2, const_map.clone());
         // let expr = gamma(1, 2, 2) * gamma(2, 1, 1) + gamma(1, 2, 1) * gamma(2, 1, 2);
         // // + gamma(1, 2, 1) * gamma(2, 1, 1);
 
@@ -909,4 +1078,7 @@ mod tests {
         //     ParamOrConcrete::<_, OrderedStructure<Bispinor>>::Concrete(b)
         // );
     }
+
+    #[test]
+    fn transpose_test() {}
 }

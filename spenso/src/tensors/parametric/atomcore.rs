@@ -399,7 +399,7 @@ pub trait TensorAtomMaps {
 
     /// Convert all coefficients to floats with a given precision `decimal_prec``.
     /// The precision of floating point coefficients in the input will be truncated to `decimal_prec`.
-    fn coefficients_to_float(&self, decimal_prec: u32) -> Self::AtomContainer;
+    fn to_float(&self, decimal_prec: u32) -> Self::AtomContainer;
 
     // /// Convert all coefficients to floats with a given precision `decimal_prec``.
     // /// The precision of floating point coefficients in the input will be truncated to `decimal_prec`.
@@ -425,7 +425,7 @@ pub trait TensorAtomMaps {
 
     /// Map all floating point and rational coefficients to the best rational approximation
     /// in the interval `[self*(1-relative_error),self*(1+relative_error)]`.
-    fn rationalize_coefficients(&self, relative_error: &Rational) -> Self::AtomContainer;
+    fn rationalize(&self, relative_error: &Rational) -> Self::AtomContainer;
 
     /// Convert the atom to a polynomial, optionally in the variable ordering
     /// specified by `var_map`. If new variables are encountered, they are
@@ -1173,8 +1173,8 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
 
     /// Convert all coefficients to floats with a given precision `decimal_prec``.
     /// The precision of floating point coefficients in the input will be truncated to `decimal_prec`.
-    fn coefficients_to_float(&self, decimal_prec: u32) -> Self {
-        self.map_data_ref_self(|a| a.coefficients_to_float(decimal_prec))
+    fn to_float(&self, decimal_prec: u32) -> Self {
+        self.map_data_ref_self(|a| a.to_float(decimal_prec))
     }
 
     // /// Convert all coefficients to floats with a given precision `decimal_prec``.
@@ -1200,8 +1200,8 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
 
     /// Map all floating point and rational coefficients to the best rational approximation
     /// in the interval `[self*(1-relative_error),self*(1+relative_error)]`.
-    fn rationalize_coefficients(&self, relative_error: &Rational) -> Self {
-        self.map_data_ref_self(|a| a.rationalize_coefficients(relative_error))
+    fn rationalize(&self, relative_error: &Rational) -> Self {
+        self.map_data_ref_self(|a| a.rationalize(relative_error))
     }
 
     /// Convert the atom to a polynomial, optionally in the variable ordering

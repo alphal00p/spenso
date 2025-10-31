@@ -606,6 +606,7 @@ mod test {
     #[test]
     fn test_color_matrix_element() {
         initialize();
+        let q = symbol!("spenso::Q";Real);
         let spin_sum_rule = parse!(
             "
             g(coad(Nc^2-1, left(3)), coad(Nc^2-1, right(3)))
@@ -630,7 +631,7 @@ mod test {
 
         // return;
         let amplitude_color_right = amplitude_color
-            .conj()
+            .hermitian_conjugate()
             .wrap_indices(symbol!("spenso::right"));
         println!("left{amplitude_color_left}");
 

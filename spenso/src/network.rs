@@ -41,8 +41,8 @@ use std::{convert::Infallible, fmt::Debug};
     feature = "shadowing",
     trait_decode(trait = symbolica::state::HasStateMap),
 )]
-pub struct Network<S, LibKey, Aind = AbstractIndex> {
-    pub graph: NetworkGraph<LibKey, Aind>,
+pub struct Network<S, LibKey, FunKey, Aind = AbstractIndex> {
+    pub graph: NetworkGraph<LibKey, FunKey, Aind>,
     pub store: S,
     pub state: NetworkState,
 }
@@ -105,10 +105,10 @@ pub mod library;
 pub mod set;
 pub mod store;
 
-impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMapping
-    for Network<S, K, Aind>
+impl<S: TensorScalarStoreMapping, K: Clone, FK: Clone, Aind: AbsInd> TensorScalarStoreMapping
+    for Network<S, K, FK, Aind>
 {
-    type Store<U, V> = Network<S::Store<U, V>, K, Aind>;
+    type Store<U, V> = Network<S::Store<U, V>, K, FK, Aind>;
     type Scalar = S::Scalar;
     type Tensor = S::Tensor;
 
@@ -252,13 +252,13 @@ impl<S: TensorScalarStoreMapping, K: Clone, Aind: AbsInd> TensorScalarStoreMappi
     }
 }
 
-impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> Default for Network<S, K, Aind> {
+impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> Default for Network<S, K, FK, Aind> {
     fn default() -> Self {
         Self::one()
     }
 }
 
-impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> NMul for Network<S, K, Aind> {
+impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> NMul for Network<S, K, FK, Aind> {
     type Output = Self;
     fn n_mul<I: IntoIterator<Item = Self>>(self, iter: I) -> Self::Output {
         let mut store = self.store;
@@ -289,7 +289,7 @@ impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> NMul for Network<S, K, Aind> 
     }
 }
 
-impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> Mul for Network<S, K, Aind> {
+impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> Mul for Network<S, K, FK, Aind> {
     type Output = Self;
     fn mul(mut self, mut other: Self) -> Self::Output {
         let mut store = self.store;
@@ -307,7 +307,9 @@ impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> Mul for Network<S, K, Aind> {
     }
 }
 
-impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> MulAssign for Network<S, K, Aind> {
+impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> MulAssign
+    for Network<S, K, FK, Aind>
+{
     fn mul_assign(&mut self, mut rhs: Self) {
         rhs.graph.shift_scalars(self.store.n_scalars());
         rhs.graph.shift_tensors(self.store.n_tensors());
@@ -317,8 +319,8 @@ impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> MulAssign for Network<S, K, A
     }
 }
 
-impl<T: TensorStructure, S, K: Debug, Aind: AbsInd> MulAssign<T>
-    for Network<NetworkStore<T, S>, K, Aind>
+impl<T: TensorStructure, S, FK: Debug, K: Debug, Aind: AbsInd> MulAssign<T>
+    for Network<NetworkStore<T, S>, K, FK, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -327,7 +329,8 @@ where
     }
 }
 
-impl<T: TensorStructure, S, K: Debug, Aind: AbsInd> Mul<T> for Network<NetworkStore<T, S>, K, Aind>
+impl<T: TensorStructure, S, FK: Debug, K: Debug, Aind: AbsInd> Mul<T>
+    for Network<NetworkStore<T, S>, K, FK, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -349,7 +352,7 @@ where
     }
 }
 
-impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> Add for Network<S, K, Aind> {
+impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> Add for Network<S, K, FK, Aind> {
     type Output = Self;
     fn add(self, mut other: Self) -> Self::Output {
         let mut store = self.store;
@@ -366,7 +369,9 @@ impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> Add for Network<S, K, Aind> {
     }
 }
 
-impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> AddAssign for Network<S, K, Aind> {
+impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> AddAssign
+    for Network<S, K, FK, Aind>
+{
     fn add_assign(&mut self, mut rhs: Self) {
         rhs.graph.shift_scalars(self.store.n_scalars());
         rhs.graph.shift_tensors(self.store.n_tensors());
@@ -376,8 +381,8 @@ impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> AddAssign for Network<S, K, A
     }
 }
 
-impl<T: TensorStructure, S, K: Debug, Aind: AbsInd> AddAssign<T>
-    for Network<NetworkStore<T, S>, K, Aind>
+impl<T: TensorStructure, S, FK: Debug, K: Debug, Aind: AbsInd> AddAssign<T>
+    for Network<NetworkStore<T, S>, K, FK, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -386,7 +391,8 @@ where
     }
 }
 
-impl<T: TensorStructure, S, K: Debug, Aind: AbsInd> Add<T> for Network<NetworkStore<T, S>, K, Aind>
+impl<T: TensorStructure, S, FK: Debug, K: Debug, Aind: AbsInd> Add<T>
+    for Network<NetworkStore<T, S>, K, FK, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -397,7 +403,8 @@ where
     }
 }
 
-impl<T: TensorStructure, K: Debug, Aind: AbsInd> Add<i8> for Network<NetworkStore<T, i8>, K, Aind>
+impl<T: TensorStructure, FK: Debug, K: Debug, Aind: AbsInd> Add<i8>
+    for Network<NetworkStore<T, i8>, K, FK, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -416,7 +423,7 @@ where
     }
 }
 
-impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> NAdd for Network<S, K, Aind> {
+impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> NAdd for Network<S, K, FK, Aind> {
     type Output = Self;
     fn n_add<I: IntoIterator<Item = Self>>(self, iter: I) -> Self::Output {
         let mut store = self.store;
@@ -436,7 +443,9 @@ impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> NAdd for Network<S, K, Aind> 
     }
 }
 
-impl<S: TensorScalarStore, K: Clone + Debug, Aind: AbsInd> Neg for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Neg
+    for Network<S, K, FK, Aind>
+{
     type Output = Self;
     fn neg(self) -> Self::Output {
         Self {
@@ -447,7 +456,9 @@ impl<S: TensorScalarStore, K: Clone + Debug, Aind: AbsInd> Neg for Network<S, K,
     }
 }
 
-impl<S: TensorScalarStore, K: Clone + Debug, Aind: AbsInd> Sub for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Sub
+    for Network<S, K, FK, Aind>
+{
     type Output = Self;
     fn sub(mut self, rhs: Self) -> Self::Output {
         self -= rhs;
@@ -455,7 +466,9 @@ impl<S: TensorScalarStore, K: Clone + Debug, Aind: AbsInd> Sub for Network<S, K,
     }
 }
 
-impl<S: TensorScalarStore, K: Clone + Debug, Aind: AbsInd> SubAssign for Network<S, K, Aind> {
+impl<S: TensorScalarStore, K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> SubAssign
+    for Network<S, K, FK, Aind>
+{
     fn sub_assign(&mut self, mut rhs: Self) {
         rhs.graph.shift_scalars(self.store.n_scalars());
         rhs.graph.shift_tensors(self.store.n_tensors());
@@ -465,8 +478,8 @@ impl<S: TensorScalarStore, K: Clone + Debug, Aind: AbsInd> SubAssign for Network
     }
 }
 
-impl<T: TensorStructure, S, K: Clone + Debug, Aind: AbsInd> SubAssign<T>
-    for Network<NetworkStore<T, S>, K, Aind>
+impl<T: TensorStructure, S, K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> SubAssign<T>
+    for Network<NetworkStore<T, S>, K, FK, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -475,8 +488,8 @@ where
     }
 }
 
-impl<T: TensorStructure, S, K: Clone + Debug, Aind: AbsInd> Sub<T>
-    for Network<NetworkStore<T, S>, K, Aind>
+impl<T: TensorStructure, S, K: Clone + Debug, FK: Clone + Debug, Aind: AbsInd> Sub<T>
+    for Network<NetworkStore<T, S>, K, FK, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -487,7 +500,7 @@ where
     }
 }
 
-impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> Network<S, K, Aind> {
+impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> Network<S, K, FK, Aind> {
     pub fn from_scalar(scalar: S::Scalar) -> Self {
         let mut store = S::default();
         let id = store.add_scalar(scalar);
@@ -557,7 +570,7 @@ impl<S: TensorScalarStore, K: Debug, Aind: AbsInd> Network<S, K, Aind> {
 }
 
 #[derive(Error, Debug)]
-pub enum TensorNetworkError<K: Display> {
+pub enum TensorNetworkError<K: Display, FK: Display> {
     #[error("Slot edge to prod node")]
     SlotEdgeToProdNode,
     #[error("Slot edge to scalar node")]
@@ -577,13 +590,13 @@ pub enum TensorNetworkError<K: Display> {
     #[error("Non tensor node still present")]
     NonTensorNodePresent,
     #[error("invalid resulting node(0)")]
-    InvalidResultNode(NetworkNode<()>),
+    InvalidResultNode(NetworkNode<(), FK>),
     #[error("internal edge still present, contract it first")]
     InternalEdgePresent,
     #[error("uncontracted scalar")]
     UncontractedScalar,
     #[error("Cannot contract edge between {0} and {1}")]
-    CannotContractEdgeBetween(NetworkNode<K>, NetworkNode<K>),
+    CannotContractEdgeBetween(NetworkNode<K, FK>, NetworkNode<K, FK>),
     #[error("no nodes in the graph")]
     NoNodes,
     #[error("no scalar present")]
@@ -618,7 +631,7 @@ pub enum TensorNetworkError<K: Display> {
     Infallible,
 }
 
-impl<K: Display> From<Infallible> for TensorNetworkError<K> {
+impl<K: Display, FK: Display> From<Infallible> for TensorNetworkError<K, FK> {
     fn from(_: Infallible) -> Self {
         TensorNetworkError::Infallible
     }
@@ -656,9 +669,10 @@ impl<
         T: TensorStructure,
         S,
         K: Display + Debug,
+        FK: Display + Debug,
         Str: TensorScalarStore<Tensor = T, Scalar = S>,
         Aind: AbsInd,
-    > Network<Str, K, Aind>
+    > Network<Str, K, FK, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -711,8 +725,11 @@ where
         &self,
     ) -> Result<
         ExecutionResult<TensorOrScalarOrKey<&T, &S, &PermutedStructure<K>, Aind>>,
-        TensorNetworkError<K>,
-    > {
+        TensorNetworkError<K, FK>,
+    >
+    where
+        FK: Clone,
+    {
         let (node, nid, graph_slots) = self.graph.result()?;
 
         match node {
@@ -732,11 +749,11 @@ where
                 ))),
             },
             NetworkNode::Op(o) => match o {
-                NetworkOp::Neg => Err(TensorNetworkError::InvalidResultNode(NetworkNode::Op(
-                    NetworkOp::Neg,
-                ))),
                 NetworkOp::Product => Ok(ExecutionResult::One),
                 NetworkOp::Sum => Ok(ExecutionResult::Zero),
+                o => Err(TensorNetworkError::InvalidResultNode(NetworkNode::Op(
+                    o.clone(),
+                ))),
             },
         }
     }
@@ -745,11 +762,12 @@ where
     pub fn result_tensor<'a, LT, L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>>(
         &'a self,
         lib: &L,
-    ) -> Result<ExecutionResult<Cow<'a, T>>, TensorNetworkError<K>>
+    ) -> Result<ExecutionResult<Cow<'a, T>>, TensorNetworkError<K, FK>>
     where
         S: 'a,
         T: Clone + ScalarTensor + HasStructure,
         K: Display + Debug,
+        FK: Display + Debug + Clone,
         LT: TensorStructure<Indexed = T> + Clone + LibraryTensor<WithIndices = T>,
         T: PermuteTensor<Permuted = T>,
 
@@ -773,11 +791,14 @@ where
     }
 
     #[allow(clippy::result_large_err)]
-    pub fn result_scalar<'a>(&'a self) -> Result<ExecutionResult<Cow<'a, S>>, TensorNetworkError<K>>
+    pub fn result_scalar<'a>(
+        &'a self,
+    ) -> Result<ExecutionResult<Cow<'a, S>>, TensorNetworkError<K, FK>>
     where
         T: Clone + ScalarTensor + 'a,
         T::Scalar: Into<S>,
         K: Display,
+        FK: Display + Clone,
         S: Clone,
     {
         Ok(match self.result()? {
@@ -796,9 +817,10 @@ where
         })
     }
 
-    pub fn cast<U>(self) -> Network<Str::Store<U, S>, K, Aind>
+    pub fn cast<U>(self) -> Network<Str::Store<U, S>, K, FK, Aind>
     where
         K: Clone,
+        FK: Clone,
         T: CastStructure<U> + HasStructure,
         T::Structure: TensorStructure,
         U: HasStructure,
@@ -828,7 +850,7 @@ where
     }
 }
 
-impl<S, K: Display + Debug, Aind: AbsInd> Network<S, K, Aind> {
+impl<S, K: Display + Debug, FK: Display + Debug, Aind: AbsInd> Network<S, K, FK, Aind> {
     pub fn dot(&self) -> std::string::String {
         self.graph.dot()
     }
@@ -850,16 +872,18 @@ impl<S, K: Display + Debug, Aind: AbsInd> Network<S, K, Aind> {
                 let tt = &self.store.get_tensor(t);
                 tt.display()
             },
+            |fk| fk.to_string(),
         )
     }
 }
 
-impl<T, S, K: Debug, Aind: AbsInd> Network<NetworkStore<T, S>, K, Aind> {
+impl<T, S, FK: Debug, K: Debug, Aind: AbsInd> Network<NetworkStore<T, S>, K, FK, Aind> {
     pub fn dot_display_impl(
         &self,
         scalar_disp: impl Fn(&S) -> String,
         library_disp: impl Fn(&K) -> Option<String>,
         tensor_disp: impl Fn(&T) -> String,
+        function_disp: impl Fn(&FK) -> String,
     ) -> std::string::String {
         self.graph.graph.dot_impl(
             &self.graph.graph.full_filter(),
@@ -890,7 +914,9 @@ impl<T, S, K: Debug, Aind: AbsInd> Network<NetworkStore<T, S>, K, Aind> {
                         scalar_disp(self.store.get_scalar(*s))
                     )),
                 },
-                NetworkNode::Op(o) => Some(format!("label = \"{o}\"")),
+                NetworkNode::Op(o) => {
+                    Some(format!("label = \"{}\"", o.display_with(&function_disp)))
+                }
             },
         )
         // self.graph.dot()
@@ -905,19 +931,20 @@ pub mod contract;
 pub use contract::{
     ContractScalars, ContractionStrategy, SingleSmallestDegree, SmallestDegree, SmallestDegreeIter,
 };
-pub trait ExecutionStrategy<E, L, K, Aind>
+pub trait ExecutionStrategy<E, L, K, FK, Aind>
 where
-    E: ExecuteOp<L, K, Aind>,
+    E: ExecuteOp<L, K, FK, Aind>,
 {
     /// Run the entire contraction to one leaf.
     #[allow(clippy::result_large_err)]
-    fn execute_all<C: ContractionStrategy<E, L, K, Aind>>(
+    fn execute_all<C: ContractionStrategy<E, L, K, FK, Aind>>(
         executor: &mut E,
-        graph: &mut NetworkGraph<K, Aind>,
+        graph: &mut NetworkGraph<K, FK, Aind>,
         lib: &L,
-    ) -> Result<(), TensorNetworkError<K>>
+    ) -> Result<(), TensorNetworkError<K, FK>>
     where
-        K: Display;
+        K: Display,
+        FK: Display;
 }
 
 pub struct Sequential;
@@ -925,19 +952,21 @@ pub struct Sequential;
 pub struct Steps<const N: usize> {}
 pub struct StepsDebug<const N: usize> {}
 
-impl<const N: usize, E, L, K: Debug, Aind: AbsInd> ExecutionStrategy<E, L, K, Aind>
+impl<const N: usize, E, L, FK: Debug, K: Debug, Aind: AbsInd> ExecutionStrategy<E, L, K, FK, Aind>
     for StepsDebug<N>
 where
-    E: ExecuteOp<L, K, Aind>,
+    E: ExecuteOp<L, K, FK, Aind>,
     K: Clone,
+    FK: Clone,
 {
-    fn execute_all<C: ContractionStrategy<E, L, K, Aind>>(
+    fn execute_all<C: ContractionStrategy<E, L, K, FK, Aind>>(
         executor: &mut E,
-        graph: &mut NetworkGraph<K, Aind>,
+        graph: &mut NetworkGraph<K, FK, Aind>,
         lib: &L,
-    ) -> Result<(), TensorNetworkError<K>>
+    ) -> Result<(), TensorNetworkError<K, FK>>
     where
         K: Display,
+        FK: Display,
     {
         for _ in 0..N {
             // find the *one* ready op
@@ -947,18 +976,29 @@ where
                     extracted_graph.dot_impl(
                         |s| s.to_string(),
                         |_| "".to_string(),
-                        |s| s.to_string()
+                        |s| s.to_string(),
+                        |_| "".to_string()
                     )
                 );
                 println!(
                     "Graph: {}",
-                    graph.dot_impl(|s| s.to_string(), |_| "".to_string(), |s| s.to_string())
+                    graph.dot_impl(
+                        |s| s.to_string(),
+                        |_| "".to_string(),
+                        |s| s.to_string(),
+                        |_| "".to_string()
+                    )
                 );
                 // execute + splice
                 let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
                 println!(
                     "Replacement Graph: {}",
-                    replacement.dot_impl(|s| s.to_string(), |_| "".to_string(), |s| s.to_string())
+                    replacement.dot_impl(
+                        |s| s.to_string(),
+                        |_| "".to_string(),
+                        |s| s.to_string(),
+                        |_| "".to_string()
+                    )
                 );
 
                 graph.splice_descendents_of(replacement);
@@ -969,18 +1009,20 @@ where
     }
 }
 
-impl<const N: usize, E, L, K, Aind: AbsInd> ExecutionStrategy<E, L, K, Aind> for Steps<N>
+impl<const N: usize, E, L, K, FK, Aind: AbsInd> ExecutionStrategy<E, L, K, FK, Aind> for Steps<N>
 where
-    E: ExecuteOp<L, K, Aind>,
+    E: ExecuteOp<L, K, FK, Aind>,
     K: Clone + Debug,
+    FK: Clone + Debug,
 {
-    fn execute_all<C: ContractionStrategy<E, L, K, Aind>>(
+    fn execute_all<C: ContractionStrategy<E, L, K, FK, Aind>>(
         executor: &mut E,
-        graph: &mut NetworkGraph<K, Aind>,
+        graph: &mut NetworkGraph<K, FK, Aind>,
         lib: &L,
-    ) -> Result<(), TensorNetworkError<K>>
+    ) -> Result<(), TensorNetworkError<K, FK>>
     where
         K: Display,
+        FK: Display,
     {
         for _ in 0..N {
             // find the *one* ready op
@@ -995,18 +1037,20 @@ where
     }
 }
 
-impl<E, L, K, Aind: AbsInd> ExecutionStrategy<E, L, K, Aind> for Sequential
+impl<E, L, K, FK, Aind: AbsInd> ExecutionStrategy<E, L, K, FK, Aind> for Sequential
 where
-    E: ExecuteOp<L, K, Aind>,
+    E: ExecuteOp<L, K, FK, Aind>,
+    FK: Clone + Debug,
     K: Clone + Debug,
 {
-    fn execute_all<C: ContractionStrategy<E, L, K, Aind>>(
+    fn execute_all<C: ContractionStrategy<E, L, K, FK, Aind>>(
         executor: &mut E,
-        graph: &mut NetworkGraph<K, Aind>,
+        graph: &mut NetworkGraph<K, FK, Aind>,
         lib: &L,
-    ) -> Result<(), TensorNetworkError<K>>
+    ) -> Result<(), TensorNetworkError<K, FK>>
     where
         K: Display,
+        FK: Display,
     {
         while {
             // find the *one* ready op
@@ -1063,38 +1107,40 @@ where
 //     }
 // }
 
-pub trait ExecuteOp<L, K, Aind>: Sized {
+pub trait ExecuteOp<L, K, FK, Aind>: Sized {
     // type LibStruct;
     #[allow(clippy::result_large_err)]
-    fn execute<C: ContractionStrategy<Self, L, K, Aind>>(
+    fn execute<C: ContractionStrategy<Self, L, K, FK, Aind>>(
         &mut self,
-        graph: NetworkGraph<K, Aind>,
+        graph: NetworkGraph<K, FK, Aind>,
         lib: &L,
-        op: NetworkOp,
-    ) -> Result<NetworkGraph<K, Aind>, TensorNetworkError<K>>
+        op: NetworkOp<FK>,
+    ) -> Result<NetworkGraph<K, FK, Aind>, TensorNetworkError<K, FK>>
     where
-        K: Display;
+        K: Display,
+        FK: Display;
 }
 
-impl<S, Store: TensorScalarStore, K, Aind: AbsInd> Network<Store, K, Aind>
+impl<S, Store: TensorScalarStore, K, FK, Aind: AbsInd> Network<Store, K, FK, Aind>
 where
     Store::Tensor: HasStructure<Structure = S>,
 {
     #[allow(clippy::result_large_err)]
     pub fn execute<
-        Strat: ExecutionStrategy<Store, L, K, Aind>,
-        C: ContractionStrategy<Store, L, K, Aind>,
+        Strat: ExecutionStrategy<Store, L, K, FK, Aind>,
+        C: ContractionStrategy<Store, L, K, FK, Aind>,
         LT,
         L,
     >(
         &mut self,
         lib: &L,
-    ) -> Result<(), TensorNetworkError<K>>
+    ) -> Result<(), TensorNetworkError<K, FK>>
     where
         K: Display + Clone + Debug,
+        FK: Display + Clone + Debug,
         L: Library<S, Key = K, Value = PermutedStructure<LT>> + Sync,
         LT: LibraryTensor<WithIndices = Store::Tensor>,
-        Store: ExecuteOp<L, K, Aind>,
+        Store: ExecuteOp<L, K, FK, Aind>,
     {
         self.merge_ops();
         // println!("Hi");
@@ -1122,19 +1168,20 @@ impl<
             + From<T::Scalar>
             + Ref,
         K: Display + Debug,
+        FK: Display + Debug,
         Aind: AbsInd,
-    > ExecuteOp<L, K, Aind> for NetworkStore<T, Sc>
+    > ExecuteOp<L, K, FK, Aind> for NetworkStore<T, Sc>
 where
     LT::WithIndices: PermuteTensor<Permuted = LT::WithIndices>,
     <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
         IsAbstractSlot<Aind = Aind>,
 {
-    fn execute<C: ContractionStrategy<Self, L, K, Aind>>(
+    fn execute<C: ContractionStrategy<Self, L, K, FK, Aind>>(
         &mut self,
-        mut graph: NetworkGraph<K, Aind>,
+        mut graph: NetworkGraph<K, FK, Aind>,
         lib: &L,
-        op: NetworkOp,
-    ) -> Result<NetworkGraph<K, Aind>, TensorNetworkError<K>> {
+        op: NetworkOp<FK>,
+    ) -> Result<NetworkGraph<K, FK, Aind>, TensorNetworkError<K, FK>> {
         graph.sync_order();
         match op {
             NetworkOp::Neg => {
@@ -1319,6 +1366,8 @@ where
                 graph.identify_nodes_without_self_edges(&all_nodes, NetworkNode::Leaf(new_node));
                 Ok(graph)
             }
+            NetworkOp::Function(f) => todo!(),
+            NetworkOp::Power(i) => todo!(),
         }
     }
 }

@@ -40,6 +40,24 @@
         (crane.mkLib nixpkgs.legacyPackages.${system}).overrideToolchain
         fenix.packages.${system}.stable.toolchain;
 
+      # Override cargo-nextest with custom preConfigure on macOS only
+      customCargoNextest = lib.optionalAttrs pkgs.stdenv.isDarwin (
+        pkgs.cargo-nextest.overrideAttrs (prev: {
+          preConfigure = ''
+            export PATH="$PATH:/usr/sbin"
+          '';
+        })
+      );
+
+      # Create a custom craneLib with the overridden cargo-nextest (macOS only)
+      craneLibWithCustomNextest =
+        if pkgs.stdenv.isDarwin
+        then
+          craneLib.overrideScope (final: prev: {
+            cargo-nextest = customCargoNextest;
+          })
+        else craneLib;
+
       src = craneLib.cleanCargoSource ./.;
 
       # Common arguments can be set here to avoid repeating them later
@@ -179,7 +197,7 @@
             cargoExtraArgs = "-p ${crateInfo.pname}";
           });
 
-        "${crateInfo.pname}-nextest" = craneLib.cargoNextest (commonArgs
+        "${crateInfo.pname}-nextest" = craneLibWithCustomNextest.cargoNextest (commonArgs
           // {
             inherit cargoArtifacts;
             inherit (crateInfo) pname version;
@@ -209,7 +227,7 @@
             cargoClippyExtraArgs = "--all-targets -- --deny warnings";
           });
 
-        "${crateInfo.pname}-nextest-${featuresName}" = craneLib.cargoNextest (commonArgs
+        "${crateInfo.pname}-nextest-${featuresName}" = craneLibWithCustomNextest.cargoNextest (commonArgs
           // {
             inherit cargoArtifacts;
             inherit (crateInfo) pname version;
@@ -287,7 +305,7 @@
         # Run tests with cargo-nextest
         # Consider setting `doCheck = false` on other crate derivations
         # if you do not want the tests to run twice
-        workspace-nextest = craneLib.cargoNextest (commonArgs
+        workspace-nextest = craneLibWithCustomNextest.cargoNextest (commonArgs
           // {
             inherit cargoArtifacts;
             pname = "spenso-workspace";

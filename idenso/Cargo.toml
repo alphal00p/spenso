@@ -12,13 +12,13 @@ repository.workspace = true
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 bincode = { version = "2.0", optional = true }
 bincode-trait-derive = { version = "0.1.0", optional = true }
-symbolica = { version = "0.18.0", default-features = false }
+symbolica = { version = "0.19.0", default-features = false }
 spenso = { version = "0.5", features = ["shadowing"] }
 spenso-macros = "0.2"
 itertools = "0.14"
 linnet = "0.12"
-pyo3 = { version = "0.25", features = ["anyhow"], optional = true }
-pyo3-stub-gen = { version = "0.13", default-features = false, optional = true }
+pyo3 = { version = "0.27", features = ["anyhow"], optional = true }
+pyo3-stub-gen = { version = "0.16", default-features = false, optional = true }
 [features]
 
 default = []

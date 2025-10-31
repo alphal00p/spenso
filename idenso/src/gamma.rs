@@ -21,6 +21,9 @@ use super::representations::Bispinor;
 
 pub struct GammaLibrary {
     pub gamma: Symbol,
+    pub gammaconj: Symbol,
+    pub gammaadj: Symbol,
+    pub gamma0: Symbol,
     pub projp: Symbol,
     pub projm: Symbol,
     pub gamma5: Symbol,
@@ -152,10 +155,13 @@ pub static GS: LazyLock<GammaSymbolsInternal> = LazyLock::new(|| GammaSymbolsInt
 
 pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
     gamma: symbol!("spenso::gamma"),
+    gammaadj: symbol!("spenso::gammaadj"),
     projp: symbol!("spenso::projp"),
     projm: symbol!("spenso::projm"),
     gamma5: symbol!("spenso::gamma5"),
     sigma: symbol!("spenso::sigma"),
+    gamma0: symbol!("spenso::gamma0"),
+    gammaconj: symbol!("spenso::gammaconj"),
 });
 
 impl GammaLibrary {
@@ -211,6 +217,32 @@ impl GammaLibrary {
         gamma.structure
     }
 
+    pub fn gamma_conj_strct<Aind: AbsInd>(&self, dim: impl Into<Dimension>) -> ExplicitKey<Aind> {
+        let gamma = ExplicitKey::from_iter(
+            [
+                LibraryRep::from(Minkowski {}).new_rep(dim),
+                Bispinor {}.new_rep(4).cast(),
+                Bispinor {}.new_rep(4).cast(),
+            ],
+            self.gammaconj,
+            None,
+        );
+        gamma.structure
+    }
+
+    pub fn gamma_adj_strct<Aind: AbsInd>(&self, dim: impl Into<Dimension>) -> ExplicitKey<Aind> {
+        let gamma = ExplicitKey::from_iter(
+            [
+                LibraryRep::from(Minkowski {}).new_rep(dim),
+                Bispinor {}.new_rep(4).cast(),
+                Bispinor {}.new_rep(4).cast(),
+            ],
+            self.gammaadj,
+            None,
+        );
+        gamma.structure
+    }
+
     pub fn gamma_pattern<'a>(
         &self,
         mu: impl Into<AtomOrView<'a>>,
@@ -241,6 +273,16 @@ impl GammaLibrary {
         let gamma5 = ExplicitKey::from_iter(
             [Bispinor {}.new_rep(dim), Bispinor {}.new_rep(dim)],
             self.gamma5,
+            None,
+        );
+        gamma5.structure
+    }
+
+    pub fn gamma0_strct<Aind: AbsInd>(&self, dim: impl Into<Dimension>) -> ExplicitKey<Aind> {
+        let dim = dim.into();
+        let gamma5 = ExplicitKey::from_iter(
+            [Bispinor {}.new_rep(dim), Bispinor {}.new_rep(dim)],
+            self.gamma0,
             None,
         );
         gamma5.structure

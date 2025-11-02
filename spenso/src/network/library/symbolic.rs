@@ -487,7 +487,7 @@ mod test {
 
     use crate::{
         network::{
-            library::panicing::PanicingLibrary,
+            library::panicing::ErroringLibrary,
             parsing::{ParseSettings, ShadowedStructure},
             store::NetworkStore,
             ExecutionResult, Network, Sequential, SmallestDegree, TensorOrScalarOrKey,
@@ -551,7 +551,7 @@ mod test {
             )
         );
 
-        let fnlib = PanicingLibrary::new();
+        let fnlib = ErroringLibrary::new();
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
@@ -622,7 +622,7 @@ mod test {
         )
         .unwrap();
 
-        let fnlib = PanicingLibrary::new();
+        let fnlib = ErroringLibrary::new();
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
@@ -641,7 +641,7 @@ mod test {
         )
         .unwrap();
 
-        let fnlib = PanicingLibrary::new();
+        let fnlib = ErroringLibrary::new();
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
@@ -684,7 +684,7 @@ mod test {
             )
         );
 
-        let fnlib = PanicingLibrary::new();
+        let fnlib = ErroringLibrary::new();
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
@@ -745,7 +745,7 @@ mod test {
             )
         );
 
-        let fnlib = PanicingLibrary::new();
+        let fnlib = ErroringLibrary::new();
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
@@ -781,7 +781,7 @@ mod test {
             )
         );
 
-        let fnlib = PanicingLibrary::new();
+        let fnlib = ErroringLibrary::new();
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
@@ -835,7 +835,7 @@ mod test {
             )
         );
 
-        let fnlib = PanicingLibrary::new();
+        let fnlib = ErroringLibrary::new();
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
@@ -884,7 +884,7 @@ mod test {
             )
         );
 
-        let fnlib = PanicingLibrary::new();
+        let fnlib = ErroringLibrary::new();
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
@@ -913,7 +913,7 @@ mod test {
         // a.merge_ops();
         a.execute::<Sequential, SmallestDegree, _, _, _>(
             &DummyLibrary::default(),
-            &PanicingLibrary::new(),
+            &ErroringLibrary::new(),
         )
         .unwrap();
 
@@ -964,7 +964,7 @@ mod test {
         .map_err(|a| a.to_string())
         .unwrap();
 
-        let fnlib = PanicingLibrary::new();
+        let fnlib = ErroringLibrary::new();
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
@@ -994,7 +994,7 @@ mod test {
         .map_err(|a| a.to_string())
         .unwrap();
 
-        let fnlib = PanicingLibrary::new();
+        let fnlib = ErroringLibrary::new();
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 

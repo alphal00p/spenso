@@ -55,6 +55,13 @@ impl RefZero for Atom {
 }
 
 #[cfg(feature = "shadowing")]
+impl RefOne for Atom {
+    fn ref_one(&self) -> Self {
+        Atom::num(1)
+    }
+}
+
+#[cfg(feature = "shadowing")]
 impl RefZero for Integer {
     fn ref_zero(&self) -> Self {
         Integer::zero()

@@ -2,6 +2,11 @@ use std::ops::{Add, Div, Sub};
 
 use ref_ops::{RefDiv, RefMul};
 
+use crate::algebra::{
+    algebraic_traits::RefZero,
+    complex::{RealOrComplex, RealOrComplexRef},
+};
+
 use super::Complex;
 
 impl<'a, T> Div<&'a Complex<T>> for &Complex<T>
@@ -116,5 +121,93 @@ where
     #[inline]
     fn div(self, rhs: T) -> Self::Output {
         Complex::new(self.re.div(rhs.clone()), self.im.div(rhs))
+    }
+}
+
+impl<T, U, Out> Div<RealOrComplex<T>> for RealOrComplex<U>
+where
+    U: Div<T, Output = Out> + RefZero,
+    Complex<U>: Div<Complex<T>, Output = Complex<Out>> + Div<T, Output = Complex<Out>>,
+{
+    type Output = RealOrComplex<Out>;
+    fn div(self, rhs: RealOrComplex<T>) -> RealOrComplex<Out> {
+        match (self, rhs) {
+            (RealOrComplex::Complex(a), RealOrComplex::Complex(b)) => RealOrComplex::Complex(a / b),
+            (RealOrComplex::Real(a), RealOrComplex::Real(b)) => RealOrComplex::Real(a / b),
+            (RealOrComplex::Complex(a), RealOrComplex::Real(b)) => RealOrComplex::Complex(a / b),
+            (mut a, b) => {
+                a.to_complex_mut();
+                a / b
+            }
+        }
+    }
+}
+
+impl<T, U, Out> Div<&RealOrComplex<T>> for RealOrComplex<U>
+where
+    U: for<'a> Div<&'a T, Output = Out> + RefZero,
+    Complex<U>: for<'a> Div<&'a Complex<T>, Output = Complex<Out>>
+        + for<'a> Div<&'a T, Output = Complex<Out>>,
+{
+    type Output = RealOrComplex<Out>;
+    fn div(self, rhs: &RealOrComplex<T>) -> RealOrComplex<Out> {
+        match (self, rhs) {
+            (RealOrComplex::Complex(a), RealOrComplex::Complex(b)) => RealOrComplex::Complex(a / b),
+            (RealOrComplex::Real(a), RealOrComplex::Real(b)) => RealOrComplex::Real(a / b),
+            (RealOrComplex::Complex(a), RealOrComplex::Real(b)) => RealOrComplex::Complex(a / b),
+            (mut a, b) => {
+                a.to_complex_mut();
+                a / b
+            }
+        }
+    }
+}
+
+impl<T, U, Out> Div<RealOrComplexRef<'_, T>> for RealOrComplex<U>
+where
+    U: for<'a> Div<&'a T, Output = Out> + RefZero,
+    Complex<U>: for<'a> Div<&'a Complex<T>, Output = Complex<Out>>
+        + for<'a> Div<&'a T, Output = Complex<Out>>,
+{
+    type Output = RealOrComplex<Out>;
+    fn div(self, rhs: RealOrComplexRef<'_, T>) -> RealOrComplex<Out> {
+        match (self, rhs) {
+            (RealOrComplex::Complex(a), RealOrComplexRef::Complex(b)) => {
+                RealOrComplex::Complex(a / b)
+            }
+            (RealOrComplex::Real(a), RealOrComplexRef::Real(b)) => RealOrComplex::Real(a / b),
+            (RealOrComplex::Complex(a), RealOrComplexRef::Real(b)) => RealOrComplex::Complex(a / b),
+            (mut a, b) => {
+                a.to_complex_mut();
+                a / b
+            }
+        }
+    }
+}
+
+impl<T, U, Out> Div<&RealOrComplex<T>> for Complex<U>
+where
+    Complex<U>: for<'a> Div<&'a Complex<T>, Output = Complex<Out>>
+        + for<'a> Div<&'a T, Output = Complex<Out>>,
+{
+    type Output = Complex<Out>;
+    fn div(self, rhs: &RealOrComplex<T>) -> Complex<Out> {
+        match rhs {
+            RealOrComplex::Complex(b) => self / b,
+            RealOrComplex::Real(a) => self / a,
+        }
+    }
+}
+impl<T, U, Out> Div<RealOrComplexRef<'_, T>> for Complex<U>
+where
+    Complex<U>: for<'a> Div<&'a Complex<T>, Output = Complex<Out>>
+        + for<'a> Div<&'a T, Output = Complex<Out>>,
+{
+    type Output = Complex<Out>;
+    fn div(self, rhs: RealOrComplexRef<'_, T>) -> Complex<Out> {
+        match rhs {
+            RealOrComplexRef::Complex(b) => self / b,
+            RealOrComplexRef::Real(a) => self / a,
+        }
     }
 }

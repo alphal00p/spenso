@@ -2,8 +2,9 @@ use std::mem::transmute;
 
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use symbolica::{
+    coefficient::Coefficient,
     domains::{
-        float::{Complex as SymComplex, NumericalFloatLike, Real, SingleFloat},
+        float::{Complex as SymComplex, Float, NumericalFloatLike, Real, SingleFloat},
         rational::Rational,
     },
     evaluate::{
@@ -12,10 +13,134 @@ use symbolica::{
     },
 };
 
-use crate::algebra::algebraic_traits::{RefOne, RefZero};
+use crate::algebra::{
+    algebraic_traits::{RefOne, RefZero},
+    complex::RealOrComplexRef,
+};
 use rand::Rng;
 
-use super::Complex;
+use super::{Complex, RealOrComplex};
+
+macro_rules! from_via_rational {
+    ($type:ty) => {
+        impl From<Complex<$type>> for Coefficient {
+            fn from(value: Complex<$type>) -> Self {
+                Coefficient::Complex(SymComplex::new(
+                    Rational::from(value.re),
+                    Rational::from(value.im),
+                ))
+            }
+        }
+
+        impl From<&Complex<$type>> for Coefficient {
+            fn from(value: &Complex<$type>) -> Self {
+                Coefficient::Complex(SymComplex::new(
+                    Rational::from(value.re),
+                    Rational::from(value.im),
+                ))
+            }
+        }
+
+        impl From<RealOrComplex<$type>> for Coefficient {
+            fn from(value: RealOrComplex<$type>) -> Self {
+                match value {
+                    RealOrComplex::Real(r) => Coefficient::Complex(Rational::from(r).into()),
+                    RealOrComplex::Complex(c) => Coefficient::Complex(SymComplex::new(
+                        Rational::from(c.re),
+                        Rational::from(c.im),
+                    )),
+                }
+            }
+        }
+
+        impl From<&RealOrComplex<$type>> for Coefficient {
+            fn from(value: &RealOrComplex<$type>) -> Self {
+                match value {
+                    RealOrComplex::Real(r) => Coefficient::Complex(Rational::from(*r).into()),
+                    RealOrComplex::Complex(c) => Coefficient::Complex(SymComplex::new(
+                        Rational::from(c.re),
+                        Rational::from(c.im),
+                    )),
+                }
+            }
+        }
+
+        impl From<RealOrComplexRef<'_, $type>> for Coefficient {
+            fn from(value: RealOrComplexRef<'_, $type>) -> Self {
+                match value {
+                    RealOrComplexRef::Real(r) => Coefficient::Complex(Rational::from(*r).into()),
+                    RealOrComplexRef::Complex(c) => Coefficient::Complex(SymComplex::new(
+                        Rational::from(c.re),
+                        Rational::from(c.im),
+                    )),
+                }
+            }
+        }
+    };
+}
+
+from_via_rational!(i32);
+from_via_rational!(i64);
+from_via_rational!(i128);
+from_via_rational!(isize);
+from_via_rational!(u32);
+from_via_rational!(u64);
+from_via_rational!(u128);
+from_via_rational!(usize);
+
+impl From<Complex<f64>> for Coefficient {
+    fn from(value: Complex<f64>) -> Self {
+        Coefficient::Float(SymComplex {
+            re: Float::with_val(53, value.re),
+            im: Float::with_val(53, value.im),
+        })
+    }
+}
+
+impl From<&Complex<f64>> for Coefficient {
+    fn from(value: &Complex<f64>) -> Self {
+        Coefficient::Float(SymComplex {
+            re: Float::with_val(53, value.re),
+            im: Float::with_val(53, value.im),
+        })
+    }
+}
+
+impl From<RealOrComplex<f64>> for Coefficient {
+    fn from(value: RealOrComplex<f64>) -> Self {
+        match value {
+            RealOrComplex::Real(r) => Coefficient::Float(Float::with_val(53, r).into()),
+            RealOrComplex::Complex(c) => Coefficient::Float(SymComplex::new(
+                Float::with_val(53, c.re),
+                Float::with_val(53, c.im),
+            )),
+        }
+    }
+}
+
+impl From<&RealOrComplex<f64>> for Coefficient {
+    fn from(value: &RealOrComplex<f64>) -> Self {
+        match value {
+            RealOrComplex::Real(r) => Coefficient::Float(Float::with_val(53, *r).into()),
+            RealOrComplex::Complex(c) => Coefficient::Float(SymComplex::new(
+                Float::with_val(53, c.re),
+                Float::with_val(53, c.im),
+            )),
+        }
+    }
+}
+
+impl From<RealOrComplexRef<'_, f64>> for Coefficient {
+    fn from(value: RealOrComplexRef<'_, f64>) -> Self {
+        match value {
+            RealOrComplexRef::Real(r) => Coefficient::Float(Float::with_val(53, *r).into()),
+            RealOrComplexRef::Complex(c) => Coefficient::Float(SymComplex::new(
+                Float::with_val(53, c.re),
+                Float::with_val(53, c.im),
+            )),
+        }
+    }
+}
 
 impl<T: ExportNumber + SingleFloat> ExportNumber for Complex<T> {
     fn export(&self) -> String {

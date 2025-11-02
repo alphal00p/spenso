@@ -6,10 +6,13 @@ use std::{
     path::Path,
 };
 
-use crate::structure::{dimension::Dimension, representation::RepName};
 use crate::structure::{permuted::PermuteTensor, representation::Representation};
 use crate::structure::{slot::AbsInd, StructureError};
 use crate::structure::{slot::IsAbstractSlot, IndexLess};
+use crate::{
+    algebra::algebraic_traits::RefOne,
+    structure::{dimension::Dimension, representation::RepName},
+};
 use crate::{
     algebra::complex::symbolica_traits::CompiledComplexEvaluatorSpenso,
     structure::PermutedStructure,
@@ -298,6 +301,7 @@ pub struct ParamTensor<S = OrderedStructure> {
 }
 
 pub mod add_assign;
+pub mod div;
 pub mod mul_assign;
 pub mod neg;
 pub mod scalar_mul;
@@ -1004,6 +1008,12 @@ impl<C: HasStructure<Structure = S> + Clone, S: TensorStructure + Clone> ParamOr
 pub enum ConcreteOrParam<C> {
     Concrete(C),
     Param(Atom),
+}
+
+impl<C> RefOne for ConcreteOrParam<C> {
+    fn ref_one(&self) -> Self {
+        ConcreteOrParam::Param(Atom::num(1))
+    }
 }
 
 impl<T: Clone> From<&ConcreteOrParam<T>> for ConcreteOrParam<T> {

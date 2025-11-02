@@ -79,17 +79,17 @@ where
     }
 }
 
-impl<T> MulAssign<RealOrComplexRef<'_, T>> for Atom
-where
-    Atom: for<'a> MulAssign<&'a T> + for<'a> MulAssign<&'a Complex<T>>,
-{
-    fn mul_assign(&mut self, rhs: RealOrComplexRef<'_, T>) {
-        match rhs {
-            RealOrComplexRef::Real(c) => *self *= c,
-            RealOrComplexRef::Complex(a) => *self *= a,
-        }
-    }
-}
+// impl<T> MulAssign<RealOrComplexRef<'_, T>> for Atom
+// where
+//     Atom: for<'a> MulAssign<&'a T> + for<'a> MulAssign<&'a Complex<T>>,
+// {
+//     fn mul_assign(&mut self, rhs: RealOrComplexRef<'_, T>) {
+//         match rhs {
+//             RealOrComplexRef::Real(c) => *self *= c,
+//             RealOrComplexRef::Complex(a) => *self *= a,
+//         }
+//     }
+// }
 
 // impl<T> MulAssign<&RealOrComplex<T>> for Atom
 // where
@@ -103,32 +103,32 @@ where
 //     }
 // }
 
-impl<T> MulAssign<RealOrComplex<T>> for Atom
-where
-    Atom: MulAssign<T> + MulAssign<Complex<T>>,
-{
-    fn mul_assign(&mut self, rhs: RealOrComplex<T>) {
-        match rhs {
-            RealOrComplex::Real(c) => *self *= c,
-            RealOrComplex::Complex(a) => *self *= a,
-        }
-    }
-}
+// impl<T> MulAssign<RealOrComplex<T>> for Atom
+// where
+//     Atom: MulAssign<T> + MulAssign<Complex<T>>,
+// {
+//     fn mul_assign(&mut self, rhs: RealOrComplex<T>) {
+//         match rhs {
+//             RealOrComplex::Real(c) => *self *= c,
+//             RealOrComplex::Complex(a) => *self *= a,
+//         }
+//     }
+// }
 
-impl<T: Into<Coefficient>> MulAssign<Complex<T>> for Atom {
-    fn mul_assign(&mut self, rhs: Complex<T>) {
-        *self = &*self * (Atom::i() * rhs.im + rhs.re);
-    }
-}
+// impl<T: Into<Coefficient>> MulAssign<Complex<T>> for Atom {
+//     fn mul_assign(&mut self, rhs: Complex<T>) {
+//         *self = &*self * (Atom::i() * rhs.im + rhs.re);
+//     }
+// }
 
-impl<T> MulAssign<&Complex<T>> for Atom
-where
-    for<'a> &'a T: Into<Coefficient>,
-{
-    fn mul_assign(&mut self, rhs: &Complex<T>) {
-        *self = &*self + &rhs.re + Atom::i() + &rhs.im;
-    }
-}
+// impl<T> MulAssign<&Complex<T>> for Atom
+// where
+//     for<'a> &'a T: Into<Coefficient>,
+// {
+//     fn mul_assign(&mut self, rhs: &Complex<T>) {
+//         *self = &*self + &rhs.re + Atom::i() + &rhs.im;
+//     }
+// }
 
 impl<T> MulAssign<ConcreteOrParam<T>> for Atom
 where

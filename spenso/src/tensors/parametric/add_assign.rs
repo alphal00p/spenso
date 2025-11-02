@@ -37,20 +37,20 @@ where
     }
 }
 
-impl<T: Into<Coefficient>> AddAssign<Complex<T>> for Atom {
-    fn add_assign(&mut self, rhs: Complex<T>) {
-        *self = &*self + rhs.re + Atom::i() + rhs.im;
-    }
-}
+// impl<T: Into<Coefficient>> AddAssign<Complex<T>> for Atom {
+//     fn add_assign(&mut self, rhs: Complex<T>) {
+//         *self = &*self + rhs.re + Atom::i() * rhs.im;
+//     }
+// }
 
-impl<T> AddAssign<&Complex<T>> for Atom
-where
-    for<'a> &'a T: Into<Coefficient>,
-{
-    fn add_assign(&mut self, rhs: &Complex<T>) {
-        *self = &*self + &rhs.re + Atom::i() + &rhs.im;
-    }
-}
+// impl<T> AddAssign<&Complex<T>> for Atom
+// where
+//     for<'a> &'a T: Into<Coefficient>,
+// {
+//     fn add_assign(&mut self, rhs: &Complex<T>) {
+//         *self = &*self + &rhs.re + Atom::i() * &rhs.im;
+//     }
+// }
 
 impl<T> AddAssign<ConcreteOrParam<T>> for Atom
 where
@@ -76,17 +76,7 @@ where
     }
 }
 
-impl<T> AddAssign<RealOrComplexRef<'_, T>> for Atom
-where
-    Atom: for<'a> AddAssign<&'a T> + for<'a> AddAssign<&'a Complex<T>>,
-{
-    fn add_assign(&mut self, rhs: RealOrComplexRef<'_, T>) {
-        match rhs {
-            RealOrComplexRef::Real(c) => *self += c,
-            RealOrComplexRef::Complex(a) => *self += a,
-        }
-    }
-}
+// impl<T> AddA/
 
 // Tensors
 

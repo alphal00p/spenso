@@ -462,6 +462,15 @@ pub enum RealOrComplex<T> {
     Complex(Complex<T>),
 }
 
+impl<T: RefOne> RefOne for RealOrComplex<T> {
+    fn ref_one(&self) -> Self {
+        match self {
+            RealOrComplex::Real(r) => RealOrComplex::Real(r.ref_one()),
+            RealOrComplex::Complex(c) => RealOrComplex::Real(c.re.ref_one()),
+        }
+    }
+}
+
 impl<T: RefZero> From<RealOrComplex<T>> for Complex<T> {
     fn from(value: RealOrComplex<T>) -> Self {
         match value {

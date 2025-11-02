@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use library::{Library, LibraryError};
 
-use crate::network::library::{FunctionLibrary, LibraryTensor};
+use crate::algebra::algebraic_traits::RefOne;
+use crate::contraction::Contract;
+use crate::network::library::{FunctionLibrary, FunctionLibraryError, LibraryTensor};
 use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::permuted::PermuteTensor;
 // use crate::shadowing::Concretize;
@@ -14,7 +16,7 @@ use crate::structure::slot::{AbsInd, IsAbstractSlot};
 use crate::structure::{HasName, PermutedStructure, StructureError};
 use std::borrow::Cow;
 use std::fmt::Display;
-use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
 use store::{NetworkStore, TensorScalarStore, TensorScalarStoreMapping};
 use thiserror::Error;
 // use log::trace;
@@ -588,6 +590,8 @@ pub enum TensorNetworkError<K: Display, FK: Display> {
     StructErr(#[from] StructureError),
     #[error("LibraryError:{0}")]
     LibErr(#[from] LibraryError<K>),
+    #[error("FunctionLibraryError:{0}")]
+    FunLibErr(#[from] FunctionLibraryError<FK>),
     #[error("Non tensor node still present")]
     NonTensorNodePresent,
     #[error("invalid resulting node(0)")]
@@ -1167,17 +1171,21 @@ impl<
             + Neg<Output = T>
             + Clone
             + Ref
+            + Contract<LCM = T>
             + for<'a> AddAssign<T::Ref<'a>>
             + for<'a> AddAssign<LT::WithIndices>
             + From<LT::WithIndices>,
         L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
         Sc: Neg<Output = Sc>
+            + RefOne
+            + Div<Output = Sc>
             + for<'a> AddAssign<Sc::Ref<'a>>
             + Clone
             + for<'a> AddAssign<T::ScalarRef<'a>>
             + From<T::Scalar>
-            + Ref,
-        K: Display + Debug,
+            + Ref
+            + for<'a> MulAssign<Sc::Ref<'a>>,
+        K: Display + Debug + Clone,
         FK: Display + Debug,
         FL: FunctionLibrary<T, Key = FK>,
         Aind: AbsInd,
@@ -1411,14 +1419,14 @@ where
                         }
                         NetworkLeaf::LibraryKey(_) => {
                             let inds = graph.get_lib_data(lib, child_id).unwrap();
-
-                            let t = fn_lib.apply(&f, T::from(inds));
+                            let t = fn_lib.apply(&f, T::from(inds))?;
                             let pos = self.tensors.len();
                             self.tensors.push(t);
                             NetworkLeaf::LocalTensor(pos)
                         }
                         NetworkLeaf::LocalTensor(t) => {
-                            let t = self.tensors[*t].clone().neg();
+                            let t = self.tensors[*t].clone();
+                            let t = fn_lib.apply(&f, t)?;
                             let pos = self.tensors.len();
                             self.tensors.push(t);
                             NetworkLeaf::LocalTensor(pos)
@@ -1433,7 +1441,140 @@ where
                     Err(TensorNetworkError::ChildlessNeg)
                 }
             }
-            NetworkOp::Power(i) => todo!(),
+            NetworkOp::Power(i) => {
+                let mut pow = 0;
+                let ops = graph.graph.iter_nodes().find(|(_, _, d)| {
+                    if let NetworkNode::Op(NetworkOp::Power(i)) = d {
+                        pow = *i;
+                        true
+                    } else {
+                        false
+                    }
+                });
+
+                let (opid, children, _) = ops.unwrap();
+
+                let mut child = None;
+                for c in children {
+                    if let Some(id) = graph.graph.involved_node_id(c) {
+                        if let NetworkNode::Leaf(l) = &graph.graph[id] {
+                            if child.is_some() {
+                                return Err(TensorNetworkError::Other(anyhow!(
+                                    "Cannot have more than one tensor argument to function"
+                                )));
+                            } else {
+                                child = Some((id, l));
+                            }
+                        }
+                    }
+                }
+                let n = pow.abs();
+                if let Some((child_id, leaf)) = child {
+                    let new_node = match leaf {
+                        NetworkLeaf::Scalar(si) => {
+                            if n == 0 {
+                                NetworkLeaf::Scalar(*si)
+                            } else {
+                                let mut s = self.scalar[*si].clone();
+
+                                for i in 0..n {
+                                    s *= self.scalar[*si].refer();
+                                }
+
+                                if pow < 0 {
+                                    s = s.ref_one() / s;
+                                }
+
+                                let pos = self.scalar.len();
+                                self.scalar.push(s);
+
+                                NetworkLeaf::Scalar(pos)
+                            }
+                        }
+                        NetworkLeaf::LibraryKey(a) => {
+                            let inds = graph.get_lib_data(lib, child_id).unwrap();
+                            let t = T::from(inds);
+
+                            match n {
+                                0 => {
+                                    let pos = self.scalar.len();
+                                    let one = self.scalar[0].ref_one();
+                                    self.scalar.push(one);
+                                    NetworkLeaf::Scalar(pos)
+                                }
+                                1 => NetworkLeaf::LibraryKey(a.clone()),
+                                _ => {
+                                    let squares = n / 2;
+                                    let mut square = t.contract(&t)?;
+
+                                    if n % 2 == 1 {
+                                        for _ in 0..squares {
+                                            square = square.contract(&square)?;
+                                        }
+                                        let t = square.contract(&t)?;
+                                        let pos = self.tensors.len();
+                                        self.tensors.push(t);
+                                        NetworkLeaf::LocalTensor(pos)
+                                    } else {
+                                        let mut s = Sc::from(square.scalar().unwrap());
+                                        let sc = s.clone();
+                                        for _ in 0..squares {
+                                            s *= sc.refer();
+                                        }
+                                        let pos = self.scalar.len();
+                                        let one = self.scalar[0].ref_one();
+                                        self.scalar.push(one);
+                                        NetworkLeaf::Scalar(pos)
+                                    }
+                                }
+                            }
+                        }
+                        NetworkLeaf::LocalTensor(ti) => {
+                            let t = self.tensors[*ti].clone();
+                            match n {
+                                0 => {
+                                    let pos = self.scalar.len();
+                                    let one = self.scalar[0].ref_one();
+                                    self.scalar.push(one);
+                                    NetworkLeaf::Scalar(pos)
+                                }
+                                1 => NetworkLeaf::LocalTensor(*ti),
+                                _ => {
+                                    let squares = n / 2;
+                                    let mut square = t.contract(&t)?;
+
+                                    if n % 2 == 1 {
+                                        for _ in 0..squares {
+                                            square = square.contract(&square)?;
+                                        }
+                                        let t = square.contract(&t)?;
+                                        let pos = self.tensors.len();
+                                        self.tensors.push(t);
+                                        NetworkLeaf::LocalTensor(pos)
+                                    } else {
+                                        let mut s = Sc::from(square.scalar().unwrap());
+                                        let sc = s.clone();
+                                        for _ in 0..squares {
+                                            s *= sc.refer();
+                                        }
+                                        let pos = self.scalar.len();
+                                        let one = self.scalar[0].ref_one();
+                                        self.scalar.push(one);
+                                        NetworkLeaf::Scalar(pos)
+                                    }
+                                }
+                            }
+                        }
+                    };
+                    graph.identify_nodes_without_self_edges(
+                        &[child_id, opid],
+                        NetworkNode::Leaf(new_node),
+                    );
+                    Ok(graph)
+                } else {
+                    Err(TensorNetworkError::ChildlessNeg)
+                }
+            }
         }
     }
 }

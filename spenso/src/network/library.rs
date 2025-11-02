@@ -12,8 +12,11 @@ use crate::{
     },
 };
 
-use anyhow::Result;
+use anyhow::{Error, Result};
 
+#[cfg(feature = "shadowing")]
+pub mod function_lib;
+pub mod panicing;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -26,6 +29,23 @@ pub enum LibraryError<Key: Display> {
 
     #[error("Invalid key")]
     InvalidKey,
+}
+
+#[derive(Debug, Error)]
+pub enum FunctionLibraryError<Key: Display> {
+    #[error("Not found {0}")]
+    NotFound(Key),
+
+    #[error("Invalid key")]
+    InvalidKey,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+pub trait FunctionLibrary<T> {
+    type Key: Display;
+
+    fn apply(&self, key: &Self::Key, tensor: T) -> Result<T, FunctionLibraryError<Self::Key>>;
 }
 
 pub trait Library<S> {

@@ -333,6 +333,7 @@ pub mod test {
     use core::panic;
 
     use crate::{
+        network::library::panicing::PanicingLibrary,
         structure::{
             representation::{initialize, Euclidean, Lorentz, Minkowski, RepName},
             slot::IsAbstractSlot,
@@ -351,6 +352,7 @@ pub mod test {
         let expr = parse!("1");
 
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
             &lib,
@@ -358,7 +360,7 @@ pub mod test {
         )
         .unwrap();
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
         if let ExecutionResult::Val(TensorOrScalarOrKey::Scalar(a)) = net.result().unwrap() {
@@ -373,6 +375,7 @@ pub mod test {
         let expr = parse!("c*a*b(mink(4,1))");
 
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
             &lib,
@@ -388,7 +391,7 @@ pub mod test {
                 |_| "".to_string()
             )
         );
-        net.execute::<Steps<1>, ContractScalars, _, _>(&lib)
+        net.execute::<Steps<1>, ContractScalars, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -413,6 +416,7 @@ pub mod test {
         let expr = parse!("c*a*b(mink(4,1))*d(mink(4,2))*d(mink(4,1))");
 
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
             &lib,
@@ -430,7 +434,7 @@ pub mod test {
                 |_| "".to_string()
             )
         );
-        net.execute::<Steps<1>, ContractScalars, _, _>(&lib)
+        net.execute::<Steps<1>, ContractScalars, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "//Contract Scalars:\n{}",
@@ -441,7 +445,7 @@ pub mod test {
                 |_| "".to_string()
             )
         );
-        net.execute::<Steps<1>, SingleSmallestDegree<false>, _, _>(&lib)
+        net.execute::<Steps<1>, SingleSmallestDegree<false>, _, _, _>(&lib, &fnlib)
             .unwrap();
 
         // println!("{:#?}", net.graph.graph);
@@ -454,7 +458,7 @@ pub mod test {
                 |_| "".to_string()
             )
         );
-        net.execute::<Steps<1>, SingleSmallestDegree<false>, _, _>(&lib)
+        net.execute::<Steps<1>, SingleSmallestDegree<false>, _, _, _>(&lib, &fnlib)
             .unwrap();
 
         // println!("{:#?}", net.graph.graph);
@@ -467,7 +471,7 @@ pub mod test {
                 |_| "".to_string()
             )
         );
-        net.execute::<Steps<1>, ContractScalars, _, _>(&lib)
+        net.execute::<Steps<1>, ContractScalars, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "//Contract Scalars again:\n{}",
@@ -478,7 +482,7 @@ pub mod test {
                 |_| "".to_string()
             )
         );
-        netc.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        netc.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -510,6 +514,7 @@ pub mod test {
         let expr = parse!("(y+x(mink(4,1))*y(mink(4,1))) *(1+1+2*x*(3*sin(r))/t)");
 
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
             &lib,
@@ -528,7 +533,7 @@ pub mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -609,6 +614,7 @@ pub mod test {
         let expr = (parse!("a*sin(x/2)") * tensor1 * tensor2 * tensor3 + tensor4) * tensor5;
 
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
             &lib,
@@ -627,7 +633,7 @@ pub mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -656,6 +662,7 @@ pub mod test {
         initialize();
         let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         println!("Hi");
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
@@ -675,7 +682,7 @@ pub mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -806,6 +813,7 @@ pub mod test {
         );
 
         let lib: DummyLibrary<_, DummyKey> = DummyLibrary::<_, _>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         // println!("Hi");
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             loop_tn_expr.as_view(),
@@ -814,7 +822,7 @@ pub mod test {
         )
         .unwrap();
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
     }
 
@@ -855,6 +863,7 @@ pub mod test {
                     * epsbar(10, mink(4, hedge15))
         );
         let lib: DummyLibrary<_, DummyKey> = DummyLibrary::<_, _>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         // println!("Hi");
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
@@ -869,7 +878,7 @@ pub mod test {
         //     net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
         // );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         // println!(
         //     "{}",
@@ -890,6 +899,7 @@ pub mod test {
         let expr =
             parse!("-d(mink(4,6),mink(4,5))*Q(2,mink(4,7))+d(mink(4,6),mink(4,5))*Q(3,mink(4,7))");
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         println!("Hi");
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
@@ -909,7 +919,7 @@ pub mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -940,6 +950,7 @@ pub mod test {
                 * (A(mink(4, r_2), mink(4, r_3)) + B(mink(4, r_3), mink(4, r_2)))
         );
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
             &lib,
@@ -957,7 +968,7 @@ pub mod test {
                 |_| "".to_string()
             )
         );
-        net.execute::<StepsDebug<6>, SmallestDegree, _, _>(&lib)
+        net.execute::<StepsDebug<6>, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -1010,6 +1021,7 @@ pub mod test {
         );
 
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
             &lib,
@@ -1027,7 +1039,7 @@ pub mod test {
             )
         );
 
-        net.execute::<Steps<14>, SmallestDegree, _, _>(&lib)
+        net.execute::<Steps<14>, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -1095,6 +1107,7 @@ pub mod test {
         );
 
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
             &lib,
@@ -1133,7 +1146,7 @@ pub mod test {
 
         // return;
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -1160,7 +1173,7 @@ pub mod test {
             &ParseSettings::default(),
         )
         .unwrap();
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -1246,6 +1259,7 @@ pub mod test {
         // );
 
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
             &lib,
@@ -1258,10 +1272,10 @@ pub mod test {
         loop {
             let old = net_iter.clone();
             net_iter
-                .execute::<Steps<1>, SingleSmallestDegree<false>, _, _>(&lib)
+                .execute::<Steps<1>, SingleSmallestDegree<false>, _, _, _>(&lib, &fnlib)
                 .unwrap();
             net_iter
-                .execute::<Steps<1>, ContractScalars, _, _>(&lib)
+                .execute::<Steps<1>, ContractScalars, _, _, _>(&lib, &fnlib)
                 .unwrap();
             if net_iter == old {
                 break;
@@ -1276,7 +1290,7 @@ pub mod test {
                 |_| "".to_string()
             )
         );
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
     }
 
@@ -1377,6 +1391,7 @@ pub mod test {
         );
 
         let lib = DummyLibrary::<_>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
             expr.as_view(),
             &lib,
@@ -1394,7 +1409,7 @@ pub mod test {
             )
         );
 
-        net.execute::<Steps<14>, SmallestDegree, _, _>(&lib)
+        net.execute::<Steps<14>, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -1415,6 +1430,7 @@ pub mod test {
         let expr3 = parse_lit!(C * ggg(euc(4, hedge_5), euc(4, hedge_4)));
 
         let lib = DummyLibrary::<SymbolicTensor>::new();
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let net = dummy_lib_parse(expr.as_view());
         let net2 = dummy_lib_parse(expr2.as_view());
         let net3 = dummy_lib_parse(expr3.as_view());
@@ -1447,10 +1463,10 @@ pub mod test {
             )
         );
 
-        // acc.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        // acc.execute::<Sequential, SmallestDegree, _, _,_>(&lib,&fnlib)
         //     .unwrap();
 
-        acc.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        acc.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -1472,6 +1488,7 @@ pub mod test {
         let expr2 = parse_lit!(B * gg(euc(4, hedge_3)));
         let expr3 = parse_lit!(C * ggg(euc(4, hedge_5)) * g(euc(4, hedge_4)));
         let expr4 = parse_lit!(A * B * ggg(euc(4, hedge_5)) * g(euc(4, hedge_4)));
+        let fnlib = PanicingLibrary::<DummyKey>::new();
         let lib = DummyLibrary::<SymbolicTensor>::new();
 
         for ex in [expr, expr2, expr3, expr4] {
@@ -1488,7 +1505,7 @@ pub mod test {
                 )
             );
 
-            acc.execute::<Steps<1>, ContractScalars, _, _>(&lib)
+            acc.execute::<Steps<1>, ContractScalars, _, _, _>(&lib, &fnlib)
                 .unwrap();
 
             println!(
@@ -1500,7 +1517,7 @@ pub mod test {
                     |_| "".to_string()
                 )
             );
-            acc.execute::<Sequential, SmallestDegree, _, _>(&lib)
+            acc.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
                 .unwrap();
 
             println!(

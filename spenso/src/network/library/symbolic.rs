@@ -487,6 +487,7 @@ mod test {
 
     use crate::{
         network::{
+            library::panicing::PanicingLibrary,
             parsing::{ParseSettings, ShadowedStructure},
             store::NetworkStore,
             ExecutionResult, Network, Sequential, SmallestDegree, TensorOrScalarOrKey,
@@ -550,7 +551,8 @@ mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        let fnlib = PanicingLibrary::new();
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -620,7 +622,8 @@ mod test {
         )
         .unwrap();
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        let fnlib = PanicingLibrary::new();
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
         print!("One {}", net.result_tensor(&lib).unwrap());
@@ -638,7 +641,8 @@ mod test {
         )
         .unwrap();
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        let fnlib = PanicingLibrary::new();
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
         print!("Two{}", net.result_tensor(&lib).unwrap())
@@ -680,7 +684,8 @@ mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        let fnlib = PanicingLibrary::new();
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -740,7 +745,8 @@ mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        let fnlib = PanicingLibrary::new();
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
         if let Ok(ExecutionResult::Val(v)) = net.result_tensor(&lib) {
@@ -775,7 +781,8 @@ mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        let fnlib = PanicingLibrary::new();
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
         println!(
             "{}",
@@ -828,7 +835,8 @@ mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        let fnlib = PanicingLibrary::new();
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
         if let Ok(ExecutionResult::Val(v)) = net.result_scalar() {
@@ -876,7 +884,8 @@ mod test {
             )
         );
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        let fnlib = PanicingLibrary::new();
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
         if let Ok(ExecutionResult::Val(v)) = net.result_tensor(&lib) {
@@ -902,8 +911,11 @@ mod test {
         > = Network::one() * Network::from_scalar(Atom::var(symbol!("x")));
 
         // a.merge_ops();
-        a.execute::<Sequential, SmallestDegree, _, _>(&DummyLibrary::default())
-            .unwrap();
+        a.execute::<Sequential, SmallestDegree, _, _, _>(
+            &DummyLibrary::default(),
+            &PanicingLibrary::new(),
+        )
+        .unwrap();
 
         let res = a.result_scalar();
         if let Ok(ExecutionResult::Val(v)) = res {
@@ -952,7 +964,8 @@ mod test {
         .map_err(|a| a.to_string())
         .unwrap();
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        let fnlib = PanicingLibrary::new();
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
         if let Ok(ExecutionResult::Val(v)) = net.result_tensor(&lib) {
@@ -981,7 +994,8 @@ mod test {
         .map_err(|a| a.to_string())
         .unwrap();
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&lib)
+        let fnlib = PanicingLibrary::new();
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
 
         if let Ok(ExecutionResult::Val(v)) = net.result_tensor(&lib) {

@@ -1,10 +1,11 @@
+use anyhow::anyhow;
 use graph::{NAdd, NMul, NetworkEdge, NetworkGraph, NetworkLeaf, NetworkNode, NetworkOp};
 use linnet::half_edge::NodeIndex;
 use serde::{Deserialize, Serialize};
 
 use library::{Library, LibraryError};
 
-use crate::network::library::LibraryTensor;
+use crate::network::library::{FunctionLibrary, LibraryTensor};
 use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::permuted::PermuteTensor;
 // use crate::shadowing::Concretize;
@@ -931,9 +932,9 @@ pub mod contract;
 pub use contract::{
     ContractScalars, ContractionStrategy, SingleSmallestDegree, SmallestDegree, SmallestDegreeIter,
 };
-pub trait ExecutionStrategy<E, L, K, FK, Aind>
+pub trait ExecutionStrategy<E, FL, L, K, FK, Aind>
 where
-    E: ExecuteOp<L, K, FK, Aind>,
+    E: ExecuteOp<FL, L, K, FK, Aind>,
 {
     /// Run the entire contraction to one leaf.
     #[allow(clippy::result_large_err)]
@@ -941,6 +942,7 @@ where
         executor: &mut E,
         graph: &mut NetworkGraph<K, FK, Aind>,
         lib: &L,
+        fnlib: &FL,
     ) -> Result<(), TensorNetworkError<K, FK>>
     where
         K: Display,
@@ -952,10 +954,10 @@ pub struct Sequential;
 pub struct Steps<const N: usize> {}
 pub struct StepsDebug<const N: usize> {}
 
-impl<const N: usize, E, L, FK: Debug, K: Debug, Aind: AbsInd> ExecutionStrategy<E, L, K, FK, Aind>
-    for StepsDebug<N>
+impl<const N: usize, E, L, FL, FK: Debug, K: Debug, Aind: AbsInd>
+    ExecutionStrategy<E, FL, L, K, FK, Aind> for StepsDebug<N>
 where
-    E: ExecuteOp<L, K, FK, Aind>,
+    E: ExecuteOp<FL, L, K, FK, Aind>,
     K: Clone,
     FK: Clone,
 {
@@ -963,6 +965,7 @@ where
         executor: &mut E,
         graph: &mut NetworkGraph<K, FK, Aind>,
         lib: &L,
+        fnlib: &FL,
     ) -> Result<(), TensorNetworkError<K, FK>>
     where
         K: Display,
@@ -990,7 +993,7 @@ where
                     )
                 );
                 // execute + splice
-                let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
+                let replacement = executor.execute::<C>(extracted_graph, lib, fnlib, op)?;
                 println!(
                     "Replacement Graph: {}",
                     replacement.dot_impl(
@@ -1009,9 +1012,10 @@ where
     }
 }
 
-impl<const N: usize, E, L, K, FK, Aind: AbsInd> ExecutionStrategy<E, L, K, FK, Aind> for Steps<N>
+impl<const N: usize, E, FL, L, K, FK, Aind: AbsInd> ExecutionStrategy<E, FL, L, K, FK, Aind>
+    for Steps<N>
 where
-    E: ExecuteOp<L, K, FK, Aind>,
+    E: ExecuteOp<FL, L, K, FK, Aind>,
     K: Clone + Debug,
     FK: Clone + Debug,
 {
@@ -1019,6 +1023,7 @@ where
         executor: &mut E,
         graph: &mut NetworkGraph<K, FK, Aind>,
         lib: &L,
+        fnlib: &FL,
     ) -> Result<(), TensorNetworkError<K, FK>>
     where
         K: Display,
@@ -1028,7 +1033,7 @@ where
             // find the *one* ready op
             if let Some((extracted_graph, op)) = graph.extract_next_ready_op() {
                 // execute + splice
-                let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
+                let replacement = executor.execute::<C>(extracted_graph, lib, fnlib, op)?;
                 graph.splice_descendents_of(replacement);
             }
         }
@@ -1037,9 +1042,9 @@ where
     }
 }
 
-impl<E, L, K, FK, Aind: AbsInd> ExecutionStrategy<E, L, K, FK, Aind> for Sequential
+impl<E, L, FL, K, FK, Aind: AbsInd> ExecutionStrategy<E, FL, L, K, FK, Aind> for Sequential
 where
-    E: ExecuteOp<L, K, FK, Aind>,
+    E: ExecuteOp<FL, L, K, FK, Aind>,
     FK: Clone + Debug,
     K: Clone + Debug,
 {
@@ -1047,6 +1052,7 @@ where
         executor: &mut E,
         graph: &mut NetworkGraph<K, FK, Aind>,
         lib: &L,
+        fnlib: &FL,
     ) -> Result<(), TensorNetworkError<K, FK>>
     where
         K: Display,
@@ -1056,7 +1062,7 @@ where
             // find the *one* ready op
             if let Some((extracted_graph, op)) = graph.extract_next_ready_op() {
                 // execute + splice
-                let replacement = executor.execute::<C>(extracted_graph, lib, op)?;
+                let replacement = executor.execute::<C>(extracted_graph, lib, fnlib, op)?;
                 graph.splice_descendents_of(replacement);
                 true
             } else {
@@ -1107,13 +1113,14 @@ where
 //     }
 // }
 
-pub trait ExecuteOp<L, K, FK, Aind>: Sized {
+pub trait ExecuteOp<FL, L, K, FK, Aind>: Sized {
     // type LibStruct;
     #[allow(clippy::result_large_err)]
     fn execute<C: ContractionStrategy<Self, L, K, FK, Aind>>(
         &mut self,
         graph: NetworkGraph<K, FK, Aind>,
         lib: &L,
+        fn_lib: &FL,
         op: NetworkOp<FK>,
     ) -> Result<NetworkGraph<K, FK, Aind>, TensorNetworkError<K, FK>>
     where
@@ -1127,26 +1134,29 @@ where
 {
     #[allow(clippy::result_large_err)]
     pub fn execute<
-        Strat: ExecutionStrategy<Store, L, K, FK, Aind>,
+        Strat: ExecutionStrategy<Store, FL, L, K, FK, Aind>,
         C: ContractionStrategy<Store, L, K, FK, Aind>,
         LT,
         L,
+        FL,
     >(
         &mut self,
         lib: &L,
+        fn_lib: &FL,
     ) -> Result<(), TensorNetworkError<K, FK>>
     where
         K: Display + Clone + Debug,
         FK: Display + Clone + Debug,
         L: Library<S, Key = K, Value = PermutedStructure<LT>> + Sync,
+        FL: FunctionLibrary<Store::Tensor, Key = FK>,
         LT: LibraryTensor<WithIndices = Store::Tensor>,
-        Store: ExecuteOp<L, K, FK, Aind>,
+        Store: ExecuteOp<FL, L, K, FK, Aind>,
     {
         self.merge_ops();
         // println!("Hi");
         // println!("{}", self.graph.dot());
         // Ok(())
-        Strat::execute_all::<C>(&mut self.store, &mut self.graph, lib)
+        Strat::execute_all::<C>(&mut self.store, &mut self.graph, lib, fn_lib)
     }
 }
 
@@ -1169,8 +1179,9 @@ impl<
             + Ref,
         K: Display + Debug,
         FK: Display + Debug,
+        FL: FunctionLibrary<T, Key = FK>,
         Aind: AbsInd,
-    > ExecuteOp<L, K, FK, Aind> for NetworkStore<T, Sc>
+    > ExecuteOp<FL, L, K, FK, Aind> for NetworkStore<T, Sc>
 where
     LT::WithIndices: PermuteTensor<Permuted = LT::WithIndices>,
     <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
@@ -1180,6 +1191,7 @@ where
         &mut self,
         mut graph: NetworkGraph<K, FK, Aind>,
         lib: &L,
+        fn_lib: &FL,
         op: NetworkOp<FK>,
     ) -> Result<NetworkGraph<K, FK, Aind>, TensorNetworkError<K, FK>> {
         graph.sync_order();
@@ -1366,7 +1378,61 @@ where
                 graph.identify_nodes_without_self_edges(&all_nodes, NetworkNode::Leaf(new_node));
                 Ok(graph)
             }
-            NetworkOp::Function(f) => todo!(),
+            NetworkOp::Function(f) => {
+                let ops = graph
+                    .graph
+                    .iter_nodes()
+                    .find(|(_, _, d)| matches!(d, NetworkNode::Op(NetworkOp::Function(_))));
+
+                let (opid, children, _) = ops.unwrap();
+
+                let mut child = None;
+                for c in children {
+                    if let Some(id) = graph.graph.involved_node_id(c) {
+                        if let NetworkNode::Leaf(l) = &graph.graph[id] {
+                            if child.is_some() {
+                                return Err(TensorNetworkError::Other(anyhow!(
+                                    "Cannot have more than one tensor argument to function"
+                                )));
+                            } else {
+                                child = Some((id, l));
+                            }
+                        }
+                    }
+                }
+                if let Some((child_id, leaf)) = child {
+                    let new_node = match leaf {
+                        NetworkLeaf::Scalar(s) => {
+                            let s = self.scalar[*s].clone();
+                            let pos = self.scalar.len();
+                            self.scalar.push(s);
+
+                            NetworkLeaf::Scalar(pos)
+                        }
+                        NetworkLeaf::LibraryKey(_) => {
+                            let inds = graph.get_lib_data(lib, child_id).unwrap();
+
+                            let t = fn_lib.apply(&f, T::from(inds));
+                            let pos = self.tensors.len();
+                            self.tensors.push(t);
+                            NetworkLeaf::LocalTensor(pos)
+                        }
+                        NetworkLeaf::LocalTensor(t) => {
+                            let t = self.tensors[*t].clone().neg();
+                            let pos = self.tensors.len();
+                            self.tensors.push(t);
+                            NetworkLeaf::LocalTensor(pos)
+                        }
+                    };
+                    graph.identify_nodes_without_self_edges(
+                        &[child_id, opid],
+                        NetworkNode::Leaf(new_node),
+                    );
+                    Ok(graph)
+                } else {
+                    Err(TensorNetworkError::ChildlessNeg)
+                }
+            }
             NetworkOp::Power(i) => todo!(),
         }
     }

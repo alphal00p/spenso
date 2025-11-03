@@ -18,7 +18,7 @@ use pyo3_stub_gen::{
     TypeInfo,
     generate::MethodType,
     inventory::submit,
-    type_info::{ArgInfo, MethodInfo, PyMethodsInfo, SignatureArg},
+    type_info::{MethodInfo, ParameterDefault, ParameterInfo, ParameterKind, PyMethodsInfo},
 };
 use spenso::structure::slot::DualSlotTo;
 use spenso::{
@@ -41,12 +41,13 @@ use spenso::{
 use symbolica::{
     api::python::PythonTransformer,
     atom::{
-        Atom, AtomView, DefaultNamespace, FunctionAttribute, FunctionBuilder, NamespacedSymbol,
-        Symbol,
+        Atom, AtomView, DefaultNamespace, FunctionBuilder, NamespacedSymbol, Symbol,
+        SymbolAttribute,
     },
     state::Workspace,
     symbol,
     transformer::{Transformer, TransformerState},
+    utils::Settable,
 };
 
 use symbolica::api::python::{ConvertibleToExpression, PythonExpression};
@@ -66,8 +67,10 @@ use pyo3_stub_gen::{PyStubType, derive::*, impl_stub_type};
 
 pub struct ConvertibleToSpensoName(pub SpensoName);
 
-impl<'py> FromPyObject<'py> for ConvertibleToSpensoName {
-    fn extract_bound(structure: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for ConvertibleToSpensoName {
+    type Error = PyErr;
+
+    fn extract(structure: pyo3::Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
         if let Ok(structure) = structure.extract::<SpensoName>() {
             Ok(ConvertibleToSpensoName(structure))
         } else if let Ok(s) = structure.extract::<String>() {
@@ -102,8 +105,10 @@ pub enum SpensoSlotOrArgOrRep {
     Rep(SpensoRepresentation),
 }
 
-impl<'py> FromPyObject<'py> for SpensoSlotOrArgOrRep {
-    fn extract_bound(structure: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for SpensoSlotOrArgOrRep {
+    type Error = PyErr;
+
+    fn extract(structure: pyo3::Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
         if let Ok(structure) = structure.extract::<SpensoSlot>() {
             Ok(SpensoSlotOrArgOrRep::Slot(structure))
         } else if let Ok(s) = structure.extract::<SpensoRepresentation>() {
@@ -232,19 +237,19 @@ impl SpensoName {
         let mut opts = vec![];
 
         if let Some(true) = is_symmetric {
-            opts.push(FunctionAttribute::Symmetric);
+            opts.push(SymbolAttribute::Symmetric);
         }
 
         if let Some(true) = is_antisymmetric {
-            opts.push(FunctionAttribute::Antisymmetric);
+            opts.push(SymbolAttribute::Antisymmetric);
         }
 
         if let Some(true) = is_cyclesymmetric {
-            opts.push(FunctionAttribute::Cyclesymmetric);
+            opts.push(SymbolAttribute::Cyclesymmetric);
         }
 
         if let Some(true) = is_linear {
-            opts.push(FunctionAttribute::Linear);
+            opts.push(SymbolAttribute::Linear);
         }
 
         let name = namespace.attach_namespace(&name);
@@ -253,7 +258,7 @@ impl SpensoName {
 
         if let Some(f) = custom_normalization {
             symbol = symbol.with_normalization_function(Box::new(
-                move |input: AtomView<'_>, out: &mut Atom| {
+                move |input: AtomView<'_>, out: &mut Settable<Atom>| {
                     let _ = Workspace::get_local()
                         .with(|ws| {
                             Transformer::execute_chain(
@@ -265,7 +270,6 @@ impl SpensoName {
                             )
                         })
                         .unwrap();
-                    true
                 },
             ))
         }
@@ -525,8 +529,10 @@ impl ArithmeticStructure {
     }
 }
 
-impl<'a> FromPyObject<'a> for ArithmeticStructure {
-    fn extract_bound(ob: &Bound<'a, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for ArithmeticStructure {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
         if let Ok(ob) = ob.extract::<ConvertibleToExpression>() {
             Ok(ArithmeticStructure::Convertible(ob))
         } else if let Ok(ob) = ob.extract::<SpensoIndices>() {
@@ -541,8 +547,10 @@ impl<'a> FromPyObject<'a> for ArithmeticStructure {
 
 pub struct ConvertibleToStructure(pub SpensoIndices);
 
-impl<'py> FromPyObject<'py> for ConvertibleToStructure {
-    fn extract_bound(structure: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for ConvertibleToStructure {
+    type Error = PyErr;
+
+    fn extract(structure: pyo3::Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
         if let Ok(structure) = structure.extract::<SpensoIndices>() {
             Ok(ConvertibleToStructure(structure))
         } else if let Ok(s) = structure.extract::<Vec<SpensoSlot>>() {
@@ -748,7 +756,7 @@ impl SpensoIndices {
                     .map_err(|s| PyIndexError::new_err(s.to_string()))?
                     .into();
 
-                Ok(Python::with_gil(|py| out.into_pyobject(py).map(|a| a.unbind()))?.into_any())
+                Ok(Python::attach(|py| out.into_pyobject(py).map(|a| a.unbind()))?.into_any())
             }
             SliceOrIntOrExpanded::Expanded(idxs) => {
                 let out: usize = self
@@ -756,7 +764,7 @@ impl SpensoIndices {
                     .map_err(|s| PyIndexError::new_err(s.to_string()))?
                     .into();
 
-                Ok(Python::with_gil(|py| out.into_pyobject(py).map(|a| a.unbind()))?.into_any())
+                Ok(Python::attach(|py| out.into_pyobject(py).map(|a| a.unbind()))?.into_any())
             }
             SliceOrIntOrExpanded::Slice(s) => {
                 let r = s.indices(self.size().unwrap() as isize)?;
@@ -787,7 +795,7 @@ impl SpensoIndices {
                 match slice {
                     Ok(slice) => {
                         Ok(
-                            Python::with_gil(|py| slice.into_pyobject(py).map(|a| a.unbind()))?
+                            Python::attach(|py| slice.into_pyobject(py).map(|a| a.unbind()))?
                                 .into_any(),
                         )
                     }
@@ -886,8 +894,10 @@ impl From<ExplicitKey<AbstractIndex>> for SpensoStructure {
     }
 }
 
-impl<'py> FromPyObject<'py> for ConvertibleToIndexLess {
-    fn extract_bound(structure: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for ConvertibleToIndexLess {
+    type Error = PyErr;
+
+    fn extract(structure: pyo3::Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
         if let Ok(structure) = structure.extract::<SpensoStructure>() {
             Ok(ConvertibleToIndexLess(structure))
         } else if let Ok(s) = structure.extract::<Vec<SpensoRepresentation>>() {
@@ -1043,7 +1053,7 @@ impl SpensoStructure {
                     .map_err(|s| PyIndexError::new_err(s.to_string()))?
                     .into();
 
-                Ok(Python::with_gil(|py| out.into_pyobject(py).map(|a| a.unbind()))?.into_any())
+                Ok(Python::attach(|py| out.into_pyobject(py).map(|a| a.unbind()))?.into_any())
             }
             SliceOrIntOrExpanded::Expanded(idxs) => {
                 let out: usize = self
@@ -1051,7 +1061,7 @@ impl SpensoStructure {
                     .map_err(|s| PyIndexError::new_err(s.to_string()))?
                     .into();
 
-                Ok(Python::with_gil(|py| out.into_pyobject(py).map(|a| a.unbind()))?.into_any())
+                Ok(Python::attach(|py| out.into_pyobject(py).map(|a| a.unbind()))?.into_any())
             }
             SliceOrIntOrExpanded::Slice(s) => {
                 let r = s.indices(self.size().unwrap() as isize)?;
@@ -1082,7 +1092,7 @@ impl SpensoStructure {
                 match slice {
                     Ok(slice) => {
                         Ok(
-                            Python::with_gil(|py| slice.into_pyobject(py).map(|a| a.unbind()))?
+                            Python::attach(|py| slice.into_pyobject(py).map(|a| a.unbind()))?
                                 .into_any(),
                         )
                     }
@@ -1406,8 +1416,10 @@ pub enum ConvertibleToAbstractIndex {
     Separator,
 }
 
-impl<'py> FromPyObject<'py> for ConvertibleToAbstractIndex {
-    fn extract_bound(aind: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for ConvertibleToAbstractIndex {
+    type Error = PyErr;
+
+    fn extract(aind: pyo3::Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
         let aind = if let Ok(i) = aind.extract::<char>() {
             if i == ';' {
                 ConvertibleToAbstractIndex::Separator
@@ -1443,8 +1455,10 @@ impl_stub_type!(ConvertibleToAbstractIndex = isize | Symbol | PyBackedStr);
 
 pub struct ConvertibleToDimension(Dimension);
 
-impl<'py> FromPyObject<'py> for ConvertibleToDimension {
-    fn extract_bound(dimension: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for ConvertibleToDimension {
+    type Error = PyErr;
+
+    fn extract(dimension: pyo3::Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
         let dim = if let Ok(i) = dimension.extract::<usize>() {
             Dimension::from(i)
         } else if let Ok(expr) = dimension.extract::<PythonExpression>() {
@@ -1880,11 +1894,12 @@ submit! {
         methods: &[
             MethodInfo {
                 name: "__call__",
-                args: &[
-                    ArgInfo {
-                        name: "args: Slot | Expression | int | str | float | complex",
-                        signature: Some(SignatureArg::Args),
-                        r#type: || SpensoSlot::type_input()| ConvertibleToExpression::type_input(),
+                parameters: &[
+                    ParameterInfo {
+                        name: "args",//: Slot | Expression | int | str | float | complex",
+                        kind:ParameterKind::VarPositional,
+                        default:ParameterDefault::None,
+                        type_info: || SpensoSlot::type_input()| ConvertibleToExpression::type_input(),
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -1919,11 +1934,12 @@ Examples
             },
             MethodInfo {
                 name: "__call__",
-                args: &[
-                    ArgInfo {
-                        name: "args: Representation | Expression",
-                        signature: Some(SignatureArg::Args),
-                        r#type: || SpensoRepresentation::type_input()| PythonExpression::type_input(),
+                parameters: &[
+                    ParameterInfo {
+                        name: "args",//: Representation | Expression",
+                        kind:ParameterKind::VarPositional,
+                        default:ParameterDefault::None,
+                        type_info: || SpensoRepresentation::type_input()| PythonExpression::type_input(),
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -1959,6 +1975,9 @@ Examples
 }
 
 #[cfg(feature = "python_stubgen")]
+static NONE_ARG: fn() -> String = || "None".into();
+
+#[cfg(feature = "python_stubgen")]
 submit! {
 PyMethodsInfo {
     struct_id: std::any::TypeId::of::<SpensoIndices>,
@@ -1968,16 +1987,18 @@ PyMethodsInfo {
     methods: &[
         MethodInfo{
             name:"__new__",
-            args:&[
-                ArgInfo{
-                    name:"slots: Slot | Expression | int | str | float | complex",
-                    signature:Some(SignatureArg::Args),
-                    r#type:ConvertibleToExpression::type_input,
+            parameters:&[
+                ParameterInfo{
+                    name:"slots",//: Slot | Expression | int | str | float | complex",
+                    type_info:ConvertibleToStructure::type_input,
+                    kind:ParameterKind::VarPositional,
+                    default:ParameterDefault::None,
                 },
-                ArgInfo{
+                ParameterInfo{
                     name:"name",
-                    signature:Some(SignatureArg::Assign { default: &NONE }),
-                    r#type:||ConvertibleToSpensoName::type_input() | TypeInfo::none(),
+                    kind:ParameterKind::KeywordOnly,
+                    default:ParameterDefault::Expr(NONE_ARG),
+                    type_info:||ConvertibleToSpensoName::type_input() | TypeInfo::none(),
                 },
             ]
             ,r#type: MethodType::New,
@@ -2015,11 +2036,13 @@ Examples
         },
         MethodInfo {
             name: "__getitem__",
-            args: &[
-                ArgInfo {
+            parameters: &[
+                ParameterInfo {
+
                     name: "item",
-                    signature: None,
-                    r#type: || TypeInfo::builtin("slice"),
+                    default: ParameterDefault::None,
+                    kind: ParameterKind::PositionalOrKeyword,
+                    type_info: || TypeInfo::builtin("slice"),
                 },
             ],
             r#type: MethodType::Instance,
@@ -2042,11 +2065,12 @@ list of list of int
         },
         MethodInfo {
             name: "__getitem__",
-            args: &[
-                ArgInfo {
+            parameters: &[
+                ParameterInfo {
                     name: "item",
-                    signature: None,
-                    r#type:  Vec::<usize>::type_input
+                    default: ParameterDefault::None,
+                    kind: ParameterKind::PositionalOrKeyword,
+                    type_info:  Vec::<usize>::type_input
                 },
             ],
             r#type: MethodType::Instance,
@@ -2068,11 +2092,13 @@ int
             type_ignored: None,
         }, MethodInfo {
             name: "__getitem__",
-            args: &[
-                ArgInfo {
+            parameters: &[
+                ParameterInfo {
                     name: "item",
-                    signature: None,
-                    r#type:  usize::type_input
+                    default: ParameterDefault::None,
+                    kind: ParameterKind::PositionalOrKeyword,
+                    type_info: usize::type_input,
+
                 },
             ],
             r#type: MethodType::Instance,
@@ -2107,16 +2133,18 @@ submit! {
         methods: &[
             MethodInfo{
                 name:"__new__",
-                args:&[
-                    ArgInfo{
-                        name:"reps_and_additional_args: Representation |  Expression | int | str | float | complex",
-                        signature:Some(SignatureArg::Args),
-                        r#type:ConvertibleToStructure::type_input,
+                parameters:&[
+                    ParameterInfo{
+                        name:"reps_and_additional_args",//: Representation |  Expression | int | str | float | complex",
+                        type_info:ConvertibleToStructure::type_input,
+                        kind:ParameterKind::VarPositional
+                        ,default:ParameterDefault::None,
                     },
-                    ArgInfo{
+                    ParameterInfo{
                         name:"name",
-                        signature:Some(SignatureArg::Assign { default: &NONE }),
-                        r#type:||ConvertibleToSpensoName::type_input() | TypeInfo::none(),
+                        kind:ParameterKind::KeywordOnly,
+                        default:ParameterDefault::Expr(NONE_ARG),
+                        type_info:||ConvertibleToSpensoName::type_input() | TypeInfo::none()
                     },
                 ]
                 ,r#type: MethodType::New,
@@ -2153,11 +2181,12 @@ Examples
 
             MethodInfo {
                 name: "__getitem__",
-                args: &[
-                    ArgInfo {
+                parameters: &[
+                    ParameterInfo {
                         name: "item",
-                        signature: None,
-                        r#type: || TypeInfo::builtin("slice"),
+                        default: ParameterDefault::None,
+                        kind: ParameterKind::PositionalOrKeyword,
+                        type_info: || TypeInfo::builtin("slice"),
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -2180,11 +2209,12 @@ list of list of int
             },
             MethodInfo {
                 name: "__getitem__",
-                args: &[
-                    ArgInfo {
+                parameters: &[
+                    ParameterInfo {
                         name: "item",
-                        signature: None,
-                        r#type:  Vec::<usize>::type_input
+                        default: ParameterDefault::None,
+                        kind: ParameterKind::PositionalOrKeyword,
+                        type_info:  Vec::<usize>::type_input
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -2206,11 +2236,12 @@ int
                 type_ignored: None,
             }, MethodInfo {
                 name: "__getitem__",
-                args: &[
-                    ArgInfo {
+                parameters: &[
+                    ParameterInfo {
                         name: "item",
-                        signature: None,
-                        r#type:  usize::type_input
+                        default: ParameterDefault::None,
+                        kind: ParameterKind::PositionalOrKeyword,
+                        type_info:  usize::type_input
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -2233,16 +2264,18 @@ list of int
             },
             MethodInfo {
                 name: "__call__",
-                args: &[
-                    ArgInfo {
-                        name: "args: builtins.int | Expression | str",
-                        signature: Some(SignatureArg::Args),
-                        r#type: ConvertibleToAbstractIndex::type_input,
+                parameters: &[
+                    ParameterInfo {
+                        name: "args",//: builtins.int | Expression | str",
+                        kind:ParameterKind::VarPositional,
+                        default:ParameterDefault::None,
+                        type_info:|| ConvertibleToAbstractIndex::type_input(),
                     },
-                    ArgInfo {
+                    ParameterInfo {
                         name: "extra_args",
-                        signature: Some(SignatureArg::Assign { default: &EMPTY }),
-                        r#type: Vec::<ConvertibleToExpression>::type_input,
+                        kind:ParameterKind::KeywordOnly,
+                        default:ParameterDefault::Expr(EMPTY),
+                        type_info: Vec::<ConvertibleToExpression>::type_input,
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -2275,16 +2308,20 @@ Examples
             },
             MethodInfo {
                 name: "symbolic",
-                args: &[
-                    ArgInfo {
-                        name: "args: builtins.int | Expression | str",
-                        signature: Some(SignatureArg::Args),
-                        r#type: ConvertibleToAbstractIndex::type_input,
+                parameters: &[
+                    ParameterInfo {
+
+                        name: "args",//: builtins.int | Expression | str",
+                        kind:ParameterKind::VarPositional,
+                        default:ParameterDefault::None,
+                        type_info:|| ConvertibleToAbstractIndex::type_input(),
                     },
-                    ArgInfo {
+                    ParameterInfo {
+
                         name: "extra_args",
-                        signature: Some(SignatureArg::Assign { default: &EMPTY }),
-                        r#type: Vec::<ConvertibleToExpression>::type_input,
+                        kind:ParameterKind::KeywordOnly,
+                        default:ParameterDefault::Expr(EMPTY),
+                        type_info: Vec::<ConvertibleToExpression>::type_input,
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -2326,21 +2363,24 @@ Examples
 
             MethodInfo {
                 name: "index",
-                args: &[
-                    ArgInfo {
-                        name: "args: builtins.int | Expression | str",
-                        signature: Some(SignatureArg::Args),
-                        r#type: ConvertibleToAbstractIndex::type_input,
+                parameters: &[
+                    ParameterInfo {
+                        name: "args",//: builtins.int | Expression | str",
+                        kind:ParameterKind::VarPositional,
+                        default:ParameterDefault::None,
+                        type_info: ConvertibleToAbstractIndex::type_input,
                     },
-                    ArgInfo {
+                    ParameterInfo {
                         name: "extra_args",
-                        signature: Some(SignatureArg::Assign { default: &EMPTY }),
-                        r#type: std::vec::Vec::<PythonExpression>::type_input,
+                        kind:ParameterKind::KeywordOnly,
+                        default:ParameterDefault::Expr(EMPTY),
+                        type_info: std::vec::Vec::<PythonExpression>::type_input,
                     },
-                    ArgInfo {
+                    ParameterInfo {
                         name: "cook_indices",
-                            signature: Some(SignatureArg::Assign { default: &FALSE }),
-                            r#type: bool::type_input
+                        kind:ParameterKind::KeywordOnly,
+                        default:ParameterDefault::Expr(FALSE),
+                        type_info: bool::type_input
                     }
                 ],
                 r#type: MethodType::Instance,

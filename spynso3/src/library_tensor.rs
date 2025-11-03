@@ -14,7 +14,7 @@ use pyo3_stub_gen::{
     generate::MethodType,
     impl_stub_type,
     inventory::submit,
-    type_info::{ArgInfo, MethodInfo, PyMethodsInfo},
+    type_info::{MethodInfo, ParameterDefault, ParameterInfo, ParameterKind, PyMethodsInfo},
 };
 use spenso::{
     algebra::complex::{Complex, RealOrComplex},
@@ -94,8 +94,10 @@ pub enum AtomsOrFloats {
     Complex(Vec<Complex<f64>>),
 }
 
-impl<'py> FromPyObject<'py> for AtomsOrFloats {
-    fn extract_bound(aind: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for AtomsOrFloats {
+    type Error = PyErr;
+
+    fn extract(aind: pyo3::Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
         let aind = if let Ok(i) = aind.extract::<Vec<f64>>() {
             AtomsOrFloats::Floats(i)
         } else if let Ok(i) = aind.extract::<Vec<Complex<f64>>>() {
@@ -367,7 +369,7 @@ impl LibrarySpensor {
 
                 if let Some(slice) = slice {
                     return Ok(
-                        Python::with_gil(|py| slice.into_pyobject(py).map(|a| a.unbind()))?
+                        Python::attach(|py| slice.into_pyobject(py).map(|a| a.unbind()))?
                             .into_any(),
                     );
                 } else {
@@ -376,7 +378,7 @@ impl LibrarySpensor {
             }
         };
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             TensorElements::from(out)
                 .into_pyobject(py)
                 .map(|a| a.unbind())
@@ -479,11 +481,12 @@ submit! {
         methods: &[
             MethodInfo {
                 name: "__getitem__",
-                args: &[
-                    ArgInfo {
+                parameters: &[
+                    ParameterInfo {
                         name: "item",
-                        signature: None,
-                        r#type: || TypeInfo::builtin("slice"),
+                        kind: ParameterKind::PositionalOrKeyword,
+                        default:ParameterDefault::None,
+                        type_info: || TypeInfo::builtin("slice"),
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -506,11 +509,12 @@ list of float, complex, or Expression
             },
             MethodInfo {
                 name: "__getitem__",
-                args: &[
-                    ArgInfo {
+                parameters: &[
+                    ParameterInfo {
                         name: "item",
-                        signature: None,
-                        r#type: || Vec::<usize>::type_input()|usize::type_input()
+                        kind: ParameterKind::PositionalOrKeyword,
+                        default:ParameterDefault::None,
+                        type_info: ||  Vec::<usize>::type_input()|usize::type_input()
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -533,16 +537,18 @@ float, complex, or Expression
             },
             MethodInfo {
                 name: "__setitem__",
-                args: &[
-                    ArgInfo {
+                parameters: &[
+                    ParameterInfo {
                         name: "item",
-                        signature: None,
-                        r#type: ||Vec::<usize>::type_input()|usize::type_input()
+                        kind: ParameterKind::PositionalOrKeyword,
+                        default:ParameterDefault::None,
+                        type_info: ||Vec::<usize>::type_input()|usize::type_input()
                     },
-                    ArgInfo {
+                    ParameterInfo {
                         name: "value",
-                        signature: None,
-                        r#type: ||TensorElements::type_input()
+                        kind: ParameterKind::PositionalOrKeyword,
+                        default:ParameterDefault::None,
+                        type_info: ||TensorElements::type_input()
                     },
                 ],
                 r#type: MethodType::Instance,

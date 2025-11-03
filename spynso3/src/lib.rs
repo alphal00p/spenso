@@ -20,7 +20,7 @@ use pyo3::{
 use pyo3_stub_gen::{
     generate::MethodType,
     inventory::submit,
-    type_info::{ArgInfo, MethodInfo, PyMethodsInfo},
+    type_info::{MethodInfo, ParameterDefault, ParameterInfo, ParameterKind, PyMethodsInfo},
 };
 
 use spenso::{
@@ -908,11 +908,12 @@ submit! {
         methods: &[
             MethodInfo {
                 name: "__call__",
-                args: &[
-                    ArgInfo {
+                parameters: &[
+                    ParameterInfo {
                         name: "aind",
-                        signature: None,
-                        r#type: ConvertibleToAbstractIndex::type_input,
+                        kind: ParameterKind::PositionalOrKeyword,
+                        default: ParameterDefault::None,
+                        type_info: ConvertibleToAbstractIndex::type_input,
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -944,11 +945,12 @@ Examples
             },
             MethodInfo {
                 name: "__call__",
-                args: &[
-                    ArgInfo {
+                parameters: &[
+                    ParameterInfo {
                         name: "aind",
-                        signature: None,
-                        r#type: PythonExpression::type_input
+                        kind: ParameterKind::PositionalOrKeyword,
+                        default: ParameterDefault::None,
+                        type_info: PythonExpression::type_input
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -980,8 +982,9 @@ Examples
     }
 }
 
-static EMPTY: LazyLock<String> = LazyLock::new(|| "[]".to_string());
-static FALSE: LazyLock<String> = LazyLock::new(|| "False".to_string());
+static EMPTY: fn() -> String = || "[]".into();
+
+static FALSE: fn() -> String = || "False".to_string();
 static NONE: LazyLock<String> = LazyLock::new(|| "None".to_string());
 
 #[cfg(feature = "python_stubgen")]
@@ -994,7 +997,7 @@ submit! {
         methods: &[
             MethodInfo {
                 name: "__iter__",
-                args: &[],
+                parameters: &[],
                 r#type: MethodType::Instance,
                 r#return:||
                 TypeInfo {
@@ -1008,11 +1011,12 @@ submit! {
             },
             MethodInfo {
                 name: "__getitem__",
-                args: &[
-                    ArgInfo {
+                parameters: &[
+                    ParameterInfo {
                         name: "item",
-                        signature: None,
-                        r#type: || TypeInfo::builtin("slice"),
+                        kind: ParameterKind::PositionalOrKeyword,
+                        default: ParameterDefault::None,
+                        type_info: || TypeInfo::builtin("slice"),
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -1035,11 +1039,12 @@ list of float, complex, or Expression
             },
             MethodInfo {
                 name: "__getitem__",
-                args: &[
-                    ArgInfo {
+                parameters: &[
+                    ParameterInfo {
                         name: "item",
-                        signature: None,
-                        r#type: || Vec::<usize>::type_input()|usize::type_input()
+                        kind: ParameterKind::PositionalOrKeyword,
+                        default: ParameterDefault::None,
+                        type_info: || Vec::<usize>::type_input()|usize::type_input()
                     },
                 ],
                 r#type: MethodType::Instance,
@@ -1062,16 +1067,19 @@ float, complex, or Expression
             },
             MethodInfo {
                 name: "__setitem__",
-                args: &[
-                    ArgInfo {
+                parameters: &[
+                    ParameterInfo {
                         name: "item",
-                        signature: None,
-                        r#type: ||Vec::<usize>::type_input()|usize::type_input()
+                        kind: ParameterKind::PositionalOrKeyword,
+                        default: ParameterDefault::None,
+                        type_info: || usize::type_input()|Vec::<usize>::type_input()
+
                     },
-                    ArgInfo {
+                    ParameterInfo {
                         name: "value",
-                        signature: None,
-                        r#type: ||TensorElements::type_input()
+                        kind: ParameterKind::PositionalOrKeyword,
+                        default: ParameterDefault::None,
+                        type_info: ||TensorElements::type_input()
                     },
                 ],
                 r#type: MethodType::Instance,

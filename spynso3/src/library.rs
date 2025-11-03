@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use pyo3::{Bound, FromPyObject, exceptions, types::PyAnyMethods};
+use pyo3::{FromPyObject, PyErr, exceptions};
 
 use pyo3::{PyResult, pyclass, pymethods};
 
@@ -8,6 +8,10 @@ use pyo3_stub_gen::{
     PyStubType,
     derive::{gen_stub_pyclass, gen_stub_pyclass_enum, gen_stub_pymethods},
 };
+
+use spenso::network::library::function_lib::{PanicMissingConcrete, SymbolLib};
+use spenso::network::parsing::ShadowedStructure;
+use spenso::tensors::complex::RealOrComplexTensor;
 use spenso::{
     network::library::symbolic::{ExplicitKey, TensorLibrary},
     structure::{HasStructure, PermutedStructure, abstract_index::AbstractIndex},
@@ -53,7 +57,18 @@ pub struct SpensorLibrary {
     pub(crate) library: TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>,
 }
 
+#[cfg_attr(
+    feature = "python_stubgen",
+    gen_stub_pyclass(module = "symbolica.community.spenso")
+)]
+#[pyclass(name = "TensorFunctionLibrary", module = "symbolica.community.spenso")]
+pub struct SpensorFunctionLibrary {
+    pub(crate) library:
+        SymbolLib<RealOrComplexTensor<f64, ShadowedStructure<AbstractIndex>>, PanicMissingConcrete>,
+}
+
 impl ModuleInit for SpensorLibrary {}
+impl ModuleInit for SpensorFunctionLibrary {}
 
 pub enum ConvertibleToSymbol {
     Name(String),
@@ -75,8 +90,10 @@ impl ConvertibleToSymbol {
     }
 }
 
-impl<'a> FromPyObject<'a> for ConvertibleToSymbol {
-    fn extract_bound(ob: &Bound<'a, pyo3::PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for ConvertibleToSymbol {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'a, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
         if let Ok(a) = ob.extract::<String>() {
             Ok(ConvertibleToSymbol::Name(a))
         } else if let Ok(num) = ob.extract::<PythonExpression>() {
@@ -92,6 +109,32 @@ impl<'a> FromPyObject<'a> for ConvertibleToSymbol {
         }
     }
 }
+#[allow(clippy::new_without_default)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
+#[pymethods]
+impl SpensorFunctionLibrary {
+    #[new]
+    /// Create a new empty tensor function library.
+    ///
+    /// Initializes an empty library ready for registering tensor functions.
+    ///
+    /// Returns
+    /// -------
+    /// TensorFunctionLibrary
+    ///     A new empty function library
+    ///
+    /// Examples
+    /// --------
+    /// >>> from symbolica.community.spenso import TensorFunctionLibrary
+    /// >>> lib = TensorFunctionLibrary()
+    pub fn new() -> Self {
+        let mut a = Self {
+            library: PanicMissingConcrete::new_lib(),
+        };
+
+        a
+    }
+}
 
 #[cfg(feature = "python_stubgen")]
 impl PyStubType for ConvertibleToSymbol {
@@ -102,8 +145,10 @@ impl PyStubType for ConvertibleToSymbol {
 
 pub struct ConvertibleToLibraryTensor(LibrarySpensor);
 
-impl<'a> FromPyObject<'a> for ConvertibleToLibraryTensor {
-    fn extract_bound(ob: &Bound<'a, pyo3::PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for ConvertibleToLibraryTensor {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'a, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
         if let Ok(a) = ob.extract::<LibrarySpensor>() {
             Ok(ConvertibleToLibraryTensor(a))
         } else if let Ok(num) = ob.extract::<Spensor>() {

@@ -16,16 +16,18 @@ use spenso::{
     structure::abstract_index::AbstractIndex,
     tensors::parametric::{MixedTensor, ParamOrConcrete, atomcore::TensorAtomMaps},
 };
-use spenso_hep_lib::HEP_LIB;
+use spenso_hep_lib::{FUN_LIB, HEP_LIB};
 use symbolica::{
     api::python::{ConvertibleToPatternRestriction, ConvertibleToReplaceWith, PythonExpression},
-    atom::{Atom, AtomCore, AtomView},
+    atom::{Atom, AtomCore, AtomView, Symbol},
     evaluate::EvaluationFn,
     id::{MatchSettings, ReplaceWith},
     poly::Variable,
 };
 
 use symbolica::api::python::ConvertibleToExpression;
+
+use crate::library::SpensorFunctionLibrary;
 
 use super::{Spensor, library::SpensorLibrary, structure::ArithmeticStructure};
 
@@ -65,6 +67,7 @@ pub struct SpensoNet {
     pub network: Network<
         NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
         ExplicitKey<AbstractIndex>,
+        Symbol,
     >,
 }
 
@@ -100,6 +103,7 @@ impl ModuleInit for SpensoNet {
 pub type ParsingNet = Network<
     NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
     ExplicitKey<AbstractIndex>,
+    Symbol,
 >;
 
 impl From<ParsingNet> for SpensoNet {
@@ -116,8 +120,10 @@ impl ConvertibleToSpensoNet {
     }
 }
 
-impl<'a> FromPyObject<'a> for ConvertibleToSpensoNet {
-    fn extract_bound(ob: &Bound<'a, pyo3::PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for ConvertibleToSpensoNet {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'a, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
         if let Ok(a) = ob.extract::<SpensoNet>() {
             Ok(ConvertibleToSpensoNet(a))
         } else if let Ok(num) = ob.extract::<Spensor>() {
@@ -379,7 +385,7 @@ impl SpensoNet {
     pub fn evaluate(
         &self,
         constants: HashMap<PythonExpression, f64>,
-        functions: HashMap<Variable, PyObject>,
+        functions: HashMap<Variable, Py<PyAny>>,
     ) -> PyResult<Self> {
         let constants = constants
             .iter()
@@ -401,7 +407,7 @@ impl SpensoNet {
                 Ok((
                     id,
                     EvaluationFn::new(Box::new(move |args, _, _, _| {
-                        Python::with_gil(|py| {
+                        Python::attach(|py| {
                             v.call(py, (args.to_vec(),), None)
                                 .expect("Bad callback function")
                                 .extract::<f64>(py)
@@ -441,31 +447,35 @@ impl SpensoNet {
     /// >>> network.execute(mode=ExecutionMode.Scalar)
     /// >>> lib = TensorLibrary.hep_lib()
     /// >>> network.execute(library=lib)
-    #[pyo3(signature = (library=None, n_steps=None, mode=ExecutionMode::All))]
+    #[pyo3(signature = (library=None,function_library=None, n_steps=None, mode=ExecutionMode::All))]
     fn execute(
         &mut self,
         library: Option<&SpensorLibrary>,
+        function_library: Option<&SpensorFunctionLibrary>,
         n_steps: Option<usize>,
         mode: ExecutionMode,
     ) -> PyResult<()> {
         let lib = library.map(|l| &l.library).unwrap_or(HEP_LIB.deref());
+        let fn_lib = function_library
+            .map(|l| &l.library)
+            .unwrap_or(FUN_LIB.deref());
 
         if let Some(n) = n_steps {
             for _ in 0..n {
                 match mode {
                     ExecutionMode::All => {
                         self.network
-                            .execute::<Steps<1>, SmallestDegree, _, _>(lib)
+                            .execute::<Steps<1>, SmallestDegree, _, _, _>(lib, fn_lib)
                             .map_err(|a| PyRuntimeError::new_err(a.to_string()))?;
                     }
                     ExecutionMode::Scalar => {
                         self.network
-                            .execute::<Steps<1>, ContractScalars, _, _>(lib)
+                            .execute::<Steps<1>, ContractScalars, _, _, _>(lib, fn_lib)
                             .map_err(|a| PyRuntimeError::new_err(a.to_string()))?;
                     }
                     ExecutionMode::Single => {
                         self.network
-                            .execute::<Steps<1>, SingleSmallestDegree<false>, _, _>(lib)
+                            .execute::<Steps<1>, SingleSmallestDegree<false>, _, _, _>(lib, fn_lib)
                             .map_err(|a| PyRuntimeError::new_err(a.to_string()))?;
                     }
                 }
@@ -474,17 +484,17 @@ impl SpensoNet {
             match mode {
                 ExecutionMode::All => {
                     self.network
-                        .execute::<Sequential, SmallestDegree, _, _>(lib)
+                        .execute::<Sequential, SmallestDegree, _, _, _>(lib, fn_lib)
                         .map_err(|a| PyRuntimeError::new_err(a.to_string()))?;
                 }
                 ExecutionMode::Scalar => {
                     self.network
-                        .execute::<Sequential, ContractScalars, _, _>(lib)
+                        .execute::<Sequential, ContractScalars, _, _, _>(lib, fn_lib)
                         .map_err(|a| PyRuntimeError::new_err(a.to_string()))?;
                 }
                 ExecutionMode::Single => {
                     self.network
-                        .execute::<Sequential, SingleSmallestDegree<false>, _, _>(lib)
+                        .execute::<Sequential, SingleSmallestDegree<false>, _, _, _>(lib, fn_lib)
                         .map_err(|a| PyRuntimeError::new_err(a.to_string()))?;
                 }
             }

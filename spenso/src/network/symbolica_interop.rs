@@ -867,12 +867,14 @@ impl<
         S,
         Sc: AtomCore,
         K,
+        FK,
         Aind: AbsInd,
-    > Network<Store, K, Aind>
+    > Network<Store, K, FK, Aind>
 where
     S: Clone + TensorStructure + std::fmt::Debug,
     T: Clone,
     K: Clone,
+    FK: Clone,
 {
     pub fn evaluate_real<A: AtomCore + KeyLookup, F: Fn(&Rational) -> T + Copy>(
         &mut self,
@@ -901,7 +903,7 @@ where
         }
     }
 
-    pub fn to_fully_parametric(self) -> Network<Store::Store<ParamTensor<S>, Sc>, K, Aind>
+    pub fn to_fully_parametric(self) -> Network<Store::Store<ParamTensor<S>, Sc>, K, FK, Aind>
     where
         T: TrySmallestUpgrade<Atom, LCM = Atom>,
         Complex<T>: TrySmallestUpgrade<Atom, LCM = Atom>,

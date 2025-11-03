@@ -145,6 +145,10 @@ impl<T> Iterator for DummyIter<T> {
 impl<T: TensorStructure> TensorStructure for DummyLibraryTensor<T> {
     type Slot = T::Slot;
     type Indexed = T::Indexed;
+
+    fn is_fully_self_dual(&self) -> bool {
+        false
+    }
     fn reindex(
         self,
         _indices: &[<Self::Slot as IsAbstractSlot>::Aind],

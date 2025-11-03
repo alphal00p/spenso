@@ -1,4 +1,5 @@
 use symbolica::atom::Symbol;
+use symbolica::{symbol, tag};
 
 use super::*;
 
@@ -21,6 +22,16 @@ use symbolica::atom::{representation::FunView, AddView, Atom, AtomView, MulView,
 use crate::structure::{HasStructure, TensorStructure};
 
 use crate::{shadowing::Concretize, structure::representation::LibraryRep, structure::HasName};
+
+pub struct SpensoTags {
+    tag: String,
+    mul: Symbol,
+}
+
+pub static SPENSO_TAG: std::sync::LazyLock<SpensoTags> = std::sync::LazyLock::new(|| SpensoTags {
+    tag: tag!("broadcast"),
+    mul: symbol!("mul"),
+});
 
 pub type ShadowedStructure<Aind> = NamedStructure<Symbol, Vec<Atom>, LibraryRep, Aind>;
 
@@ -152,20 +163,20 @@ impl<
         Sc,
         T: HasStructure + TensorStructure,
         K: Clone + Display + Debug,
-        FK: Clone + Display + Debug,
+        // FK: Clone + Display + Debug,
         Str: TensorScalarStore<Tensor = T, Scalar = Sc> + Clone,
         Aind: AbsInd,
-    > Network<Str, K, FK, Aind>
+    > Network<Str, K, Symbol, Aind>
 where
     Sc: for<'r> TryFrom<AtomView<'r>> + Clone,
-    TensorNetworkError<K, FK>: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
+    TensorNetworkError<K, Symbol>: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
 {
     #[allow(clippy::result_large_err)]
     pub fn try_from_view<S, Lib: Library<S, Key = K>>(
         value: AtomView<'a>,
         library: &Lib,
         settings: &ParseSettings,
-    ) -> Result<Self, TensorNetworkError<K, FK>>
+    ) -> Result<Self, TensorNetworkError<K, Symbol>>
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
@@ -187,7 +198,7 @@ where
         value: MulView<'a>,
         library: &Lib,
         settings: &ParseSettings,
-    ) -> Result<Self, TensorNetworkError<K, FK>>
+    ) -> Result<Self, TensorNetworkError<K, Symbol>>
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
@@ -218,7 +229,7 @@ where
         value: FunView<'a>,
         library: &Lib,
         settings: &ParseSettings,
-    ) -> Result<Self, TensorNetworkError<K, FK>>
+    ) -> Result<Self, TensorNetworkError<K, Symbol>>
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
@@ -226,32 +237,54 @@ where
         T::Slot: IsAbstractSlot<Aind = Aind>,
         PermutedStructure<S>: TryFrom<FunView<'a>>,
     {
-        let s: Result<PermutedStructure<S>, _> = value.try_into();
+        let symbol = value.get_symbol();
 
-        if let Ok(s) = s {
-            // println!("Perm:{}", s.index_permutation);
-            // let s = s;
-            match library.key_for_structure(&s) {
-                Ok(key) => {
-                    // println!("Adding lib");
-                    // let t = library.get(&key).unwrap();
-                    Ok(Self::library_tensor(
-                        &s.structure,
-                        PermutedStructure {
-                            structure: key,
-                            rep_permutation: s.rep_permutation,
-                            index_permutation: s.index_permutation,
-                        },
-                    ))
-                }
-                Err(_) => Ok(Self::from_tensor(
-                    s.structure
-                        .to_shell()
-                        .concretize(Some(s.index_permutation.inverse())),
-                )),
+        if symbol == SPENSO_TAG.mul {
+            let mut n_muls = value
+                .iter()
+                .map(|a| Self::try_from_view(a, library, settings))
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(n_muls.pop().unwrap().n_mul(n_muls))
+        } else if symbol.has_tag(&SPENSO_TAG.tag) {
+            if value.get_nargs() != 1 {
+                return Err(TensorNetworkError::TooManyArgsFunction(
+                    value.as_view().to_plain_string(),
+                ));
             }
+
+            let inner = value.iter().next().unwrap();
+            let inner_tensor = Self::try_from_view(inner, library, settings)?;
+
+            Ok(inner_tensor.fun(symbol))
         } else {
-            Ok(Self::from_scalar(value.as_view().try_into()?))
+            let s: Result<PermutedStructure<S>, _> = value.try_into();
+
+            if let Ok(s) = s {
+                // println!("Perm:{}", s.index_permutation);
+                // let s = s;
+                match library.key_for_structure(&s) {
+                    Ok(key) => {
+                        // println!("Adding lib");
+                        // let t = library.get(&key).unwrap();
+                        Ok(Self::library_tensor(
+                            &s.structure,
+                            PermutedStructure {
+                                structure: key,
+                                rep_permutation: s.rep_permutation,
+                                index_permutation: s.index_permutation,
+                            },
+                        ))
+                    }
+                    Err(_) => Ok(Self::from_tensor(
+                        s.structure
+                            .to_shell()
+                            .concretize(Some(s.index_permutation.inverse())),
+                    )),
+                }
+            } else {
+                Ok(Self::from_scalar(value.as_view().try_into()?))
+            }
         }
     }
 
@@ -260,7 +293,7 @@ where
         value: PowView<'a>,
         library: &Lib,
         settings: &ParseSettings,
-    ) -> std::result::Result<Self, TensorNetworkError<K, FK>>
+    ) -> std::result::Result<Self, TensorNetworkError<K, Symbol>>
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
@@ -270,20 +303,28 @@ where
     {
         let (base, exp) = value.get_base_exp();
 
-        if let Ok(n) = i64::try_from(exp) {
-            if n < 0 {
-                return Ok(Self::from_scalar(value.as_view().try_into()?));
-            }
-            if n == 0 {
-                let one = Atom::num(1);
-                return Ok(Self::from_scalar(one.as_view().try_into()?));
-            } else if n == 1 {
-                return Self::try_from_view(base, library, settings);
-            }
-            let net = Self::try_from_view(base, library, settings)?;
-            let cloned_net = net.clone();
+        if let Ok(n) = i8::try_from(exp) {
+            let base = Self::try_from_view(base, library, settings)?;
 
-            Ok(net.n_mul((1..n).map(|_| cloned_net.clone())))
+            if let NetworkState::Tensor = base.state {
+                Err(TensorNetworkError::NonSelfDualTensorPower(
+                    value.as_view().to_plain_string(),
+                ))
+            } else if n < 0 {
+                // An even power of a self_dual tensor, or scalar is a scalar
+                if n % 2 == 0 || base.state.is_scalar() {
+                    Ok(base.pow(n))
+                } else {
+                    Err(TensorNetworkError::NegativeExponentNonScalar(format!(
+                        "Atom:{},graph of base: {}, dangling indices: {:?}",
+                        value.as_view().to_plain_string(),
+                        base.dot(),
+                        base.graph.dangling_indices()
+                    )))
+                }
+            } else {
+                Ok(base.pow(n))
+            }
         } else {
             Ok(Self::from_scalar(value.as_view().try_into()?))
         }
@@ -294,7 +335,7 @@ where
         value: AddView<'a>,
         library: &Lib,
         settings: &ParseSettings,
-    ) -> Result<Self, TensorNetworkError<K, FK>>
+    ) -> Result<Self, TensorNetworkError<K, Symbol>>
     where
         S: TensorStructure + Clone + HasName,
         TensorShell<S>: Concretize<T>,
@@ -343,6 +384,7 @@ pub mod test {
     };
 
     use super::*;
+    use insta::assert_snapshot;
     use library::{DummyKey, DummyLibrary};
     use linnet::half_edge::swap::Swap;
     use symbolica::{atom::AtomCore, parse, parse_lit, symbol};
@@ -352,8 +394,8 @@ pub mod test {
         let expr = parse!("1");
 
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -371,12 +413,55 @@ pub mod test {
     }
 
     #[test]
+    fn parse_div() {
+        let expr = parse!("c*a/spenso::mul(d(mink(4,1))* b(mink(4,1)))(spenso::mul(d(mink(4,1))* b(mink(4,1)))^-3)(spenso::mul(d(mink(4,1))* b(mink(4,1)))^-2)");
+        println!("{expr}");
+        let lib = DummyLibrary::<_>::new();
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(
+                |a| a.to_string(),
+                |_| None,
+                |a| a.to_string(),
+                |_| "".to_string()
+            )
+        );
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+            .unwrap();
+        assert_snapshot!(
+            net.dot_display_impl(
+                |a| a.to_string(),
+                |_| None,
+                |a| a.to_string(),
+                |_| "".to_string()
+            ),@r#"
+        digraph {
+          node	 [shape=circle,height=0.1,label=""];
+          overlap = "scale";
+          layout = "neato";
+
+          0	 [label = "S:c*a*d(mink(4,1))^-6*b(mink(4,1))^-6"];
+          ext0	 [style=invis];
+          0:0:s	-> ext0	 [id=0 color="red"];
+        }
+        "#
+        );
+    }
+
+    #[test]
     fn parse_scalar_tensor() {
         let expr = parse!("c*a*b(mink(4,1))");
 
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -416,8 +501,8 @@ pub mod test {
         let expr = parse!("c*a*b(mink(4,1))*d(mink(4,2))*d(mink(4,1))");
 
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -514,8 +599,8 @@ pub mod test {
         let expr = parse!("(y+x(mink(4,1))*y(mink(4,1))) *(1+1+2*x*(3*sin(r))/t)");
 
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -614,8 +699,8 @@ pub mod test {
         let expr = (parse!("a*sin(x/2)") * tensor1 * tensor2 * tensor3 + tensor4) * tensor5;
 
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -662,9 +747,9 @@ pub mod test {
         initialize();
         let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
+        let fnlib = ErroringLibrary::<Symbol>::new();
         println!("Hi");
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -813,9 +898,9 @@ pub mod test {
         );
 
         let lib: DummyLibrary<_, DummyKey> = DummyLibrary::<_, _>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
+        let fnlib = ErroringLibrary::<Symbol>::new();
         // println!("Hi");
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             loop_tn_expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -863,9 +948,9 @@ pub mod test {
                     * epsbar(10, mink(4, hedge15))
         );
         let lib: DummyLibrary<_, DummyKey> = DummyLibrary::<_, _>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
+        let fnlib = ErroringLibrary::<Symbol>::new();
         // println!("Hi");
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -899,9 +984,9 @@ pub mod test {
         let expr =
             parse!("-d(mink(4,6),mink(4,5))*Q(2,mink(4,7))+d(mink(4,6),mink(4,5))*Q(3,mink(4,7))");
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
+        let fnlib = ErroringLibrary::<Symbol>::new();
         println!("Hi");
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -950,8 +1035,8 @@ pub mod test {
                 * (A(mink(4, r_2), mink(4, r_3)) + B(mink(4, r_3), mink(4, r_2)))
         );
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -1021,8 +1106,8 @@ pub mod test {
         );
 
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -1107,8 +1192,8 @@ pub mod test {
         );
 
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -1167,7 +1252,7 @@ pub mod test {
             panic!("Not tensor")
         }
 
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -1259,8 +1344,8 @@ pub mod test {
         // );
 
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -1391,8 +1476,8 @@ pub mod test {
         );
 
         let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, DummyKey>::try_from_view(
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -1430,7 +1515,7 @@ pub mod test {
         let expr3 = parse_lit!(C * ggg(euc(4, hedge_5), euc(4, hedge_4)));
 
         let lib = DummyLibrary::<SymbolicTensor>::new();
-        let fnlib = ErroringLibrary::<DummyKey>::new();
+        let fnlib = ErroringLibrary::<Symbol>::new();
         let net = dummy_lib_parse(expr.as_view());
         let net2 = dummy_lib_parse(expr2.as_view());
         let net3 = dummy_lib_parse(expr3.as_view());
@@ -1488,7 +1573,7 @@ pub mod test {
         let expr2 = parse_lit!(B * gg(euc(4, hedge_3)));
         let expr3 = parse_lit!(C * ggg(euc(4, hedge_5)) * g(euc(4, hedge_4)));
         let expr4 = parse_lit!(A * B * ggg(euc(4, hedge_5)) * g(euc(4, hedge_4)));
-        let fnlib = ErroringLibrary::<DummyKey>::new();
+        let fnlib = ErroringLibrary::<Symbol>::new();
         let lib = DummyLibrary::<SymbolicTensor>::new();
 
         for ex in [expr, expr2, expr3, expr4] {
@@ -1543,9 +1628,9 @@ pub mod test {
 
     fn dummy_lib_parse(
         atom: impl AtomCore,
-    ) -> Network<NetworkStore<SymbolicTensor, Atom>, DummyKey, DummyKey> {
+    ) -> Network<NetworkStore<SymbolicTensor, Atom>, DummyKey, Symbol> {
         let lib = DummyLibrary::<SymbolicTensor>::new();
-        Network::<NetworkStore<SymbolicTensor, Atom>, DummyKey, DummyKey>::try_from_view(
+        Network::<NetworkStore<SymbolicTensor, Atom>, DummyKey, Symbol>::try_from_view(
             atom.as_atom_view(),
             &lib,
             &ParseSettings::default(),

@@ -164,6 +164,10 @@ impl<R: RepName<Dual = R>, Aind: AbsInd> TensorStructure for OrderedStructure<R,
     //         panic!("Not same dimension for ID")
     //     }
     // }
+    //
+    fn is_fully_self_dual(&self) -> bool {
+        self.base_start >= self.structure.len()
+    }
 
     fn reindex(self, indices: &[Aind]) -> Result<PermutedStructure<Self::Indexed>, StructureError> {
         if self.structure.len() != indices.len() {

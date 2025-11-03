@@ -1,17 +1,19 @@
+use core::panic::PanicMessage;
 use std::{ops::Neg, sync::LazyLock};
 
 use idenso::{gamma::AGS, representations::initialize};
 
 use spenso::{
-    algebra::complex::Complex,
+    algebra::complex::{Complex, RealOrComplex},
     network::library::{
-        TensorLibraryData,
+        FunctionLibrary, TensorLibraryData,
+        function_lib::{PanicMissingConcrete, SymbolLib},
         symbolic::{ExplicitKey, TensorLibrary},
     },
     structure::{PermutedStructure, TensorStructure, abstract_index::AbstractIndex, slot::AbsInd},
     tensors::{
         data::{SetTensorData, SparseTensor},
-        parametric::MixedTensor,
+        parametric::{ConcreteOrParam, MixedTensor},
     },
 };
 
@@ -431,6 +433,9 @@ pub static HEP_LIB: LazyLock<
     TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>,
 > = LazyLock::new(|| hep_lib(1., 0.));
 
+pub static FUN_LIB: LazyLock<SymbolLib<ConcreteOrParam<RealOrComplex<f64>>, PanicMissingConcrete>> =
+    LazyLock::new(|| PanicMissingConcrete::new_lib());
+
 #[cfg(test)]
 mod tests {
 
@@ -753,6 +758,7 @@ mod tests {
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
             _,
+            Symbol,
         >::try_from_view(expr.as_view(), &*HEP_LIB, &ParseSettings::default())
         .unwrap();
 
@@ -760,18 +766,18 @@ mod tests {
         let simplified = expr.simplify_gamma();
 
         println!("Simplified to {}", simplified);
-        let mut net_simplified = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
-            _,
-        >::try_from_view(
-            simplified.as_view(), &*HEP_LIB, &ParseSettings::default()
-        )
-        .unwrap();
+        let mut net_simplified =
+            Network::<
+                NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
+                _,
+                Symbol,
+            >::try_from_view(simplified.as_view(), &*HEP_LIB, &ParseSettings::default())
+            .unwrap();
 
-        net.execute::<Sequential, SmallestDegree, _, _>(&*HEP_LIB)
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&*HEP_LIB)
             .unwrap();
         net_simplified
-            .execute::<Sequential, SmallestDegree, _, _>(&*HEP_LIB)
+            .execute::<Sequential, SmallestDegree, _, _, _>(&*HEP_LIB)
             .unwrap();
 
         let function_map = HashMap::new();

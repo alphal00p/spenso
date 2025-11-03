@@ -59,7 +59,7 @@ pub enum CookingError {
 
 pub fn canonize_impl(view: AtomView) -> Atom {
     let lib = DummyLibrary::<SymbolicTensor>::new();
-    let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _>::try_from_view(
+    let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
         view,
         &lib,
         &ParseSettings::default(),

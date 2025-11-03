@@ -18,7 +18,23 @@ pub struct SymbolLib<T, Missing> {
 }
 
 pub struct Panic;
+impl Panic {
+    pub fn new_lib<T>() -> SymbolLib<T, Self> {
+        SymbolLib {
+            functions: HashMap::new(),
+            _missing: Self,
+        }
+    }
+}
 pub struct Wrap;
+impl Wrap {
+    pub fn new_lib<T>() -> SymbolLib<T, Self> {
+        SymbolLib {
+            functions: HashMap::new(),
+            _missing: Self,
+        }
+    }
+}
 
 impl<S: TensorStructure> FunctionLibrary<ParamTensor<S>> for SymbolLib<ParamTensor<S>, Panic> {
     type Key = Symbol;
@@ -80,6 +96,14 @@ impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
 }
 
 pub struct PanicMissingConcrete;
+impl PanicMissingConcrete {
+    pub fn new_lib<T>() -> SymbolLib<T, Self> {
+        SymbolLib {
+            functions: HashMap::new(),
+            _missing: Self,
+        }
+    }
+}
 
 impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
     FunctionLibrary<ParamOrConcrete<C, S>> for SymbolLib<C, PanicMissingConcrete>

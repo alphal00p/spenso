@@ -757,6 +757,18 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
         graph.into()
     }
 
+    pub fn pow_graph(pow: i8) -> Self {
+        let (mut graph, head) = Self::head_builder(NetworkNode::Op(NetworkOp::Power(pow)));
+        graph.add_external_edge(head, NetworkEdge::Head, true, Flow::Sink);
+        graph.into()
+    }
+
+    pub fn fun_graph(key: FK) -> Self {
+        let (mut graph, head) = Self::head_builder(NetworkNode::Op(NetworkOp::Function(key)));
+        graph.add_external_edge(head, NetworkEdge::Head, true, Flow::Sink);
+        graph.into()
+    }
+
     pub fn mul_graph(n: usize) -> Self {
         let (mut graph, head) = Self::head_builder(NetworkNode::Op(NetworkOp::Product));
         for _ in 0..n {
@@ -1055,6 +1067,32 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
         self.slot_order.extend(other.slot_order);
         // self.uncontracted.join_mut(other.uncontracted);
         Ok(())
+    }
+
+    pub fn pow(self, pow: i8) -> Self {
+        let mut pow = NetworkGraph::pow_graph(pow);
+
+        pow.join_mut(
+            self,
+            NetworkGraph::<K, FK, Aind>::match_heads,
+            NetworkGraph::<K, FK, Aind>::join_heads,
+        )
+        .unwrap();
+
+        pow
+    }
+
+    pub fn function(self, name: FK) -> Self {
+        let mut fun = NetworkGraph::fun_graph(name);
+
+        fun.join_mut(
+            self,
+            NetworkGraph::<K, FK, Aind>::match_heads,
+            NetworkGraph::<K, FK, Aind>::join_heads,
+        )
+        .unwrap();
+
+        fun
     }
 }
 

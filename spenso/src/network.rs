@@ -7,7 +7,7 @@ use library::{Library, LibraryError};
 
 use crate::algebra::algebraic_traits::RefOne;
 use crate::contraction::Contract;
-use crate::network::library::{FunctionLibrary, FunctionLibraryError, LibraryTensor};
+use crate::network::library::{DummyKey, FunctionLibrary, FunctionLibraryError, LibraryTensor};
 use crate::structure::abstract_index::AbstractIndex;
 use crate::structure::permuted::PermuteTensor;
 // use crate::shadowing::Concretize;
@@ -64,14 +64,39 @@ pub struct Network<S, LibKey, FunKey, Aind = AbstractIndex> {
 pub enum NetworkState {
     PureScalar,
     Tensor,
+    SelfDualTensor,
     Scalar,
 }
 
 impl NetworkState {
+    pub fn is_scalar(&self) -> bool {
+        matches!(self, NetworkState::Scalar | NetworkState::PureScalar)
+    }
+
+    pub fn is_tensor(&self) -> bool {
+        matches!(self, NetworkState::Tensor | NetworkState::SelfDualTensor)
+    }
+
+    pub fn pow(self, pow: i8) -> Self {
+        match self {
+            NetworkState::PureScalar => NetworkState::PureScalar,
+            NetworkState::Scalar => NetworkState::Scalar,
+            NetworkState::SelfDualTensor => {
+                if pow % 2 == 0 {
+                    NetworkState::Scalar
+                } else {
+                    NetworkState::SelfDualTensor
+                }
+            }
+            NetworkState::Tensor => panic!("Cannot have integer power of non-self dual tensor"),
+        }
+    }
+
     pub fn is_compatible(&self, other: &Self) -> bool {
         matches!(
             (self, other),
             (NetworkState::Tensor, NetworkState::Tensor)
+                | (NetworkState::SelfDualTensor, NetworkState::SelfDualTensor)
                 | (NetworkState::Scalar, NetworkState::Scalar)
                 | (NetworkState::PureScalar, NetworkState::Scalar)
                 | (NetworkState::Scalar, NetworkState::PureScalar)
@@ -87,6 +112,8 @@ impl MulAssign for NetworkState {
             (NetworkState::Tensor, _) => NetworkState::Tensor,
             (NetworkState::Scalar, NetworkState::PureScalar) => NetworkState::Scalar,
             (_, NetworkState::Tensor) => NetworkState::Tensor,
+            (NetworkState::SelfDualTensor, _) => NetworkState::SelfDualTensor,
+            (_, NetworkState::SelfDualTensor) => NetworkState::SelfDualTensor,
             (NetworkState::Scalar, NetworkState::Scalar) => NetworkState::Scalar,
         }
     }
@@ -278,10 +305,8 @@ impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> NMul for Network<S
 
         let graph = self.graph.n_mul(items);
 
-        if let NetworkState::Tensor = state {
-            if graph.dangling_indices().is_empty() {
-                state = NetworkState::Scalar;
-            }
+        if state.is_tensor() && graph.dangling_indices().is_empty() {
+            state = NetworkState::Scalar;
         }
 
         Network {
@@ -504,6 +529,21 @@ where
 }
 
 impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> Network<S, K, FK, Aind> {
+    pub fn pow(self, pow: i8) -> Self {
+        Self {
+            store: self.store,
+            graph: self.graph.pow(pow),
+            state: self.state,
+        }
+    }
+    pub fn fun(self, key: FK) -> Self {
+        Self {
+            store: self.store,
+            graph: self.graph.function(key),
+            state: self.state,
+        }
+    }
+
     pub fn from_scalar(scalar: S::Scalar) -> Self {
         let mut store = S::default();
         let id = store.add_scalar(scalar);
@@ -532,6 +572,7 @@ impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> Network<S, K, FK, 
         let state = if tensor.is_scalar() {
             NetworkState::Scalar
         } else {
+            // tensor.structure().dual();
             NetworkState::Tensor
         };
         let id = store.add_tensor(tensor);
@@ -594,8 +635,14 @@ pub enum TensorNetworkError<K: Display, FK: Display> {
     FunLibErr(#[from] FunctionLibraryError<FK>),
     #[error("Non tensor node still present")]
     NonTensorNodePresent,
-    #[error("invalid resulting node(0)")]
-    InvalidResultNode(NetworkNode<(), FK>),
+    #[error("Negative non-even power on non-scalar node:{0}")]
+    NegativeExponentNonScalar(String),
+    #[error("Too many arguments for function:{0}")]
+    TooManyArgsFunction(String),
+    #[error("Non self-dual tensor power{0}")]
+    NonSelfDualTensorPower(String),
+    #[error("invalid resulting node{0}")]
+    InvalidResultNode(NetworkNode<DummyKey, FK>),
     #[error("internal edge still present, contract it first")]
     InternalEdgePresent,
     #[error("uncontracted scalar")]
@@ -1493,9 +1540,9 @@ where
                         }
                         NetworkLeaf::LibraryKey(a) => {
                             let inds = graph.get_lib_data(lib, child_id).unwrap();
-                            let t = T::from(inds);
+                            let mut t = T::from(inds);
 
-                            match n {
+                            match pow {
                                 0 => {
                                     let pos = self.scalar.len();
                                     let one = self.scalar[0].ref_one();
@@ -1508,30 +1555,51 @@ where
                                     let mut square = t.contract(&t)?;
 
                                     if n % 2 == 1 {
-                                        for _ in 0..squares {
-                                            square = square.contract(&square)?;
+                                        if n != 1 {
+                                            for _ in 0..squares {
+                                                square = square.contract(&square)?;
+                                            }
+                                            t = square.contract(&t)?;
                                         }
-                                        let t = square.contract(&t)?;
-                                        let pos = self.tensors.len();
-                                        self.tensors.push(t);
-                                        NetworkLeaf::LocalTensor(pos)
+
+                                        if pow < 0 {
+                                            if !t.is_scalar() {
+                                                return Err(
+                                                    TensorNetworkError::NegativeExponentNonScalar(
+                                                        "".to_string(),
+                                                    ),
+                                                );
+                                            } else {
+                                                let mut s = Sc::from(t.scalar().unwrap());
+                                                let pos = self.scalar.len();
+                                                s = s.ref_one() / s;
+                                                self.scalar.push(s);
+                                                NetworkLeaf::Scalar(pos)
+                                            }
+                                        } else {
+                                            let pos = self.tensors.len();
+                                            self.tensors.push(t);
+                                            NetworkLeaf::LocalTensor(pos)
+                                        }
                                     } else {
                                         let mut s = Sc::from(square.scalar().unwrap());
                                         let sc = s.clone();
-                                        for _ in 0..squares {
+                                        for _ in 1..squares {
                                             s *= sc.refer();
                                         }
                                         let pos = self.scalar.len();
-                                        let one = self.scalar[0].ref_one();
-                                        self.scalar.push(one);
+                                        if pow < 0 {
+                                            s = s.ref_one() / s;
+                                        }
+                                        self.scalar.push(s);
                                         NetworkLeaf::Scalar(pos)
                                     }
                                 }
                             }
                         }
                         NetworkLeaf::LocalTensor(ti) => {
-                            let t = self.tensors[*ti].clone();
-                            match n {
+                            let mut t = self.tensors[*ti].clone();
+                            match pow {
                                 0 => {
                                     let pos = self.scalar.len();
                                     let one = self.scalar[0].ref_one();
@@ -1544,22 +1612,42 @@ where
                                     let mut square = t.contract(&t)?;
 
                                     if n % 2 == 1 {
-                                        for _ in 0..squares {
-                                            square = square.contract(&square)?;
+                                        if n != 1 {
+                                            for _ in 0..squares {
+                                                square = square.contract(&square)?;
+                                            }
+                                            t = square.contract(&t)?;
                                         }
-                                        let t = square.contract(&t)?;
-                                        let pos = self.tensors.len();
-                                        self.tensors.push(t);
-                                        NetworkLeaf::LocalTensor(pos)
+                                        if pow < 0 {
+                                            if !t.is_scalar() {
+                                                return Err(
+                                                    TensorNetworkError::NegativeExponentNonScalar(
+                                                        "".to_string(),
+                                                    ),
+                                                );
+                                            } else {
+                                                let mut s = Sc::from(t.scalar().unwrap());
+                                                let pos = self.scalar.len();
+                                                s = s.ref_one() / s;
+                                                self.scalar.push(s);
+                                                NetworkLeaf::Scalar(pos)
+                                            }
+                                        } else {
+                                            let pos = self.tensors.len();
+                                            self.tensors.push(t);
+                                            NetworkLeaf::LocalTensor(pos)
+                                        }
                                     } else {
                                         let mut s = Sc::from(square.scalar().unwrap());
                                         let sc = s.clone();
-                                        for _ in 0..squares {
+                                        for _ in 1..squares {
                                             s *= sc.refer();
                                         }
                                         let pos = self.scalar.len();
-                                        let one = self.scalar[0].ref_one();
-                                        self.scalar.push(one);
+                                        if pow < 0 {
+                                            s = s.ref_one() / s;
+                                        }
+                                        self.scalar.push(s);
                                         NetworkLeaf::Scalar(pos)
                                     }
                                 }

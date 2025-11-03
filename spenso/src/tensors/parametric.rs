@@ -366,6 +366,7 @@ where
 
     delegate! {
         to self.structure() {
+            fn is_fully_self_dual(&self)-> bool;
             fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn external_indices_iter(&self)-> impl Iterator<Item = <Self::Slot as IsAbstractSlot>::Aind>;
             fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
@@ -1282,6 +1283,7 @@ where
 
     delegate! {
         to self.structure() {
+            fn is_fully_self_dual(&self)-> bool;
             fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn external_indices_iter(&self)-> impl Iterator<Item = <Self::Slot as IsAbstractSlot>::Aind>;
             fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;
@@ -2358,6 +2360,7 @@ where
 
     delegate! {
         to self.structure() {
+            fn is_fully_self_dual(&self)-> bool;
             fn external_reps_iter(&self)-> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn external_indices_iter(&self)-> impl Iterator<Item = <Self::Slot as IsAbstractSlot>::Aind>;
             fn external_dims_iter(&self)-> impl Iterator<Item = Dimension>;

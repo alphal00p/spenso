@@ -212,6 +212,10 @@ impl<N, A, R: RepName<Dual = R>, Aind: AbsInd> TensorStructure for NamedStructur
     // type R = PhysicalReps;
     type Indexed = Self;
 
+    fn is_fully_self_dual(&self) -> bool {
+        self.structure.is_fully_self_dual()
+    }
+
     // fn id(i: Self::Slot, j: Self::Slot) -> Self {
     //     Self {
     //         structure: OrderedStructure::id(i, j),

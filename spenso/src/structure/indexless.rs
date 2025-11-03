@@ -200,6 +200,10 @@ impl<T: RepName<Dual = T>, Aind: AbsInd> TensorStructure for IndexLess<T, Aind> 
     // type R = T;
     type Indexed = OrderedStructure<T, Aind>;
 
+    fn is_fully_self_dual(&self) -> bool {
+        self.structure.iter().all(|r| r.rep.is_self_dual())
+    }
+
     fn reindex(
         self,
         indices: &[Aind],
@@ -498,6 +502,7 @@ impl<Name, Args, R: RepName<Dual = R>, Aind: AbsInd> TensorStructure
 
     delegate! {
         to self.structure{
+            fn is_fully_self_dual(&self) -> bool;
             fn external_reps_iter(&self) -> impl Iterator<Item = Representation<<Self::Slot as IsAbstractSlot>::R>>;
             fn external_indices_iter(&self) -> impl Iterator<Item = Aind>;
             fn external_dims_iter(&self)->impl Iterator<Item=Dimension>;

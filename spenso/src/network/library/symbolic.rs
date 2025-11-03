@@ -537,7 +537,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-            DummyKey,
+            Symbol,
         >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .unwrap();
 
@@ -613,7 +613,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-            DummyKey,
+            Symbol,
         >::try_from_view(
             parse!("gamma(euc(2,1),euc(2,2),mink(2,0))-gamma(mink(2,0),euc(2,2),euc(2,1))")
                 .as_view(),
@@ -633,7 +633,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-            DummyKey,
+            Symbol,
         >::try_from_view(
             parse!("gamma(mink(2,0),euc(2,2),euc(2,1))").as_view(),
             &lib,
@@ -670,7 +670,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-            DummyKey,
+            Symbol,
         >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .unwrap();
 
@@ -730,7 +730,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-            DummyKey,
+            Symbol,
         >::try_from_view(a.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();
@@ -766,7 +766,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-            DummyKey,
+            Symbol,
         >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();
@@ -820,7 +820,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-            DummyKey,
+            Symbol,
         >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();
@@ -869,7 +869,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-            DummyKey,
+            Symbol,
         >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();
@@ -959,7 +959,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-            DummyKey,
+            Symbol,
         >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();
@@ -989,7 +989,7 @@ mod test {
                 ConcreteOrParam<RealOrComplex<f64>>,
             >,
             _,
-            DummyKey,
+            Symbol,
         >::try_from_view(expr.as_view(), &lib, &ParseSettings::default())
         .map_err(|a| a.to_string())
         .unwrap();

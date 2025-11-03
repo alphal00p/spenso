@@ -334,6 +334,7 @@ impl<T: RepName, Aind: AbsInd> DualSlotTo for Slot<T, Aind> {
 #[cfg(test)]
 #[cfg(feature = "shadowing")]
 mod shadowing_tests {
+    use insta::assert_snapshot;
     use symbolica::{atom::AtomCore, parse, symbol};
 
     use crate::structure::{
@@ -365,7 +366,7 @@ mod shadowing_tests {
         let mink = Lorentz {}.new_rep(4);
         let mu: Slot<Lorentz> = mink.slot(0);
         println!("{}", mu.to_atom());
-        assert_eq!("spenso::lor(4,0)", mu.to_atom().to_canonical_string());
+        assert_snapshot!( mu.to_atom().to_canonical_string(),@"spenso::{}::lor(4,0)");
         // assert_eq!("lor🠑4|₀", mu.dual().to_string());
 
         let mink = Lorentz {}.new_rep(4);

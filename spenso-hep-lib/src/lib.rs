@@ -5,17 +5,22 @@ use idenso::{gamma::AGS, representations::initialize};
 
 use spenso::{
     algebra::complex::{Complex, RealOrComplex},
-    network::library::{
-        FunctionLibrary, TensorLibraryData,
-        function_lib::{PanicMissingConcrete, SymbolLib},
-        symbolic::{ExplicitKey, TensorLibrary},
+    network::{
+        library::{
+            FunctionLibrary, TensorLibraryData,
+            function_lib::{PanicMissingConcrete, SymbolLib},
+            symbolic::{ExplicitKey, TensorLibrary},
+        },
+        parsing::{SPENSO_TAG, ShadowedStructure},
     },
     structure::{PermutedStructure, TensorStructure, abstract_index::AbstractIndex, slot::AbsInd},
     tensors::{
-        data::{SetTensorData, SparseTensor},
-        parametric::{ConcreteOrParam, MixedTensor},
+        complex::RealOrComplexTensor,
+        data::{SetTensorData, SparseTensor, StorageTensor},
+        parametric::{ConcreteOrParam, MixedTensor, ParamOrConcrete},
     },
 };
+use symbolica::symbol;
 
 #[allow(clippy::similar_names)]
 pub fn gamma_data_dirac<T, N>(structure: N, one: T, zero: T) -> SparseTensor<Complex<T>, N>
@@ -433,8 +438,16 @@ pub static HEP_LIB: LazyLock<
     TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>,
 > = LazyLock::new(|| hep_lib(1., 0.));
 
-pub static FUN_LIB: LazyLock<SymbolLib<ConcreteOrParam<RealOrComplex<f64>>, PanicMissingConcrete>> =
-    LazyLock::new(|| PanicMissingConcrete::new_lib());
+pub static FUN_LIB: LazyLock<
+    SymbolLib<RealOrComplexTensor<f64, ShadowedStructure<AbstractIndex>>, PanicMissingConcrete>,
+> = LazyLock::new(|| {
+    let mut lib = PanicMissingConcrete::new_lib();
+    lib.insert(symbol!("conju", tag = SPENSO_TAG.tag), |a| match a {
+        RealOrComplexTensor::Complex(c) => RealOrComplexTensor::Complex(c.map_data(|x| x.conj())),
+        RealOrComplexTensor::Real(r) => RealOrComplexTensor::Real(r),
+    });
+    lib
+});
 
 #[cfg(test)]
 mod tests {
@@ -450,7 +463,7 @@ mod tests {
         network::{
             ExecutionResult, Network, Sequential, SingleSmallestDegree, SmallestDegree,
             SmallestDegreeIter, Steps,
-            parsing::{ParseSettings, ShadowedStructure},
+            parsing::{ParseSettings, SPENSO_TAG, ShadowedStructure},
             store::NetworkStore,
         },
         shadowing::Concretize,
@@ -494,6 +507,7 @@ mod tests {
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
             _,
+            Symbol,
         >::try_from_view(expr.as_view(), &*HEP_LIB, &ParseSettings::default())
         .unwrap();
 
@@ -502,11 +516,12 @@ mod tests {
             net.dot_display_impl(
                 |a| a.to_string(),
                 |a| Some(format!("{}", a.global_name.unwrap())),
-                |a| a.structure().global_name.unwrap().to_string()
+                |a| a.structure().global_name.unwrap().to_string(),
+                |a| a.to_string()
             )
         );
 
-        net.execute::<Steps<1>, SmallestDegreeIter<1>, _, _>(&*HEP_LIB)
+        net.execute::<Steps<1>, SmallestDegreeIter<1>, _, _, _>(&*HEP_LIB, &*FUN_LIB)
             .unwrap();
         println!(
             "{}",
@@ -517,10 +532,11 @@ mod tests {
                     .structure()
                     .global_name
                     .map(|a| a.to_string())
-                    .unwrap_or("".to_string())
+                    .unwrap_or("".to_string()),
+                |a| a.to_string()
             )
         );
-        net.execute::<Steps<1>, SmallestDegreeIter<2>, _, _>(&*HEP_LIB)
+        net.execute::<Steps<1>, SmallestDegreeIter<2>, _, _, _>(&*HEP_LIB, &*FUN_LIB)
             .unwrap();
         println!(
             "{}",
@@ -531,13 +547,19 @@ mod tests {
                     .structure()
                     .global_name
                     .map(|a| a.to_string())
-                    .unwrap_or("".to_string())
+                    .unwrap_or("".to_string()),
+                |a| a.to_string()
             )
         );
 
         println!(
             "{}",
-            net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
+            net.dot_display_impl(
+                |a| a.to_string(),
+                |_| None,
+                |a| a.to_string(),
+                |a| a.to_string()
+            )
         );
         // if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
         //     net.result().unwrap()
@@ -681,6 +703,7 @@ mod tests {
         let mut net = Network::<
             NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
             _,
+            Symbol,
         >::try_from_view(expr.as_view(), &*HEP_LIB, &ParseSettings::default())
         .unwrap();
 
@@ -690,12 +713,13 @@ mod tests {
             net.dot_display_impl(
                 |a| a.to_string(),
                 |a| Some(format!("{}", a.global_name.unwrap())),
-                |a| a.structure().global_name.unwrap().to_string()
+                |a| a.structure().global_name.unwrap().to_string(),
+                |a| a.to_string()
             )
         );
 
         // net.validate();
-        net.execute::<Steps<1>, SingleSmallestDegree<true>, _, _>(&*HEP_LIB)
+        net.execute::<Steps<1>, SingleSmallestDegree<true>, _, _, _>(&*HEP_LIB, &(*FUN_LIB))
             .unwrap();
         // net.validate();
         // net.execute::<Steps<1>, SmallestDegree, _, _>(&*HEP_LIB);
@@ -738,7 +762,8 @@ mod tests {
             net.dot_display_impl(
                 |a| a.to_string(),
                 |_| None,
-                |a| a.structure().to_string().replace('\n', "\\n")
+                |a| a.structure().to_string().replace('\n', "\\n"),
+                |a| a.to_string()
             )
         );
         // if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
@@ -774,10 +799,11 @@ mod tests {
             >::try_from_view(simplified.as_view(), &*HEP_LIB, &ParseSettings::default())
             .unwrap();
 
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&*HEP_LIB)
+        println!("{}", net_simplified.dot_pretty());
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&*HEP_LIB, &*FUN_LIB)
             .unwrap();
         net_simplified
-            .execute::<Sequential, SmallestDegree, _, _, _>(&*HEP_LIB)
+            .execute::<Sequential, SmallestDegree, _, _, _>(&*HEP_LIB, &*FUN_LIB)
             .unwrap();
 
         let function_map = HashMap::new();
@@ -1037,8 +1063,7 @@ mod tests {
         let expr = gamma(1, 2, 2) * gamma(2, 1, 1) + gamma(1, 2, 1) * gamma(2, 1, 2);
         validate_gamma(expr, const_map.clone());
 
-        let expr = gamma0(1, 2) * gamma(2, 3, 1) * gamma0(3, 4)
-            - gamma0(2, 1) * gammaconj(3, 2, 1) * gamma0(4, 3);
+        let expr = gamma0(1, 2) * gamma(2, 3, 1) * gamma0(3, 4) - gammaconj(4, 1, 1);
         // let expr2 = gamma0(1, 2) * gammaconj(3, 2, 1) * gamma0(3, 4);
 
         validate_gamma(expr, const_map.clone());
@@ -1053,7 +1078,28 @@ mod tests {
 
         validate_gamma(expr, const_map.clone());
         let a = u(1, 1) * gamma(1, 2, 1) * ub(2, 2);
-        validate_gamma(a.conj() * a, const_map.clone());
+        // validate_gamma(
+        //     a.conj()
+        //         .replace(function!(Symbol::CONJ, symbol!("a__")))
+        //         .with(function!(
+        //             symbol!("conju", tag = SPENSO_TAG.tag),
+        //             symbol!("a__")
+        //         ))
+        //         * a,
+        //     const_map.clone(),
+        // );
+
+        // let a = Atom::num(1) / u(1, 1) * gamma(1, 2, 1) * ub(2, 2);
+        // validate_gamma(
+        //     a.conj()
+        //         .replace(function!(Symbol::CONJ, symbol!("a__")))
+        //         .with(function!(
+        //             symbol!("conju", tag = SPENSO_TAG.tag),
+        //             symbol!("a__")
+        //         ))
+        //         * a,
+        //     const_map.clone(),
+        // );
 
         // validate_gamma(expr2, const_map.clone());
         // let expr = gamma(1, 2, 2) * gamma(2, 1, 1) + gamma(1, 2, 1) * gamma(2, 1, 2);

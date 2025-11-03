@@ -13,8 +13,17 @@ use crate::{
 };
 
 pub struct SymbolLib<T, Missing> {
-    pub functions: HashMap<Symbol, Box<dyn Fn(T) -> T>>,
+    pub functions: HashMap<Symbol, Box<dyn Fn(T) -> T + Send + Sync>>,
     pub _missing: Missing,
+}
+
+impl<T, Missing> SymbolLib<T, Missing> {
+    pub fn insert<F>(&mut self, key: Symbol, func: F)
+    where
+        F: Fn(T) -> T + Send + Sync + 'static,
+    {
+        self.functions.insert(key, Box::new(func));
+    }
 }
 
 pub struct Panic;

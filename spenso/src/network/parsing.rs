@@ -24,13 +24,15 @@ use crate::structure::{HasStructure, TensorStructure};
 use crate::{shadowing::Concretize, structure::representation::LibraryRep, structure::HasName};
 
 pub struct SpensoTags {
-    tag: String,
-    mul: Symbol,
+    pub tag: String,
+    pub bracket: Symbol,
+    pub pure_scalar: Symbol,
 }
 
 pub static SPENSO_TAG: std::sync::LazyLock<SpensoTags> = std::sync::LazyLock::new(|| SpensoTags {
     tag: tag!("broadcast"),
-    mul: symbol!("mul"),
+    bracket: symbol!("bracket"),
+    pure_scalar: symbol!("pure_scalar"),
 });
 
 pub type ShadowedStructure<Aind> = NamedStructure<Symbol, Vec<Atom>, LibraryRep, Aind>;
@@ -239,13 +241,20 @@ where
     {
         let symbol = value.get_symbol();
 
-        if symbol == SPENSO_TAG.mul {
+        if symbol == SPENSO_TAG.bracket {
             let mut n_muls = value
                 .iter()
                 .map(|a| Self::try_from_view(a, library, settings))
                 .collect::<Result<Vec<_>, _>>()?;
 
             Ok(n_muls.pop().unwrap().n_mul(n_muls))
+        } else if symbol == SPENSO_TAG.pure_scalar {
+            if value.get_nargs() != 1 {
+                return Err(TensorNetworkError::TooManyArgsFunction(
+                    value.as_view().to_plain_string(),
+                ));
+            }
+            Ok(Self::from_scalar(value.iter().next().unwrap().try_into()?))
         } else if symbol.has_tag(&SPENSO_TAG.tag) {
             if value.get_nargs() != 1 {
                 return Err(TensorNetworkError::TooManyArgsFunction(
@@ -356,8 +365,8 @@ where
                         Ok(n)
                     } else {
                         Err(TensorNetworkError::IncompatibleSummand(format!(
-                            "{} vs {}",
-                            a, first_atom
+                            "{} is {:?} vs {} is {:?}",
+                            a, n.state, first_atom, first.state
                         )))
                     }
                 }
@@ -413,6 +422,74 @@ pub mod test {
     }
 
     #[test]
+    fn parse_pow() {
+        let expr = parse!("ee^3*d(mink(4,1))^-2");
+
+        let lib: DummyLibrary<SymbolicTensor> = DummyLibrary::<_>::new();
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
+        println!(
+            "{}",
+            net.dot_display_impl(
+                |a| a.to_string(),
+                |_| None,
+                |a| a.to_string(),
+                |_| "".to_string()
+            )
+        );
+        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+            .unwrap();
+        assert_snapshot!(
+            net.dot_display_impl(
+                |a| a.to_string(),
+                |_| None,
+                |a| a.to_string(),
+                |_| "".to_string()
+            ),@r#"
+        digraph {
+          node	 [shape=circle,height=0.1,label=""];
+          overlap = "scale";
+          layout = "neato";
+
+          0	 [label = "S:ee^3*d(mink(4,1))^-2"];
+          ext0	 [style=invis];
+          0:0:s	-> ext0	 [id=0 color="red"];
+        }
+        "#);
+    }
+
+    #[test]
+    fn parse_ratio() {
+        let expr = parse_lit!(
+            (P(1, mink(4, 1)) * P(2, mink(4, 1)))
+                / f(spenso::mul(P(3, mink(4, 1)) * P(4, mink(4, 1))))
+        );
+        println!("{expr}");
+        let lib: DummyLibrary<SymbolicTensor> = DummyLibrary::<_>::new();
+        let fnlib = ErroringLibrary::<Symbol>::new();
+        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
+            expr.as_view(),
+            &lib,
+            &ParseSettings::default(),
+        )
+        .unwrap();
+
+        println!(
+            "{}",
+            net.dot_display_impl(
+                |a| a.to_string(),
+                |_| None,
+                |a| a.to_string(),
+                |_| "".to_string()
+            )
+        );
+    }
+    #[test]
     fn parse_div() {
         let expr = parse!("c*a/spenso::mul(d(mink(4,1))* b(mink(4,1)))(spenso::mul(d(mink(4,1))* b(mink(4,1)))^-3)(spenso::mul(d(mink(4,1))* b(mink(4,1)))^-2)");
         println!("{expr}");
@@ -447,7 +524,7 @@ pub mod test {
           overlap = "scale";
           layout = "neato";
 
-          0	 [label = "S:c*a*d(mink(4,1))^-6*b(mink(4,1))^-6"];
+          0	 [label = "S:a*c*mul(b(mink(4,1))*d(mink(4,1)))^-6"];
           ext0	 [style=invis];
           0:0:s	-> ext0	 [id=0 color="red"];
         }
@@ -498,7 +575,7 @@ pub mod test {
 
     #[test]
     fn parse_scalar_tensors_step_by() {
-        let expr = parse!("c*a*b(mink(4,1))*d(mink(4,2))*d(mink(4,1))");
+        let expr = parse!("c*a*b(mink(4,1))*d(mink(4,2))*d(mink(4,1))*d(mink(4,2))");
 
         let lib = DummyLibrary::<_>::new();
         let fnlib = ErroringLibrary::<Symbol>::new();

@@ -22,12 +22,15 @@ use serde::{Deserialize, Serialize};
 use tabled::grid::records::vec_records::Cell;
 use thiserror::Error;
 
-use crate::structure::{
-    abstract_index::AbstractIndex,
-    permuted::{Perm, PermuteTensor},
-    representation::{LibrarySlot, RepName},
-    slot::{AbsInd, DualSlotTo, IsAbstractSlot},
-    HasStructure, PermutedStructure, TensorStructure,
+use crate::{
+    network::NetworkState,
+    structure::{
+        abstract_index::AbstractIndex,
+        permuted::{Perm, PermuteTensor},
+        representation::{LibrarySlot, RepName},
+        slot::{AbsInd, DualSlotTo, IsAbstractSlot},
+        HasStructure, PermutedStructure, TensorStructure,
+    },
 };
 
 use super::{
@@ -236,6 +239,17 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
         let perm = Permutation::sort(&slots);
         perm.apply_slice_in_place(&mut slots);
         slots
+    }
+
+    pub fn state(&self) -> NetworkState {
+        let dang = self.dangling_indices();
+        if dang.is_empty() {
+            NetworkState::Scalar
+        } else if dang.iter().all(|a| a.rep.rep.is_self_dual()) {
+            NetworkState::SelfDualTensor
+        } else {
+            NetworkState::Tensor
+        }
     }
 
     pub fn sync_order(&mut self) {
@@ -757,9 +771,15 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
         graph.into()
     }
 
-    pub fn pow_graph(pow: i8) -> Self {
+    pub fn pow_graph(pow: i8, slots: &[LibrarySlot<Aind>]) -> Self {
         let (mut graph, head) = Self::head_builder(NetworkNode::Op(NetworkOp::Power(pow)));
         graph.add_external_edge(head, NetworkEdge::Head, true, Flow::Sink);
+        if pow % 2 == 0 {
+            for s in slots {
+                let orientation = s.rep_name().orientation();
+                graph.add_external_edge(head, NetworkEdge::Slot(*s), orientation, Flow::Sink);
+            }
+        }
         graph.into()
     }
 
@@ -1070,11 +1090,12 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
     }
 
     pub fn pow(self, pow: i8) -> Self {
-        let mut pow = NetworkGraph::pow_graph(pow);
+        let dangling = self.dangling_indices();
+        let mut pow = NetworkGraph::pow_graph(pow, &dangling);
 
         pow.join_mut(
             self,
-            NetworkGraph::<K, FK, Aind>::match_heads,
+            NetworkGraph::<K, FK, Aind>::add_match,
             NetworkGraph::<K, FK, Aind>::join_heads,
         )
         .unwrap();

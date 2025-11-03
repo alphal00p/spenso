@@ -106,6 +106,7 @@ impl NetworkState {
 }
 impl MulAssign for NetworkState {
     fn mul_assign(&mut self, rhs: Self) {
+        // println!("{self:?} *={rhs:?}");
         *self = match (*self, rhs) {
             (NetworkState::PureScalar, NetworkState::PureScalar) => NetworkState::PureScalar,
             (NetworkState::PureScalar, NetworkState::Scalar) => NetworkState::Scalar,
@@ -533,14 +534,15 @@ impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> Network<S, K, FK, 
         Self {
             store: self.store,
             graph: self.graph.pow(pow),
-            state: self.state,
+            state: self.state.pow(pow),
         }
     }
     pub fn fun(self, key: FK) -> Self {
+        let graph = self.graph.function(key);
         Self {
             store: self.store,
-            graph: self.graph.function(key),
-            state: self.state,
+            state: graph.state(),
+            graph,
         }
     }
 
@@ -571,8 +573,10 @@ impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> Network<S, K, FK, 
 
         let state = if tensor.is_scalar() {
             NetworkState::Scalar
-        } else {
+        } else if tensor.is_fully_self_dual() {
             // tensor.structure().dual();
+            NetworkState::SelfDualTensor
+        } else {
             NetworkState::Tensor
         };
         let id = store.add_tensor(tensor);
@@ -589,10 +593,17 @@ impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> Network<S, K, FK, 
         T: TensorStructure,
         T::Slot: IsAbstractSlot<Aind = Aind>,
     {
+        let state = if tensor.is_scalar() {
+            NetworkState::Scalar
+        } else if tensor.is_fully_self_dual() {
+            NetworkState::SelfDualTensor
+        } else {
+            NetworkState::Tensor
+        };
         Network {
             graph: NetworkGraph::tensor(tensor, NetworkLeaf::LibraryKey(key)),
             store: S::default(),
-            state: NetworkState::Tensor,
+            state,
         }
     }
 
@@ -1445,10 +1456,12 @@ where
                 for c in children {
                     if let Some(id) = graph.graph.involved_node_id(c) {
                         if let NetworkNode::Leaf(l) = &graph.graph[id] {
-                            if child.is_some() {
-                                return Err(TensorNetworkError::Other(anyhow!(
-                                    "Cannot have more than one tensor argument to function"
-                                )));
+                            if let Some((nid, _)) = child {
+                                if nid != id {
+                                    return Err(TensorNetworkError::Other(anyhow!(
+                                        "Cannot have more than one tensor argument to function"
+                                    )));
+                                }
                             } else {
                                 child = Some((id, l));
                             }
@@ -1505,10 +1518,13 @@ where
                 for c in children {
                     if let Some(id) = graph.graph.involved_node_id(c) {
                         if let NetworkNode::Leaf(l) = &graph.graph[id] {
-                            if child.is_some() {
-                                return Err(TensorNetworkError::Other(anyhow!(
-                                    "Cannot have more than one tensor argument to function"
-                                )));
+                            if let Some((nid, _)) = child {
+                                if nid != id {
+                                    return Err(TensorNetworkError::Other(anyhow!(
+                                        "Cannot have more than one tensor argument to power:{}",
+                                        graph.dot()
+                                    )));
+                                }
                             } else {
                                 child = Some((id, l));
                             }
@@ -1524,7 +1540,7 @@ where
                             } else {
                                 let mut s = self.scalar[*si].clone();
 
-                                for i in 0..n {
+                                for i in 1..n {
                                     s *= self.scalar[*si].refer();
                                 }
 

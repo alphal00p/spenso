@@ -12,7 +12,7 @@ use crate::{
     },
 };
 
-use anyhow::{Error, Result};
+use anyhow::Result;
 
 #[cfg(feature = "shadowing")]
 pub mod function_lib;

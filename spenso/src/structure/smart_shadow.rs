@@ -31,7 +31,6 @@ use serde::{Deserialize, Serialize};
 feature = "shadowing",
 trait_decode(trait = symbolica::state::HasStateMap),
 )]
-
 pub struct SmartShadowStructure<
     Name = String,
     Args = usize,

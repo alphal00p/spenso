@@ -29,7 +29,7 @@ pub struct ContractScalars;
 
 pub struct SingleSmallestDegree<const D: bool>;
 pub trait ContractionStrategy<E, L, K, FK, Aind>: Sized {
-    #[allow(clippy::result_large_err)]
+    #[allow(clippy::result_large_err, clippy::type_complexity)]
     fn contract(
         executor: &mut E,
         graph: NetworkGraph<K, FK, Aind>,

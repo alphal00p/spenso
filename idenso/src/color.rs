@@ -606,7 +606,7 @@ mod test {
     #[test]
     fn test_color_matrix_element() {
         initialize();
-        let q = symbol!("spenso::Q";Real);
+        let _q = symbol!("spenso::Q";Real);
         let spin_sum_rule = parse!(
             "
             g(coad(Nc^2-1, left(3)), coad(Nc^2-1, right(3)))

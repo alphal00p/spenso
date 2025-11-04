@@ -10,14 +10,16 @@ use pyo3_stub_gen::{
 };
 
 use spenso::network::library::function_lib::{PanicMissingConcrete, SymbolLib};
-use spenso::network::parsing::ShadowedStructure;
+use spenso::network::parsing::{SPENSO_TAG, ShadowedStructure};
 use spenso::tensors::complex::RealOrComplexTensor;
+use spenso::tensors::data::StorageTensor;
 use spenso::{
     network::library::symbolic::{ExplicitKey, TensorLibrary},
     structure::{HasStructure, PermutedStructure, abstract_index::AbstractIndex},
     tensors::parametric::MixedTensor,
 };
 use symbolica::atom::Atom;
+use symbolica::symbol;
 use symbolica::{
     api::python::PythonExpression,
     atom::{AtomView, Symbol},
@@ -131,6 +133,14 @@ impl SpensorFunctionLibrary {
         let mut a = Self {
             library: PanicMissingConcrete::new_lib(),
         };
+
+        a.library
+            .insert(symbol!("spenso::conj", tag = SPENSO_TAG.tag), |a| match a {
+                RealOrComplexTensor::Complex(c) => {
+                    RealOrComplexTensor::Complex(c.map_data(|x| x.conj()))
+                }
+                RealOrComplexTensor::Real(r) => RealOrComplexTensor::Real(r),
+            });
 
         a
     }

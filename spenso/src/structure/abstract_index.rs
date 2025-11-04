@@ -121,10 +121,8 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
                     if dind1.get_nargs() == 1 {
                         let arg = dind1.iter().next().unwrap();
                         if let AtomView::Fun(arg) = arg {
-                            if arg.get_nargs() == 1 {
-                                if arg.get_symbol() == symbol!(DOWNIND) {
-                                    **out = arg.iter().next().unwrap().to_owned();
-                                }
+                            if arg.get_nargs() == 1 && arg.get_symbol() == symbol!(DOWNIND) {
+                                **out = arg.iter().next().unwrap().to_owned();
                             }
                         }
                     }

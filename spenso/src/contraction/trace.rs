@@ -14,7 +14,6 @@ where
     T: ContractableWith<T, Out = T> + Clone + RefZero + FallibleAddAssign<T> + FallibleSubAssign<T>,
     I: TensorStructure + Clone + StructureContract,
 {
-    #[must_use]
     /// Contract the tensor with itself, i.e. trace over all matching indices.
     fn internal_contract(&self) -> Self {
         let mut result: DenseTensor<T, I> = self.clone();

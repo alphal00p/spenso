@@ -1,13 +1,12 @@
-use core::panic::PanicMessage;
 use std::{ops::Neg, sync::LazyLock};
 
 use idenso::{gamma::AGS, representations::initialize};
 
 use spenso::{
-    algebra::complex::{Complex, RealOrComplex},
+    algebra::complex::Complex,
     network::{
         library::{
-            FunctionLibrary, TensorLibraryData,
+            TensorLibraryData,
             function_lib::{PanicMissingConcrete, SymbolLib},
             symbolic::{ExplicitKey, TensorLibrary},
         },
@@ -17,7 +16,7 @@ use spenso::{
     tensors::{
         complex::RealOrComplexTensor,
         data::{SetTensorData, SparseTensor, StorageTensor},
-        parametric::{ConcreteOrParam, MixedTensor, ParamOrConcrete},
+        parametric::MixedTensor,
     },
 };
 use symbolica::symbol;
@@ -463,7 +462,7 @@ mod tests {
         network::{
             ExecutionResult, Network, Sequential, SingleSmallestDegree, SmallestDegree,
             SmallestDegreeIter, Steps,
-            parsing::{ParseSettings, SPENSO_TAG, ShadowedStructure},
+            parsing::{ParseSettings, ShadowedStructure},
             store::NetworkStore,
         },
         shadowing::Concretize,
@@ -481,7 +480,7 @@ mod tests {
         },
     };
     use symbolica::{
-        atom::{Atom, AtomCore, Symbol},
+        atom::{Atom, Symbol},
         function,
         id::ConditionResult,
         parse, parse_lit, symbol,
@@ -1077,7 +1076,7 @@ mod tests {
         // let expr2 = gamma0(1, 2) * gammaconj(3, 2, 1) * gamma0(3, 4);
 
         validate_gamma(expr, const_map.clone());
-        let a = u(1, 1) * gamma(1, 2, 1) * ub(2, 2);
+        let _a = u(1, 1) * gamma(1, 2, 1) * ub(2, 2);
         // validate_gamma(
         //     a.conj()
         //         .replace(function!(Symbol::CONJ, symbol!("a__")))

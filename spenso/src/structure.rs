@@ -667,7 +667,7 @@ pub trait TensorStructure {
     }
 
     /// yields an iterator over the indices of the tensor
-    fn index_iter(&self) -> TensorStructureIndexIterator<Self>
+    fn index_iter(&self) -> TensorStructureIndexIterator<'_, Self>
     where
         Self: Sized,
     {

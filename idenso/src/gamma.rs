@@ -387,45 +387,45 @@ fn collect_gammas(expr: &mut Atom) {
 fn normalise_gammas(expr: &mut Atom) {
     // Uses the anti commutation rule of the gamma chain to sort the minkowski indices
     fn gamma_chain_normalisation(arg: AtomView, _context: &Context, out: &mut Atom) -> bool {
-        if let AtomView::Fun(f) = arg {
-            if f.get_symbol() == GS.gamma_chain {
-                // println!("Gamma chain:{}", arg);
-                let mut args = f.iter().collect::<Vec<_>>();
-                if args.len() >= 5 {
-                    let more = args.len() > 5;
-                    for i in 0..args.len().saturating_sub(4) {
-                        if i % 2 == 0 {
-                            // println!("{}", args[i]);
-                            // println!("{}?{}", args[i], args[i + 1]);
-                            if args[i] > args[i + 2] {
-                                // println!("{}>{}", args[i], args[i + 1]);
-                                args.swap(i, i + 2);
-                                let swapped = FunctionBuilder::new(GS.gamma_chain)
+        if let AtomView::Fun(f) = arg
+            && f.get_symbol() == GS.gamma_chain
+        {
+            // println!("Gamma chain:{}", arg);
+            let mut args = f.iter().collect::<Vec<_>>();
+            if args.len() >= 5 {
+                let more = args.len() > 5;
+                for i in 0..args.len().saturating_sub(4) {
+                    if i % 2 == 0 {
+                        // println!("{}", args[i]);
+                        // println!("{}?{}", args[i], args[i + 1]);
+                        if args[i] > args[i + 2] {
+                            // println!("{}>{}", args[i], args[i + 1]);
+                            args.swap(i, i + 2);
+                            let swapped = FunctionBuilder::new(GS.gamma_chain)
+                                .add_args(&args)
+                                .finish();
+
+                            // println!("{}", swapped);
+                            let mu = args.remove(i);
+                            let _bis = args.remove(i);
+                            let nu = args.remove(i);
+                            if more {
+                                if i == 0 {
+                                    args.remove(i);
+                                } else {
+                                    args.remove(i - 1);
+                                }
+                            }
+
+                            // println!("mu:{}bis:{}nu:{}", mu, bis, nu);
+                            let metric = function!(ETS.metric, mu, nu)
+                                * 2
+                                * FunctionBuilder::new(GS.gamma_chain)
                                     .add_args(&args)
                                     .finish();
-
-                                // println!("{}", swapped);
-                                let mu = args.remove(i);
-                                let _bis = args.remove(i);
-                                let nu = args.remove(i);
-                                if more {
-                                    if i == 0 {
-                                        args.remove(i);
-                                    } else {
-                                        args.remove(i - 1);
-                                    }
-                                }
-
-                                // println!("mu:{}bis:{}nu:{}", mu, bis, nu);
-                                let metric = function!(ETS.metric, mu, nu)
-                                    * 2
-                                    * FunctionBuilder::new(GS.gamma_chain)
-                                        .add_args(&args)
-                                        .finish();
-                                *out = metric - swapped;
-                                // println!("{}->{}", a, c);
-                                return true;
-                            }
+                            *out = metric - swapped;
+                            // println!("{}->{}", a, c);
+                            return true;
                         }
                     }
                 }
@@ -630,48 +630,48 @@ pub fn gamma_simplify_impl(expr: AtomView) -> Atom {
             let gamma_trace = GS.gamma_trace;
 
             let mut found = false;
-            if let AtomView::Fun(f) = arg {
-                if f.get_symbol() == gamma_trace {
-                    // println!("{arg}");
-                    found = true;
-                    let mut sum = Atom::Zero;
+            if let AtomView::Fun(f) = arg
+                && f.get_symbol() == gamma_trace
+            {
+                // println!("{arg}");
+                found = true;
+                let mut sum = Atom::Zero;
 
-                    if f.get_nargs() == 1 {
-                        *out = Atom::Zero;
-                    }
-                    let args = f.iter().collect::<Vec<_>>();
-
-                    for i in 1..args.len() {
-                        let sign = if i % 2 == 0 { -1 } else { 1 };
-
-                        let mut gcn = FunctionBuilder::new(gamma_trace);
-                        #[allow(clippy::needless_range_loop)]
-                        for j in 1..args.len() {
-                            if i != j {
-                                gcn = gcn.add_arg(args[j]);
-                            }
-                        }
-
-                        let metric = if args[0] == args[i] {
-                            if let AtomView::Fun(f) = args[0].as_atom_view() {
-                                f.iter().next().unwrap().to_owned()
-                            } else {
-                                panic!("aaaa")
-                            }
-                            // Atom::num(4)
-                        } else {
-                            function!(ETS.metric, args[0], args[i])
-                        };
-                        if args.len() == 2 {
-                            sum += metric * sign * Atom::num(4);
-                        } else {
-                            sum += metric * gcn.finish() * sign;
-                        }
-                    }
-                    *out = sum;
-
-                    // println!("{}->{}", arg, out);
+                if f.get_nargs() == 1 {
+                    *out = Atom::Zero;
                 }
+                let args = f.iter().collect::<Vec<_>>();
+
+                for i in 1..args.len() {
+                    let sign = if i % 2 == 0 { -1 } else { 1 };
+
+                    let mut gcn = FunctionBuilder::new(gamma_trace);
+                    #[allow(clippy::needless_range_loop)]
+                    for j in 1..args.len() {
+                        if i != j {
+                            gcn = gcn.add_arg(args[j]);
+                        }
+                    }
+
+                    let metric = if args[0] == args[i] {
+                        if let AtomView::Fun(f) = args[0].as_atom_view() {
+                            f.iter().next().unwrap().to_owned()
+                        } else {
+                            panic!("aaaa")
+                        }
+                        // Atom::num(4)
+                    } else {
+                        function!(ETS.metric, args[0], args[i])
+                    };
+                    if args.len() == 2 {
+                        sum += metric * sign * Atom::num(4);
+                    } else {
+                        sum += metric * gcn.finish() * sign;
+                    }
+                }
+                *out = sum;
+
+                // println!("{}->{}", arg, out);
             }
 
             found

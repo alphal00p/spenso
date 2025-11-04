@@ -227,7 +227,7 @@ impl<T, S: TensorStructure> SparseTensor<T, S> {
     /// # Arguments
     ///
     /// * `trace_indices` - The indices to trace over
-    pub fn iter_trace(&self, trace_indices: [usize; 2]) -> SparseTensorTraceIterator<T, S> {
+    pub fn iter_trace(&self, trace_indices: [usize; 2]) -> SparseTensorTraceIterator<'_, T, S> {
         SparseTensorTraceIterator::new(self, trace_indices)
     }
 }
@@ -511,7 +511,7 @@ where
     /// # Arguments
     ///
     /// * `trace_indices` - The indices to trace over
-    pub fn iter_trace(&self, trace_indices: [usize; 2]) -> DenseTensorTraceIterator<T, I> {
+    pub fn iter_trace(&self, trace_indices: [usize; 2]) -> DenseTensorTraceIterator<'_, T, I> {
         DenseTensorTraceIterator::new(self, trace_indices)
     }
 }

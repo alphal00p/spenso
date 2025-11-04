@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fmt::{Debug, Display},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
@@ -19,7 +19,6 @@ use linnet::{
     tree::{child_pointer::ParentChildStore, child_vec::ChildVecStore},
 };
 use serde::{Deserialize, Serialize};
-use tabled::grid::records::vec_records::Cell;
 use thiserror::Error;
 
 use crate::{

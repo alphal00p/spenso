@@ -1387,7 +1387,7 @@ pub trait TensorAtomOps: HasStructure {
     fn get_all_symbols(&self, include_function_symbols: bool) -> HashSet<Symbol>;
 
     /// Get all variables and functions in the expression.
-    fn get_all_indeterminates(&self, enter_functions: bool) -> HashSet<AtomView>;
+    fn get_all_indeterminates(&self, enter_functions: bool) -> HashSet<AtomView<'_>>;
 
     /// Returns true iff `self` contains the symbol `s`.
     fn contains_symbol(&self, s: Symbol) -> bool;
@@ -1409,7 +1409,7 @@ pub trait TensorAtomOps: HasStructure {
 }
 
 impl<S: TensorStructure + Clone> TensorAtomOps for DenseTensor<Atom, S> {
-    fn get_all_indeterminates(&self, enter_functions: bool) -> HashSet<AtomView> {
+    fn get_all_indeterminates(&self, enter_functions: bool) -> HashSet<AtomView<'_>> {
         let mut indeterminates = HashSet::new();
 
         for (_, a) in self.iter_flat() {
@@ -1497,7 +1497,7 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DenseTensor<Atom, S> {
 }
 
 impl<S: TensorStructure + Clone> TensorAtomOps for SparseTensor<Atom, S> {
-    fn get_all_indeterminates(&self, enter_functions: bool) -> HashSet<AtomView> {
+    fn get_all_indeterminates(&self, enter_functions: bool) -> HashSet<AtomView<'_>> {
         let mut indeterminates = HashSet::new();
 
         for (_, a) in self.iter_flat() {
@@ -1649,7 +1649,7 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DataTensor<Atom, S> {
         }
     }
 
-    fn get_all_indeterminates(&self, enter_functions: bool) -> HashSet<AtomView> {
+    fn get_all_indeterminates(&self, enter_functions: bool) -> HashSet<AtomView<'_>> {
         match self {
             DataTensor::Dense(d) => d.get_all_indeterminates(enter_functions),
             DataTensor::Sparse(s) => s.get_all_indeterminates(enter_functions),
@@ -1701,7 +1701,7 @@ impl<S: TensorStructure + Clone> TensorAtomOps for ParamTensor<S> {
         self.tensor.to_evaluation_tree(fn_map, params)
     }
 
-    fn get_all_indeterminates(&self, enter_functions: bool) -> HashSet<AtomView> {
+    fn get_all_indeterminates(&self, enter_functions: bool) -> HashSet<AtomView<'_>> {
         self.tensor.get_all_indeterminates(enter_functions)
     }
 }

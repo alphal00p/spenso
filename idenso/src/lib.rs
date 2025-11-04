@@ -1,6 +1,4 @@
 #![allow(uncommon_codepoints)]
-use color::color_conj_impl;
-use gamma::{gamma_conj_impl, pol_conj_impl};
 use metric::{
     CookingError, cook_function_view, cook_indices_impl, list_dangling_impl, wrap_dummies_impl,
     wrap_indices_impl,

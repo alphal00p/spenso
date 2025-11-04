@@ -1,14 +1,8 @@
 use std::ops::Div;
 
-use symbolica::{
-    atom::{Atom, AtomView},
-    coefficient::Coefficient,
-};
+use symbolica::atom::{Atom, AtomView};
 
-use crate::{
-    algebra::complex::Complex,
-    tensors::parametric::{to_param::ToAtom, ConcreteOrParam, ConcreteOrParamRef},
-};
+use crate::tensors::parametric::{to_param::ToAtom, ConcreteOrParam, ConcreteOrParamRef};
 
 impl<T, U, Out> Div<ConcreteOrParamRef<'_, U>> for ConcreteOrParam<T>
 where

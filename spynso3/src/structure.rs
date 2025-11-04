@@ -58,7 +58,7 @@ use idenso::{
     IndexTooling, color::CS, gamma::AGS, metric::PermuteWithMetric, representations::Bispinor,
 };
 
-use crate::{EMPTY, FALSE, NONE, TensorElements};
+use crate::{EMPTY, FALSE, TensorElements};
 
 use super::{ModuleInit, SliceOrIntOrExpanded};
 

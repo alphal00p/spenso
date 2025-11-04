@@ -9,7 +9,7 @@ use duplicate::duplicate;
 use enum_try_as_inner::EnumTryAsInner;
 use num::{Float, One, Zero};
 #[cfg(feature = "python")]
-use pyo3::types::{PyAnyMethods, PyComplex, PyComplexMethods};
+use pyo3::types::{PyComplex, PyComplexMethods};
 use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "shadowing")]

@@ -1,12 +1,9 @@
 use std::ops::AddAssign;
 
-use symbolica::{
-    atom::{Atom, AtomView},
-    coefficient::Coefficient,
-};
+use symbolica::atom::{Atom, AtomView};
 
 use crate::{
-    algebra::complex::{Complex, RealOrComplexRef},
+    algebra::complex::Complex,
     structure::{HasStructure, ScalarStructure, TensorStructure},
     tensors::complex::RealOrComplexTensor,
     tensors::data::DataTensor,

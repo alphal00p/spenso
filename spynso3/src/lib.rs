@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
-    sync::LazyLock,
 };
 
 use anyhow::anyhow;
@@ -172,12 +171,12 @@ impl From<ConcreteOrParam<RealOrComplex<f64>>> for TensorElements {
     fn from(value: ConcreteOrParam<RealOrComplex<f64>>) -> Self {
         match value {
             ConcreteOrParam::Concrete(RealOrComplex::Real(f)) => {
-                TensorElements::Real(Python::with_gil(|py| {
+                TensorElements::Real(Python::attach(|py| {
                     PyFloat::new(py, f).as_unbound().to_owned()
                 }))
             }
             ConcreteOrParam::Concrete(RealOrComplex::Complex(c)) => {
-                TensorElements::Complex(Python::with_gil(|py| {
+                TensorElements::Complex(Python::attach(|py| {
                     PyComplex::from_doubles(py, c.re, c.im)
                         .as_unbound()
                         .to_owned()
@@ -427,7 +426,7 @@ impl Spensor {
 
                 if let Some(slice) = slice {
                     return Ok(
-                        Python::with_gil(|py| slice.into_pyobject(py).map(|a| a.unbind()))?
+                        Python::attach(|py| slice.into_pyobject(py).map(|a| a.unbind()))?
                             .into_any(),
                     );
                 } else {
@@ -436,7 +435,7 @@ impl Spensor {
             }
         };
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             TensorElements::from(out)
                 .into_pyobject(py)
                 .map(|a| a.unbind())
@@ -985,7 +984,7 @@ Examples
 static EMPTY: fn() -> String = || "[]".into();
 
 static FALSE: fn() -> String = || "False".to_string();
-static NONE: LazyLock<String> = LazyLock::new(|| "None".to_string());
+// static NONE: LazyLock<String> = LazyLock::new(|| "None".to_string());
 
 #[cfg(feature = "python_stubgen")]
 submit! {

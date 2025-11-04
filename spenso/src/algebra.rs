@@ -2,10 +2,7 @@ use std::{iter::Sum, ops::AddAssign};
 
 use gat_lending_iterator::LendingIterator;
 
-use crate::{
-    structure::TensorStructure,
-    tensors::data::{DataTensor, DenseTensor},
-};
+use crate::{structure::TensorStructure, tensors::data::DataTensor};
 
 pub mod add;
 pub mod add_assign;

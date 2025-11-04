@@ -471,8 +471,8 @@ pub mod test {
         );
         println!("{expr}");
         let lib: DummyLibrary<SymbolicTensor> = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
+        // let fnlib = ErroringLibrary::<Symbol>::new();
+        let net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
@@ -817,12 +817,12 @@ pub mod test {
         }
     }
 
-    // -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))
+    // -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ebar(2,mink(4,2))*ebar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))
 
     #[test]
     fn parse_big_tensors() {
         initialize();
-        let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
+        let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ebar(2,mink(4,2))*ebar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
         let lib = DummyLibrary::<_>::new();
         let fnlib = ErroringLibrary::<Symbol>::new();
         println!("Hi");
@@ -911,9 +911,9 @@ pub mod test {
                     * _gammaloop::Q(8, spenso::mink(4, _gammaloop::edge_8_1))
                     * _gammaloop::u(1)
                     * _gammaloop::vbar(2, spenso::bis(4, _gammaloop::hedge_2))
-                    * _gammaloop::ϵbar(0, spenso::mink(4, _gammaloop::hedge_0))
-                    * _gammaloop::ϵbar(3, spenso::mink(4, _gammaloop::hedge_3))
-                    * _gammaloop::ϵbar(4, spenso::mink(4, _gammaloop::hedge_4))
+                    * _gammaloop::ebar(0, spenso::mink(4, _gammaloop::hedge_0))
+                    * _gammaloop::ebar(3, spenso::mink(4, _gammaloop::hedge_3))
+                    * _gammaloop::ebar(4, spenso::mink(4, _gammaloop::hedge_4))
                     * spenso::g(
                         spenso::cof(3, _gammaloop::hedge_1),
                         spenso::dind(spenso::cof(3, _gammaloop::hedge_2))

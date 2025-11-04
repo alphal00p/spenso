@@ -199,12 +199,13 @@ pub fn cook_indices_impl(view: AtomView) -> Atom {
         let ipat = i.to_symbolic([RS.d_, RS.a_]).to_pattern();
         expr = expr.replace_map(|term, ctx, out| {
             if ctx.function_level < 2 && ctx.function_level > 0 {
-                if let Some(c) = term.pattern_match(&ipat, None, &settings).next() {
-                    if let Ok(aind) = cook_function_view(c[&RS.a_].as_view()) {
-                        *out = i.to_symbolic([c[&RS.d_].clone(), aind]);
-                        return true;
-                    }
+                if let Some(c) = term.pattern_match(&ipat, None, &settings).next()
+                    && let Ok(aind) = cook_function_view(c[&RS.a_].as_view())
+                {
+                    *out = i.to_symbolic([c[&RS.d_].clone(), aind]);
+                    return true;
                 }
+
                 false
             } else {
                 false
@@ -218,13 +219,14 @@ pub fn cook_indices_impl(view: AtomView) -> Atom {
         let ipat_dual = i.dual().to_symbolic([RS.d_, RS.a_]).to_pattern();
         expr = expr.replace_map(|term, ctx, out| {
             if ctx.function_level == 1 {
-                if let Some(c) = term.pattern_match(&ipat_dual, None, &settings).next() {
-                    if let Ok(aind) = cook_function_view(c[&RS.a_].as_view()) {
-                        // println!("{aind}");
-                        *out = i.dual().to_symbolic([c[&RS.d_].clone(), aind]);
-                        return true;
-                    }
+                if let Some(c) = term.pattern_match(&ipat_dual, None, &settings).next()
+                    && let Ok(aind) = cook_function_view(c[&RS.a_].as_view())
+                {
+                    // println!("{aind}");
+                    *out = i.dual().to_symbolic([c[&RS.d_].clone(), aind]);
+                    return true;
                 }
+
                 false
             } else {
                 false
@@ -232,12 +234,13 @@ pub fn cook_indices_impl(view: AtomView) -> Atom {
         });
         expr = expr.replace_map(|term, ctx, out| {
             if ctx.function_level == 1 {
-                if let Some(c) = term.pattern_match(&ipat, None, &settings).next() {
-                    if let Ok(aind) = cook_function_view(c[&RS.a_].as_view()) {
-                        *out = i.to_symbolic([c[&RS.d_].clone(), aind]);
-                        return true;
-                    }
+                if let Some(c) = term.pattern_match(&ipat, None, &settings).next()
+                    && let Ok(aind) = cook_function_view(c[&RS.a_].as_view())
+                {
+                    *out = i.to_symbolic([c[&RS.d_].clone(), aind]);
+                    return true;
                 }
+
                 false
             } else {
                 false

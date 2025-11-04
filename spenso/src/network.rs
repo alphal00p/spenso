@@ -1501,7 +1501,7 @@ where
                     Err(TensorNetworkError::ChildlessNeg)
                 }
             }
-            NetworkOp::Power(i) => {
+            NetworkOp::Power(_) => {
                 let mut pow = 0;
                 let ops = graph.graph.iter_nodes().find(|(_, _, d)| {
                     if let NetworkNode::Op(NetworkOp::Power(i)) = d {
@@ -1540,7 +1540,7 @@ where
                             } else {
                                 let mut s = self.scalar[*si].clone();
 
-                                for i in 1..n {
+                                for _ in 1..n {
                                     s *= self.scalar[*si].refer();
                                 }
 

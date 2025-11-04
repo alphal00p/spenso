@@ -1,11 +1,6 @@
 use std::ops::MulAssign;
 
-use symbolica::{
-    atom::{Atom, AtomView},
-    coefficient::Coefficient,
-};
-
-use crate::algebra::complex::{Complex, RealOrComplex, RealOrComplexRef};
+use symbolica::atom::{Atom, AtomView};
 
 use super::{to_param::ToAtom, ConcreteOrParam, ConcreteOrParamRef};
 

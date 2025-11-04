@@ -338,6 +338,7 @@ impl<
         self.shared_data.common_subexpression_elimination()
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn evaluate(
         &mut self,
         params: &[T],
@@ -394,6 +395,7 @@ impl<
         Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> + Clone,
     > EvalTensorNetworkSet<T, S, K, FK, Aind, Store>
 {
+    #[allow(clippy::type_complexity)]
     pub fn evaluate(
         &mut self,
         params: &[T],
@@ -444,6 +446,7 @@ impl<
     /// high-performance inline ASM code will be generated for most
     /// evaluation instructions. This often gives better performance than
     /// the `O3` optimization level and results in very fast compilation.
+    #[allow(clippy::type_complexity)]
     pub fn export_cpp<F: CompiledNumber>(
         &self,
         path: impl AsRef<std::path::Path>,

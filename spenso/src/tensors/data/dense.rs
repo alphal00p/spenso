@@ -441,7 +441,7 @@ impl<U, I> DenseTensor<U, I>
 where
     I: TensorStructure + Clone,
 {
-    pub fn try_upgrade<T>(&self) -> Option<Cow<DenseTensor<U::LCM, I>>>
+    pub fn try_upgrade<T>(&self) -> Option<Cow<'_, DenseTensor<U::LCM, I>>>
     where
         U: TrySmallestUpgrade<T>,
         U::LCM: Clone,

@@ -540,6 +540,7 @@ where
 }
 
 pub trait Evaluate<Str: TensorScalarStore, K, FK, S, T, Aind> {
+    #[allow(clippy::type_complexity)]
     fn evaluate(&mut self, params: &[T]) -> Network<Str::Store<DataTensor<T, S>, T>, K, FK, Aind>
     where
         S: TensorStructure + Clone;

@@ -732,7 +732,7 @@ pub trait TrySmallestUpgrade<T> {
     type LCM: Clone;
     // type Order;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>;
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>>;
 }
 
 // pub trait SmallerThan<T> {}
@@ -773,7 +773,7 @@ where
     type LCM = SymbolicaComplex<O>;
     // type Order = LessThan;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>>
     where
         Self::LCM: Clone,
     {
@@ -794,7 +794,7 @@ where
     type LCM = Complex<O>;
     // type Order = LessThan;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>>
     where
         Self::LCM: Clone,
     {
@@ -926,7 +926,7 @@ duplicate! {
 impl TrySmallestUpgrade<equal> for equal {
     type LCM = equal;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_,Self::LCM>>
         where
             Self::LCM: Clone {
         Some(Cow::Borrowed(self))
@@ -938,7 +938,7 @@ impl TrySmallestUpgrade<equal> for equal {
 impl TrySmallestUpgrade<Atom> for Atom {
     type LCM = Atom;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>>
     where
         Self::LCM: Clone,
     {
@@ -950,7 +950,7 @@ impl TrySmallestUpgrade<Atom> for Atom {
 impl TrySmallestUpgrade<Integer> for Integer {
     type LCM = Integer;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>>
     where
         Self::LCM: Clone,
     {
@@ -962,7 +962,7 @@ impl TrySmallestUpgrade<Integer> for Integer {
 impl TrySmallestUpgrade<Complex<Integer>> for Complex<Integer> {
     type LCM = Complex<Integer>;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>>
     where
         Self::LCM: Clone,
     {
@@ -974,7 +974,7 @@ impl TrySmallestUpgrade<Complex<Integer>> for Complex<Integer> {
 impl TrySmallestUpgrade<Rational> for Rational {
     type LCM = Rational;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>>
     where
         Self::LCM: Clone,
     {
@@ -986,7 +986,7 @@ impl TrySmallestUpgrade<Rational> for Rational {
 impl TrySmallestUpgrade<Complex<Rational>> for Complex<Rational> {
     type LCM = Complex<Rational>;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>>
     where
         Self::LCM: Clone,
     {
@@ -998,7 +998,7 @@ impl TrySmallestUpgrade<Complex<Rational>> for Complex<Rational> {
 impl TrySmallestUpgrade<SerializableAtom> for SerializableAtom {
     type LCM = SerializableAtom;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>>
     where
         Self::LCM: Clone,
     {
@@ -1016,7 +1016,7 @@ impl TrySmallestUpgrade<larger> for smaller {
 
 
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_,Self::LCM>>
         where
             Self::LCM: Clone {
         Some(Cow::Owned(larger::from(*self)))
@@ -1028,7 +1028,7 @@ impl TrySmallestUpgrade<smaller> for larger {
 
 
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_,Self::LCM>>
         where
             Self::LCM: Clone {
         Some(Cow::Borrowed(self))
@@ -1053,7 +1053,7 @@ impl TrySmallestUpgrade<smaller> for larger {
 impl TrySmallestUpgrade<Atom> for f64 {
     type LCM = Atom;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>> {
         let natrat = symbolica::domains::rational::Rational::from(*self);
         let symrat = Atom::num(symbolica::coefficient::Coefficient::from(natrat));
 
@@ -1065,7 +1065,7 @@ impl TrySmallestUpgrade<Atom> for f64 {
 impl TrySmallestUpgrade<SerializableAtom> for f64 {
     type LCM = SerializableAtom;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>> {
         let natrat = symbolica::domains::rational::Rational::from(*self);
         let symrat = Atom::num(symbolica::coefficient::Coefficient::from(natrat)).into();
 
@@ -1077,7 +1077,7 @@ impl TrySmallestUpgrade<SerializableAtom> for f64 {
 impl TrySmallestUpgrade<Atom> for i32 {
     type LCM = Atom;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>> {
         let symnum = Atom::num(*self);
 
         Some(Cow::Owned(symnum))
@@ -1088,7 +1088,7 @@ impl TrySmallestUpgrade<Atom> for i32 {
 impl TrySmallestUpgrade<SerializableAtom> for i32 {
     type LCM = SerializableAtom;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>> {
         let symnum = Atom::num(*self).into();
 
         Some(Cow::Owned(symnum))
@@ -1227,7 +1227,7 @@ impl Div<SerializableAtom> for &SerializableAtom {
 impl TrySmallestUpgrade<SerializableAtom> for Complex<f64> {
     type LCM = SerializableAtom;
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>> {
+    fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>> {
         let real: Cow<'_, SerializableAtom> =
             <f64 as TrySmallestUpgrade<SerializableAtom>>::try_upgrade(&self.re)?;
         let imag: Cow<'_, SerializableAtom> =
@@ -1256,7 +1256,7 @@ impl TrySmallestUpgrade<smaller> for larger {
 
 
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_,Self::LCM>>
         where
             Self::LCM: Clone {
         Some(Cow::Borrowed(self))
@@ -1278,7 +1278,7 @@ impl TrySmallestUpgrade<smaller> for larger {
 
 
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_,Self::LCM>>
         where
             Self::LCM: Clone {
         Some(Cow::Borrowed(self))
@@ -1290,7 +1290,7 @@ impl TrySmallestUpgrade<larger> for smaller {
 
 
 
-    fn try_upgrade(&self) -> Option<Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<Cow<'_,Self::LCM>>
         where
             Self::LCM: Clone {
                let z = self.ref_zero();

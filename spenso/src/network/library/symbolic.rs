@@ -464,7 +464,7 @@ impl<
         self.generic_dimension.insert(key, data);
     }
 
-    pub fn get(&self, key: &ExplicitKey<Aind>) -> Result<Cow<T>>
+    pub fn get(&self, key: &ExplicitKey<Aind>) -> Result<Cow<'_, T>>
     where
         T: Clone,
         LibraryError<ExplicitKey<Aind>>: Into<anyhow::Error>,
@@ -482,6 +482,7 @@ impl<
 }
 
 #[cfg(test)]
+#[allow(clippy::type_complexity)]
 mod test {
     use symbolica::{function, parse};
 

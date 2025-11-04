@@ -39,7 +39,7 @@ where
 {
     type LCM = Atom;
 
-    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<'_, Self::LCM>> {
         Some(std::borrow::Cow::Borrowed(self))
     }
 }
@@ -50,7 +50,7 @@ where
 {
     type LCM = Atom;
 
-    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<'_, Self::LCM>> {
         Some(std::borrow::Cow::Owned(
             self.re.try_upgrade()?.as_ref() + self.im.try_upgrade()?.as_ref() * Atom::i(),
         ))
@@ -63,7 +63,7 @@ where
 {
     type LCM = Atom;
 
-    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<'_, Self::LCM>> {
         Some(std::borrow::Cow::Borrowed(self))
     }
 }
@@ -74,7 +74,7 @@ where
 {
     type LCM = Atom;
 
-    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<'_, Self::LCM>> {
         match self {
             RealOrComplex::Real(r) => r.try_upgrade(),
             RealOrComplex::Complex(c) => Some(std::borrow::Cow::Owned(
@@ -90,7 +90,7 @@ where
 {
     type LCM = <Atom as TrySmallestUpgrade<T>>::LCM;
 
-    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<'_, Self::LCM>> {
         <Atom as TrySmallestUpgrade<T>>::try_upgrade(self)
     }
 }
@@ -102,7 +102,7 @@ where
 {
     type LCM = <T as TrySmallestUpgrade<Atom>>::LCM;
 
-    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>> {
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<'_, Self::LCM>> {
         match self {
             ConcreteOrParam::Param(a) => a.try_upgrade(),
             ConcreteOrParam::Concrete(c) => c.try_upgrade(),
@@ -122,7 +122,7 @@ impl TrySmallestUpgrade<smaller> for larger {
 
 
 
-    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<'_,Self::LCM>>
         where
             Self::LCM: Clone {
         Some(std::borrow::Cow::Borrowed(self))
@@ -134,7 +134,7 @@ impl TrySmallestUpgrade<larger> for smaller {
 
 
 
-    fn try_upgrade(&self) -> Option<std::borrow::Cow<Self::LCM>>
+    fn try_upgrade(&self) -> Option<std::borrow::Cow<'_,Self::LCM>>
         where
             Self::LCM: Clone {
                let z = self.ref_zero();

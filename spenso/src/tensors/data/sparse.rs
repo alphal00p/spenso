@@ -633,7 +633,7 @@ impl<U, I> SparseTensor<U, I>
 where
     I: TensorStructure + Clone,
 {
-    pub fn try_upgrade<T>(&self) -> Option<Cow<SparseTensor<U::LCM, I>>>
+    pub fn try_upgrade<T>(&self) -> Option<Cow<'_, SparseTensor<U::LCM, I>>>
     where
         U: TrySmallestUpgrade<T>,
         U::LCM: Clone,
@@ -744,7 +744,7 @@ where
 
     /// fallible smart get method, returns an error if the indices are out of bounds.
     /// If the index is in the bTree return the value, else return zero.
-    pub fn smart_get(&self, indices: &[ConcreteIndex]) -> Result<Cow<T>>
+    pub fn smart_get(&self, indices: &[ConcreteIndex]) -> Result<Cow<'_, T>>
     where
         T: Default + Clone,
     {

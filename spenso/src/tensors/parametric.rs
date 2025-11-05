@@ -6,7 +6,9 @@ use std::{
     path::Path,
 };
 
-use crate::structure::{permuted::PermuteTensor, representation::Representation};
+use crate::structure::{
+    permuted::PermuteTensor, representation::Representation, slot::ParseableAind,
+};
 use crate::structure::{slot::AbsInd, StructureError};
 use crate::structure::{slot::IsAbstractSlot, IndexLess};
 use crate::{
@@ -687,7 +689,7 @@ where
     S: HasName + Clone,
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
-    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
 }
 
@@ -696,7 +698,7 @@ where
     S: HasName + Clone,
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
-    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     fn append_map<T>(
         &self,
@@ -920,7 +922,7 @@ impl<
         S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
     > Shadowable for ParamOrConcrete<C, S>
 where
-    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
 }
 
@@ -930,7 +932,7 @@ impl<
         S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
     > ShadowMapping<U> for ParamOrConcrete<C, S>
 where
-    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     // fn shadow_with_map<'a, T>(
     //     &'a self,

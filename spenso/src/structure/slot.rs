@@ -100,8 +100,7 @@ pub enum SlotError {
 ///
 impl<'a, T: RepName, Aind> TryFrom<AtomView<'a>> for Slot<T, Aind>
 where
-    Aind: TryFrom<AtomView<'a>>,
-    SlotError: From<<Aind as TryFrom<AtomView<'a>>>::Error>,
+    Aind: ParseableAind,
 {
     type Error = SlotError;
 
@@ -131,13 +130,13 @@ where
         };
 
         let index: Aind = if let Some(a) = iter.next() {
-            Ok(Aind::try_from(a)?)
+            Ok(Aind::from_view(a).map_err(|a| a.into())?)
         } else {
             Err(SlotError::NoMoreArguments)
         }?;
 
         if if let Some(a) = iter.next() {
-            Ok(Aind::try_from(a)?)
+            Ok(Aind::from_view(a).map_err(|a| a.into())?)
         } else {
             Err(SlotError::NoMoreArguments)
         }
@@ -175,8 +174,17 @@ impl<T: BaseRepName, Aind> ConstructibleSlot<T, Aind> for Slot<T, Aind> {
 
 pub trait AbsInd: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + Display {}
 
+#[cfg(feature = "shadowing")]
+pub trait ParseableAind: Sized {
+    type Error: Into<SlotError>;
+    fn from_view(view: AtomView<'_>) -> Result<Self, Self::Error>;
+
+    fn to_atom(&self) -> Atom;
+}
+
 pub trait DummyAind {
     fn new_dummy() -> Self;
+    fn is_dummy(&self) -> bool;
 }
 
 pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + Display {
@@ -219,11 +227,11 @@ pub trait IsAbstractSlot: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + D
     /// using the function builder of the representation add the abstract index as an argument, and finish it to an Atom.
     fn to_atom(&self) -> Atom
     where
-        Atom: From<Self::Aind>;
+        Self::Aind: ParseableAind;
     #[cfg(feature = "shadowing")]
     fn to_symbolic_wrapped(&self) -> Atom
     where
-        Atom: From<Self::Aind>;
+        Self::Aind: ParseableAind;
     // #[cfg(feature = "shadowing")]
     // fn try_from_view<'a>(v: AtomView<'a>) -> Result<Self, SlotError>
     // where
@@ -264,19 +272,19 @@ impl<T: RepName, A: AbsInd> IsAbstractSlot for Slot<T, A> {
     #[cfg(feature = "shadowing")]
     fn to_atom(&self) -> Atom
     where
-        Atom: From<Self::Aind>,
+        Self::Aind: ParseableAind,
     {
-        self.rep.to_symbolic([Atom::from(self.aind)])
+        self.rep.to_symbolic([self.aind.to_atom()])
     }
     #[cfg(feature = "shadowing")]
     fn to_symbolic_wrapped(&self) -> Atom
     where
-        Atom: From<Self::Aind>,
+        Self::Aind: ParseableAind,
     {
         use symbolica::function;
 
         self.rep
-            .to_symbolic([function!(symbol!("indexid"), Atom::from(self.aind))])
+            .to_symbolic([function!(symbol!("indexid"), self.aind.to_atom())])
     }
     // #[cfg(feature = "shadowing")]
     // fn try_from_view<'a>(v: AtomView<'a>) -> Result<Self, SlotError>

@@ -9,6 +9,7 @@ use pyo3::{
     types::{PyModule, PyModuleMethods},
     wrap_pyfunction,
 };
+use spenso::structure::abstract_index::AbstractIndex;
 use symbolica::atom::Atom;
 
 use crate::IndexTooling;
@@ -25,59 +26,8 @@ use symbolica::api::python::PythonExpression;
     gen_stub_pyfunction(module = "symbolica.community.idenso")
 )]
 #[pyfunction]
-/// Calculate the physics-aware complex conjugate of tensor expressions.
-///
-/// Applies sophisticated conjugation rules for quantum field theory and particle physics
-/// objects, respecting the mathematical structure of each tensor type:
-///
-/// **Complex Numbers:**
-/// - `i → -i` (imaginary unit)
-/// - `z* → conjugate(z)` for complex coefficients
-///
-/// **Electromagnetic Fields:**
-/// - Polarization vectors: `eps(p,λ) ↔ epsbar(p,λ)`
-///
-/// **Spinor Fields:**
-/// - Dirac spinors: `u(p,s) ↔ ū(p,s)`, `v(p,s) ↔ v̄(p,s)`
-///
-/// **Gamma Matrices:**
-/// - `γ^μ_{αβ} → -γ^μ_{βα}` (Hermitian conjugation with index swap)
-/// - `γ^5_{αβ} → γ^5_{βα}` (γ^5 is Hermitian)
-///
-/// **Color Structures:**
-/// - SU(N) generators: `T^a_{ij} → T^a_{ji}` (fundamental ↔ antifundamental)
-/// - Structure constants: `f^{abc} → f^{abc}` (unchanged, purely real)
-/// - Color wavefunctions: fundamental ↔ antifundamental representations
-///
-/// # Args:
-///     self_: The symbolic expression to conjugate
-///
-/// # Returns:
-///     The physics-conjugated expression following QFT conventions
-///
-/// # Examples:
-/// ```python
-/// import symbolica as sp
-/// from symbolica.community.idenso import conj
-///
-/// # Complex coefficients
-/// expr = sp.I * sp.S('x')
-/// result = conj(expr)  # -I * x
-///
-/// # Spinor conjugation
-/// u = sp.S('u')
-/// mu = sp.S('mu')
-/// spinor_expr = u(sp.S('p'), sp.S('s'))
-/// conj_spinor = conj(spinor_expr)  # ubar(p, s)
-///
-/// # Gamma matrix conjugation
-/// gamma = sp.S('gamma')
-/// alpha, beta = sp.S('alpha', 'beta')
-/// gamma_expr = gamma(mu, alpha, beta)
-/// conj_gamma = conj(gamma_expr)  # -gamma(mu, beta, alpha)
-/// ```
-pub fn conj(self_: &PythonExpression) -> PythonExpression {
-    self_.expr.hermitian_conjugate().into()
+pub fn dirac_adjoint(self_: &PythonExpression) -> PythonExpression {
+    self_.expr.dirac_adjoint::<AbstractIndex>().unwrap().into()
 }
 
 #[cfg_attr(
@@ -435,7 +385,7 @@ pub fn cook_function(self_: &PythonExpression) -> PyResult<PythonExpression> {
 ///
 /// ```
 pub fn wrap_dummies(self_: &PythonExpression, header: Symbol) -> PythonExpression {
-    self_.expr.wrap_dummies(header).into()
+    self_.expr.wrap_dummies::<AbstractIndex>(header).into()
 }
 
 #[cfg_attr(
@@ -482,7 +432,7 @@ pub fn wrap_dummies(self_: &PythonExpression, header: Symbol) -> PythonExpressio
 pub fn list_dangling(self_: &PythonExpression) -> Vec<PythonExpression> {
     self_
         .expr
-        .list_dangling()
+        .list_dangling::<AbstractIndex>()
         .into_iter()
         .map(|a| a.into())
         .collect()
@@ -674,7 +624,7 @@ pub(crate) fn initialize_alg_simp(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(cook_function, m)?)?;
     m.add_function(wrap_pyfunction!(wrap_dummies, m)?)?;
     m.add_function(wrap_pyfunction!(list_dangling, m)?)?;
-    m.add_function(wrap_pyfunction!(conj, m)?)?;
+    m.add_function(wrap_pyfunction!(dirac_adjoint, m)?)?;
     m.add_function(wrap_pyfunction!(expand_bis, m)?)?;
     m.add_function(wrap_pyfunction!(expand_mink_bis, m)?)?;
     m.add_function(wrap_pyfunction!(expand_mink, m)?)?;

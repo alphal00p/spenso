@@ -5,7 +5,7 @@ use spenso::{
     structure::{
         dimension::Dimension,
         representation::{LibraryRep, Minkowski, RepName},
-        slot::AbsInd,
+        slot::{AbsInd, DummyAind, ParseableAind},
     },
 };
 use symbolica::{
@@ -160,7 +160,7 @@ pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
     projm: symbol!("spenso::projm"),
     gamma5: symbol!("spenso::gamma5"),
     sigma: symbol!("spenso::sigma"),
-    gamma0: symbol!("spenso::gamma0"),
+    gamma0: symbol!("spenso::gamma0";Real,Symmetric),
     gammaconj: symbol!("spenso::gammaconj"),
 });
 
@@ -263,6 +263,18 @@ impl GammaLibrary {
     ) -> Atom {
         function!(
             self.gamma5,
+            Bispinor {}.to_symbolic([i]),
+            Bispinor {}.to_symbolic([j])
+        )
+    }
+
+    pub fn gamma0_pattern<'a>(
+        &self,
+        i: impl Into<AtomOrView<'a>>,
+        j: impl Into<AtomOrView<'a>>,
+    ) -> Atom {
+        function!(
+            self.gamma0,
             Bispinor {}.to_symbolic([i]),
             Bispinor {}.to_symbolic([j])
         )
@@ -716,17 +728,79 @@ pub trait GammaSimplifier {
     /// # Returns
     /// An [`Atom`] representing the expression after gamma matrix simplification.
     fn simplify_gamma(&self) -> Atom;
+
+    fn simplify_gamma0(&self) -> Atom;
+
+    fn simplify_gamma_conj<Aind: DummyAind + ParseableAind>(&self) -> anyhow::Result<Atom>;
 }
 
 impl GammaSimplifier for Atom {
     fn simplify_gamma(&self) -> Atom {
         gamma_simplify_impl(self.as_atom_view())
     }
+
+    fn simplify_gamma0(&self) -> Atom {
+        self.as_view().simplify_gamma0()
+    }
+
+    fn simplify_gamma_conj<Aind: DummyAind + ParseableAind>(&self) -> anyhow::Result<Atom> {
+        self.as_view().simplify_gamma_conj::<Aind>()
+    }
 }
 
 impl GammaSimplifier for AtomView<'_> {
     fn simplify_gamma(&self) -> Atom {
         gamma_simplify_impl(self.as_atom_view())
+    }
+
+    fn simplify_gamma0(&self) -> Atom {
+        let repeated_gamma0 =
+            AGS.gamma0_pattern(RS.a__, RS.b__) * AGS.gamma0_pattern(RS.b__, RS.c__);
+
+        self.replace(repeated_gamma0)
+            .repeat()
+            .with(Bispinor {}.metric_atom([RS.a__], [RS.c__]))
+    }
+
+    fn simplify_gamma_conj<Aind: DummyAind + ParseableAind>(&self) -> Result<Atom, anyhow::Error> {
+        let dummy = symbol!("dummy");
+
+        let dummypati = function!(dummy, RS.i_).to_pattern();
+        let dummypatj = function!(dummy, RS.j_).to_pattern();
+
+        let conj_gamma = function!(
+            AGS.gamma,
+            Bispinor {}.to_symbolic([RS.d_, RS.i_]),
+            Bispinor {}.to_symbolic([RS.d_, RS.j_]),
+            Minkowski {}.to_symbolic([RS.a__])
+        )
+        .conj();
+
+        let conj_gamma_rhs = (function!(
+            AGS.gamma0,
+            Bispinor {}.to_symbolic([RS.d_, RS.j_]),
+            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.j_)])
+        ) * function!(
+            AGS.gamma,
+            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.j_)]),
+            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.i_)]),
+            Minkowski {}.to_symbolic([RS.a__])
+        ) * function!(
+            AGS.gamma0,
+            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.i_)]),
+            Bispinor {}.to_symbolic([RS.d_, RS.i_])
+        ))
+        .to_pattern();
+
+        Ok(self.replace(conj_gamma).with_map(move |m| {
+            let a = conj_gamma_rhs.replace_wildcards_with_matches(m);
+            let i = dummypati.replace_wildcards_with_matches(m);
+            let j = dummypatj.replace_wildcards_with_matches(m);
+            a.replace(i)
+                .with(Aind::new_dummy().to_atom())
+                .replace(j)
+                .with(Aind::new_dummy().to_atom())
+        }))
     }
 }
 

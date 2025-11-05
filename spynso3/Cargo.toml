@@ -22,7 +22,7 @@ xpct = "0.5.1"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 pyo3 = { version = "0.27", features = ["anyhow"] }
 
-pyo3-stub-gen-derive = { git = "https://github.com/benruijl/pyo3-stub-gen", branch = "patched", package = "pyo3-stub-gen-derive", default-features = false }
+# pyo3-stub-gen-derive = { git = "https://github.com/benruijl/pyo3-stub-gen", branch = "patched", package = "pyo3-stub-gen-derive", default-features = false }
 
 pyo3-stub-gen = { version = "0.16", default-features = false, optional = true }
 itertools = "0.14.0"

@@ -8,7 +8,7 @@ use tabled::{builder::Builder, settings::Style};
 #[cfg(feature = "shadowing")]
 use crate::{
     shadowing::symbolica_utils::IntoSymbol,
-    structure::{ExpandedCoefficent, FlatIndex, ToSymbolic},
+    structure::{slot::ParseableAind, ExpandedCoefficent, FlatIndex, ToSymbolic},
     tensors::{data::DenseTensor, parametric::TensorCoefficient},
 };
 
@@ -493,10 +493,7 @@ impl<R: RepName, Aind: AbsInd> ScalarStructure for OrderedStructure<R, Aind> {
 }
 
 #[cfg(feature = "shadowing")]
-impl<R: RepName<Dual = R>, Aind: AbsInd> ToSymbolic for OrderedStructure<R, Aind>
-where
-    Atom: From<Aind>,
-{
+impl<R: RepName<Dual = R>, Aind: AbsInd + ParseableAind> ToSymbolic for OrderedStructure<R, Aind> {
     fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
         ExpandedCoefficent {
             name: None,

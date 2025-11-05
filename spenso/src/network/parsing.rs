@@ -5,12 +5,14 @@ use super::*;
 
 use library::Library;
 
-use crate::structure::abstract_index::AIND_SYMBOLS;
+use crate::network::library::DummyLibrary;
+use crate::structure::abstract_index::{AindSymbols, AIND_SYMBOLS};
 // use crate::shadowing::Concretize;
-use crate::structure::slot::{Slot, SlotError};
+use crate::structure::slot::{ParseableAind, Slot, SlotError};
 use crate::structure::{
     NamedStructure, OrderedStructure, PermutedStructure, StructureError, TensorShell,
 };
+use crate::tensors::symbolic::SymbolicTensor;
 
 use std::fmt::Display;
 
@@ -37,10 +39,8 @@ pub static SPENSO_TAG: std::sync::LazyLock<SpensoTags> = std::sync::LazyLock::ne
 
 pub type ShadowedStructure<Aind> = NamedStructure<Symbol, Vec<Atom>, LibraryRep, Aind>;
 
-impl<'a, Aind: AbsInd> TryFrom<AtomView<'a>> for PermutedStructure<ShadowedStructure<Aind>>
-where
-    Slot<LibraryRep, Aind>: TryFrom<AtomView<'a>>,
-    StructureError: From<<Slot<LibraryRep, Aind> as TryFrom<AtomView<'a>>>::Error>,
+impl<'a, Aind: ParseableAind + AbsInd> TryFrom<AtomView<'a>>
+    for PermutedStructure<ShadowedStructure<Aind>>
 {
     type Error = StructureError;
     fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
@@ -52,21 +52,15 @@ where
     }
 }
 
-impl<Aind: AbsInd> TryFrom<Atom> for PermutedStructure<ShadowedStructure<Aind>>
-where
-    Slot<LibraryRep, Aind>: for<'a> TryFrom<AtomView<'a>>,
-    StructureError: for<'a> From<<Slot<LibraryRep, Aind> as TryFrom<AtomView<'a>>>::Error>,
-{
+impl<Aind: ParseableAind + AbsInd> TryFrom<Atom> for PermutedStructure<ShadowedStructure<Aind>> {
     type Error = StructureError;
     fn try_from(value: Atom) -> Result<Self, Self::Error> {
         value.as_view().try_into()
     }
 }
 
-impl<'a, Aind: AbsInd> TryFrom<&'a Atom> for PermutedStructure<ShadowedStructure<Aind>>
-where
-    Slot<LibraryRep, Aind>: TryFrom<AtomView<'a>>,
-    StructureError: From<<Slot<LibraryRep, Aind> as TryFrom<AtomView<'a>>>::Error>,
+impl<'a, Aind: ParseableAind + AbsInd> TryFrom<&'a Atom>
+    for PermutedStructure<ShadowedStructure<Aind>>
 {
     type Error = StructureError;
     fn try_from(value: &'a Atom) -> Result<Self, Self::Error> {
@@ -74,10 +68,8 @@ where
     }
 }
 
-impl<'a, Aind: AbsInd> TryFrom<FunView<'a>> for PermutedStructure<ShadowedStructure<Aind>>
-where
-    Slot<LibraryRep, Aind>: TryFrom<AtomView<'a>>,
-    StructureError: From<<Slot<LibraryRep, Aind> as TryFrom<AtomView<'a>>>::Error>,
+impl<'a, Aind: ParseableAind + AbsInd> TryFrom<FunView<'a>>
+    for PermutedStructure<ShadowedStructure<Aind>>
 {
     type Error = StructureError;
     fn try_from(value: FunView<'a>) -> Result<Self, Self::Error> {
@@ -149,13 +141,15 @@ where
 
 #[derive(Clone, Debug)]
 pub struct ParseSettings {
-    precontract_scalars: bool,
+    pub precontract_scalars: bool,
+    pub take_first_term_from_sum: bool,
 }
 
 impl Default for ParseSettings {
     fn default() -> Self {
         Self {
             precontract_scalars: true,
+            take_first_term_from_sum: false,
         }
     }
 }
@@ -357,24 +351,47 @@ where
         let first_atom = iter.next().unwrap();
 
         let first = Self::try_from_view(first_atom, library, settings)?;
-
-        let rest: Result<Vec<_>, _> = iter
-            .map(|a| match Self::try_from_view(a, library, settings) {
-                Ok(n) => {
-                    if n.state.is_compatible(&first.state) {
-                        Ok(n)
-                    } else {
-                        Err(TensorNetworkError::IncompatibleSummand(format!(
-                            "{} is {:?} vs {} is {:?}",
-                            a, n.state, first_atom, first.state
-                        )))
+        if settings.take_first_term_from_sum {
+            Ok(first)
+        } else {
+            let rest: Result<Vec<_>, _> = iter
+                .map(|a| match Self::try_from_view(a, library, settings) {
+                    Ok(n) => {
+                        if n.state.is_compatible(&first.state) {
+                            Ok(n)
+                        } else {
+                            Err(TensorNetworkError::IncompatibleSummand(format!(
+                                "{} is {:?} vs {} is {:?}",
+                                a, n.state, first_atom, first.state
+                            )))
+                        }
                     }
-                }
-                Err(e) => Err(e),
-            })
-            .collect();
+                    Err(e) => Err(e),
+                })
+                .collect();
 
-        Ok(first.n_add(rest?))
+            Ok(first.n_add(rest?))
+        }
+    }
+}
+
+pub type SymbolicNet<Aind> =
+    Network<NetworkStore<SymbolicTensor<Aind>, Atom>, DummyKey, Symbol, Aind>;
+pub trait SymbolicParse {
+    fn parse_to_symbolic_net<Aind: AbsInd + ParseableAind>(
+        &self,
+        settings: &ParseSettings,
+    ) -> Result<SymbolicNet<Aind>, TensorNetworkError<DummyKey, Symbol>>;
+}
+
+impl SymbolicParse for AtomView<'_> {
+    fn parse_to_symbolic_net<Aind: AbsInd + ParseableAind>(
+        &self,
+        settings: &ParseSettings,
+    ) -> Result<SymbolicNet<Aind>, TensorNetworkError<DummyKey, Symbol>> {
+        let lib = DummyLibrary::<SymbolicTensor>::new();
+
+        SymbolicNet::<Aind>::try_from_view(*self, &lib, settings)
     }
 }
 
@@ -408,8 +425,9 @@ pub mod test {
             expr.as_view(),
             &lib,
             &ParseSettings::default(),
-        )
-        .unwrap();
+        );
+
+        let mut net = net.unwrap();
 
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
@@ -514,7 +532,7 @@ pub mod test {
             .unwrap();
         assert_snapshot!(
             net.dot_display_impl(
-                |a| a.to_string(),
+                |a| a.to_canonical_string(),
                 |_| None,
                 |a| a.to_string(),
                 |_| "".to_string()

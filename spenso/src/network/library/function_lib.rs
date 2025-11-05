@@ -5,10 +5,11 @@ use symbolica::{atom::Symbol, function};
 
 use crate::{
     network::library::{FunctionLibrary, FunctionLibraryError},
-    structure::{HasStructure, TensorStructure},
+    structure::{slot::AbsInd, HasStructure, TensorStructure},
     tensors::{
         data::StorageTensor,
         parametric::{to_param::ToParam, ParamOrConcrete, ParamTensor},
+        symbolic::SymbolicTensor,
     },
 };
 
@@ -36,6 +37,20 @@ impl Panic {
     }
 }
 pub struct Wrap;
+
+impl<Aind: AbsInd> FunctionLibrary<SymbolicTensor<Aind>> for Wrap {
+    type Key = Symbol;
+    fn apply(
+        &self,
+        key: &Self::Key,
+        tensor: SymbolicTensor<Aind>,
+    ) -> anyhow::Result<SymbolicTensor<Aind>, FunctionLibraryError<Self::Key>> {
+        Ok(SymbolicTensor {
+            structure: tensor.structure,
+            expression: function!(*key, tensor.expression),
+        })
+    }
+}
 impl Wrap {
     pub fn new_lib<T>() -> SymbolLib<T, Self> {
         SymbolLib {

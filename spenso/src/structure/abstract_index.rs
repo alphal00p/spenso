@@ -20,6 +20,8 @@ use symbolica::coefficient::CoefficientView;
 
 #[cfg(feature = "shadowing")]
 use crate::shadowing::symbolica_utils::SerializableSymbol;
+#[cfg(feature = "shadowing")]
+use crate::structure::slot::ParseableAind;
 use crate::utils::{to_subscript, to_superscript};
 
 use thiserror::Error;
@@ -177,6 +179,10 @@ impl AbsInd for AbstractIndex {}
 impl DummyAind for AbstractIndex {
     fn new_dummy() -> Self {
         AbstractIndex::Dummy(DUMMYCOUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+
+    fn is_dummy(&self) -> bool {
+        matches!(self, AbstractIndex::Dummy(_))
     }
 }
 
@@ -344,6 +350,20 @@ impl From<AbstractIndex> for symbolica::atom::AtomOrView<'_> {
         symbolica::atom::AtomOrView::Atom(Atom::from(value))
     }
 }
+
+#[cfg(feature = "shadowing")]
+impl ParseableAind for AbstractIndex {
+    type Error = AbstractIndexError;
+
+    fn from_view(view: AtomView<'_>) -> std::result::Result<Self, Self::Error> {
+        view.try_into()
+    }
+
+    fn to_atom(&self) -> Atom {
+        (*self).into()
+    }
+}
+
 impl From<AbstractIndex> for usize {
     fn from(value: AbstractIndex) -> Self {
         match value {

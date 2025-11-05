@@ -7,7 +7,7 @@ use spenso::{
     network::{
         Network,
         library::{DummyLibrary, symbolic::ETS},
-        parsing::ParseSettings,
+        parsing::{ParseSettings, SymbolicParse},
         store::NetworkStore,
     },
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
@@ -16,7 +16,7 @@ use spenso::{
         abstract_index::AIND_SYMBOLS,
         permuted::Perm,
         representation::{LibraryRep, LibrarySlot, RepName},
-        slot::{AbsInd, DualSlotTo, DummyAind, IsAbstractSlot},
+        slot::{AbsInd, DualSlotTo, DummyAind, IsAbstractSlot, ParseableAind},
     },
     tensors::symbolic::SymbolicTensor,
 };
@@ -312,57 +312,23 @@ pub fn wrap_indices_impl(view: AtomView, header: Symbol) -> Atom {
     expr
 }
 
-pub fn list_dangling_impl(view: AtomView) -> Vec<Atom> {
-    let a = view.expand();
-    let settings = MatchSettings {
-        level_range: (0, Some(1)),
-        ..Default::default()
-    };
-    let mut dangling = HashMap::new();
-    let first_term = if let AtomView::Add(a) = a.as_view() {
-        if let Some(ft) = a.iter().next() {
-            ft
-        } else {
-            Atom::Zero.as_view()
-        }
-    } else {
-        a.as_view()
-    };
-
-    // println!("First term: {}", first_term);
-    for i in LibraryRep::all_self_duals().chain(LibraryRep::all_inline_metrics()) {
-        let ipat = i.to_symbolic([RS.d_, RS.a_]).to_pattern();
-        for p in first_term.pattern_match(&ipat, None, &settings) {
-            *dangling.entry(ipat.replace_wildcards(&p)).or_insert(0) += 1;
-        }
-    }
-    for i in LibraryRep::all_dualizables() {
-        let ipat = i.to_symbolic([RS.d_, RS.a_]).to_pattern();
-        let ipat_dual = i.dual().to_symbolic([RS.d_, RS.a_]).to_pattern();
-
-        for p in first_term.pattern_match(&ipat, None, &settings) {
-            *dangling.entry(ipat.replace_wildcards(&p)).or_insert(0) += 1;
-        }
-        for p in first_term.pattern_match(&ipat_dual, None, &settings) {
-            *dangling.entry(ipat.replace_wildcards(&p)).or_insert(0) -= 1;
-        }
-    }
-
-    dangling
-        .into_iter()
-        .filter_map(|(k, v)| {
-            // println!("Dangling: {}, Value: {}", k, v);
-            match v {
-                1 => Some(k),
-                -1 => Some(function!(AIND_SYMBOLS.dind, k)),
-                _ => None,
-            }
+pub fn list_dangling_impl<Aind: ParseableAind + AbsInd>(view: AtomView) -> Vec<Atom> {
+    let a = view
+        .parse_to_symbolic_net::<Aind>(&ParseSettings {
+            take_first_term_from_sum: true,
+            ..Default::default()
         })
+        .unwrap();
+
+    a.graph
+        .dangling_indices()
+        .into_iter()
+        .map(|a| a.to_atom())
         .collect()
 }
 
-pub fn wrap_dummies_impl(view: AtomView, header: Symbol) -> Atom {
-    let externals: HashSet<_> = list_dangling_impl(view).into_iter().collect();
+pub fn wrap_dummies_impl<Aind: ParseableAind + AbsInd>(view: AtomView, header: Symbol) -> Atom {
+    let externals: HashSet<_> = list_dangling_impl::<Aind>(view).into_iter().collect();
 
     let mut expr = view.to_owned();
     let settings = MatchSettings {
@@ -651,12 +617,11 @@ pub trait PermuteWithMetric {
     fn permute_with_metric(self) -> Atom;
 }
 
-impl<N, Aind: AbsInd + DummyAind> PermuteWithMetric for PermutedStructure<N>
+impl<N, Aind: AbsInd + DummyAind + ParseableAind> PermuteWithMetric for PermutedStructure<N>
 where
     N: ToSymbolic + HasName + TensorStructure<Slot = LibrarySlot<Aind>>,
     N::Name: IntoSymbol + Clone,
     N::Args: IntoArgs,
-    Atom: From<Aind>,
 {
     fn permute_with_metric(self) -> Atom {
         self.map_structure(|a| SymbolicTensor::from_named(&a).unwrap())

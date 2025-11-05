@@ -3,7 +3,7 @@ use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         concrete_index::FlatIndex,
-        slot::{AbsInd, IsAbstractSlot},
+        slot::{AbsInd, IsAbstractSlot, ParseableAind},
         HasName, HasStructure, TensorShell, TensorStructure, ToSymbolic,
     },
     tensors::{
@@ -26,7 +26,7 @@ pub trait Shadowable:
         Structure: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs> + Clone + Sized,
     > + Sized
 where
-    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     // type Const;
     fn expanded_shadow(&self) -> Result<DenseTensor<Atom, Self::Structure>> {
@@ -58,10 +58,7 @@ pub trait Concretize<T> {
     fn concretize(self, perm: Option<Permutation>) -> T;
 }
 
-impl<Aind: AbsInd> Concretize<SymbolicTensor<Aind>> for ShadowedStructure<Aind>
-where
-    Atom: From<Aind>,
-{
+impl<Aind: AbsInd + ParseableAind> Concretize<SymbolicTensor<Aind>> for ShadowedStructure<Aind> {
     fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor<Aind> {
         SymbolicTensor {
             expression: self.to_symbolic(perm).unwrap(),
@@ -70,9 +67,8 @@ where
     }
 }
 
-impl<Aind: AbsInd> Concretize<SymbolicTensor<Aind>> for TensorShell<ShadowedStructure<Aind>>
-where
-    Atom: From<Aind>,
+impl<Aind: AbsInd + ParseableAind> Concretize<SymbolicTensor<Aind>>
+    for TensorShell<ShadowedStructure<Aind>>
 {
     fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor<Aind> {
         SymbolicTensor {
@@ -84,7 +80,7 @@ where
 
 impl<S: Shadowable> Concretize<DenseTensor<Atom, S::Structure>> for S
 where
-    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     fn concretize(self, perm: Option<Permutation>) -> DenseTensor<Atom, S::Structure> {
         // self.flat_s
@@ -99,7 +95,7 @@ where
 
 impl<S: Shadowable> Concretize<DataTensor<Atom, S::Structure>> for S
 where
-    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     fn concretize(self, perm: Option<Permutation>) -> DataTensor<Atom, S::Structure> {
         // self.flat_s
@@ -110,7 +106,7 @@ where
 
 impl<S: Shadowable> Concretize<ParamTensor<S::Structure>> for S
 where
-    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     fn concretize(self, perm: Option<Permutation>) -> ParamTensor<S::Structure> {
         // self.flat_s
@@ -123,7 +119,7 @@ where
 
 impl<T: Clone, S: Shadowable> Concretize<MixedTensor<T, S::Structure>> for S
 where
-    Atom: From<<<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<S::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     fn concretize(self, perm: Option<Permutation>) -> MixedTensor<T, S::Structure> {
         // self.flat_s
@@ -599,7 +595,7 @@ where
 
 pub trait ShadowMapping<Const>: Shadowable
 where
-    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     fn expanded_shadow_with_map(
         &self,
@@ -651,7 +647,7 @@ where
     S::Name: IntoSymbol + Clone,
     S::Args: IntoArgs,
 
-    Atom: From<<<S as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<S as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
 }
 
@@ -659,7 +655,7 @@ impl<S: TensorStructure + HasName + Clone, Const> ShadowMapping<Const> for Tenso
 where
     S::Name: IntoSymbol + Clone,
     S::Args: IntoArgs,
-    Atom: From<<<S as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<S as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     fn append_map<T>(
         &self,

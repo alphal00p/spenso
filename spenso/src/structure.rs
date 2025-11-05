@@ -13,6 +13,8 @@ use dimension::Dimension;
 use thiserror::Error;
 
 #[cfg(feature = "shadowing")]
+use crate::structure::slot::ParseableAind;
+#[cfg(feature = "shadowing")]
 use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     tensors::data::DenseTensor,
@@ -109,7 +111,7 @@ impl<T: HasName> ToSymbolic for PermutedStructure<T>
 where
     T: TensorStructure,
     T::Name: IntoSymbol,
-    Atom: From<<T::Slot as IsAbstractSlot>::Aind>,
+    <T::Slot as IsAbstractSlot>::Aind: ParseableAind,
     T::Args: IntoArgs,
 {
     fn concrete_atom(&self, id: FlatIndex) -> ExpandedCoefficent<()> {
@@ -194,7 +196,7 @@ where
 impl<T: HasName> ToSymbolic for T
 where
     T: TensorStructure,
-    Atom: From<<T::Slot as IsAbstractSlot>::Aind>,
+    <T::Slot as IsAbstractSlot>::Aind: ParseableAind,
     T::Name: IntoSymbol,
     T::Args: IntoArgs,
 {

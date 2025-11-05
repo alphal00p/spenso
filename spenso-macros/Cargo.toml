@@ -21,4 +21,4 @@ serde = "1.0.201"
 shadowing = ["dep:symbolica"]
 [dev-dependencies]
 spenso = { path = "../spenso" }
-linnet = "0.12.0"
+linnet = "0.13.0"

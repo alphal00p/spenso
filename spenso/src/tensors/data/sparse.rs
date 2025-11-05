@@ -2,6 +2,8 @@ use crate::algebra::algebraic_traits::RefZero;
 use crate::structure::dimension::Dimension;
 use crate::structure::permuted::PermuteTensor;
 use crate::structure::representation::{RepName, Representation};
+#[cfg(feature = "shadowing")]
+use crate::structure::slot::ParseableAind;
 use crate::structure::slot::{AbsInd, IsAbstractSlot, Slot};
 use crate::structure::{IndexLess, PermutedStructure, StructureError};
 use crate::{
@@ -204,7 +206,7 @@ where
     S: HasName + Clone,
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
-    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
 }
 
@@ -215,7 +217,7 @@ where
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
     R: From<T>,
-    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     // fn shadow_with_map<'a, C>(
     //     &self,

@@ -39,7 +39,7 @@ use crate::{
         ShadowMapping, Shadowable,
     },
     structure::{
-        slot::{AbsInd, IsAbstractSlot},
+        slot::{AbsInd, IsAbstractSlot, ParseableAind},
         HasName, TensorStructure, ToSymbolic,
     },
     tensors::{
@@ -116,13 +116,17 @@ where
     }
 }
 
-impl<Store: TensorScalarStore<Tensor = T, Scalar = S>, T, S, K: Clone, Aind: AbsInd>
-    Network<Store, K, Aind>
+impl<
+        Store: TensorScalarStore<Tensor = T, Scalar = S>,
+        T,
+        S,
+        K: Clone,
+        Aind: AbsInd + ParseableAind,
+    > Network<Store, K, Aind>
 where
     T: Shadowable + HasName<Name = Symbol, Args: IntoArgs>,
     T::Structure: Clone + ToSymbolic + TensorStructure,
     <T::Structure as TensorStructure>::Slot: IsAbstractSlot<Aind = Aind>,
-    Atom: From<Aind>,
 {
     pub fn sym_shadow(
         &mut self,
@@ -141,8 +145,13 @@ where
     }
 }
 
-impl<Store: TensorScalarStore<Tensor = T, Scalar = S>, T, S, K: Clone, Aind: AbsInd>
-    Network<Store, K, Aind>
+impl<
+        Store: TensorScalarStore<Tensor = T, Scalar = S>,
+        T,
+        S,
+        K: Clone,
+        Aind: AbsInd + ParseableAind,
+    > Network<Store, K, Aind>
 where
     T: HasName<Name: IntoSymbol, Args: IntoArgs> + TensorStructure,
     T::Slot: IsAbstractSlot<Aind = Aind>,
@@ -153,7 +162,6 @@ where
         T::Structure: Clone + ToSymbolic + TensorStructure,
         <T::Structure as TensorStructure>::Slot: IsAbstractSlot<Aind = Aind>,
         S: Clone,
-        Atom: From<Aind>,
     {
         for n in self.iter_tensors() {
             n.expanded_append_map(fn_map)
@@ -166,7 +174,6 @@ where
         T::Structure: Clone + ToSymbolic + TensorStructure<Slot = T::Slot>,
         S: Clone,
         K: Clone,
-        Atom: From<Aind>,
     {
         self.map_ref(Clone::clone, |t| {
             let node = t.expanded_shadow().unwrap();

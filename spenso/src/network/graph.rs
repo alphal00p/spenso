@@ -5,13 +5,12 @@ use std::{
 };
 
 use bincode::{Decode, Encode};
-use bitvec::vec::BitVec;
 use linnet::{
     half_edge::{
         builder::HedgeGraphBuilder,
         involution::{EdgeData, Flow, Hedge},
         nodestore::NodeStorageOps,
-        subgraph::{ModifySubgraph, SubGraph, SubGraphOps},
+        subgraph::{ModifySubSet, SuBitGraph, SubGraphLike, SubSetLike, SubSetOps},
         tree::SimpleTraversalTree,
         HedgeGraph, HedgeGraphError, NodeIndex,
     },
@@ -55,7 +54,7 @@ pub struct NetworkGraph<K, FK = i8, Aind = AbstractIndex> {
     pub graph: HedgeGraph<NetworkEdge<Aind>, NetworkNode<K, FK>>, //, Forest<NetworkNode<K>, ChildVecStore<()>>>,
     pub slot_order: Vec<u8>,
     // #[bincode(with_serde)]
-    // uncontracted: BitVec,
+    // uncontracted: SuBitGraph,
 }
 
 #[derive(
@@ -354,7 +353,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
             .unwrap();
     }
 
-    pub fn extract<S: SubGraph<Base = BitVec>>(&mut self, subgraph: &S) -> Self
+    pub fn extract<S: SubSetLike<Base = SuBitGraph>>(&mut self, subgraph: &S) -> Self
     where
         K: Clone + Display,
         FK: Clone + Display,
@@ -409,7 +408,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
         for nid in tt.iter_preorder_tree_nodes(&involution, root_node) {
             if let NetworkNode::Op(op) = &self.graph[nid] {
                 let mut leaves = Vec::new();
-                let mut subgraph: BitVec = self.graph.empty_subgraph();
+                let mut subgraph: SuBitGraph = self.graph.empty_subgraph();
                 let ok = tt.iter_children(nid, &self.graph).all(|child| {
                     for h in self.graph.iter_crown(child) {
                         subgraph.add(h);
@@ -458,7 +457,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
         // look for the first op node whose children are all leaves
         for nid in tt.iter_preorder_tree_nodes(&self.graph, root_node) {
             if let NetworkNode::Op(op) = &self.graph[nid] {
-                let mut subgraph: BitVec = self.graph.empty_subgraph();
+                let mut subgraph: SuBitGraph = self.graph.empty_subgraph();
 
                 let mut all_leaves = true;
                 let mut has_children = false;
@@ -519,7 +518,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
             .iter_crown(nid)
             .find(|i| !matches!(self.graph[[i]], NetworkEdge::Slot(_)));
 
-        let headgraph: BitVec = self.graph.from_filter(|a| matches!(a, NetworkEdge::Head));
+        let headgraph: SuBitGraph = self.graph.from_filter(|a| matches!(a, NetworkEdge::Head));
 
         if include_hedge.is_some() {
             Ok(SimpleTraversalTree::depth_first_traverse(
@@ -553,7 +552,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
         });
     }
 
-    pub fn delete<S: SubGraph<Base = BitVec>>(&mut self, subgraph: &S) {
+    pub fn delete<S: SubSetLike<Base = SuBitGraph>>(&mut self, subgraph: &S) {
         let mut left = Hedge(0);
         let mut extracted = Hedge(self.graph.n_hedges());
         while left < extracted {
@@ -580,7 +579,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
     ) -> NodeIndex {
         let (n, sub) = self
             .graph
-            .identify_nodes_without_self_edges::<BitVec>(nodes, node_data);
+            .identify_nodes_without_self_edges::<SuBitGraph>(nodes, node_data);
 
         self.graph.forget_identification_history();
         self.graph.node_store.check_and_set_nodes().unwrap();
@@ -602,7 +601,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
         // println!("Identifying:{:?}", nodes);
         let (n, mut sub) = self
             .graph
-            .identify_nodes_without_self_edges::<BitVec>(nodes, node_data);
+            .identify_nodes_without_self_edges::<SuBitGraph>(nodes, node_data);
 
         let mut first = true;
         for h in self.graph.iter_crown(n) {
@@ -697,7 +696,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
             },
         )
     }
-    pub fn dot_impl_of<S: SubGraph>(
+    pub fn dot_impl_of<S: SubGraphLike>(
         &self,
         subgraph: &S,
         scalar_disp: impl Fn(usize) -> String,
@@ -911,7 +910,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
     }
 
     pub fn head(&self) -> Hedge {
-        let exts = self.graph.external_filter();
+        let exts: SuBitGraph = self.graph.external_filter();
         let head = exts
             .included_iter()
             .find(|i| self.graph[[i]] == NetworkEdge::Head);
@@ -919,7 +918,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
     }
 
     pub fn dangling_indices(&self) -> Vec<LibrarySlot<Aind>> {
-        let exts = self.graph.external_filter();
+        let exts: SuBitGraph = self.graph.external_filter();
         exts.included_iter()
             .filter_map(|i| {
                 if let NetworkEdge::Slot(s) = self.graph[[&i]] {
@@ -933,7 +932,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
 
     pub fn n_dangling(&self) -> usize {
         self.graph
-            .external_filter()
+            .external_filter::<SuBitGraph>()
             .included_iter()
             .filter(|i| matches!(self.graph[[i]], NetworkEdge::Slot(_)))
             .count()
@@ -952,7 +951,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
         FK: Display,
     {
         let mut n_heads = 0;
-        let _headgraph: BitVec = self.graph.from_filter(|a| match a {
+        let _headgraph: SuBitGraph = self.graph.from_filter(|a| match a {
             NetworkEdge::Head => {
                 n_heads += 1;
                 true
@@ -990,7 +989,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
     }
 
     pub fn expr_tree(&self) -> SimpleTraversalTree {
-        let headgraph: BitVec = self
+        let headgraph: SuBitGraph = self
             .graph
             .from_filter(|a| !matches!(a, NetworkEdge::Slot(_)));
 
@@ -1009,8 +1008,8 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
         let head = self.head();
         let root_node = self.graph.node_id(head);
 
-        let mut sums: BitVec = self.graph.empty_subgraph();
-        let mut prods: BitVec = self.graph.empty_subgraph();
+        let mut sums: SuBitGraph = self.graph.empty_subgraph();
+        let mut prods: SuBitGraph = self.graph.empty_subgraph();
 
         // look for repeated ops nodes along a chain
         for nid in tt.iter_preorder_tree_nodes(&self.graph, root_node) {
@@ -1035,13 +1034,13 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
             }
         }
 
-        let mut to_del: BitVec = self.graph.empty_subgraph();
+        let mut to_del: SuBitGraph = self.graph.empty_subgraph();
 
         for sum in self.graph.connected_components(&sums) {
             let nodes: Vec<_> = self.graph.iter_nodes_of(&sum).map(|(a, _, _)| a).collect();
 
             if nodes.len() > 1 {
-                let (_, sub) = self.graph.identify_nodes_without_self_edges::<BitVec>(
+                let (_, sub) = self.graph.identify_nodes_without_self_edges::<SuBitGraph>(
                     &nodes,
                     NetworkNode::Op(NetworkOp::Sum),
                 );
@@ -1051,7 +1050,7 @@ impl<K: Debug, FK: Debug, Aind: AbsInd> NetworkGraph<K, FK, Aind> {
         for prod in self.graph.connected_components(&prods) {
             let nodes: Vec<_> = self.graph.iter_nodes_of(&prod).map(|(a, _, _)| a).collect();
             if nodes.len() > 1 {
-                let (_, sub) = self.graph.identify_nodes_without_self_edges::<BitVec>(
+                let (_, sub) = self.graph.identify_nodes_without_self_edges::<SuBitGraph>(
                     &nodes,
                     NetworkNode::Op(NetworkOp::Product),
                 );

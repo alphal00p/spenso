@@ -18,7 +18,7 @@ use crate::{
         abstract_index::AIND_SYMBOLS,
         permuted::PermuteTensor,
         representation::{LibraryRep, LibrarySlot},
-        slot::{AbsInd, DummyAind},
+        slot::{AbsInd, DummyAind, ParseableAind},
         HasName, HasStructure, MergeInfo, NamedStructure, OrderedStructure, PermutedStructure,
         ScalarStructure, ScalarTensor, StructureContract, TensorShell, TensorStructure, ToSymbolic,
     },
@@ -74,10 +74,7 @@ impl ScalarTensor for SymbolicTensor {
     }
 }
 
-impl<Aind: AbsInd + DummyAind> PermuteTensor for SymbolicTensor<Aind>
-where
-    Atom: From<Aind>,
-{
+impl<Aind: AbsInd + DummyAind + ParseableAind> PermuteTensor for SymbolicTensor<Aind> {
     type Id = SymbolicTensor<Aind>;
     type IdSlot = LibrarySlot<Aind>;
     type Permuted = SymbolicTensor<Aind>;

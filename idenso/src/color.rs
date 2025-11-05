@@ -631,7 +631,8 @@ mod test {
 
         // return;
         let amplitude_color_right = amplitude_color
-            .hermitian_conjugate()
+            .dirac_adjoint::<AbstractIndex>()
+            .unwrap()
             .wrap_indices(symbol!("spenso::right"));
         println!("left{amplitude_color_left}");
 
@@ -684,13 +685,20 @@ mod test {
 
         println!("Amplitude right:\n{}", amplitude_right.factor());
 
-        println!("Amplitude right conj:\n{}", amplitude_right.conj().factor());
+        println!(
+            "Amplitude right conj:\n{}",
+            amplitude_right
+                .dirac_adjoint::<AbstractIndex>()
+                .unwrap()
+                .factor()
+        );
 
-        let mut amp_squared = amplitude_left * amplitude_right.conj();
+        let mut amp_squared =
+            amplitude_left * amplitude_right.dirac_adjoint::<AbstractIndex>().unwrap();
 
         println!("Amplitude squared:\n{}", amp_squared.factor());
 
-        let dangling_atoms = amp_squared.list_dangling();
+        let dangling_atoms = amp_squared.list_dangling::<AbstractIndex>();
 
         assert_eq!(dangling_atoms.len(), 8);
 
@@ -759,11 +767,11 @@ mod test {
 
         let (amplitude, tgt) = colored_matrix_element();
 
-        let amplitude_left = amplitude.wrap_dummies(symbol!("spenso::left"));
+        let amplitude_left = amplitude.wrap_dummies::<AbstractIndex>(symbol!("spenso::left"));
 
         println!("Amplitude left:\n{}", amplitude_left.collect_factors());
 
-        let amplitude_right = amplitude.wrap_dummies(symbol!("spenso::right"));
+        let amplitude_right = amplitude.wrap_dummies::<AbstractIndex>(symbol!("spenso::right"));
 
         println!("Amplitude right:\n{}", amplitude_right.conj().factor());
 

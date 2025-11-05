@@ -1,4 +1,4 @@
-use spenso::structure::slot::{AbsInd, DummyAind, SlotError};
+use spenso::structure::slot::{AbsInd, DummyAind, ParseableAind, SlotError};
 use std::sync::atomic::AtomicUsize;
 use symbolica::{
     atom::{Atom, AtomView},
@@ -17,6 +17,19 @@ impl AbsInd for Parsind {}
 impl DummyAind for Parsind {
     fn new_dummy() -> Self {
         Parsind::Dummy(DUMMYCOUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    }
+    fn is_dummy(&self) -> bool {
+        true
+    }
+}
+
+impl ParseableAind for Parsind {
+    type Error = SlotError;
+    fn from_view(view: AtomView<'_>) -> Result<Self, Self::Error> {
+        view.try_into()
+    }
+    fn to_atom(&self) -> Atom {
+        (*self).into()
     }
 }
 

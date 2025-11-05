@@ -24,11 +24,15 @@ use delegate::delegate;
 
 #[cfg(feature = "shadowing")]
 use crate::{
-    shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
-    shadowing::{ShadowMapping, Shadowable},
-    structure::ToSymbolic,
-    tensors::data::{DataIterator, DenseTensor},
-    tensors::parametric::TensorCoefficient,
+    shadowing::{
+        symbolica_utils::{IntoArgs, IntoSymbol},
+        ShadowMapping, Shadowable,
+    },
+    structure::{slot::ParseableAind, ToSymbolic},
+    tensors::{
+        data::{DataIterator, DenseTensor},
+        parametric::TensorCoefficient,
+    },
 };
 
 use crate::{
@@ -288,7 +292,7 @@ where
     S: HasName + Clone,
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
-    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     fn shadow<C>(
         &self,
@@ -346,7 +350,7 @@ where
     S::Name: IntoSymbol,
     S::Args: IntoArgs,
     R: From<T>,
-    Atom: From<<<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind>,
+    <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
     fn append_map<C>(
         &self,

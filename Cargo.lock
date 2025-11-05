@@ -2147,6 +2147,7 @@ dependencies = [
  "bincode",
  "bincode-trait-derive",
  "bitvec",
+ "colored 3.0.0",
  "constcat",
  "criterion",
  "delegate",

@@ -1,10 +1,20 @@
 use std::collections::HashMap;
 
 use anyhow::anyhow;
-use symbolica::{atom::Symbol, function};
+use symbolica::{
+    atom::{Atom, AtomCore, AtomOrView, AtomView, Symbol},
+    function,
+    printer::PrintState,
+    symbol,
+};
+
+use colored::Colorize;
 
 use crate::{
-    network::library::{FunctionLibrary, FunctionLibraryError},
+    network::{
+        library::{FunctionLibrary, FunctionLibraryError},
+        parsing::SPENSO_TAG,
+    },
     structure::{slot::AbsInd, HasStructure, TensorStructure},
     tensors::{
         data::StorageTensor,
@@ -12,6 +22,55 @@ use crate::{
         symbolic::SymbolicTensor,
     },
 };
+
+pub struct Inbuilts {
+    pub conj: Symbol,
+}
+
+impl Inbuilts {
+    pub fn conj<'a, A: Into<AtomOrView<'a>>>(&self, atom: A) -> Atom {
+        let a = atom.into();
+        function!(self.conj, a.as_view())
+    }
+}
+pub static INBUILTS: std::sync::LazyLock<Inbuilts> = std::sync::LazyLock::new(|| Inbuilts {
+    conj: symbol!(
+        "spenso::conj",
+        tag = SPENSO_TAG.tag,
+        norm = |view, out| {
+            if let AtomView::Fun(dind1) = view {
+                if dind1.get_nargs() == 1 {
+                    let arg = dind1.iter().next().unwrap();
+                    if let AtomView::Fun(arg) = arg {
+                        if arg.get_nargs() == 1 && arg.get_symbol() == symbol!("spenso::conj") {
+                            **out = arg.iter().next().unwrap().to_owned();
+                        }
+                    }
+                }
+            }
+        },
+        print = |a, opt| {
+            if opt.color_builtin_symbols {
+                let mut fmt = "conj".blue().to_string();
+                if let AtomView::Fun(f) = a {
+                    fmt.push('(');
+                    let n_args = f.get_nargs();
+                    for (i, a) in f.iter().enumerate() {
+                        a.format(&mut fmt, opt, PrintState::new()).unwrap();
+                        if i < n_args - 1 {
+                            fmt.push(',');
+                        }
+                    }
+                    fmt.push(')');
+                }
+
+                Some(fmt)
+            } else {
+                None
+            }
+        }
+    ),
+});
 
 pub struct SymbolLib<T, Missing> {
     pub functions: HashMap<Symbol, Box<dyn Fn(T) -> T + Send + Sync>>,
@@ -239,4 +298,9 @@ impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
             Err(FunctionLibraryError::NotFound(*key))
         }
     }
+}
+
+#[test]
+fn conj_construction() {
+    // let a=  symbol!("spenso::conj", tag = SPENSO_TAG.tag);
 }

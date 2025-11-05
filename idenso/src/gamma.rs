@@ -15,7 +15,7 @@ use symbolica::{
     symbol,
 };
 
-use crate::{color::SelectiveExpand, metric::MetricSimplifier, rep_symbols::RS};
+use crate::{IndexTooling, color::SelectiveExpand, metric::MetricSimplifier, rep_symbols::RS};
 
 use super::representations::Bispinor;
 
@@ -774,7 +774,7 @@ impl GammaSimplifier for AtomView<'_> {
             Bispinor {}.to_symbolic([RS.d_, RS.j_]),
             Minkowski {}.to_symbolic([RS.a__])
         )
-        .conj();
+        .spenso_conj();
 
         let conj_gamma_rhs = (function!(
             AGS.gamma0,

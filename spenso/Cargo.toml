@@ -79,6 +79,7 @@ approx-derive = "0.2.6"
 pyo3 = { version = "0.27", optional = true }
 
 pyo3-stub-gen = { version = "0.16", default-features = false, optional = true }
+colored = "3.0.0"
 [features]
 python = ["dep:pyo3"]
 python_stubgen = ["dep:pyo3-stub-gen", "python"]

@@ -2,6 +2,7 @@ use std::{borrow::Cow, fmt::Display, marker::PhantomData, ops::Neg};
 
 use crate::{
     algebra::complex::{Complex, RealOrComplex},
+    network::StructureLessDisplay,
     structure::{
         concrete_index::ConcreteIndex, dimension::Dimension, representation::Representation,
         slot::IsAbstractSlot, HasStructure, PermutedStructure, StructureError, TensorStructure,
@@ -67,6 +68,8 @@ pub struct DummyLibrary<V, K = DummyKey> {
     key: PhantomData<K>,
     value: PhantomData<V>,
 }
+
+impl StructureLessDisplay for DummyKey {}
 
 impl<V, K> Default for DummyLibrary<V, K> {
     fn default() -> Self {

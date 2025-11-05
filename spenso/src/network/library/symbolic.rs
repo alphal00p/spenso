@@ -215,7 +215,7 @@ pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTenso
 
 impl IdentityName for Symbol {
     fn id() -> Self {
-        symbol!(METRIC_NAME;Symmetric)
+        symbol!(METRIC_NAME;Symmetric,Real)
     }
 }
 impl<T: HasStructure<Structure = ExplicitKey<Aind>>, Aind: AbsInd> Default

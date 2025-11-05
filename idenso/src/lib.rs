@@ -1,20 +1,38 @@
 #![allow(uncommon_codepoints)]
 
+use anyhow::anyhow;
+use linnet::half_edge::subgraph::{
+    BaseSubgraph, Inclusion, ModifySubSet, SuBitGraph, SubGraphLike, SubSetLike,
+};
 use metric::{
     CookingError, cook_function_view, cook_indices_impl, list_dangling_impl, wrap_dummies_impl,
     wrap_indices_impl,
 };
-use spenso::structure::{
-    representation::{Minkowski, RepName},
-    slot::{AbsInd, DummyAind, ParseableAind},
+use spenso::{
+    network::{
+        graph::NetworkEdge,
+        library::function_lib::{INBUILTS, Inbuilts},
+        parsing::{ParseSettings, SPENSO_TAG, SymbolicParse},
+    },
+    structure::{
+        representation::{Minkowski, RepName},
+        slot::{AbsInd, DummyAind, IsAbstractSlot, ParseableAind},
+    },
 };
 use symbolica::{
     atom::{Atom, AtomCore, AtomView, Symbol},
-    function, symbol,
+    function,
+    id::Replacement,
+    symbol,
 };
 use thiserror::Error;
 
-use crate::{gamma::AGS, metric::MetricSimplifier, rep_symbols::RS, representations::Bispinor};
+use crate::{
+    gamma::{AGS, GammaSimplifier},
+    metric::MetricSimplifier,
+    rep_symbols::RS,
+    representations::Bispinor,
+};
 
 pub mod color;
 pub mod gamma;
@@ -43,6 +61,8 @@ pub trait IndexTooling {
     /// # Returns
     /// A new [`Atom`] with all indices wrapped.
     fn wrap_indices(&self, header: Symbol) -> Atom;
+
+    fn spenso_conj(&self) -> Atom;
 
     /// Wraps only the dummy (contracted) abstract indices within the expression using a header symbol.
     ///
@@ -85,9 +105,7 @@ pub trait IndexTooling {
     ///
     /// # Returns
     /// A new [`Atom`] representing the conjugated expression.
-    fn dirac_adjoint<Aind: DummyAind + for<'a> TryFrom<AtomView<'a>> + Into<Atom>>(
-        &self,
-    ) -> Result<Atom, AdjointError>;
+    fn dirac_adjoint<Aind: DummyAind + ParseableAind + AbsInd>(&self) -> anyhow::Result<Atom>;
 
     fn conjugate_transpose(&self, rep: impl RepName) -> Atom;
 
@@ -102,6 +120,9 @@ pub trait IndexTooling {
 }
 
 impl IndexTooling for Atom {
+    fn spenso_conj(&self) -> Atom {
+        self.as_view().spenso_conj()
+    }
     fn wrap_indices(&self, header: Symbol) -> Atom {
         self.as_view().wrap_indices(header)
     }
@@ -116,9 +137,7 @@ impl IndexTooling for Atom {
         self.as_view().cook_function()
     }
 
-    fn dirac_adjoint<Aind: DummyAind + for<'a> TryFrom<AtomView<'a>> + Into<Atom>>(
-        &self,
-    ) -> Result<Atom, AdjointError> {
+    fn dirac_adjoint<Aind: DummyAind + ParseableAind + AbsInd>(&self) -> anyhow::Result<Atom> {
         self.as_view().dirac_adjoint::<Aind>()
     }
 
@@ -137,6 +156,12 @@ pub enum AdjointError {
 }
 
 impl IndexTooling for AtomView<'_> {
+    fn spenso_conj(&self) -> Atom {
+        self.conj()
+            .replace(Atom::var(RS.a__).conj())
+            .with(INBUILTS.conj(RS.a__))
+    }
+
     fn conjugate_transpose(&self, rep: impl RepName) -> Atom {
         let transpose_pat = function!(
             RS.a_,
@@ -158,127 +183,82 @@ impl IndexTooling for AtomView<'_> {
         self.conj().replace(transpose_pat).with(transpose_rhs)
     }
 
-    fn dirac_adjoint<Aind: DummyAind + for<'a> TryFrom<AtomView<'a>> + Into<Atom>>(
-        &self,
-    ) -> Result<Atom, AdjointError> {
-        let mut a = self.conj();
-
-        let dummy = symbol!("dummy");
-
-        let vector_pat = function!(
-            RS.a_,
-            RS.a___,
-            Bispinor {}.to_symbolic([RS.d_, RS.i_]),
-            RS.b___
-        )
-        .to_pattern();
-
-        let vector_rhs = (function!(
-            RS.a_,
-            RS.a___,
-            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.i_)]),
-            RS.b___
-        ) * function!(
-            AGS.gamma0,
-            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.i_)]),
-            Bispinor {}.to_symbolic([RS.d_, RS.i_])
-        ))
-        .to_pattern();
-
-        let transpose_pat = function!(
-            RS.a_,
-            RS.a___,
-            Bispinor {}.to_symbolic([RS.d_, RS.i_]),
-            Bispinor {}.to_symbolic([RS.d_, RS.j_]),
-            RS.b___
-        )
-        .to_pattern();
-
-        let transpose_rhs = (function!(
-            AGS.gamma0,
-            Bispinor {}.to_symbolic([RS.d_, RS.j_]),
-            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.j_)])
-        ) * function!(
-            RS.a_,
-            RS.a___,
-            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.j_)]),
-            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.i_)]),
-            RS.b___
-        ) * function!(
-            AGS.gamma0,
-            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.i_)]),
-            Bispinor {}.to_symbolic([RS.d_, RS.i_])
-        ))
-        .to_pattern();
-
-        let bispat = Bispinor {}.to_symbolic([RS.e__]).to_pattern();
-        let bispatc = Bispinor {}.to_symbolic([RS.e__]).to_pattern();
-        let dummypati = function!(dummy, RS.i_).to_pattern();
-        let dummypatic = dummypati.clone();
-        let dummypatj = function!(dummy, RS.j_).to_pattern();
-
-        let cond = RS.a___.filter(move |a| {
-            a.to_atom()
-                .pattern_match(&bispat, None, None)
-                .next()
-                .is_none()
-        }) & RS.b___.filter(move |a| {
-            a.to_atom()
-                .pattern_match(&bispatc, None, None)
-                .next()
-                .is_none()
-        });
-        a = a
-            .replace(transpose_pat)
-            .when(&cond)
-            .with_map(move |m| {
-                let a = transpose_rhs.replace_wildcards_with_matches(m);
-                let i = dummypati.replace_wildcards_with_matches(m);
-                let j = dummypatj.replace_wildcards_with_matches(m);
-                a.replace(i)
-                    .with(Aind::new_dummy().into())
-                    .replace(j)
-                    .with(Aind::new_dummy().into())
+    fn dirac_adjoint<Aind: DummyAind + ParseableAind + AbsInd>(&self) -> anyhow::Result<Atom> {
+        let net = self
+            .parse_to_symbolic_net::<Aind>(&ParseSettings {
+                take_first_term_from_sum: true,
+                ..Default::default()
             })
-            .replace(vector_pat)
-            .when(&cond)
-            .with_map(move |m| {
-                let a = vector_rhs.replace_wildcards_with_matches(m);
-                let i = dummypatic.replace_wildcards_with_matches(m);
-                a.replace(i).with(Aind::new_dummy().into())
-            });
+            .unwrap();
 
-        let repeated_gamma0 =
-            AGS.gamma0_pattern(RS.a__, RS.b__) * AGS.gamma0_pattern(RS.b__, RS.c__);
+        let bis_dangling: Vec<_> = net
+            .graph
+            .dangling_indices()
+            .into_iter()
+            .filter(|a| a.rep_name() == Bispinor {}.into())
+            .collect();
 
-        let conj_gamma = function!(
-            AGS.gamma,
-            Bispinor {}.to_symbolic([RS.d_, RS.j_]),
-            Bispinor {}.to_symbolic([RS.d_, RS.i_]),
-            Minkowski {}.to_symbolic([RS.a__])
-        )
-        .conj();
+        // println!("{}", net.dot_pretty());
 
-        let conj_gamma_rhs = (function!(
-            AGS.gamma0,
-            Bispinor {}.to_symbolic([RS.d_, RS.j_]),
-            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.j_)])
-        ) * function!(
-            AGS.gamma,
-            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.j_)]),
-            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.i_)]),
-            Minkowski {}.to_symbolic([RS.a__])
-        ) * function!(
-            AGS.gamma0,
-            Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.i_)]),
-            Bispinor {}.to_symbolic([RS.d_, RS.i_])
-        ));
+        let mut a = self.spenso_conj();
 
-        Ok(a.replace(conj_gamma)
-            .with(conj_gamma_rhs)
-            .replace(repeated_gamma0)
-            .repeat()
-            .with(Bispinor {}.metric_atom([RS.a__], [RS.c__]))
+        for i in bis_dangling {
+            let mut dummy = i;
+            dummy.aind = Aind::new_dummy();
+
+            a = a.replace(i.to_atom()).with(dummy.to_atom())
+                * function!(AGS.gamma0, i.to_atom(), dummy.to_atom());
+        }
+        let bis_graph = SuBitGraph::from_filter(&net.graph.graph, |e| {
+            if let NetworkEdge::Slot(s) = e {
+                s.rep_name() == Bispinor {}.into()
+            } else {
+                false
+            }
+        });
+
+        let con = net.graph.graph.connected_components(&bis_graph);
+
+        for c in con {
+            let mut dangling: SuBitGraph = net.graph.graph.empty_subgraph();
+            for i in c.included_iter() {
+                if net.graph.graph.is_dangling(i) {
+                    dangling.add(i);
+                }
+            }
+
+            match dangling.n_included() {
+                0 => {}
+                1 => {}
+                2 => {
+                    let mut iter = dangling.included_iter();
+                    let NetworkEdge::Slot(i) =
+                        net.graph.graph[net.graph.graph[&iter.next().unwrap()]]
+                    else {
+                        break;
+                    };
+
+                    let NetworkEdge::Slot(j) =
+                        net.graph.graph[net.graph.graph[&iter.next().unwrap()]]
+                    else {
+                        break;
+                    };
+
+                    a = a.replace_multiple(&[
+                        Replacement::new(i.to_atom().to_pattern(), j.to_atom()),
+                        Replacement::new(j.to_atom().to_pattern(), i.to_atom()),
+                    ]);
+                }
+                _ => {
+                    return Err(anyhow!(
+                        "Too many dangling bispinors for complex conjugation {}",
+                        net.dot_pretty()
+                    ));
+                }
+            }
+        }
+        Ok(a.simplify_gamma_conj::<Aind>()?
+            .simplify_gamma0()
             .simplify_metrics())
     }
 
@@ -343,25 +323,65 @@ mod test {
         let mink = Bispinor {}.new_rep(4);
         function!(symbol!("spenso::u"), i, mink.to_symbolic([m_atom]))
     }
+
+    pub fn p(i: usize, m: impl Into<AbstractIndex>) -> Atom {
+        let m_atom: AbstractIndex = m.into();
+        let m_atom: Atom = m_atom.into();
+        let mink = Minkowski {}.new_rep(4);
+        function!(symbol!("spenso::u"), i, mink.to_symbolic([m_atom]))
+    }
+
+    pub fn A(i: usize, m: impl Into<AbstractIndex>, n: impl Into<AbstractIndex>) -> Atom {
+        let m_atom: AbstractIndex = m.into();
+        let m_atom: Atom = m_atom.into();
+
+        let n_atom: AbstractIndex = n.into();
+        let n_atom: Atom = n_atom.into();
+        let mink = Bispinor {}.new_rep(4);
+        function!(
+            symbol!("spenso::A"),
+            i,
+            mink.to_symbolic([m_atom]),
+            mink.to_symbolic([n_atom])
+        )
+    }
+
     #[test]
     fn gamma_conj() {
-        let expr = gamma(1, 2, 3).dirac_adjoint::<AbstractIndex>().unwrap();
-        println!("{expr}");
+        // let expr = gamma(1, 2, 3).dirac_adjoint::<AbstractIndex>().unwrap();
+        // println!("{expr}");
+        //
+        println!("Printing{}", (A(1, 2, 3) + A(2, 2, 3)));
 
         let ubgu = (u(2, 2) * gamma(1, 2, 3) * (u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap()));
-        let expr = ubgu.dirac_adjoint::<AbstractIndex>().unwrap();
-        println!("{expr}");
+        println!("Start:\n{}", ubgu);
+        // let expr = ubgu.dirac_adjoint::<AbstractIndex>().unwrap();
+        // println!("{expr}");
 
-        let mut exp = ubgu.conjugate_transpose(Bispinor {});
+        let mut exp = ubgu.spenso_conj();
 
-        println!("conj trans {exp}");
+        println!("conj trans\n {exp}");
         exp = exp.simplify_gamma_conj::<AbstractIndex>().unwrap();
-        println!("conj gamma simplify {exp}");
+        println!("conj gamma simplify \n{exp}");
         exp = exp.simplify_gamma0();
-        println!("gamma0 simplify {exp}");
+        println!("gamma0 simplify \n{exp}");
         exp = exp.simplify_metrics();
-        println!("simplify metrics {exp}");
+        println!("simplify metrics \n{exp}");
 
-        println!("{exp}")
+        println!(
+            "Direct:\n{}",
+            ubgu.dirac_adjoint::<AbstractIndex>().unwrap()
+        );
+
+        let ubggu = (u(2, 3)
+            * gamma(1, 2, 3)
+            * gamma(2, 3, 1)
+            * (u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap()));
+
+        println!("Ubggu:\n{}", ubggu);
+        println!(
+            "Conjugate:\n{}",
+            ubggu.dirac_adjoint::<AbstractIndex>().unwrap()
+        );
     }
 }

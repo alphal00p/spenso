@@ -104,12 +104,12 @@ impl ColorSymbols {
 }
 
 pub static CS: LazyLock<ColorSymbols> = LazyLock::new(|| ColorSymbols {
-    t: symbol!("spenso::t"),
-    f: symbol!("spenso::f"),
+    t: symbol!("spenso::t";Real),
+    f: symbol!("spenso::f";Real),
     adj_: symbol!("adj_"),
     nc_: symbol!("nc_"),
-    tr: symbol!("spenso::TR"),
-    nc: symbol!("spenso::Nc"),
+    tr: symbol!("spenso::TR";Real),
+    nc: symbol!("spenso::Nc";Real),
 });
 
 pub fn color_conj_impl(expression: AtomView) -> Atom {

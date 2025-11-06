@@ -16,7 +16,7 @@ symbolica = { version = "0.19.0", default-features = false }
 spenso = { version = "0.5", features = ["shadowing"] }
 spenso-macros = "0.2"
 itertools = "0.14"
-linnet = "0.13"
+linnet = "0.13.1"
 thiserror="2"
 pyo3 = { version = "0.27", features = ["anyhow"], optional = true }
 pyo3-stub-gen = { version = "0.16", default-features = false, optional = true }

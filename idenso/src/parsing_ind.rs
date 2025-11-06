@@ -18,6 +18,10 @@ impl DummyAind for Parsind {
     fn new_dummy() -> Self {
         Parsind::Dummy(DUMMYCOUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
     }
+
+    fn new_dummy_at(i: usize) -> Self {
+        Parsind::Dummy(i)
+    }
     fn is_dummy(&self) -> bool {
         true
     }

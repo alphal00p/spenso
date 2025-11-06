@@ -181,6 +181,10 @@ impl DummyAind for AbstractIndex {
         AbstractIndex::Dummy(DUMMYCOUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
+    fn new_dummy_at(i: usize) -> Self {
+        AbstractIndex::Dummy(i)
+    }
+
     fn is_dummy(&self) -> bool {
         matches!(self, AbstractIndex::Dummy(_))
     }

@@ -209,35 +209,24 @@ impl IndexTooling for AtomView<'_> {
                 && let NetworkEdge::Slot(s) = d.data
             {
                 // println!("{}", s.to_atom());
-                dummies.insert(s.to_atom(), s.rep().to_symbolic([]));
+                dummies.insert(s.to_atom(), s.rep());
             }
         }
 
-        let index_ident_pat: Vec<Replacement> = dummies
-            .iter()
-            .map(|(k, v)| Replacement::new(k.to_pattern(), v.clone()))
-            .collect();
-
-        let mut indices_sorted = BTreeSet::new();
-
-        for i in 0..(index_ident_pat.len()) {
-            let rep = &index_ident_pat[i..(i + 1)];
-            let r = &index_ident_pat[i];
-            for m in self.pattern_match(&r.pat, None, None) {
-                let a = r.pat.replace_wildcards(&m);
-                let group = a.replace_multiple(rep);
-                // println!("{}:{}", group, a);
-                indices_sorted.insert((group, a));
-            }
+        for (t, g) in dummies.iter() {
+            println!("T:{t},G:{g}")
         }
 
         let expr = net.simple_execute();
 
-        let mut a = expr.canonize_tensors(indices_sorted).unwrap();
+        let mut a = expr.canonize_tensors(dummies).unwrap();
 
-        for (i, (d, _)) in a.dummy_indices.into_iter().enumerate() {
+        for (i, (d, r)) in a.dummy_indices.into_iter().enumerate() {
             // println!("dummy{i}:{d}");
-            a.canonical_form = a.canonical_form.replace(d).with(new_dummy(i).to_atom());
+            a.canonical_form = a
+                .canonical_form
+                .replace(d)
+                .with(r.slot::<Aind, Aind>(new_dummy(i)).to_atom());
         }
 
         a.canonical_form.replace_multiple(&redual_reps)
@@ -344,7 +333,7 @@ impl IndexTooling for AtomView<'_> {
             }
         }
         Ok(a.simplify_gamma_conj::<Aind>()?
-            .simplify_gamma0()
+            .simplify_gamma0::<Aind>()
             .simplify_metrics())
     }
 
@@ -416,7 +405,7 @@ mod test {
         let m_atom: AbstractIndex = m.into();
         let m_atom: Atom = m_atom.into();
         let mink = Minkowski {}.new_rep(4);
-        function!(symbol!("spenso::u"), i, mink.to_symbolic([m_atom]))
+        function!(symbol!("spenso::p";Real), i, mink.to_symbolic([m_atom]))
     }
 
     pub fn a(i: usize, m: impl Into<AbstractIndex>, n: impl Into<AbstractIndex>) -> Atom {
@@ -441,55 +430,62 @@ mod test {
         //
         println!("Printing{}", (a(1, 2, 3) + a(2, 2, 3)));
 
-        let ubgu = u(2, 2) * gamma(1, 2, 3) * (u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap());
+        let ubgu = u(2, 2)
+            * (gamma(1, 2, 3) * p(1, 3) + Bispinor {}.metric_atom([4, 1], [4, 2]))
+            * (u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap());
         println!("Start:\n{}", ubgu);
         // let expr = ubgu.dirac_adjoint::<AbstractIndex>().unwrap();
         // println!("{expr}");
 
         let mut exp = ubgu.spenso_conj();
 
-        println!("conj trans\n {exp}");
-        exp = exp.simplify_gamma_conj::<AbstractIndex>().unwrap();
-        println!("conj gamma simplify \n{exp}");
-        exp = exp.simplify_gamma0();
-        println!("gamma0 simplify \n{exp}");
-        exp = exp.simplify_metrics();
-        println!("simplify metrics \n{exp}");
+        // println!("conj trans\n {exp}");
+        // exp = exp.simplify_gamma_conj::<AbstractIndex>().unwrap();
+        // println!("conj gamma simplify \n{exp}");
+        // exp = exp.simplify_gamma0::<AbstractIndex>();
+        // println!("gamma0 simplify \n{exp}");
+        // exp = exp.simplify_metrics();
+        // println!("simplify metrics \n{exp}");
 
         println!(
             "Direct:\n{}",
-            ubgu.dirac_adjoint::<AbstractIndex>().unwrap()
+            ubgu.dirac_adjoint::<AbstractIndex>().unwrap() // .canonize(AbstractIndex::Dummy)
         );
 
-        let ubggu = u(2, 3)
-            * gamma(1, 2, 3)
-            * gamma(2, 3, 1)
-            * (u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap());
+        // let ubggu = u(2, 3)
+        //     * gamma(1, 2, 3)
+        //     * gamma(2, 3, 1)
+        //     * (u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap());
 
-        println!("Ubggu:\n{}", ubggu);
-        println!(
-            "Conjugate:\n{}",
-            ubggu.dirac_adjoint::<AbstractIndex>().unwrap()
-        );
+        // println!("Ubggu:\n{}", ubggu);
+        // println!(
+        //     "Conjugate:\n{}",
+        //     ubggu.dirac_adjoint::<AbstractIndex>().unwrap()
+        // );
 
-        let ub = u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap();
-        let u = u(2, 2);
+        // let ub = u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap();
+        // let u = u(2, 2);
 
-        let ubgu = &ub * gamma(1, 2, 3) * &u;
-        let cubgu = ubgu.dirac_adjoint::<AbstractIndex>().unwrap();
+        // let ubgu = &ub * gamma(1, 2, 3) * &u;
+        // let cubgu = ubgu.dirac_adjoint::<AbstractIndex>().unwrap();
 
-        let ccubgu = ub.dirac_adjoint::<AbstractIndex>().unwrap()
-            * gamma(1, 2, 3).dirac_adjoint::<AbstractIndex>().unwrap()
-            * u.dirac_adjoint::<AbstractIndex>().unwrap();
-        println!("Start:\n{}", ubgu);
-        println!("Oneshot:\n{}", cubgu);
-        println!(
-            "Separate:\n{}",
-            ccubgu
-                .simplify_gamma0()
-                .replace(function!(symbol!("spenso::u"), RS.a__).spenso_conj())
-                .with(function!(symbol!("spenso::uconj"), RS.a__))
-                .canonize(AbstractIndex::Dummy)
-        );
+        // let ccubgu = ub.dirac_adjoint::<AbstractIndex>().unwrap()
+        //     * gamma(1, 2, 3).dirac_adjoint::<AbstractIndex>().unwrap()
+        //     * u.dirac_adjoint::<AbstractIndex>().unwrap();
+        // println!("Start:\n{}", ubgu);
+        // println!("Oneshot:\n{}", cubgu);
+        // println!(
+        //     "Separate:\n{}",
+        //     ccubgu
+        //         .simplify_gamma0::<AbstractIndex>()
+        //         .replace(function!(symbol!("spenso::u"), RS.a__).spenso_conj())
+        //         .with(function!(symbol!("spenso::uconj"), RS.a__))
+        //         .canonize(AbstractIndex::Dummy)
+        // );
+
+        // let a = a(1, 1, 2) * a(2, 2, 4) * a(1, 4, 3) + a(1, 1, 4) * a(3, 4, 5) * a(1, 5, 3);
+
+        // println!("{a}");
+        // println!("{}", a.canonize(AbstractIndex::Dummy));
     }
 }

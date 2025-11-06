@@ -187,6 +187,7 @@ pub trait ParseableAind: Sized {
 
 pub trait DummyAind {
     fn new_dummy() -> Self;
+    fn new_dummy_at(i: usize) -> Self;
     fn is_dummy(&self) -> bool;
 }
 

@@ -729,7 +729,7 @@ pub trait GammaSimplifier {
     /// An [`Atom`] representing the expression after gamma matrix simplification.
     fn simplify_gamma(&self) -> Atom;
 
-    fn simplify_gamma0(&self) -> Atom;
+    fn simplify_gamma0<Aind: DummyAind + ParseableAind + AbsInd>(&self) -> Atom;
 
     fn simplify_gamma_conj<Aind: DummyAind + ParseableAind>(&self) -> anyhow::Result<Atom>;
 }
@@ -739,8 +739,8 @@ impl GammaSimplifier for Atom {
         gamma_simplify_impl(self.as_atom_view())
     }
 
-    fn simplify_gamma0(&self) -> Atom {
-        self.as_view().simplify_gamma0()
+    fn simplify_gamma0<Aind: DummyAind + ParseableAind + AbsInd>(&self) -> Atom {
+        self.as_view().simplify_gamma0::<Aind>()
     }
 
     fn simplify_gamma_conj<Aind: DummyAind + ParseableAind>(&self) -> anyhow::Result<Atom> {
@@ -753,10 +753,54 @@ impl GammaSimplifier for AtomView<'_> {
         gamma_simplify_impl(self.as_atom_view())
     }
 
-    fn simplify_gamma0(&self) -> Atom {
+    fn simplify_gamma0<Aind: DummyAind + ParseableAind + AbsInd>(&self) -> Atom {
         let repeated_gamma0 =
             AGS.gamma0_pattern(RS.a__, RS.b__) * AGS.gamma0_pattern(RS.b__, RS.c__);
 
+        // let dummy = symbol!("dummy");
+
+        // let dummypati = function!(dummy, RS.a_).to_pattern();
+        // let dummypatj = function!(dummy, RS.b_).to_pattern();
+
+        // let metric = Bispinor {}.metric_atom([RS.d_, RS.a_], [RS.d_, RS.b_]);
+
+        // let gmg = (function!(
+        //     AGS.gamma0,
+        //     Bispinor {}.to_symbolic([RS.d_, RS.a_]),
+        //     Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.a_)])
+        // ) * Bispinor {}.metric_atom(
+        //     [Atom::var(RS.d_), function!(dummy, RS.a_)],
+        //     [Atom::var(RS.d_), function!(dummy, RS.b_)],
+        // ) * function!(
+        //     AGS.gamma0,
+        //     Bispinor {}.to_symbolic([Atom::var(RS.d_), function!(dummy, RS.b_)]),
+        //     Bispinor {}.to_symbolic([RS.d_, RS.b_])
+        // ))
+        // .to_pattern();
+
+        // let mut a = self.replace(metric).with_map(move |m| {
+        //     let a = gmg.replace_wildcards_with_matches(m);
+        //     let i = dummypati.replace_wildcards_with_matches(m);
+        //     let j = dummypatj.replace_wildcards_with_matches(m);
+        //     a.replace(i)
+        //         .with(Aind::new_dummy().to_atom())
+        //         .replace(j)
+        //         .with(Aind::new_dummy().to_atom())
+        // });
+
+        // println!("a:{a}");
+
+        // a = a.canonize(Aind::new_dummy_at);
+
+        // println!("Canonized:{a}");
+
+        // let g0 = function!(AGS.gamma0, RS.a__).to_pattern();
+        // for m in a.clone().pattern_match(&g0, None, None) {
+        //     let g = g0.replace_wildcards(&m);
+        //     println!("collecting :{g}");
+        //     a = a.collect::<u8>(g, None, None);
+        //     println!("{a}");
+        // }
         self.replace(repeated_gamma0)
             .repeat()
             .with(Bispinor {}.metric_atom([RS.a__], [RS.c__]))

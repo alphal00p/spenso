@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::LazyLock,
-};
+use std::{collections::HashSet, sync::LazyLock};
 
 use spenso::{
     network::{
@@ -13,7 +10,6 @@ use spenso::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         HasName, PermutedStructure, TensorStructure, ToSymbolic,
-        abstract_index::AIND_SYMBOLS,
         permuted::Perm,
         representation::{LibraryRep, LibrarySlot, RepName},
         slot::{AbsInd, DualSlotTo, DummyAind, IsAbstractSlot, ParseableAind},

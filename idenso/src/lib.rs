@@ -1,9 +1,9 @@
 #![allow(uncommon_codepoints)]
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use anyhow::anyhow;
-use linnet::half_edge::subgraph::{
-    BaseSubgraph, Inclusion, ModifySubSet, SuBitGraph, SubGraphLike, SubSetLike,
-};
+use linnet::half_edge::subgraph::{BaseSubgraph, ModifySubSet, SuBitGraph, SubSetLike};
 use metric::{
     CookingError, cook_function_view, cook_indices_impl, list_dangling_impl, wrap_dummies_impl,
     wrap_indices_impl,
@@ -11,19 +11,19 @@ use metric::{
 use spenso::{
     network::{
         graph::NetworkEdge,
-        library::function_lib::{INBUILTS, Inbuilts},
-        parsing::{ParseSettings, SPENSO_TAG, SymbolicParse},
+        library::function_lib::INBUILTS,
+        parsing::{ParseSettings, SymbolicParse},
     },
     structure::{
-        representation::{Minkowski, RepName},
+        HasName, TensorStructure,
+        representation::RepName,
         slot::{AbsInd, DummyAind, IsAbstractSlot, ParseableAind},
     },
 };
 use symbolica::{
-    atom::{Atom, AtomCore, AtomView, Symbol},
+    atom::{Atom, AtomCore, AtomView, FunctionBuilder, Symbol},
     function,
     id::Replacement,
-    symbol,
 };
 use thiserror::Error;
 
@@ -50,6 +50,10 @@ pub mod representations;
 /// only dummy/contracted ones), simplifying indices ("cooking"), and identifying external
 /// ("dangling") indices.
 pub trait IndexTooling {
+    fn canonize<Aind: AbsInd + ParseableAind + DummyAind>(
+        &self,
+        new_dummy: impl FnMut(usize) -> Aind,
+    ) -> Atom;
     /// Wraps all abstract indices within the expression using a specified header symbol.
     ///
     /// This transforms indices like `mink(dim,idx)` into `mink(dim,header(idx))`. Useful for distinguishing
@@ -120,6 +124,12 @@ pub trait IndexTooling {
 }
 
 impl IndexTooling for Atom {
+    fn canonize<Aind: AbsInd + ParseableAind + DummyAind>(
+        &self,
+        new_dummy: impl FnMut(usize) -> Aind,
+    ) -> Atom {
+        self.as_view().canonize(new_dummy)
+    }
     fn spenso_conj(&self) -> Atom {
         self.as_view().spenso_conj()
     }
@@ -156,6 +166,82 @@ pub enum AdjointError {
 }
 
 impl IndexTooling for AtomView<'_> {
+    fn canonize<Aind: AbsInd + ParseableAind + DummyAind>(
+        &self,
+        mut new_dummy: impl FnMut(usize) -> Aind,
+    ) -> Atom {
+        let mut net = self
+            .parse_to_symbolic_net::<Aind>(&ParseSettings::default())
+            .unwrap();
+
+        // println!("{}", net.dot_pretty());
+
+        let mut redual_reps = vec![];
+
+        for t in net.store.tensors.iter_mut() {
+            let mut reps = vec![];
+
+            let mut pat = FunctionBuilder::new(t.name().unwrap());
+            let mut rhs = pat.clone();
+            for s in t.structure.external_structure_iter() {
+                if !s.rep_name().is_self_dual() && s.rep_name().is_dual() {
+                    pat = pat.add_arg(s.rep().dual().to_symbolic([Atom::var(RS.a_)]));
+
+                    reps.push(Replacement::new(
+                        s.rep().to_symbolic([Atom::var(RS.a_)]).to_pattern(),
+                        s.rep().dual().to_symbolic([Atom::var(RS.a_)]),
+                    ));
+                } else {
+                    pat = pat.add_arg(s.rep().to_symbolic([Atom::var(RS.a_)]));
+                }
+                rhs = rhs.add_arg(s.rep().to_symbolic([Atom::var(RS.a_)]));
+            }
+            if !reps.is_empty() {
+                redual_reps.push(Replacement::new(pat.finish().to_pattern(), rhs.finish()));
+                t.expression = t.expression.replace_multiple(&reps);
+            }
+        }
+
+        let mut dummies = BTreeMap::new();
+
+        for (p, _, d) in net.graph.graph.iter_edges() {
+            if p.is_paired()
+                && let NetworkEdge::Slot(s) = d.data
+            {
+                // println!("{}", s.to_atom());
+                dummies.insert(s.to_atom(), s.rep().to_symbolic([]));
+            }
+        }
+
+        let index_ident_pat: Vec<Replacement> = dummies
+            .iter()
+            .map(|(k, v)| Replacement::new(k.to_pattern(), v.clone()))
+            .collect();
+
+        let mut indices_sorted = BTreeSet::new();
+
+        for i in 0..(index_ident_pat.len()) {
+            let rep = &index_ident_pat[i..(i + 1)];
+            let r = &index_ident_pat[i];
+            for m in self.pattern_match(&r.pat, None, None) {
+                let a = r.pat.replace_wildcards(&m);
+                let group = a.replace_multiple(rep);
+                // println!("{}:{}", group, a);
+                indices_sorted.insert((group, a));
+            }
+        }
+
+        let expr = net.simple_execute();
+
+        let mut a = expr.canonize_tensors(indices_sorted).unwrap();
+
+        for (i, (d, _)) in a.dummy_indices.into_iter().enumerate() {
+            // println!("dummy{i}:{d}");
+            a.canonical_form = a.canonical_form.replace(d).with(new_dummy(i).to_atom());
+        }
+
+        a.canonical_form.replace_multiple(&redual_reps)
+    }
     fn spenso_conj(&self) -> Atom {
         self.conj()
             .replace(Atom::var(RS.a__).conj())
@@ -295,6 +381,7 @@ mod test {
         IndexTooling,
         gamma::{AGS, GammaSimplifier},
         metric::{MetricSimplifier, PermuteWithMetric},
+        rep_symbols::RS,
         representations::Bispinor,
     };
     pub fn gamma(
@@ -324,6 +411,7 @@ mod test {
         function!(symbol!("spenso::u"), i, mink.to_symbolic([m_atom]))
     }
 
+    #[allow(dead_code)]
     pub fn p(i: usize, m: impl Into<AbstractIndex>) -> Atom {
         let m_atom: AbstractIndex = m.into();
         let m_atom: Atom = m_atom.into();
@@ -331,7 +419,7 @@ mod test {
         function!(symbol!("spenso::u"), i, mink.to_symbolic([m_atom]))
     }
 
-    pub fn A(i: usize, m: impl Into<AbstractIndex>, n: impl Into<AbstractIndex>) -> Atom {
+    pub fn a(i: usize, m: impl Into<AbstractIndex>, n: impl Into<AbstractIndex>) -> Atom {
         let m_atom: AbstractIndex = m.into();
         let m_atom: Atom = m_atom.into();
 
@@ -351,9 +439,9 @@ mod test {
         // let expr = gamma(1, 2, 3).dirac_adjoint::<AbstractIndex>().unwrap();
         // println!("{expr}");
         //
-        println!("Printing{}", (A(1, 2, 3) + A(2, 2, 3)));
+        println!("Printing{}", (a(1, 2, 3) + a(2, 2, 3)));
 
-        let ubgu = (u(2, 2) * gamma(1, 2, 3) * (u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap()));
+        let ubgu = u(2, 2) * gamma(1, 2, 3) * (u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap());
         println!("Start:\n{}", ubgu);
         // let expr = ubgu.dirac_adjoint::<AbstractIndex>().unwrap();
         // println!("{expr}");
@@ -373,15 +461,35 @@ mod test {
             ubgu.dirac_adjoint::<AbstractIndex>().unwrap()
         );
 
-        let ubggu = (u(2, 3)
+        let ubggu = u(2, 3)
             * gamma(1, 2, 3)
             * gamma(2, 3, 1)
-            * (u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap()));
+            * (u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap());
 
         println!("Ubggu:\n{}", ubggu);
         println!(
             "Conjugate:\n{}",
             ubggu.dirac_adjoint::<AbstractIndex>().unwrap()
+        );
+
+        let ub = u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap();
+        let u = u(2, 2);
+
+        let ubgu = &ub * gamma(1, 2, 3) * &u;
+        let cubgu = ubgu.dirac_adjoint::<AbstractIndex>().unwrap();
+
+        let ccubgu = ub.dirac_adjoint::<AbstractIndex>().unwrap()
+            * gamma(1, 2, 3).dirac_adjoint::<AbstractIndex>().unwrap()
+            * u.dirac_adjoint::<AbstractIndex>().unwrap();
+        println!("Start:\n{}", ubgu);
+        println!("Oneshot:\n{}", cubgu);
+        println!(
+            "Separate:\n{}",
+            ccubgu
+                .simplify_gamma0()
+                .replace(function!(symbol!("spenso::u"), RS.a__).spenso_conj())
+                .with(function!(symbol!("spenso::uconj"), RS.a__))
+                .canonize(AbstractIndex::Dummy)
         );
     }
 }

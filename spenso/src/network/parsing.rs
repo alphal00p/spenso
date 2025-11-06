@@ -5,10 +5,11 @@ use super::*;
 
 use library::Library;
 
+use crate::network::library::function_lib::Wrap;
 use crate::network::library::DummyLibrary;
 use crate::structure::abstract_index::{AindSymbols, AIND_SYMBOLS};
 // use crate::shadowing::Concretize;
-use crate::structure::slot::{ParseableAind, Slot, SlotError};
+use crate::structure::slot::{DummyAind, ParseableAind, Slot, SlotError};
 use crate::structure::{
     NamedStructure, OrderedStructure, PermutedStructure, StructureError, TensorShell,
 };
@@ -377,6 +378,28 @@ where
 
 pub type SymbolicNet<Aind> =
     Network<NetworkStore<SymbolicTensor<Aind>, Atom>, DummyKey, Symbol, Aind>;
+
+impl<Aind: AbsInd + DummyAind + ParseableAind + 'static> SymbolicNet<Aind> {
+    pub fn simple_execute(mut self) -> Atom {
+        let lib = DummyLibrary::<SymbolicTensor<Aind>>::new();
+
+        self.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &Wrap {})
+            .unwrap();
+
+        match self.result().unwrap() {
+            ExecutionResult::One => Atom::num(1),
+            ExecutionResult::Zero => Atom::Zero,
+            ExecutionResult::Val(a) => match a {
+                TensorOrScalarOrKey::Key { .. } => panic!("aaa"),
+                TensorOrScalarOrKey::Scalar(s) => s.clone(),
+                TensorOrScalarOrKey::Tensor {
+                    tensor,
+                    graph_slots,
+                } => tensor.expression.clone(),
+            },
+        }
+    }
+}
 pub trait SymbolicParse {
     fn parse_to_symbolic_net<Aind: AbsInd + ParseableAind>(
         &self,
@@ -389,7 +412,7 @@ impl SymbolicParse for AtomView<'_> {
         &self,
         settings: &ParseSettings,
     ) -> Result<SymbolicNet<Aind>, TensorNetworkError<DummyKey, Symbol>> {
-        let lib = DummyLibrary::<SymbolicTensor>::new();
+        let lib = DummyLibrary::<SymbolicTensor<Aind>>::new();
 
         SymbolicNet::<Aind>::try_from_view(*self, &lib, settings)
     }

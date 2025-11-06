@@ -172,7 +172,10 @@ impl<T: BaseRepName, Aind> ConstructibleSlot<T, Aind> for Slot<T, Aind> {
     }
 }
 
-pub trait AbsInd: Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + Display {}
+pub trait AbsInd:
+    Copy + PartialEq + Eq + Debug + Clone + Hash + Ord + Display + Send + Sync + 'static
+{
+}
 
 #[cfg(feature = "shadowing")]
 pub trait ParseableAind: Sized {

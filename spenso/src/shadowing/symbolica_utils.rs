@@ -30,6 +30,7 @@ impl<A: AtomCore> AtomCoreExt for A {
         self.to_canonically_ordered_string(CanonicalOrderingSettings {
             include_namespace: false,
             include_attributes: false,
+            hide_namespace: None,
         })
     }
 }

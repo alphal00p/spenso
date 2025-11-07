@@ -73,8 +73,9 @@ impl<
         T,
         S,
         K,
+        FK,
         Aind: AbsInd,
-    > Network<Store, K, Aind>
+    > Network<Store, K, FK, Aind>
 where
     S: TensorStructure + Clone,
     T: Clone,
@@ -89,9 +90,10 @@ where
     pub fn replace_multiple<R: BorrowReplacement>(
         &self,
         replacements: &[R],
-    ) -> Network<Store::Store<MixedTensor<T, S>, Atom>, K, Aind>
+    ) -> Network<Store::Store<MixedTensor<T, S>, Atom>, K, FK, Aind>
     where
         K: Clone,
+        FK: Clone,
     {
         // println!("Replacing");
         self.map_ref(
@@ -103,6 +105,7 @@ where
     pub fn generate_params(&mut self) -> AHashSet<Atom>
     where
         K: Clone,
+        FK: Clone,
     {
         let mut params = AHashSet::new();
         for n in self.iter_tensors().filter(|t| t.is_parametric()) {
@@ -121,8 +124,9 @@ impl<
         T,
         S,
         K: Clone,
+        FK: Clone,
         Aind: AbsInd + ParseableAind,
-    > Network<Store, K, Aind>
+    > Network<Store, K, FK, Aind>
 where
     T: Shadowable + HasName<Name = Symbol, Args: IntoArgs>,
     T::Structure: Clone + ToSymbolic + TensorStructure,
@@ -132,7 +136,7 @@ where
         &mut self,
         tensor_name: &str,
         scalar_name: &str,
-    ) -> Network<Store::Store<ParamTensor<T::Structure>, Atom>, K, Aind> {
+    ) -> Network<Store::Store<ParamTensor<T::Structure>, Atom>, K, FK, Aind> {
         self.map_ref_mut_enumerate(
             |(i, _)| Atom::var(symbol!(format!("{}{}", scalar_name, i))),
             |(i, t)| {
@@ -150,8 +154,9 @@ impl<
         T,
         S,
         K: Clone,
+        FK: Clone,
         Aind: AbsInd + ParseableAind,
-    > Network<Store, K, Aind>
+    > Network<Store, K, FK, Aind>
 where
     T: HasName<Name: IntoSymbol, Args: IntoArgs> + TensorStructure,
     T::Slot: IsAbstractSlot<Aind = Aind>,
@@ -168,12 +173,13 @@ where
         }
     }
 
-    pub fn shadow(&self) -> Network<Store::Store<ParamTensor<T::Structure>, S>, K, Aind>
+    pub fn shadow(&self) -> Network<Store::Store<ParamTensor<T::Structure>, S>, K, FK, Aind>
     where
         T: Shadowable,
         T::Structure: Clone + ToSymbolic + TensorStructure<Slot = T::Slot>,
         S: Clone,
         K: Clone,
+        FK: Clone,
     {
         self.map_ref(Clone::clone, |t| {
             let node = t.expanded_shadow().unwrap();
@@ -182,8 +188,8 @@ where
     }
 }
 
-impl<Store: TensorScalarStore<Tensor = T, Scalar = S>, T, S, K: Clone, Aind: AbsInd>
-    Network<Store, K, Aind>
+impl<Store: TensorScalarStore<Tensor = T, Scalar = S>, T, S, FK: Clone, K: Clone, Aind: AbsInd>
+    Network<Store, K, FK, Aind>
 where
     T: HasName + TensorStructure,
 {
@@ -210,13 +216,14 @@ impl<
         Store: TensorScalarStore<Tensor = P, Scalar = Atom>,
         P: TensorAtomMaps,
         K: Clone,
+        FK: Clone,
         Aind: AbsInd,
-    > TensorAtomMaps for Network<Store, K, Aind>
+    > TensorAtomMaps for Network<Store, K, FK, Aind>
 where
     P: Clone + TensorStructure,
 {
-    type ContainerData<T> = Network<Store::Store<P::ContainerData<T>, T>, K, Aind>;
-    type AtomContainer = Network<Store::Store<P::AtomContainer, Atom>, K, Aind>;
+    type ContainerData<T> = Network<Store::Store<P::ContainerData<T>, T>, K, FK, Aind>;
+    type AtomContainer = Network<Store::Store<P::AtomContainer, Atom>, K, FK, Aind>;
     type Ref<'a>
         = &'a Self
     where
@@ -565,8 +572,9 @@ impl<
         S: TensorStructure + Clone,
         Sc: AtomCore,
         K: Clone,
+        FK: Clone,
         Aind: Clone + AbsInd,
-    > Network<Store, K, Aind>
+    > Network<Store, K, FK, Aind>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn eval_tree(
@@ -577,6 +585,7 @@ impl<
         Network<
             Store::Store<EvalTreeTensor<SymComplex<Rational>, S>, EvalTree<SymComplex<Rational>>>,
             K,
+            FK,
             Aind,
         >,
         String,
@@ -596,7 +605,7 @@ impl<
         coeff_map: F,
         const_map: &AHashMap<A, D>,
         function_map: &HashMap<Symbol, EvaluationFn<A, D>>,
-    ) -> Result<Network<Store::Store<DataTensor<D, S>, D>, K, Aind>, String>
+    ) -> Result<Network<Store::Store<DataTensor<D, S>, D>, K, FK, Aind>, String>
     where
         D: Clone
             + symbolica::domains::float::Real
@@ -855,8 +864,9 @@ impl<
         >,
         S: Clone + TensorStructure,
         K: Clone,
+        FK: Clone,
         Aind: AbsInd,
-    > Network<Store, K, Aind>
+    > Network<Store, K, FK, Aind>
 {
     pub fn horner_scheme(&mut self) {
         self.iter_tensors_mut().for_each(|a| a.horner_scheme());

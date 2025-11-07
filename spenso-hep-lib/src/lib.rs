@@ -7,7 +7,7 @@ use spenso::{
     network::{
         library::{
             TensorLibraryData,
-            function_lib::{PanicMissingConcrete, SymbolLib},
+            function_lib::{INBUILTS, PanicMissingConcrete, SymbolLib},
             symbolic::{ExplicitKey, TensorLibrary},
         },
         parsing::{SPENSO_TAG, ShadowedStructure},
@@ -441,7 +441,7 @@ pub static FUN_LIB: LazyLock<
     SymbolLib<RealOrComplexTensor<f64, ShadowedStructure<AbstractIndex>>, PanicMissingConcrete>,
 > = LazyLock::new(|| {
     let mut lib = PanicMissingConcrete::new_lib();
-    lib.insert(symbol!("conju", tag = SPENSO_TAG.tag), |a| match a {
+    lib.insert(INBUILTS.conj, |a| match a {
         RealOrComplexTensor::Complex(c) => RealOrComplexTensor::Complex(c.map_data(|x| x.conj())),
         RealOrComplexTensor::Real(r) => RealOrComplexTensor::Real(r),
     });

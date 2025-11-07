@@ -27,9 +27,10 @@ use symbolica::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, series::Series,
         Exponent, PositiveExponent, Variable,
     },
+    solve::SolveError,
     state::RecycledAtom,
     tensors::matrix::Matrix,
-    utils::BorrowedOrOwned,
+    utils::{BorrowedOrOwned, Settable},
 };
 
 use crate::{
@@ -44,7 +45,7 @@ pub trait PatternReplacement {
     fn replace_multiple_repeat<T: BorrowReplacement>(&self, replacements: &[T]) -> Self;
     fn replace_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
     fn replace_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
-    fn replace_map_mut<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&mut self, m: &F);
+    fn replace_map_mut<F: Fn(AtomView, &Context, &mut Settable<'_, Atom>)>(&mut self, m: &F);
 }
 
 impl PatternReplacement for Atom {
@@ -70,7 +71,7 @@ impl PatternReplacement for Atom {
         *self = atom;
     }
 
-    fn replace_map_mut<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&mut self, m: &F) {
+    fn replace_map_mut<F: Fn(AtomView, &Context, &mut Settable<'_, Atom>)>(&mut self, m: &F) {
         *self = self.replace_map(m);
     }
 }
@@ -302,7 +303,7 @@ pub trait TensorAtomMaps {
     ) -> Self::AtomContainer;
     fn replace_multiple_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
     fn replace_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]);
-    fn replace_map_mut<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&mut self, m: &F);
+    fn replace_map_mut<F: Fn(AtomView, &Context, &mut Settable<'_, Atom>)>(&mut self, m: &F);
 
     /// Collect terms involving the literal occurrence of `x`.
     fn coefficient<T: AtomCore>(&self, x: T) -> Self::AtomContainer;
@@ -500,7 +501,7 @@ pub trait TensorAtomMaps {
 
     fn to_pattern(&self) -> Self::ContainerData<Pattern>;
 
-    fn replace_map<F: Fn(AtomView, &Context, &mut Atom) -> bool>(
+    fn replace_map<F: Fn(AtomView, &Context, &mut Settable<'_, Atom>)>(
         &self,
         m: &F,
     ) -> Self::AtomContainer;
@@ -1036,7 +1037,7 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
     fn replace_multiple_repeat_mut<T: BorrowReplacement>(&mut self, replacements: &[T]) {
         self.map_data_mut(|a| a.replace_multiple_repeat_mut(replacements));
     }
-    fn replace_map_mut<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&mut self, m: &F) {
+    fn replace_map_mut<F: Fn(AtomView, &Context, &mut Settable<'_, Atom>)>(&mut self, m: &F) {
         self.map_data_mut(|a| a.replace_map_mut(m));
     }
 
@@ -1303,9 +1304,15 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
         self.map_data_ref(|a| a.to_pattern())
     }
 
-    fn replace_map<F: Fn(AtomView, &Context, &mut Atom) -> bool>(&self, m: &F) -> Self {
+    fn replace_map<F: Fn(AtomView, &Context, &mut Settable<'_, Atom>)>(
+        &self,
+        m: &F,
+    ) -> Self::AtomContainer {
         self.map_data_ref_self(|a| a.replace_map(m))
     }
+    // fn replace_map<F: FnMut(AtomView, &Context, &mut Settable<'_, Atom>)>(&self, m: &F) -> Self {
+    //     self.map_data_ref_self(|a| a.replace_map(m))
+    // }
 
     // /// Return an iterator that replaces the pattern in the target once.
     // fn replace_iter<'a>(
@@ -1338,7 +1345,7 @@ impl<S: TensorStructure> DenseTensor<Atom, S> {
     pub fn solve_linear_system<E: PositiveExponent, T: AtomCore>(
         &self,
         vars: &[T],
-    ) -> Result<Vec<Atom>, String> {
+    ) -> Result<Vec<Atom>, SolveError> {
         <Atom as AtomCore>::solve_linear_system::<E, Atom, T>(&self.data, vars)
     }
     /// Convert a system of linear equations to a matrix representation, returning the matrix

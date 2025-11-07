@@ -5,8 +5,11 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use symbolica::{
     atom::{Atom, AtomCore, AtomView, FunctionBuilder, Symbol},
+    id::Context,
+    printer::CanonicalOrderingSettings,
     state::State,
     symbol,
+    utils::Settable,
 };
 
 extern crate derive_more;
@@ -18,6 +21,18 @@ use std::{
 
 use anyhow::Result;
 
+pub trait AtomCoreExt {
+    fn to_bare_ordered_string(&self) -> String;
+}
+
+impl<A: AtomCore> AtomCoreExt for A {
+    fn to_bare_ordered_string(&self) -> String {
+        self.to_canonically_ordered_string(CanonicalOrderingSettings {
+            include_namespace: false,
+            include_attributes: false,
+        })
+    }
+}
 // use anyhow::Ok;
 use serde::ser::SerializeStruct;
 
@@ -93,10 +108,7 @@ impl From<SerializableSymbol> for u32 {
 pub struct SerializableAtom(pub Atom);
 
 impl PatternReplacement for SerializableAtom {
-    fn replace_map_mut<F: Fn(AtomView, &symbolica::id::Context, &mut Atom) -> bool>(
-        &mut self,
-        m: &F,
-    ) {
+    fn replace_map_mut<F: Fn(AtomView, &Context, &mut Settable<'_, Atom>)>(&mut self, m: &F) {
         self.0.replace_map_mut(m)
     }
 

@@ -547,7 +547,7 @@ impl Spensor {
 
         for ((symbol, rename, args), body) in &funs {
             let symbol = symbol
-                .to_id()
+                .get_id()
                 .ok_or(exceptions::PyValueError::new_err(format!(
                     "Bad function name {}",
                     symbol
@@ -555,7 +555,7 @@ impl Spensor {
             let args: Vec<_> = args
                 .iter()
                 .map(|x| {
-                    x.to_id().ok_or(exceptions::PyValueError::new_err(format!(
+                    x.get_id().ok_or(exceptions::PyValueError::new_err(format!(
                         "Bad function name {}",
                         symbol
                     )))

@@ -19,13 +19,13 @@ use symbolica::{
         CompileOptions, CompiledCode, CompiledNumber, EvalTree, EvaluationFn, ExportNumber,
         ExportSettings, ExportedCode, ExpressionEvaluator, FunctionMap,
     },
-    id::{BorrowReplacement, Pattern},
+    id::{BorrowReplacement, Context, Pattern},
     poly::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial,
         PositiveExponent, Variable,
     },
     symbol,
-    utils::BorrowedOrOwned,
+    utils::{BorrowedOrOwned, Settable},
 };
 
 use crate::{
@@ -375,7 +375,7 @@ where
         self.map_ref(AtomCore::collect_num, TensorAtomMaps::collect_num)
     }
 
-    fn replace_map<F: Fn(AtomView, &symbolica::id::Context, &mut Atom) -> bool>(
+    fn replace_map<F: Fn(AtomView, &Context, &mut Settable<'_, Atom>)>(
         &self,
         m: &F,
     ) -> Self::AtomContainer {
@@ -418,10 +418,7 @@ where
         self.map_ref(|a| a.map_coefficient(f), |a| a.map_coefficient(f))
     }
 
-    fn replace_map_mut<F: Fn(AtomView, &symbolica::id::Context, &mut Atom) -> bool>(
-        &mut self,
-        m: &F,
-    ) {
+    fn replace_map_mut<F: Fn(AtomView, &Context, &mut Settable<'_, Atom>)>(&mut self, m: &F) {
         self.iter_tensors_mut().for_each(|a| a.replace_map_mut(m));
 
         for a in self.iter_scalars_mut() {

@@ -7,7 +7,8 @@ use library::Library;
 
 use crate::network::library::function_lib::Wrap;
 use crate::network::library::DummyLibrary;
-use crate::structure::abstract_index::{AindSymbols, AIND_SYMBOLS};
+use crate::shadowing::symbolica_utils::AtomCoreExt;
+use crate::structure::abstract_index::AIND_SYMBOLS;
 // use crate::shadowing::Concretize;
 use crate::structure::slot::{DummyAind, ParseableAind, Slot, SlotError};
 use crate::structure::{
@@ -380,6 +381,15 @@ pub type SymbolicNet<Aind> =
     Network<NetworkStore<SymbolicTensor<Aind>, Atom>, DummyKey, Symbol, Aind>;
 
 impl<Aind: AbsInd + DummyAind + ParseableAind + 'static> SymbolicNet<Aind> {
+    pub fn snapshot_dot(&self) -> String {
+        self.dot_display_impl(
+            |a| a.to_bare_ordered_string(),
+            |_| None,
+            |a| a.expression.to_bare_ordered_string(),
+            |a| a.to_string(),
+        )
+    }
+
     pub fn simple_execute(mut self) -> Atom {
         let lib = DummyLibrary::<SymbolicTensor<Aind>>::new();
 
@@ -392,19 +402,26 @@ impl<Aind: AbsInd + DummyAind + ParseableAind + 'static> SymbolicNet<Aind> {
             ExecutionResult::Val(a) => match a {
                 TensorOrScalarOrKey::Key { .. } => panic!("aaa"),
                 TensorOrScalarOrKey::Scalar(s) => s.clone(),
-                TensorOrScalarOrKey::Tensor {
-                    tensor,
-                    graph_slots,
-                } => tensor.expression.clone(),
+                TensorOrScalarOrKey::Tensor { tensor, .. } => tensor.expression.clone(),
             },
         }
     }
 }
 pub trait SymbolicParse {
+    #[allow(clippy::result_large_err)]
     fn parse_to_symbolic_net<Aind: AbsInd + ParseableAind>(
         &self,
         settings: &ParseSettings,
     ) -> Result<SymbolicNet<Aind>, TensorNetworkError<DummyKey, Symbol>>;
+}
+
+impl SymbolicParse for Atom {
+    fn parse_to_symbolic_net<Aind: AbsInd + ParseableAind>(
+        &self,
+        settings: &ParseSettings,
+    ) -> Result<SymbolicNet<Aind>, TensorNetworkError<DummyKey, Symbol>> {
+        self.as_view().parse_to_symbolic_net::<Aind>(settings)
+    }
 }
 
 impl SymbolicParse for AtomView<'_> {
@@ -424,6 +441,7 @@ pub mod test {
 
     use crate::{
         network::library::panicing::ErroringLibrary,
+        network::parsing::SymbolicParse,
         structure::{
             representation::{initialize, Euclidean, Lorentz, Minkowski, RepName},
             slot::IsAbstractSlot,
@@ -434,74 +452,28 @@ pub mod test {
 
     use super::*;
     use insta::assert_snapshot;
-    use library::{DummyKey, DummyLibrary};
-    use linnet::half_edge::swap::Swap;
+    use library::DummyLibrary;
     use symbolica::{atom::AtomCore, parse, parse_lit, symbol};
 
     #[test]
     fn parse_scalar() {
         let expr = parse!("1");
 
-        let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        );
-
-        let mut net = net.unwrap();
-
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
 
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Scalar(a)) = net.result().unwrap() {
-            println!("YaY:{a}")
-        } else {
-            panic!("Not scalar")
-        }
+        assert_eq!(net.simple_execute(), expr);
     }
 
     #[test]
     fn parse_pow() {
         let expr = parse!("ee^3*d(mink(4,1))^-2");
 
-        let lib: DummyLibrary<SymbolicTensor> = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        assert_snapshot!(
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            ),@r#"
-        digraph {
-          node	 [shape=circle,height=0.1,label=""];
-          overlap = "scale";
-          layout = "neato";
-
-          0	 [label = "S:ee^3*d(mink(4,1))^-2"];
-          ext0	 [style=invis];
-          0:0:s	-> ext0	 [id=0 color="red"];
-        }
-        "#);
+        assert_eq!(net.simple_execute(), expr);
     }
 
     #[test]
@@ -510,191 +482,190 @@ pub mod test {
             (P(1, mink(4, 1)) * P(2, mink(4, 1)))
                 / f(spenso::mul(P(3, mink(4, 1)) * P(4, mink(4, 1))))
         );
-        println!("{expr}");
-        let lib: DummyLibrary<SymbolicTensor> = DummyLibrary::<_>::new();
-        // let fnlib = ErroringLibrary::<Symbol>::new();
-        let net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-    }
-    #[test]
-    fn parse_div() {
-        let expr = parse!("c*a/spenso::mul(d(mink(4,1))* b(mink(4,1)))(spenso::mul(d(mink(4,1))* b(mink(4,1)))^-3)(spenso::mul(d(mink(4,1))* b(mink(4,1)))^-2)");
-        println!("{expr}");
-        let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        assert_snapshot!(
-            net.dot_display_impl(
-                |a| a.to_canonical_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            ),@r#"
+
+        assert_snapshot!(net.snapshot_dot(),@r#"
         digraph {
           node	 [shape=circle,height=0.1,label=""];
           overlap = "scale";
           layout = "neato";
 
-          0	 [label = "S:a*c*mul(b(mink(4,1))*d(mink(4,1)))^-6"];
+          0	 [label = "∏"];
+          1	 [label = "T:P(1,mink(4,1))"];
+          2	 [label = "T:P(2,mink(4,1))"];
+          3	 [label = "^( -1 )"];
+          4	 [label = "S:f(mul(P(3,mink(4,1))*P(4,mink(4,1))))"];
           ext0	 [style=invis];
           0:0:s	-> ext0	 [id=0 color="red"];
+          4:10:s	-> 3:9:s	 [id=1  color="red:blue;0.5"];
+          1:5:s	-> 2:7:s	 [id=2 dir=none  color="red:blue;0.5" label="mink4|1"];
+          1:4:s	-> 0:3:s	 [id=3  color="red:blue;0.5"];
+          2:6:s	-> 0:2:s	 [id=4  color="red:blue;0.5"];
+          3:8:s	-> 0:1:s	 [id=5  color="red:blue;0.5"];
         }
-        "#
-        );
+        "#);
+
+        assert_eq!(net.simple_execute(), expr);
+    }
+    #[test]
+    fn parse_div() {
+        let expr = parse!("c*a/spenso::bracket(d(mink(4,1))* b(mink(4,1)))(spenso::bracket(d(mink(4,1))* b(mink(4,1)))^-3)(spenso::bracket(d(mink(4,1))* b(mink(4,1)))^-2)");
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
+            .unwrap();
+        assert_snapshot!(net.simple_execute().to_bare_ordered_string(), @"(b(mink(4,1)))^(-6)*(d(mink(4,1)))^(-6)*a*c");
     }
 
     #[test]
     fn parse_scalar_tensor() {
         let expr = parse!("c*a*b(mink(4,1))");
-
-        let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-        net.execute::<Steps<1>, ContractScalars, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
-            net.result().unwrap()
-        {
-            assert_eq!(expr, tensor.expression);
-        } else {
-            panic!("Not scalar")
-        }
+        assert_eq!(net.simple_execute(), expr);
     }
 
     #[test]
     fn parse_scalar_tensors_step_by() {
         let expr = parse!("c*a*b(mink(4,1))*d(mink(4,2))*d(mink(4,1))*d(mink(4,2))");
 
+        let mut net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
+            .unwrap();
         let lib = DummyLibrary::<_>::new();
         let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
 
         let mut netc = net.clone();
-        println!(
-            "//Init:\n{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
+        assert_snapshot!(
+            net.snapshot_dot(),@r#"
+        digraph {
+          node	 [shape=circle,height=0.1,label=""];
+          overlap = "scale";
+          layout = "neato";
+
+          0	 [label = "∏"];
+          1	 [label = "S:c"];
+          2	 [label = "S:a"];
+          3	 [label = "T:b(mink(4,1))"];
+          4	 [label = "T:d(mink(4,1))"];
+          5	 [label = "^( 2 )"];
+          6	 [label = "T:d(mink(4,2))"];
+          ext0	 [style=invis];
+          0:0:s	-> ext0	 [id=0 color="red"];
+          6:15:s	-> 5:13:s	 [id=1  color="red:blue;0.5"];
+          3:9:s	-> 4:11:s	 [id=2 dir=none  color="red:blue;0.5" label="mink4|1"];
+          3:8:s	-> 0:3:s	 [id=3  color="red:blue;0.5"];
+          1:6:s	-> 0:5:s	 [id=4  color="red:blue;0.5"];
+          2:7:s	-> 0:4:s	 [id=5  color="red:blue;0.5"];
+          4:10:s	-> 0:2:s	 [id=6  color="red:blue;0.5"];
+          6:16:s	-> 5:14:s	 [id=7 dir=none  color="red:blue;0.5" label="mink4|2"];
+          5:12:s	-> 0:1:s	 [id=8  color="red:blue;0.5"];
+        }
+        "#
         );
         net.execute::<Steps<1>, ContractScalars, _, _, _>(&lib, &fnlib)
             .unwrap();
-        println!(
-            "//Contract Scalars:\n{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
+        assert_snapshot!(
+            net.snapshot_dot(),@r#"
+        digraph {
+          node	 [shape=circle,height=0.1,label=""];
+          overlap = "scale";
+          layout = "neato";
+
+          0	 [label = "∏"];
+          1	 [label = "S:c"];
+          2	 [label = "S:a"];
+          3	 [label = "T:b(mink(4,1))"];
+          4	 [label = "T:d(mink(4,1))"];
+          5	 [label = "S:(d(mink(4,2)))^2"];
+          ext0	 [style=invis];
+          0:0:s	-> ext0	 [id=0 color="red"];
+          4:10:s	-> 0:2:s	 [id=1  color="red:blue;0.5"];
+          1:6:s	-> 0:5:s	 [id=2  color="red:blue;0.5"];
+          2:7:s	-> 0:4:s	 [id=3  color="red:blue;0.5"];
+          3:8:s	-> 0:3:s	 [id=4  color="red:blue;0.5"];
+          3:9:s	-> 4:11:s	 [id=5 dir=none  color="red:blue;0.5" label="mink4|1"];
+          5:12:s	-> 0:1:s	 [id=6  color="red:blue;0.5"];
+        }
+        "#
         );
         net.execute::<Steps<1>, SingleSmallestDegree<false>, _, _, _>(&lib, &fnlib)
             .unwrap();
+        assert_snapshot!(
+            net.snapshot_dot(),@r#"
+        digraph {
+          node	 [shape=circle,height=0.1,label=""];
+          overlap = "scale";
+          layout = "neato";
 
-        // println!("{:#?}", net.graph.graph);
-        println!(
-            "//Single Smallest Degree 1:\n{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
+          4	 [label = "∏"];
+          0	 [label = "S:(d(mink(4,2)))^2"];
+          1	 [label = "S:c"];
+          2	 [label = "S:a"];
+          3	 [label = "T:b(mink(4,1))*d(mink(4,1))"];
+          ext0	 [style=invis];
+          4:0:s	-> ext0	 [id=0 color="red"];
+          1:6:s	-> 4:5:s	 [id=1  color="red:blue;0.5"];
+          2:7:s	-> 4:4:s	 [id=2  color="red:blue;0.5"];
+          3:8:s	-> 4:3:s	 [id=3  color="red:blue;0.5"];
+          0:2:s	-> 4:1:s	 [id=4  color="red:blue;0.5"];
+        }
+        "#
         );
         net.execute::<Steps<1>, SingleSmallestDegree<false>, _, _, _>(&lib, &fnlib)
             .unwrap();
+        assert_snapshot!(
+            net.snapshot_dot(),@r#"
+        digraph {
+          node	 [shape=circle,height=0.1,label=""];
+          overlap = "scale";
+          layout = "neato";
 
-        // println!("{:#?}", net.graph.graph);
-        println!(
-            "//Single Smallest Degree 2:\n{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
+          4	 [label = "∏"];
+          0	 [label = "S:(d(mink(4,2)))^2"];
+          1	 [label = "S:c"];
+          2	 [label = "S:a"];
+          3	 [label = "T:b(mink(4,1))*d(mink(4,1))"];
+          ext0	 [style=invis];
+          4:0:s	-> ext0	 [id=0 color="red"];
+          0:2:s	-> 4:1:s	 [id=1  color="red:blue;0.5"];
+          1:6:s	-> 4:5:s	 [id=2  color="red:blue;0.5"];
+          2:7:s	-> 4:4:s	 [id=3  color="red:blue;0.5"];
+          3:8:s	-> 4:3:s	 [id=4  color="red:blue;0.5"];
+        }
+        "#
         );
         net.execute::<Steps<1>, ContractScalars, _, _, _>(&lib, &fnlib)
             .unwrap();
-        println!(
-            "//Contract Scalars again:\n{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
+        assert_snapshot!(
+            net.snapshot_dot(),@r#"
+        digraph {
+          node	 [shape=circle,height=0.1,label=""];
+          overlap = "scale";
+          layout = "neato";
+
+          0	 [label = "T:(d(mink(4,2)))^2*a*b(mink(4,1))*c*d(mink(4,1))"];
+          ext0	 [style=invis];
+          0:0:s	-> ext0	 [id=0 color="red"];
+        }
+        "#
         );
         netc.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
-        println!(
-            "{}",
-            netc.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
+        assert_snapshot!(
+            netc.snapshot_dot(),@r#"
+        digraph {
+          node	 [shape=circle,height=0.1,label=""];
+          overlap = "scale";
+          layout = "neato";
+
+          0	 [label = "T:(d(mink(4,2)))^2*a*b(mink(4,1))*c*d(mink(4,1))"];
+          ext0	 [style=invis];
+          0:0:s	-> ext0	 [id=0 color="red"];
+        }
+        "#
         );
         if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
             net.result().unwrap()
@@ -715,44 +686,10 @@ pub mod test {
     #[test]
     fn parse_scalar_expr() {
         let expr = parse!("(y+x(mink(4,1))*y(mink(4,1))) *(1+1+2*x*(3*sin(r))/t)");
-
-        let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-
-        println!("{}", expr);
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Scalar(a)) = net.result().unwrap() {
-            // println!("YaY:{a}");
-            assert_eq!(&expr, a);
-        } else {
-            panic!("Not scalar")
-        }
+        assert_eq!(net.simple_execute(), expr);
     }
 
     #[test]
@@ -816,46 +753,10 @@ pub mod test {
 
         let expr = (parse!("a*sin(x/2)") * tensor1 * tensor2 * tensor3 + tensor4) * tensor5;
 
-        let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-
-        println!("{}", expr);
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
-            net.result().unwrap()
-        {
-            // println!("YaY:{a}");
-            assert_eq!(expr, tensor.expression);
-        } else {
-            panic!("Not tensor")
-        }
+        assert_eq!(net.simple_execute(), expr);
     }
 
     // -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ebar(2,mink(4,2))*ebar(3,mink(4,3))*gamma(mink(4,4),euc(4,5),euc(4,4))
@@ -864,53 +765,16 @@ pub mod test {
     fn parse_big_tensors() {
         initialize();
         let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ebar(2,mink(4,2))*ebar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
-        let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        println!("Hi");
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-
-        println!("{}", expr);
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
-            net.result().unwrap()
-        {
-            // println!("YaY:{}", (&expr - &tensor.expression).expand());
-            assert_eq!(expr, tensor.expression);
-        } else {
-            panic!("Not tensor")
-        }
+        assert_eq!(net.simple_execute(), expr);
     }
 
     #[test]
     fn equal_duals() {
         initialize();
-        let loop_tn_expr = parse_lit!(
+        let expr = parse_lit!(
             ((_gammaloop::Q(5, spenso::cind(0)))
                 ^ 2 + (_gammaloop::Q(5, spenso::cind(1)))
                 ^ 2 * -1 + (_gammaloop::Q(5, spenso::cind(2)))
@@ -1015,18 +879,10 @@ pub mod test {
                     )
         );
 
-        let lib: DummyLibrary<_, DummyKey> = DummyLibrary::<_, _>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        // println!("Hi");
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            loop_tn_expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
+        assert_eq!(net.simple_execute(), expr);
     }
 
     #[test]
@@ -1065,35 +921,10 @@ pub mod test {
                     * epsbar(6, mink(4, hedge8))
                     * epsbar(10, mink(4, hedge15))
         );
-        let lib: DummyLibrary<_, DummyKey> = DummyLibrary::<_, _>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        // println!("Hi");
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-
-        // println!("{}", expr);
-        // println!(
-        //     "{}",
-        //     net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        // );
-
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        // println!(
-        //     "{}",
-        //     net.dot_display_impl(|a| a.to_string(), |_| None, |a| a.to_string())
-        // );
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
-            net.result().unwrap()
-        {
-            assert_eq!(expr, tensor.expression);
-        } else {
-            panic!("Not tensor")
-        }
+        assert_eq!(net.simple_execute(), expr);
     }
 
     #[test]
@@ -1101,47 +932,10 @@ pub mod test {
         initialize();
         let expr =
             parse!("-d(mink(4,6),mink(4,5))*Q(2,mink(4,7))+d(mink(4,6),mink(4,5))*Q(3,mink(4,7))");
-        let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        println!("Hi");
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-
-        println!("{}", expr);
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
-            net.result().unwrap()
-        {
-            // println!("YaY:{}", (&expr - &tensor.expression).expand());
-            assert_eq!(expr, tensor.expression);
-        } else {
-            panic!("Not tensor")
-        }
+        assert_eq!(net.simple_execute(), expr);
     }
 
     #[test]
@@ -1152,43 +946,10 @@ pub mod test {
                 * (P(5, mink(4, r_3)) + N(5, mink(4, r_3)))
                 * (A(mink(4, r_2), mink(4, r_3)) + B(mink(4, r_3), mink(4, r_2)))
         );
-        let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-
-        println!("{}", expr);
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-        net.execute::<StepsDebug<6>, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
-            net.result().unwrap()
-        {
-            assert_eq!(expr, tensor.expression);
-        } else {
-            panic!("Not tensor")
-        }
+        assert_eq!(net.simple_execute(), expr);
     }
 
     #[test]
@@ -1223,36 +984,10 @@ pub mod test {
                 ^ 2
         );
 
-        let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-        println!("{}", expr);
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-
-        net.execute::<Steps<14>, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
+        assert_eq!(net.simple_execute(), expr);
     }
 
     #[test]
@@ -1309,92 +1044,10 @@ pub mod test {
             "spenso"
         );
 
-        let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-
-        println!("{}", expr);
-
-        net.graph.graph.check().unwrap();
-
-        // println!("{:?}", net.graph);
-
-        // let ron_string = ron::ser::to_string(&net.graph).unwrap();
-
-        // Write the RON string to a file
-        // let mut file = File::create("graph.ron").unwrap();
-        // file.write_all(ron_string.as_bytes()).unwrap();
-        net.graph.merge_ops();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-
-        let node: NodeIndex = net.graph.graph.len();
-        println!("Nnodes: {node}");
-
-        // net.graph.graph.iter_crown(NodeIndex(200)).for_each(|h| {
-        //     println!("Hedge: {:?}", h);
-        // });
-
-        // return;
-
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
-            net.result().unwrap()
-        {
-            // println!("YaY:{}", (&expr - &tensor.expression).expand());
-            assert_eq!(expr, tensor.expression);
-        } else {
-            panic!("Not tensor")
-        }
-
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
-            .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-        if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
-            net.result().unwrap()
-        {
-            // println!("YaY:{}", (&expr - &tensor.expression).expand());
-            assert_eq!(expr, tensor.expression);
-        } else {
-            panic!("Not tensor")
-        }
+        assert_eq!(net.simple_execute(), expr);
     }
     #[test]
     // #[should_panic]
@@ -1440,35 +1093,11 @@ pub mod test {
                     )
         );
 
-        // let expr = parse_lit!(
-        //     (-1 * spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_9))
-        //         * spenso::g(spenso::mink(4, python::l_7), spenso::mink(4, python::l_8))
-        //         + spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_8))
-        //             * spenso::g(spenso::mink(4, python::l_7), spenso::mink(4, python::l_9)))
-        //         * -1𝑖
-        //         * (spenso::G
-        //             ^ 3 * spenso::g(spenso::bis(4, python::l_2), spenso::bis(4, python::l_5))
-        //                 * spenso::g(spenso::bis(4, python::l_3), spenso::bis(4, python::l_6))
-        //                 * spenso::g(spenso::mink(4, python::l_0), spenso::mink(4, python::l_6))
-        //                 * spenso::g(spenso::mink(4, python::l_1), spenso::mink(4, python::l_7))
-        //                 * spenso::g(spenso::mink(4, python::l_4), spenso::mink(4, python::l_8))
-        //                 * spenso::g(spenso::mink(4, python::l_5), spenso::mink(4, python::l_9))
-        //                 * spenso::gamma(
-        //                     spenso::bis(4, python::l_6),
-        //                     spenso::bis(4, python::l_5),
-        //                     spenso::mink(4, python::l_5)
-        //                 )),
-        //     "spenso"
-        // );
-
         let lib = DummyLibrary::<_>::new();
         let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
+        let mut net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
+            .unwrap();
 
         let mut net_iter = net.clone();
 
@@ -1484,14 +1113,8 @@ pub mod test {
                 break;
             }
         }
-        println!(
-            "{}",
-            net_iter.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
+        assert_snapshot!(
+            net_iter.snapshot_dot(),@""
         );
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
@@ -1593,36 +1216,10 @@ pub mod test {
                     * eps(7, mink(4, hedge_9))
         );
 
-        let lib = DummyLibrary::<_>::new();
-        let fnlib = ErroringLibrary::<Symbol>::new();
-        let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-            expr.as_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap();
-        println!("{}", expr);
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
-
-        net.execute::<Steps<14>, SmallestDegree, _, _, _>(&lib, &fnlib)
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
-        println!(
-            "{}",
-            net.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
+        assert_eq!(net.simple_execute(), expr);
     }
     #[test]
     fn wrapping() {
@@ -1634,9 +1231,16 @@ pub mod test {
 
         let lib = DummyLibrary::<SymbolicTensor>::new();
         let fnlib = ErroringLibrary::<Symbol>::new();
-        let net = dummy_lib_parse(expr.as_view());
-        let net2 = dummy_lib_parse(expr2.as_view());
-        let net3 = dummy_lib_parse(expr3.as_view());
+        let settings = &ParseSettings::default();
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(settings)
+            .unwrap();
+        let net2 = expr2
+            .parse_to_symbolic_net::<AbstractIndex>(settings)
+            .unwrap();
+        let net3 = expr3
+            .parse_to_symbolic_net::<AbstractIndex>(settings)
+            .unwrap();
 
         let mut acc = Network::one();
         println!("{}", expr);
@@ -1644,42 +1248,18 @@ pub mod test {
         acc *= net;
         acc *= net2;
         acc *= net3;
-        println!(
-            "{}",
-            acc.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
+        println!("{}", acc.snapshot_dot());
 
         acc.merge_ops();
 
-        println!(
-            "{}",
-            acc.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
+        println!("{}", acc.snapshot_dot());
 
         // acc.execute::<Sequential, SmallestDegree, _, _,_>(&lib,&fnlib)
         //     .unwrap();
 
         acc.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();
-        println!(
-            "{}",
-            acc.dot_display_impl(
-                |a| a.to_string(),
-                |_| None,
-                |a| a.to_string(),
-                |_| "".to_string()
-            )
-        );
+        println!("{}", acc.snapshot_dot());
         let obt: Atom = acc.result_scalar().unwrap().into();
         assert_eq!(obt, expr * expr2 * expr3)
     }
@@ -1696,42 +1276,20 @@ pub mod test {
 
         for ex in [expr, expr2, expr3, expr4] {
             println!("Expr:{ex}");
-            let mut acc = dummy_lib_parse(&ex);
+            let mut acc = ex
+                .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
+                .unwrap();
             // acc *= net3;
-            println!(
-                "{}",
-                acc.dot_display_impl(
-                    |a| a.to_string(),
-                    |_| None,
-                    |a| a.to_string(),
-                    |_| "".to_string()
-                )
-            );
+            println!("{}", acc.snapshot_dot());
 
             acc.execute::<Steps<1>, ContractScalars, _, _, _>(&lib, &fnlib)
                 .unwrap();
 
-            println!(
-                "{}",
-                acc.dot_display_impl(
-                    |a| a.to_string(),
-                    |_| None,
-                    |a| a.to_string(),
-                    |_| "".to_string()
-                )
-            );
+            println!("{}", acc.snapshot_dot());
             acc.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
                 .unwrap();
 
-            println!(
-                "{}",
-                acc.dot_display_impl(
-                    |a| a.to_string(),
-                    |_| None,
-                    |a| a.to_string(),
-                    |_| "".to_string()
-                )
-            );
+            println!("{}", acc.snapshot_dot());
 
             if let ExecutionResult::Val(TensorOrScalarOrKey::Tensor { tensor, .. }) =
                 acc.result().unwrap()
@@ -1742,17 +1300,5 @@ pub mod test {
                 panic!("Not tensor")
             }
         }
-    }
-
-    fn dummy_lib_parse(
-        atom: impl AtomCore,
-    ) -> Network<NetworkStore<SymbolicTensor, Atom>, DummyKey, Symbol> {
-        let lib = DummyLibrary::<SymbolicTensor>::new();
-        Network::<NetworkStore<SymbolicTensor, Atom>, DummyKey, Symbol>::try_from_view(
-            atom.as_atom_view(),
-            &lib,
-            &ParseSettings::default(),
-        )
-        .unwrap()
     }
 }

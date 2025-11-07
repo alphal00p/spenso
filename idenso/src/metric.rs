@@ -194,17 +194,12 @@ pub fn cook_indices_impl(view: AtomView) -> Atom {
     for i in LibraryRep::all_self_duals().chain(LibraryRep::all_inline_metrics()) {
         let ipat = i.to_symbolic([RS.d_, RS.a_]).to_pattern();
         expr = expr.replace_map(|term, ctx, out| {
-            if ctx.function_level < 2 && ctx.function_level > 0 {
-                if let Some(c) = term.pattern_match(&ipat, None, &settings).next()
-                    && let Ok(aind) = cook_function_view(c[&RS.a_].as_view())
-                {
-                    *out = i.to_symbolic([c[&RS.d_].clone(), aind]);
-                    return true;
-                }
-
-                false
-            } else {
-                false
+            if ctx.function_level < 2
+                && ctx.function_level > 0
+                && let Some(c) = term.pattern_match(&ipat, None, &settings).next()
+                && let Ok(aind) = cook_function_view(c[&RS.a_].as_view())
+            {
+                **out = i.to_symbolic([c[&RS.d_].clone(), aind]);
             }
         });
     }
@@ -214,32 +209,20 @@ pub fn cook_indices_impl(view: AtomView) -> Atom {
         // println!("{ipat}");
         let ipat_dual = i.dual().to_symbolic([RS.d_, RS.a_]).to_pattern();
         expr = expr.replace_map(|term, ctx, out| {
-            if ctx.function_level == 1 {
-                if let Some(c) = term.pattern_match(&ipat_dual, None, &settings).next()
-                    && let Ok(aind) = cook_function_view(c[&RS.a_].as_view())
-                {
-                    // println!("{aind}");
-                    *out = i.dual().to_symbolic([c[&RS.d_].clone(), aind]);
-                    return true;
-                }
-
-                false
-            } else {
-                false
+            if ctx.function_level == 1
+                && let Some(c) = term.pattern_match(&ipat_dual, None, &settings).next()
+                && let Ok(aind) = cook_function_view(c[&RS.a_].as_view())
+            {
+                // println!("{aind}");
+                **out = i.dual().to_symbolic([c[&RS.d_].clone(), aind]);
             }
         });
         expr = expr.replace_map(|term, ctx, out| {
-            if ctx.function_level == 1 {
-                if let Some(c) = term.pattern_match(&ipat, None, &settings).next()
-                    && let Ok(aind) = cook_function_view(c[&RS.a_].as_view())
-                {
-                    *out = i.to_symbolic([c[&RS.d_].clone(), aind]);
-                    return true;
-                }
-
-                false
-            } else {
-                false
+            if ctx.function_level == 1
+                && let Some(c) = term.pattern_match(&ipat, None, &settings).next()
+                && let Ok(aind) = cook_function_view(c[&RS.a_].as_view())
+            {
+                **out = i.to_symbolic([c[&RS.d_].clone(), aind]);
             }
         });
     }
@@ -335,18 +318,15 @@ pub fn wrap_dummies_impl<Aind: ParseableAind + AbsInd>(view: AtomView, header: S
     for i in LibraryRep::all_self_duals().chain(LibraryRep::all_inline_metrics()) {
         let ipat = i.to_symbolic([RS.d_, RS.a_]).to_pattern();
         expr = expr.replace_map(|term, ctx, out| {
-            if ctx.function_level < 2 && ctx.function_level > 0 {
-                if let Some(c) = term.pattern_match(&ipat, None, &settings).next() {
-                    let atom = ipat.replace_wildcards(&c);
-                    if !externals.contains(&atom) {
-                        *out = i
-                            .to_symbolic([c[&RS.d_].clone(), function!(header, c[&RS.a_].clone())]);
-                        return true;
-                    }
+            if ctx.function_level < 2
+                && ctx.function_level > 0
+                && let Some(c) = term.pattern_match(&ipat, None, &settings).next()
+            {
+                let atom = ipat.replace_wildcards(&c);
+                if !externals.contains(&atom) {
+                    **out =
+                        i.to_symbolic([c[&RS.d_].clone(), function!(header, c[&RS.a_].clone())]);
                 }
-                false
-            } else {
-                false
             }
         });
     }
@@ -359,22 +339,17 @@ pub fn wrap_dummies_impl<Aind: ParseableAind + AbsInd>(view: AtomView, header: S
                 if let Some(c) = term.pattern_match(&ipat, None, &settings).next() {
                     let atom = ipat.replace_wildcards(&c);
                     if !externals.contains(&atom) {
-                        *out = i
+                        **out = i
                             .to_symbolic([c[&RS.d_].clone(), function!(header, c[&RS.a_].clone())]);
-                        return true;
                     }
                 } else if let Some(c) = term.pattern_match(&ipat_dual, None, &settings).next() {
                     let atom = ipat_dual.replace_wildcards(&c);
                     if !externals.contains(&atom) {
-                        *out = i
+                        **out = i
                             .dual()
                             .to_symbolic([c[&RS.d_].clone(), function!(header, c[&RS.a_].clone())]);
-                        return true;
                     }
                 }
-                false
-            } else {
-                false
             }
         });
     }

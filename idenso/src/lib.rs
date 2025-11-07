@@ -1,6 +1,6 @@
 #![allow(uncommon_codepoints)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use anyhow::anyhow;
 use linnet::half_edge::subgraph::{BaseSubgraph, ModifySubSet, SuBitGraph, SubSetLike};
@@ -174,8 +174,6 @@ impl IndexTooling for AtomView<'_> {
             .parse_to_symbolic_net::<Aind>(&ParseSettings::default())
             .unwrap();
 
-        // println!("{}", net.dot_pretty());
-
         let mut redual_reps = vec![];
 
         for t in net.store.tensors.iter_mut() {
@@ -213,23 +211,22 @@ impl IndexTooling for AtomView<'_> {
             }
         }
 
-        for (t, g) in dummies.iter() {
-            println!("T:{t},G:{g}")
-        }
-
         let expr = net.simple_execute();
 
-        let mut a = expr.canonize_tensors(dummies).unwrap();
+        let a = expr.canonize_tensors(dummies).unwrap();
+
+        let mut reps = vec![];
 
         for (i, (d, r)) in a.dummy_indices.into_iter().enumerate() {
-            // println!("dummy{i}:{d}");
-            a.canonical_form = a
-                .canonical_form
-                .replace(d)
-                .with(r.slot::<Aind, Aind>(new_dummy(i)).to_atom());
+            reps.push(Replacement::new(
+                d.to_pattern(),
+                r.slot::<Aind, Aind>(new_dummy(i)).to_atom(),
+            ));
         }
 
-        a.canonical_form.replace_multiple(&redual_reps)
+        a.canonical_form
+            .replace_multiple(&reps)
+            .replace_multiple(&redual_reps)
     }
     fn spenso_conj(&self) -> Atom {
         self.conj()
@@ -333,7 +330,7 @@ impl IndexTooling for AtomView<'_> {
             }
         }
         Ok(a.simplify_gamma_conj::<Aind>()?
-            .simplify_gamma0::<Aind>()
+            .simplify_gamma0()
             .simplify_metrics())
     }
 
@@ -356,6 +353,7 @@ impl IndexTooling for AtomView<'_> {
 
 #[cfg(test)]
 mod test {
+    use insta::assert_snapshot;
     use spenso::structure::{
         IndexlessNamedStructure,
         abstract_index::AbstractIndex,
@@ -363,16 +361,12 @@ mod test {
     };
     use symbolica::{
         atom::{Atom, AtomCore, Symbol},
-        function, symbol,
+        function,
+        printer::CanonicalOrderingSettings,
+        symbol,
     };
 
-    use crate::{
-        IndexTooling,
-        gamma::{AGS, GammaSimplifier},
-        metric::{MetricSimplifier, PermuteWithMetric},
-        rep_symbols::RS,
-        representations::Bispinor,
-    };
+    use crate::{IndexTooling, gamma::AGS, metric::PermuteWithMetric, representations::Bispinor};
     pub fn gamma(
         i: impl Into<AbstractIndex>,
         j: impl Into<AbstractIndex>,
@@ -408,6 +402,7 @@ mod test {
         function!(symbol!("spenso::p";Real), i, mink.to_symbolic([m_atom]))
     }
 
+    #[allow(dead_code)]
     pub fn a(i: usize, m: impl Into<AbstractIndex>, n: impl Into<AbstractIndex>) -> Atom {
         let m_atom: AbstractIndex = m.into();
         let m_atom: Atom = m_atom.into();
@@ -428,16 +423,13 @@ mod test {
         // let expr = gamma(1, 2, 3).dirac_adjoint::<AbstractIndex>().unwrap();
         // println!("{expr}");
         //
-        println!("Printing{}", (a(1, 2, 3) + a(2, 2, 3)));
 
         let ubgu = u(2, 2)
             * (gamma(1, 2, 3) * p(1, 3) + Bispinor {}.metric_atom([4, 1], [4, 2]))
             * (u(1, 1).dirac_adjoint::<AbstractIndex>().unwrap());
-        println!("Start:\n{}", ubgu);
+        // println!("Start:\n{}", ubgu);
         // let expr = ubgu.dirac_adjoint::<AbstractIndex>().unwrap();
         // println!("{expr}");
-
-        let mut exp = ubgu.spenso_conj();
 
         // println!("conj trans\n {exp}");
         // exp = exp.simplify_gamma_conj::<AbstractIndex>().unwrap();
@@ -447,9 +439,14 @@ mod test {
         // exp = exp.simplify_metrics();
         // println!("simplify metrics \n{exp}");
 
-        println!(
-            "Direct:\n{}",
-            ubgu.dirac_adjoint::<AbstractIndex>().unwrap() // .canonize(AbstractIndex::Dummy)
+        assert_snapshot!(
+            ubgu.dirac_adjoint::<AbstractIndex>()
+                .unwrap()
+                .canonize(AbstractIndex::Dummy)
+                .to_canonically_ordered_string(CanonicalOrderingSettings {
+                    include_attributes: false,
+                    include_namespace: false
+                }),@"(g(bis(4,d_1),bis(4,d_2))+gamma(bis(4,d_1),bis(4,d_2),mink(4,d_0))*p(1,mink(4,d_0)))*conj(u(2,bis(4,d_3)))*gamma0(bis(4,d_1),bis(4,d_3))*u(1,bis(4,d_2))"
         );
 
         // let ubggu = u(2, 3)

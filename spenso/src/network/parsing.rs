@@ -493,17 +493,17 @@ pub mod test {
           layout = "neato";
 
           0	 [label = "∏"];
-          1	 [label = "T:P(1,mink(4,1))"];
-          2	 [label = "T:P(2,mink(4,1))"];
-          3	 [label = "^( -1 )"];
-          4	 [label = "S:f(mul(P(3,mink(4,1))*P(4,mink(4,1))))"];
+          1	 [label = "^( -1 )"];
+          2	 [label = "S:f(mul(P(3,mink(4,1))*P(4,mink(4,1))))"];
+          3	 [label = "T:P(1,mink(4,1))"];
+          4	 [label = "T:P(2,mink(4,1))"];
           ext0	 [style=invis];
           0:0:s	-> ext0	 [id=0 color="red"];
-          4:10:s	-> 3:9:s	 [id=1  color="red:blue;0.5"];
-          1:5:s	-> 2:7:s	 [id=2 dir=none  color="red:blue;0.5" label="mink4|1"];
-          1:4:s	-> 0:3:s	 [id=3  color="red:blue;0.5"];
-          2:6:s	-> 0:2:s	 [id=4  color="red:blue;0.5"];
-          3:8:s	-> 0:1:s	 [id=5  color="red:blue;0.5"];
+          3:8:s	-> 4:10:s	 [id=1 dir=none  color="red:blue;0.5" label="mink4|1"];
+          3:7:s	-> 0:2:s	 [id=2  color="red:blue;0.5"];
+          2:6:s	-> 1:5:s	 [id=3  color="red:blue;0.5"];
+          1:4:s	-> 0:3:s	 [id=4  color="red:blue;0.5"];
+          4:9:s	-> 0:1:s	 [id=5  color="red:blue;0.5"];
         }
         "#);
 
@@ -546,8 +546,8 @@ pub mod test {
           layout = "neato";
 
           0	 [label = "∏"];
-          1	 [label = "S:c"];
-          2	 [label = "S:a"];
+          1	 [label = "S:a"];
+          2	 [label = "S:c"];
           3	 [label = "T:b(mink(4,1))"];
           4	 [label = "T:d(mink(4,1))"];
           5	 [label = "^( 2 )"];
@@ -1114,7 +1114,23 @@ pub mod test {
             }
         }
         assert_snapshot!(
-            net_iter.snapshot_dot(),@""
+            net_iter.snapshot_dot(),@r#"
+        digraph {
+          node	 [shape=circle,height=0.1,label=""];
+          overlap = "scale";
+          layout = "neato";
+
+          0	 [label = "T:(-1*g(mink(4,l_6),mink(4,l_9))*g(mink(4,l_7),mink(4,l_8))+g(mink(4,l_6),mink(4,l_8))*g(mink(4,l_7),mink(4,l_9)))*-1𝑖*G^3*g(bis(4,l_2),bis(4,l_5))*g(bis(4,l_3),bis(4,l_6))*g(mink(4,l_0),mink(4,l_6))*g(mink(4,l_1),mink(4,l_7))*g(mink(4,l_4),mink(4,l_8))*g(mink(4,l_5),mink(4,l_9))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_5))"];
+          ext0	 [style=invis];
+          0:0:s	-> ext0	 [id=0 color="red"];
+          ext1	 [style=invis];
+          0:1:s	-> ext1	 [id=1 dir=none color="red" label="mink4|l_4"];
+          ext2	 [style=invis];
+          0:2:s	-> ext2	 [id=2 dir=none color="red" label="mink4|l_1"];
+          ext3	 [style=invis];
+          0:3:s	-> ext3	 [id=3 dir=none color="red" label="mink4|l_0"];
+        }
+        "#
         );
         net.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &fnlib)
             .unwrap();

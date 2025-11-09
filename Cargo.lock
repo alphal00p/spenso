@@ -1671,9 +1671,20 @@ dependencies = [
  "num-complex",
  "numpy",
  "pyo3",
- "pyo3-stub-gen-derive",
+ "pyo3-stub-gen-derive 0.16.1",
  "serde",
  "toml 0.9.8",
+]
+
+[[package]]
+name = "pyo3-stub-gen-derive"
+version = "0.13.1"
+source = "git+https://github.com/benruijl/pyo3-stub-gen?branch=patched#f421197e60e3617992ebfe0615db1fe846c1da81"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.108",
 ]
 
 [[package]]
@@ -2216,6 +2227,7 @@ dependencies = [
  "itertools 0.14.0",
  "pyo3",
  "pyo3-stub-gen",
+ "pyo3-stub-gen-derive 0.13.1",
  "spenso",
  "spenso-hep-lib",
  "spenso-macros",
@@ -2276,7 +2288,7 @@ dependencies = [
  "once_cell",
  "pyo3",
  "pyo3-stub-gen",
- "pyo3-stub-gen-derive",
+ "pyo3-stub-gen-derive 0.16.1",
  "rand 0.9.1",
  "rand_xoshiro 0.7.0",
  "rayon",

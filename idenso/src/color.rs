@@ -34,9 +34,15 @@ pub enum ColorError {
 pub struct ColorSymbols {
     pub nc_: Symbol,
     pub adj_: Symbol,
+    /// The adjoint Casimir symbol, i.e. CA = Nc
+    pub ca: Symbol,
+    /// The generator symbol
     pub t: Symbol,
+    /// The structure constant symbol i.e. [T^a, T^b] = i f^{abc} T^c
     pub f: Symbol,
+    /// The trace constant symbol i.e. Tr(T^a T^b) = TR delta^{ab}. Usually TR=1/2
     pub tr: Symbol,
+    /// The number of colors symbol (i.e. the dimension of the fundamental representation) usually Nc=3
     pub nc: Symbol,
 }
 
@@ -106,6 +112,8 @@ impl ColorSymbols {
 pub static CS: LazyLock<ColorSymbols> = LazyLock::new(|| ColorSymbols {
     t: symbol!("spenso::t";Real),
     f: symbol!("spenso::f";Real),
+
+    ca: symbol!("ca"),
     adj_: symbol!("adj_"),
     nc_: symbol!("nc_"),
     tr: symbol!("spenso::TR";Real),
@@ -262,7 +270,6 @@ pub fn color_simplify_impl(expression: AtomView) -> Atom {
             t(RS.i_, RS.a_, RS.b_) * t(RS.e_, RS.b_, RS.c_) * t(RS.i_, RS.c_, RS.d_),
             -(&tr / Atom::var(CS.nc_)) * t(RS.e_, RS.a_, RS.d_),
         ),
-        (f(RS.a_, RS.b_, RS.c_).pow(Atom::num(2)), CS.nc * CS.adj_),
     ];
 
     let i = symbol!("i");
@@ -282,36 +289,42 @@ pub fn color_simplify_impl(expression: AtomView) -> Atom {
         )
     }
 
-    let frep = [Replacement::new(
-        f(RS.a_, RS.b_, RS.c_).to_pattern(),
-        (((ta(
-            RS.a_,
-            function!(i, RS.a_, RS.b_, RS.c_),
-            function!(j, RS.a_, RS.b_, RS.c_),
-        ) * ta(
-            RS.b_,
-            function!(j, RS.a_, RS.b_, RS.c_),
-            function!(k, RS.a_, RS.b_, RS.c_),
-        ) * ta(
-            RS.c_,
-            function!(k, RS.a_, RS.b_, RS.c_),
-            function!(i, RS.a_, RS.b_, RS.c_),
-        ) - ta(
-            RS.a_,
-            function!(i, RS.a_, RS.b_, RS.c_),
-            function!(j, RS.a_, RS.b_, RS.c_),
-        ) * ta(
-            RS.c_,
-            function!(j, RS.a_, RS.b_, RS.c_),
-            function!(k, RS.a_, RS.b_, RS.c_),
-        ) * ta(
-            RS.b_,
-            function!(k, RS.a_, RS.b_, RS.c_),
-            function!(i, RS.a_, RS.b_, RS.c_),
-        )) / &tr)
-            * -Atom::i())
-        .to_pattern(),
-    )];
+    let frep = [
+        Replacement::new(
+            f(RS.a_, RS.b_, RS.c_).pow(Atom::num(2)).to_pattern(),
+            CS.ca * CS.adj_,
+        ),
+        Replacement::new(
+            f(RS.a_, RS.b_, RS.c_).to_pattern(),
+            (((ta(
+                RS.a_,
+                function!(i, RS.a_, RS.b_, RS.c_),
+                function!(j, RS.a_, RS.b_, RS.c_),
+            ) * ta(
+                RS.b_,
+                function!(j, RS.a_, RS.b_, RS.c_),
+                function!(k, RS.a_, RS.b_, RS.c_),
+            ) * ta(
+                RS.c_,
+                function!(k, RS.a_, RS.b_, RS.c_),
+                function!(i, RS.a_, RS.b_, RS.c_),
+            ) - ta(
+                RS.a_,
+                function!(i, RS.a_, RS.b_, RS.c_),
+                function!(j, RS.a_, RS.b_, RS.c_),
+            ) * ta(
+                RS.c_,
+                function!(j, RS.a_, RS.b_, RS.c_),
+                function!(k, RS.a_, RS.b_, RS.c_),
+            ) * ta(
+                RS.b_,
+                function!(k, RS.a_, RS.b_, RS.c_),
+                function!(i, RS.a_, RS.b_, RS.c_),
+            )) / &tr)
+                * -Atom::i())
+            .to_pattern(),
+        ),
+    ];
 
     let settings = MatchSettings {
         rhs_cache_size: 0,
@@ -417,6 +430,8 @@ impl ColorSimplifier for AtomView<'_> {
 #[cfg(test)]
 mod test {
 
+    use insta::assert_snapshot;
+    use spenso::shadowing::symbolica_utils::AtomCoreExt;
     use spenso::structure::IndexlessNamedStructure;
     use spenso::structure::PermutedStructure;
 
@@ -525,11 +540,17 @@ mod test {
     #[test]
     fn test_color_simplification() {
         initialize();
-        let atom = parse_lit!(f(coad(8, 2), coad(8, 2), coad(8, 1)), "spenso");
-        println!("{atom}");
+        let atom = parse_lit!(
+            f(
+                coad(Nc ^ 2 - 1, 1),
+                coad(Nc ^ 2 - 1, 2),
+                coad(Nc ^ 2 - 1, 3)
+            ) ^ 2,
+            "spenso"
+        );
         let simplified = atom.simplify_color();
-        println!("{simplified}");
-        assert_eq!(simplified, Atom::num(0));
+
+        assert_snapshot!(simplified.to_bare_ordered_string(), @"-1*ca+Nc^2*ca");
     }
 
     fn colored_matrix_element() -> (Atom, Atom) {

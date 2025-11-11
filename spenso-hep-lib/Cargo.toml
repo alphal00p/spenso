@@ -17,3 +17,7 @@ idenso = "0.2"
 
 ahash = { version = "0.8.11", features = ["serde"] }
 xpct = "0.5.1"
+
+[dev-dependencies]
+
+insta = { version = "1.38.0", features = ["yaml", "json", "ron", "toml"] }

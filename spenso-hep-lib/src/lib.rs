@@ -5,12 +5,14 @@ use idenso::{gamma::AGS, representations::initialize};
 use spenso::{
     algebra::complex::Complex,
     network::{
+        Network,
         library::{
             TensorLibraryData,
             function_lib::{INBUILTS, PanicMissingConcrete, SymbolLib},
             symbolic::{ExplicitKey, TensorLibrary},
         },
         parsing::{SPENSO_TAG, ShadowedStructure},
+        store::NetworkStore,
     },
     structure::{PermutedStructure, TensorStructure, abstract_index::AbstractIndex, slot::AbsInd},
     tensors::{
@@ -19,7 +21,10 @@ use spenso::{
         parametric::MixedTensor,
     },
 };
-use symbolica::symbol;
+use symbolica::{
+    atom::{Atom, Symbol},
+    symbol,
+};
 
 #[allow(clippy::similar_names)]
 pub fn gamma_data_dirac<T, N>(structure: N, one: T, zero: T) -> SparseTensor<Complex<T>, N>
@@ -433,6 +438,11 @@ where
     weyl
 }
 
+pub type HepTensor<Aind> = MixedTensor<f64, ShadowedStructure<Aind>>;
+
+pub type HepNet<Aind> =
+    Network<NetworkStore<HepTensor<Aind>, Atom>, ExplicitKey<Aind>, Symbol, Aind>;
+
 pub static HEP_LIB: LazyLock<
     TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>,
 > = LazyLock::new(|| hep_lib(1., 0.));
@@ -495,7 +505,7 @@ mod tests {
         let _a = HEP_LIB.get(&AGS.gamma_strct(4)).unwrap();
 
         let expr = parse!("gamma(bis(4,l_5),bis(4,l_4),mink(4,l_4))*gamma(bis(4,l_6),bis(4,l_5),mink(4,l_4))*gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
-            ","spenso");
+            ",default_namespace="spenso");
         // let expr = parse!(
         // "gamma(bis(4,l_4),bis(4,l_6),mink(4,l_5))*p(mink(4,l_5))
         // ",
@@ -695,7 +705,7 @@ mod tests {
                     * gamma(bis(4, 3), bis(4, 7), mink(4, 4))
                     * gamma(bis(4, 6), bis(4, 2), mink(4, 26))
                     * gamma(bis(4, 7), bis(4, 6), mink(4, 0))),
-            "spenso"
+            default_namespace = "spenso"
         );
         // println!("{}", expr);
 
@@ -773,361 +783,6 @@ mod tests {
         // } else {
         //     panic!("Not tensor")
         // }
-    }
-
-    fn validate_gamma(
-        expr: Atom,
-        const_map: HashMap<Atom, symbolica::domains::float::Complex<f64>>,
-    ) {
-        let mut net = Network::<
-            NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
-            _,
-            Symbol,
-        >::try_from_view(expr.as_view(), &*HEP_LIB, &ParseSettings::default())
-        .unwrap();
-
-        println!("Expression: {}", expr);
-        let simplified = expr.simplify_gamma();
-
-        println!("Simplified to {}", simplified);
-        let mut net_simplified =
-            Network::<
-                NetworkStore<MixedTensor<f64, ShadowedStructure<AbstractIndex>>, Atom>,
-                _,
-                Symbol,
-            >::try_from_view(simplified.as_view(), &*HEP_LIB, &ParseSettings::default())
-            .unwrap();
-
-        println!("{}", net_simplified.dot_pretty());
-        net.execute::<Sequential, SmallestDegree, _, _, _>(&*HEP_LIB, &*FUN_LIB)
-            .unwrap();
-        net_simplified
-            .execute::<Sequential, SmallestDegree, _, _, _>(&*HEP_LIB, &*FUN_LIB)
-            .unwrap();
-
-        let function_map = HashMap::new();
-
-        if let ExecutionResult::Val(v) = net.result_tensor(&*HEP_LIB).unwrap() {
-            if let ExecutionResult::Val(v2) = net_simplified.result_tensor(&*HEP_LIB).unwrap() {
-                let mut res = v.into_owned();
-                println!("{res}");
-                let mut res_simplified = v2.into_owned();
-                res.evaluate_complex(|c| c.into(), &const_map, &function_map);
-                res_simplified.evaluate_complex(|c| c.into(), &const_map, &function_map);
-                res = res.to_dense();
-                res_simplified = res_simplified.to_dense();
-
-                let mut sub = res.sub_fallible(&res_simplified).unwrap();
-                sub.to_param();
-                let sub = sub.try_into_parametric().unwrap();
-                let zero = sub
-                    .zero_test(10, 0.01)
-                    .iter_flat()
-                    .fold(ConditionResult::True, |a, (_, b)| a & *b);
-
-                match zero {
-                    ConditionResult::False => panic!(
-                        "Should be zero but \n{}\n minus simplified\n{}\n is \n{}",
-                        res, res_simplified, sub
-                    ),
-                    ConditionResult::Inconclusive => panic!("Inconclusive"),
-                    _ => {
-                        println!("Works:res\n{}res_simplified\n{}", res, res_simplified)
-                    }
-                }
-            } else {
-                panic!("Expected tensor result");
-            }
-        } else {
-            panic!("Expected tensor result");
-        }
-    }
-
-    #[test]
-    fn gamma_algebra_validate() {
-        initialize();
-        let mut const_map = HashMap::new();
-        let pt: DenseTensor<Atom, _> = ShadowedStructure::<AbstractIndex>::from_iter(
-            [Minkowski {}.new_slot(4, 1)],
-            symbol!("spenso::p"),
-            None,
-        )
-        .structure
-        .to_shell()
-        .concretize(None);
-
-        for (i, a) in pt.iter_flat() {
-            const_map.insert(
-                a.clone(),
-                symbolica::domains::float::Complex::new(usize::from(i) as f64 * 1., 0.),
-            );
-        }
-
-        let qt: DenseTensor<Atom, _> = ShadowedStructure::<AbstractIndex>::from_iter(
-            [Minkowski {}.new_slot(4, 1)],
-            symbol!("spenso::q"),
-            None,
-        )
-        .structure
-        .to_shell()
-        .concretize(None);
-
-        for (i, a) in qt.iter_flat() {
-            const_map.insert(
-                a.clone(),
-                symbolica::domains::float::Complex::new((usize::from(i) + 1) as f64 * 1., 0.),
-            );
-        }
-        initialize();
-
-        #[allow(non_snake_case)]
-        #[allow(unused)]
-        fn A(
-            i: impl Into<AbstractIndex>,
-            j: impl Into<AbstractIndex>,
-            k: impl Into<AbstractIndex>,
-        ) -> Atom {
-            let a_strct = IndexlessNamedStructure::<Symbol, ()>::from_iter(
-                [
-                    Bispinor {}.new_rep(2).to_lib(),
-                    Bispinor {}.new_rep(2).cast(),
-                    Bispinor {}.new_rep(2).cast(),
-                ],
-                symbol!("A"),
-                None,
-            );
-            a_strct
-                .reindex([i.into(), j.into(), k.into()])
-                .unwrap()
-                .map_structure(|a| SymbolicTensor::from_named(&a).unwrap())
-                .permute_inds()
-                .expression
-                .simplify_metrics()
-        }
-        #[allow(unused)]
-        #[allow(non_snake_case)]
-        fn B(
-            i: impl Into<AbstractIndex>,
-            j: impl Into<AbstractIndex>,
-            k: impl Into<AbstractIndex>,
-        ) -> Atom {
-            let a_strct = IndexlessNamedStructure::<Symbol, ()>::from_iter(
-                [
-                    Bispinor {}.new_rep(2).to_lib(),
-                    Bispinor {}.new_rep(2).cast(),
-                    Bispinor {}.new_rep(2).cast(),
-                ],
-                symbol!("B"),
-                None,
-            );
-            a_strct
-                .reindex([i.into(), j.into(), k.into()])
-                .unwrap()
-                .map_structure(|a| SymbolicTensor::from_named(&a).unwrap())
-                .permute_inds()
-                .expression
-                .simplify_metrics()
-        }
-
-        fn gamma(
-            i: impl Into<AbstractIndex>,
-            j: impl Into<AbstractIndex>,
-            mu: impl Into<AbstractIndex>,
-        ) -> Atom {
-            let gamma_strct = IndexlessNamedStructure::<Symbol, ()>::from_iter(
-                [
-                    Bispinor {}.new_rep(4).to_lib(),
-                    Bispinor {}.new_rep(4).cast(),
-                    Minkowski {}.new_rep(4).cast(),
-                ],
-                AGS.gamma,
-                None,
-            );
-            gamma_strct
-                .reindex([i.into(), j.into(), mu.into()])
-                .unwrap()
-                .permute_with_metric()
-        }
-
-        fn gammaadj(
-            i: impl Into<AbstractIndex>,
-            j: impl Into<AbstractIndex>,
-            mu: impl Into<AbstractIndex>,
-        ) -> Atom {
-            let gamma_strct = IndexlessNamedStructure::<Symbol, ()>::from_iter(
-                [
-                    Bispinor {}.new_rep(4).to_lib(),
-                    Bispinor {}.new_rep(4).cast(),
-                    Minkowski {}.new_rep(4).cast(),
-                ],
-                AGS.gammaadj,
-                None,
-            );
-            gamma_strct
-                .reindex([i.into(), j.into(), mu.into()])
-                .unwrap()
-                .permute_with_metric()
-        }
-
-        fn gamma0(i: impl Into<AbstractIndex>, j: impl Into<AbstractIndex>) -> Atom {
-            let gamma_strct = IndexlessNamedStructure::<Symbol, ()>::from_iter(
-                [
-                    Bispinor {}.new_rep(4).to_lib(),
-                    Bispinor {}.new_rep(4).cast(),
-                ],
-                AGS.gamma0,
-                None,
-            );
-            gamma_strct
-                .reindex([i.into(), j.into()])
-                .unwrap()
-                .permute_with_metric()
-        }
-
-        fn gammaconj(
-            i: impl Into<AbstractIndex>,
-            j: impl Into<AbstractIndex>,
-            mu: impl Into<AbstractIndex>,
-        ) -> Atom {
-            let gamma_strct = IndexlessNamedStructure::<Symbol, ()>::from_iter(
-                [
-                    Bispinor {}.new_rep(4).to_lib(),
-                    Bispinor {}.new_rep(4).cast(),
-                    Minkowski {}.new_rep(4).cast(),
-                ],
-                AGS.gammaconj,
-                None,
-            );
-            gamma_strct
-                .reindex([i.into(), j.into(), mu.into()])
-                .unwrap()
-                .permute_with_metric()
-        }
-
-        fn p(m: impl Into<AbstractIndex>) -> Atom {
-            let m_atom: AbstractIndex = m.into();
-            let m_atom: Atom = m_atom.into();
-            let mink = Minkowski {}.new_rep(4);
-            function!(symbol!("spenso::p"), mink.to_symbolic([m_atom]))
-        }
-        fn q(m: impl Into<AbstractIndex>) -> Atom {
-            let m_atom: AbstractIndex = m.into();
-            let m_atom: Atom = m_atom.into();
-            let mink = Minkowski {}.new_rep(4);
-            function!(symbol!("spenso::q"), mink.to_symbolic([m_atom]))
-        }
-
-        fn u(i: usize, m: impl Into<AbstractIndex>) -> Atom {
-            let m_atom: AbstractIndex = m.into();
-            let m_atom: Atom = m_atom.into();
-            let mink = Bispinor {}.new_rep(4);
-            function!(symbol!("spenso::u"), i, mink.to_symbolic([m_atom]))
-        }
-
-        fn ub(i: usize, m: impl Into<AbstractIndex>) -> Atom {
-            let m_atom: AbstractIndex = m.into();
-            let m_atom: Atom = m_atom.into();
-            let mink = Bispinor {}.new_rep(4);
-            function!(symbol!("spenso::ub"), i, mink.to_symbolic([m_atom]))
-        }
-
-        // gamma.reindex([1,2,3]).unwrap().map_structure(|a|)
-
-        let expr = p(1)
-            * (p(3) + q(3))
-            * gamma(1, 2, 1)
-            * gamma(2, 3, 2)
-            * gamma(3, 4, 3)
-            * gamma(4, 1, 4);
-
-        validate_gamma(expr, const_map.clone());
-        let _expr = p(1) * p(1);
-
-        let bis = Bispinor {}.new_rep(2);
-        let mink = Minkowski {}.new_rep(2);
-        let _expr = function!(
-            symbol!("A"),
-            bis.slot::<AbstractIndex, _>(1).to_atom(),
-            bis.slot::<AbstractIndex, _>(2).to_atom(),
-            mink.slot::<AbstractIndex, _>(1).to_atom()
-        ) * function!(
-            symbol!("A"),
-            bis.slot::<AbstractIndex, _>(2).to_atom(),
-            bis.slot::<AbstractIndex, _>(1).to_atom(),
-            mink.slot::<AbstractIndex, _>(2).to_atom()
-        );
-
-        let expr = gamma(1, 2, 1) * gamma(2, 1, 1);
-        validate_gamma(expr, const_map.clone());
-        let expr = gamma(1, 2, 2) * gamma(2, 1, 1) + gamma(1, 2, 1) * gamma(2, 1, 2);
-        validate_gamma(expr, const_map.clone());
-
-        let expr = gamma0(1, 2) * gamma(2, 3, 1) * gamma0(3, 4) - gammaconj(4, 1, 1);
-        // let expr2 = gamma0(1, 2) * gammaconj(3, 2, 1) * gamma0(3, 4);
-
-        validate_gamma(expr, const_map.clone());
-
-        let expr = gammaadj(1, 2, 1) - gamma0(1, 3) * gamma(3, 4, 1) * gamma0(4, 2);
-        // let expr2 = gamma0(1, 2) * gammaconj(3, 2, 1) * gamma0(3, 4);
-
-        validate_gamma(expr, const_map.clone());
-
-        let expr = gammaadj(1, 2, 1) - gammaconj(2, 1, 1);
-        // let expr2 = gamma0(1, 2) * gammaconj(3, 2, 1) * gamma0(3, 4);
-
-        validate_gamma(expr, const_map.clone());
-        let _a = u(1, 1) * gamma(1, 2, 1) * ub(2, 2);
-        // validate_gamma(
-        //     a.conj()
-        //         .replace(function!(Symbol::CONJ, symbol!("a__")))
-        //         .with(function!(
-        //             symbol!("conju", tag = SPENSO_TAG.tag),
-        //             symbol!("a__")
-        //         ))
-        //         * a,
-        //     const_map.clone(),
-        // );
-
-        // let a = Atom::num(1) / u(1, 1) * gamma(1, 2, 1) * ub(2, 2);
-        // validate_gamma(
-        //     a.conj()
-        //         .replace(function!(Symbol::CONJ, symbol!("a__")))
-        //         .with(function!(
-        //             symbol!("conju", tag = SPENSO_TAG.tag),
-        //             symbol!("a__")
-        //         ))
-        //         * a,
-        //     const_map.clone(),
-        // );
-
-        // validate_gamma(expr2, const_map.clone());
-        // let expr = gamma(1, 2, 2) * gamma(2, 1, 1) + gamma(1, 2, 1) * gamma(2, 1, 2);
-        // // + gamma(1, 2, 1) * gamma(2, 1, 1);
-
-        // // let expr = A(1, 2, 0) * B(2, 1, 3);
-        // validate_gamma(expr, const_map.clone());
-        // let expr = gamma(1, 2, 1);
-
-        // validate_gamma(expr, const_map.clone());
-        // let expr = gamma(2, 1, 1);
-
-        // validate_gamma(expr, const_map.clone());
-        // assert_eq!(pt, qt);
-
-        // let a: DataTensor<_, _> = DenseTensor::fill(
-        //     OrderedStructure::<Bispinor>::from_iter([Bispinor {}.new_slot(2, 2)]).structure,
-        //     Complex::new(-1., 0.),
-        // )
-        // .into();
-        // let b: DataTensor<_, _> = DenseTensor::fill(
-        //     OrderedStructure::<Bispinor>::from_iter([Bispinor {}.new_slot(2, 2)]).structure,
-        //     Complex::new(1., 0.),
-        // )
-        // .into();
-        // assert_eq!(
-        //     ParamOrConcrete::<_, OrderedStructure<Bispinor>>::Concrete(a),
-        //     ParamOrConcrete::<_, OrderedStructure<Bispinor>>::Concrete(b)
-        // );
     }
 
     #[test]

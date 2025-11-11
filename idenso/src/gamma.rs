@@ -965,7 +965,7 @@ mod test {
                     * gamma(bis(4, l(5)), bis(4, l(4)), mink(dim, l(4)))
                     * gamma(bis(4, l(6)), bis(4, l(5)), mink(dim, l(20)))
                     * gamma(bis(4, l(7)), bis(4, l(6)), mink(dim, l(5))),
-            "spenso"
+            default_namespace = "spenso"
         );
 
         println!("Bef:{}", expr);
@@ -977,7 +977,7 @@ mod test {
         initialize();
         let expr = parse_lit!(
             gamma_chain(mink(4, 0), bis(3), mink(4, 0), bis(1), bis(2)),
-            "spenso"
+            default_namespace = "spenso"
         )
         .simplify_gamma();
 
@@ -1003,7 +1003,7 @@ mod test {
                     bis(1),
                     bis(1)
                 ),
-            "spenso"
+            default_namespace = "spenso"
         )
         .simplify_gamma()
         .expand()
@@ -1019,7 +1019,7 @@ mod test {
                         + 4 * p(mink(4, mu)) * q(mink(4, nu))
                         + 4 * p(mink(4, nu)) * q(mink(4, mu))
                         - 4 * g(mink(4, mu), mink(4, nu)) * p(mink(4, dummy)) * q(mink(4, dummy)),
-                "spenso"
+                default_namespace = "spenso"
             ),
             "got \n{:#>}",
             expr
@@ -1035,10 +1035,15 @@ mod test {
                         * g(mink(dim, 5), mink(dim, 4)))
                 * (g(mink(dim, 1), mink(dim, 2)) * g(mink(dim, 3), mink(dim, 4))
                     - g(mink(dim, 1), mink(dim, 3)) * g(mink(dim, 2), mink(dim, 4))),
-            "spenso"
+            default_namespace = "spenso"
         )
         .simplify_gamma();
-        assert_eq!(expr, parse_lit!(-dim + dim ^ 3, "spenso"), "got {}", expr);
+        assert_eq!(
+            expr,
+            parse_lit!(-dim + dim ^ 3, default_namespace = "spenso"),
+            "got {}",
+            expr
+        );
 
         let expr = parse_lit!(
             p(mink(4, nu1))
@@ -1054,7 +1059,7 @@ mod test {
                     bis(4, 1),
                     bis(4, 1)
                 ),
-            "spenso"
+            default_namespace = "spenso"
         )
         .simplify_gamma()
         .replace(symbol!("spenso::nu3"))
@@ -1069,7 +1074,7 @@ mod test {
                         + 4 * g(mink(4, mu), mink(4, nu))
                             * p(mink(4, idenso::dummy))
                             * q(mink(4, idenso::dummy)),
-                "spenso"
+                default_namespace = "spenso"
             ),
             "got \n{:>+}",
             expr
@@ -1089,7 +1094,7 @@ mod test {
                     bis(1),
                     bis(1)
                 ),
-            "spenso"
+            default_namespace = "spenso"
         )
         .simplify_gamma()
         .replace(symbol!("nu1"))
@@ -1098,7 +1103,7 @@ mod test {
             expr.expand(),
             parse_lit!(
                 4 * dim * p(mink(dim, nu1)) ^ 2 + 4 * dim * p(mink(dim, nu1)) * q(mink(dim, nu1)),
-                "spenso"
+                default_namespace = "spenso"
             ),
             "got {:#}",
             expr
@@ -1118,7 +1123,7 @@ mod test {
                     bis(1),
                     bis(1)
                 ),
-            "spenso"
+            default_namespace = "spenso"
         )
         .simplify_gamma()
         .replace(symbol!("nu1"))
@@ -1130,7 +1135,7 @@ mod test {
                     ^ 2 - 4 * dim * p(mink(dim, nu1))
                     ^ 2 + 8 * p(mink(dim, nu1)) * q(mink(dim, nu1))
                         - 4 * dim * p(mink(dim, nu1)) * q(mink(dim, nu1)),
-                "spenso"
+                default_namespace = "spenso"
             ),
             "got {:#}",
             expr
@@ -1152,7 +1157,7 @@ mod test {
                     bis(1),
                     bis(1)
                 ),
-            "spenso"
+            default_namespace = "spenso"
         )
         .simplify_gamma()
         .to_dots();
@@ -1160,7 +1165,7 @@ mod test {
             expr,
             parse_lit!(
                 8 * dot(p, q) ^ 2 - 4 * dot(p, p) * dot(q, q) + 4 * dot(p, q) * dot(q, q),
-                "spenso"
+                default_namespace = "spenso"
             ),
             "got {}",
             expr
@@ -1178,7 +1183,7 @@ mod test {
                 bis(4, 1),
                 bis(4, 2)
             ),
-            "spenso"
+            default_namespace = "spenso"
         )
         .simplify_gamma()
         .to_dots();
@@ -1320,7 +1325,7 @@ mod test {
                 8 * dot(idenso::p, idenso::q)
                     ^ 2 - 4 * dot(idenso::p, idenso::p) * dot(idenso::q, idenso::q)
                         + 4 * dot(idenso::p, idenso::q) * dot(idenso::q, idenso::q),
-                "spenso"
+                default_namespace = "spenso"
             ),
             "got {:#}",
             expr
@@ -1331,7 +1336,7 @@ mod test {
     fn normalise_g() {
         let expr = parse_lit!(
             gamma_chain(mink(dim, mu), bis(5), mink(dim, mu), bis(1), bis(2)),
-            "spenso"
+            default_namespace = "spenso"
         );
 
         println!("{}", expr.simplify_gamma())
@@ -1466,7 +1471,7 @@ mod test {
                 )
                 * p(1, mink(4, hedge(4, 0)))
                 * p(7, mink(4, hedge(11, 0))),
-            "spenso"
+            default_namespace = "spenso"
         );
 
         // let expr = parse_lit!(
@@ -1736,10 +1741,10 @@ mod test {
                     * gamma(bis(4, r(3)), bis(4, l(3)), mink(4, dummy(3, 3)))
                     * gamma(bis(4, r(5)), bis(4, r(6)), mink(4, r(5))))
                 * -18,
-            "spenso"
+            default_namespace = "spenso"
         );
 
-        let res = parse_lit!(7776 * G ^ 6 * dot(P(2), P(3)), "spenso");
+        let res = parse_lit!(7776 * G ^ 6 * dot(P(2), P(3)), default_namespace = "spenso");
         assert_eq!(
             res,
             expr.simplify_gamma().to_dots(),
@@ -1757,7 +1762,7 @@ mod test {
                 * gamma(bis(4, l(5)), bis(4, l(4)), mink(dim, l(4)))
                 * gamma(bis(4, l(6)), bis(4, l(5)), mink(dim, l(20)))
                 * gamma(bis(4, l(7)), bis(4, l(6)), mink(dim, l(5))),
-            "spenso"
+            default_namespace = "spenso"
         );
 
         println!("{:>}", expr.simplify_gamma().expand());

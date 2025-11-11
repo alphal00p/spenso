@@ -171,6 +171,7 @@ where
         let mut result_data = HashMap::default();
         if let Some((_, _)) = self.flat_iter().next() {
             let self_fiber_class = Fiber::from(&partition, &resulting_structure); //We use the partition as a filter here, for indices that belong to self, vs those that belong to other
+
             let (mut self_fiber_class_iter, mut other_fiber_class_iter) =
                 CoreFlatFiberIterator::new_paired_conjugates(&self_fiber_class); // these are iterators over the open indices of self and other, except expressed in the flat indices of the resulting structure
 

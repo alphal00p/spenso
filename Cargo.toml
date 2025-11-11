@@ -13,7 +13,7 @@ lto = "fat"
 
 
 [patch.crates-io]
-symbolica = { git = "https://github.com/benruijl/symbolica", rev = "f2eb0c1ddcc61c342f2ff9616c2d129141d433dc" }
+symbolica = { git = "https://github.com/benruijl/symbolica", rev = "af3f1b2043b270401920e4ff76d938217d995fc3" }
 
 spenso = { path = "./spenso" }
 idenso = { path = "./idenso" }

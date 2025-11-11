@@ -1,6 +1,9 @@
-use spenso::structure::{
-    abstract_index::AIND_SYMBOLS,
-    representation::{Euclidean, Lorentz, Minkowski, RepName},
+use spenso::{
+    network::parsing::SPENSO_TAG,
+    structure::{
+        abstract_index::AIND_SYMBOLS,
+        representation::{Euclidean, Lorentz, Minkowski, RepName},
+    },
 };
 use spenso_macros::SimpleRepresentation;
 use symbolica::atom::Atom;
@@ -131,6 +134,7 @@ pub fn initialize() {
     let _ = MS.dot;
     let _ = AGS.gamma;
     let _ = CS.f;
+    let _ = SPENSO_TAG.bracket;
 }
 
 #[cfg(test)]

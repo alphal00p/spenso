@@ -844,7 +844,7 @@ impl<R: RepName<Dual = R>, Aind: AbsInd> StructureContract for OrderedStructure<
                 Ordering::Less => {
                     if !common_indices_self[i + ibase + idual] {
                         resulting_structure.push(self.structure[i + ibase + idual]);
-                        partition.push(false);
+                        partition.push(true);
                     }
                     idual += 1;
                 }
@@ -864,7 +864,7 @@ impl<R: RepName<Dual = R>, Aind: AbsInd> StructureContract for OrderedStructure<
         while idual < self.n_dual() {
             if !common_indices_self[i + ibase + idual] {
                 resulting_structure.push(self.structure[i + ibase + idual]);
-                partition.push(false);
+                partition.push(true);
             }
             idual += 1;
         }
@@ -933,10 +933,38 @@ pub mod test {
     use crate::structure::{
         representation::{Euclidean, LibraryRep, Lorentz, Minkowski, RepName},
         slot::{DualSlotTo, IsAbstractSlot},
-        PermutedStructure, StructureContract,
+        MergeInfo, PermutedStructure, StructureContract, TensorStructure,
     };
 
     use super::OrderedStructure;
+
+    #[test]
+    fn merge_dual() {
+        let a: OrderedStructure<LibraryRep> = PermutedStructure::from_iter([
+            Lorentz {}.new_slot(3, 2).to_lib().dual(),
+            Lorentz {}.new_slot(3, 4).to_lib(),
+        ])
+        .structure;
+        let b: OrderedStructure<LibraryRep> = PermutedStructure::from_iter([
+            Lorentz {}.new_slot(3, 3).to_lib().dual(),
+            Lorentz {}.new_slot(3, 1).to_lib(),
+        ])
+        .structure;
+
+        if let MergeInfo::Interleaved(filter) = a.merge(&b).unwrap().3 {
+            assert_eq!(filter.count_ones(), a.order());
+        }
+
+        if let MergeInfo::Interleaved(filter) = b.merge(&a).unwrap().3 {
+            assert_eq!(filter.count_ones(), b.order());
+        }
+
+        // if let a
+        println!("{:?}", a);
+        println!("{:?}", b);
+        println!("{:?}", a.merge(&b).unwrap().3);
+        println!("{:?}", b.merge(&a).unwrap().3);
+    }
 
     #[test]
     fn orderedmerge() {

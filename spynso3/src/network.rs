@@ -10,7 +10,7 @@ use spenso::{
         ContractScalars, ExecutionResult, Network, Sequential, SingleSmallestDegree,
         SmallestDegree, Steps,
         library::symbolic::ExplicitKey,
-        parsing::{ParseSettings, ShadowedStructure},
+        parsing::{ParseSettings, SPENSO_TAG, ShadowedStructure},
         store::{NetworkStore, TensorScalarStoreMapping},
     },
     structure::abstract_index::AbstractIndex,
@@ -23,6 +23,7 @@ use symbolica::{
     evaluate::EvaluationFn,
     id::{MatchSettings, ReplaceWith},
     poly::Variable,
+    symbol,
 };
 
 use symbolica::api::python::ConvertibleToExpression;
@@ -211,6 +212,19 @@ impl SpensoNet {
         }
     }
 
+    #[staticmethod]
+    pub fn bracket() -> PythonExpression {
+        PythonExpression {
+            expr: Atom::var(SPENSO_TAG.bracket),
+        }
+    }
+
+    #[staticmethod]
+    pub fn broadcast(str: &str) -> PythonExpression {
+        PythonExpression {
+            expr: Atom::var(symbol!(str, tag = SPENSO_TAG.tag)),
+        }
+    }
     #[staticmethod]
     /// Create a tensor network representing the scalar value 0.
     ///

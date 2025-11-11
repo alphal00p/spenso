@@ -445,7 +445,7 @@ mod test {
                 .canonize(AbstractIndex::Dummy)
                 .to_canonically_ordered_string(CanonicalOrderingSettings {
                     include_attributes: false,
-                    include_namespace: false
+                    include_namespace: false,hide_namespace:None,
                 }),@"(g(bis(4,d_1),bis(4,d_2))+gamma(bis(4,d_1),bis(4,d_2),mink(4,d_0))*p(1,mink(4,d_0)))*conj(u(2,bis(4,d_3)))*gamma0(bis(4,d_1),bis(4,d_3))*u(1,bis(4,d_2))"
         );
 

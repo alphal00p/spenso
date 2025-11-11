@@ -546,7 +546,7 @@ mod test {
                 coad(Nc ^ 2 - 1, 2),
                 coad(Nc ^ 2 - 1, 3)
             ) ^ 2,
-            "spenso"
+            default_namespace = "spenso"
         );
         let simplified = atom.simplify_color();
 
@@ -582,7 +582,7 @@ mod test {
             *u(0,bis(D,0))
             *ϵbar(2,mink(D,2))
             *ϵbar(3,mink(D,3))",
-                "spenso"
+                default_namespace = "spenso"
             ),
             parse_lit!(
                 -4 * TR
@@ -613,7 +613,7 @@ mod test {
                         + D * dot(Q(0), Q(2)) * dot(Q(1), Q(3))
                         + D * dot(Q(0), Q(3)) * dot(Q(1), Q(2))
                         - D * dot(Q(0), Q(3)) * dot(Q(1), Q(3))),
-                "spenso"
+                default_namespace = "spenso"
             ),
         )
     }
@@ -636,7 +636,7 @@ mod test {
                 * g(coad(Nc^2-1, left(2)), coad(Nc^2-1, right(2)))
                 * g(cof(Nc, right(0)), dind(cof(Nc, left(0))))
                 * g(cof(Nc, left(1)), dind(cof(Nc, right(1))))",
-            "spenso"
+            default_namespace = "spenso"
         );
 
         let amplitude_color = parse!(
@@ -648,7 +648,7 @@ mod test {
                 * g(coad(Nc^2-1, 6), coad(Nc^2-1, 9))
                 * g(cof(Nc, 0), dind(cof(Nc, 5)))
                 * g(cof(Nc, 4), dind(cof(Nc, 1)))",
-            "spenso"
+            default_namespace = "spenso"
         );
         let amplitude_color_left = amplitude_color.wrap_indices(symbol!("spenso::left"));
 
@@ -673,7 +673,7 @@ mod test {
                 * spenso::ϵ(2, mink(D, right(2)))
                 * spenso::ϵbar(3, mink(D, left(3)))
                 * spenso::ϵ(3, mink(D, right(3))),
-            "spenso"
+            default_namespace = "spenso"
         );
 
         let spin_sum_rule_trg = parse!(
@@ -691,7 +691,7 @@ mod test {
                     * g(cof(Nc, right(0)), dind(cof(Nc, left(0))))
                     * g(cof(Nc, left(1)), dind(cof(Nc, right(1))))
                 )",
-            "spenso"
+            default_namespace = "spenso"
         );
 
         let (amplitude, tgt) = colored_matrix_element();
@@ -773,7 +773,7 @@ mod test {
                 * ϵ(2, mink(D, right(2)))
                 * ϵbar(3, mink(D, left(3)))
                 * ϵ(3, mink(D, right(3))),
-            "spenso"
+            default_namespace = "spenso"
         );
 
         let spin_sum_rule_trg = parse!(
@@ -786,7 +786,7 @@ mod test {
                 * (-1) * g(mink(D,left(3)),mink(D,right(3)))
                 )
                 ",
-            "spenso"
+            default_namespace = "spenso"
         );
 
         let (amplitude, tgt) = colored_matrix_element();
@@ -805,7 +805,7 @@ mod test {
 
         let _spin_sum_pat = parse!(
             "gamma(bis(D,left(1)),bis(D,right(1)),mink(D,1337))",
-            "spenso"
+            default_namespace = "spenso"
         )
         .to_pattern();
 
@@ -1056,7 +1056,7 @@ mod test {
                         * ϵ(4, mink(4, r(4)))
                         * ϵbar(0, mink(4, r(0)))
                         * ϵbar(1, mink(4, r(1)))),
-            "spenso"
+            default_namespace = "spenso"
         );
 
         println!("{expr}");

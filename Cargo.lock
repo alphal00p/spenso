@@ -2198,6 +2198,7 @@ version = "0.1.4"
 dependencies = [
  "ahash",
  "idenso",
+ "insta",
  "spenso",
  "spenso-macros",
  "symbolica 0.19.2",
@@ -2272,7 +2273,7 @@ dependencies = [
 [[package]]
 name = "symbolica"
 version = "0.19.2"
-source = "git+https://github.com/benruijl/symbolica?rev=f2eb0c1ddcc61c342f2ff9616c2d129141d433dc#f2eb0c1ddcc61c342f2ff9616c2d129141d433dc"
+source = "git+https://github.com/benruijl/symbolica?rev=af3f1b2043b270401920e4ff76d938217d995fc3#af3f1b2043b270401920e4ff76d938217d995fc3"
 dependencies = [
  "ahash",
  "append-only-vec",

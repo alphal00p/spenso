@@ -206,20 +206,52 @@ where
     {
         let mut iter = value.iter();
 
-        let first = Self::try_from_view(iter.next().unwrap(), library, settings)?;
+        let first_atom = iter.next().unwrap();
+        let first = Self::try_from_view(first_atom, library, settings)?;
 
-        let rest: Result<Vec<_>, _> = iter
-            .map(|a| Self::try_from_view(a, library, settings))
-            .collect();
-
-        let res = first.n_mul(rest?);
         if settings.precontract_scalars {
-            if let NetworkState::PureScalar = res.state {
-                return Ok(Self::from_scalar(value.as_view().try_into()?));
-            }
-        }
+            let mut scalars = Atom::num(1);
 
-        Ok(res)
+            let rest: Result<Vec<_>, _> = iter
+                .filter_map(|a| match Self::try_from_view(a, library, settings) {
+                    Ok(n) => {
+                        if let NetworkState::PureScalar = n.state {
+                            scalars *= a;
+                            None
+                        } else {
+                            Some(Ok(n))
+                        }
+                    }
+                    Err(e) => Some(Err(e)),
+                })
+                .collect();
+
+            let mut res = rest?;
+
+            if let NetworkState::PureScalar = first.state {
+                scalars *= first_atom;
+            } else {
+                res.push(first);
+            }
+
+            if res.is_empty() {
+                Ok(Self::from_scalar(value.as_view().try_into()?))
+            } else {
+                let s = if scalars != Atom::num(1) {
+                    Self::from_scalar(scalars.as_view().try_into()?)
+                } else {
+                    res.pop().unwrap()
+                };
+
+                Ok(s.n_mul(res))
+            }
+        } else {
+            let rest: Result<Vec<_>, _> = iter
+                .map(|a| Self::try_from_view(a, library, settings))
+                .collect();
+
+            Ok(first.n_add(rest?))
+        }
     }
 
     #[allow(clippy::result_large_err)]
@@ -310,6 +342,11 @@ where
 
         if let Ok(n) = i8::try_from(exp) {
             let base = Self::try_from_view(base, library, settings)?;
+            if settings.precontract_scalars {
+                if let NetworkState::PureScalar = base.state {
+                    return Ok(Self::from_scalar(value.as_view().try_into()?));
+                }
+            }
 
             if let NetworkState::Tensor = base.state {
                 Err(TensorNetworkError::NonSelfDualTensorPower(
@@ -355,6 +392,48 @@ where
         let first = Self::try_from_view(first_atom, library, settings)?;
         if settings.take_first_term_from_sum {
             Ok(first)
+        } else if settings.precontract_scalars {
+            let mut scalars = Atom::Zero;
+
+            let rest: Result<Vec<_>, _> = iter
+                .filter_map(|a| match Self::try_from_view(a, library, settings) {
+                    Ok(n) => {
+                        if n.state.is_compatible(&first.state) {
+                            if let NetworkState::PureScalar = n.state {
+                                scalars += a;
+                                None
+                            } else {
+                                Some(Ok(n))
+                            }
+                        } else {
+                            Some(Err(TensorNetworkError::IncompatibleSummand(format!(
+                                "{} is {:?} vs {} is {:?}",
+                                a, n.state, first_atom, first.state
+                            ))))
+                        }
+                    }
+                    Err(e) => Some(Err(e)),
+                })
+                .collect();
+
+            let mut res = rest?;
+
+            if let NetworkState::PureScalar = first.state {
+                scalars += first_atom;
+            } else {
+                res.push(first);
+            }
+
+            if res.is_empty() {
+                Ok(Self::from_scalar(value.as_view().try_into()?))
+            } else {
+                let s = if scalars != Atom::Zero {
+                    Self::from_scalar(scalars.as_view().try_into()?)
+                } else {
+                    res.pop().unwrap()
+                };
+                Ok(s.n_add(res))
+            }
         } else {
             let rest: Result<Vec<_>, _> = iter
                 .map(|a| match Self::try_from_view(a, library, settings) {
@@ -516,6 +595,13 @@ pub mod test {
             .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
         assert_snapshot!(net.simple_execute().to_bare_ordered_string(), @"(b(mink(4,1)))^(-6)*(d(mink(4,1)))^(-6)*a*c");
+
+        let expr = parse_lit!(st(Q(1, mink(4, 1)) * Q(2, mink(4, 1))) ^ -1);
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
+            .unwrap();
+        println!("{}", net.snapshot_dot());
+        assert_snapshot!(net.simple_execute().to_bare_ordered_string(), @"(Q(1,mink(4,dot_dummy_2))*Q(2,mink(4,dot_dummy_2)))^(-1)");
     }
 
     #[test]
@@ -524,6 +610,107 @@ pub mod test {
         let net = expr
             .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
+        assert_eq!(net.simple_execute(), expr);
+    }
+
+    #[test]
+    fn parse_val() {
+        initialize();
+        let expr = parse_lit!(
+            ((Q(5, spenso::cind(0)))
+                ^ 2 + (Q(5, spenso::cind(1)))
+                ^ 2 * -1 + (Q(5, spenso::cind(2)))
+                ^ 2 * -1 + (Q(5, spenso::cind(3)))
+                ^ 2 * -1)
+                ^ (-1)
+                    * ((Q(6, spenso::cind(0)))
+                        ^ 2 + (Q(6, spenso::cind(1)))
+                        ^ 2 * -1 + (Q(6, spenso::cind(2)))
+                        ^ 2 * -1 + (Q(6, spenso::cind(3)))
+                        ^ 2 * -1)
+                ^ (-1) * 1𝑖 / 3 * UFO::GC_1
+                ^ 3 * gammalooprs::Q(5, spenso::mink(4, gammalooprs::edge_5_1))
+                    * gammalooprs::Q(6, spenso::mink(4, gammalooprs::edge_6_1))
+                    * gammalooprs::u(1, spenso::bis(4, gammalooprs::hedge_1))
+                    * gammalooprs::vbar(2, spenso::bis(4, gammalooprs::hedge_2))
+                    * gammalooprs::ϵbar(0, spenso::mink(4, gammalooprs::hedge_0))
+                    * gammalooprs::ϵbar(3, spenso::mink(4, gammalooprs::hedge_3))
+                    * gammalooprs::ϵbar(4, spenso::mink(4, gammalooprs::hedge_4))
+                    * spenso::g(
+                        spenso::cof(3, hedge_1),
+                        spenso::dind(spenso::cof(3, hedge_2))
+                    )
+                    * spenso::g(
+                        spenso::cof(3, gammalooprs::hedge_1),
+                        spenso::dind(spenso::cof(3, gammalooprs::hedge_2))
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, gammalooprs::hedge_2),
+                        spenso::bis(4, gammalooprs::hedge_8),
+                        spenso::mink(4, gammalooprs::hedge_0)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, gammalooprs::hedge_5),
+                        spenso::bis(4, gammalooprs::hedge_1),
+                        spenso::mink(4, gammalooprs::hedge_3)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, gammalooprs::hedge_6),
+                        spenso::bis(4, gammalooprs::hedge_5),
+                        spenso::mink(4, gammalooprs::edge_5_1)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, gammalooprs::hedge_7),
+                        spenso::bis(4, gammalooprs::hedge_6),
+                        spenso::mink(4, gammalooprs::hedge_4)
+                    )
+                    * spenso::gamma(
+                        spenso::bis(4, gammalooprs::hedge_8),
+                        spenso::bis(4, gammalooprs::hedge_7),
+                        spenso::mink(4, gammalooprs::edge_6_1)
+                    )
+        );
+        let net = expr
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
+            .unwrap();
+        assert_snapshot!(net.snapshot_dot(),@r#"
+        digraph {
+          node	 [shape=circle,height=0.1,label=""];
+          overlap = "scale";
+          layout = "neato";
+
+          0	 [label = "∏"];
+          1	 [label = "S:((Q(5,cind(0)))^2+(Q(5,cind(1)))^2*-1+(Q(5,cind(2)))^2*-1+(Q(5,cind(3)))^2*-1)^(-1)*((Q(6,cind(0)))^2+(Q(6,cind(1)))^2*-1+(Q(6,cind(2)))^2*-1+(Q(6,cind(3)))^2*-1)^(-1)*1𝑖/3*GC_1^3*g(cof(3,hedge_1),dind(cof(3,hedge_2)))*g(cof(3,hedge_1),dind(cof(3,hedge_2)))*u(1,bis(4,hedge_1))*vbar(2,bis(4,hedge_2))"];
+          2	 [label = "T:Q(5,mink(4,edge_5_1))"];
+          3	 [label = "T:Q(6,mink(4,edge_6_1))"];
+          4	 [label = "T:ϵbar(0,mink(4,hedge_0))"];
+          5	 [label = "T:ϵbar(3,mink(4,hedge_3))"];
+          6	 [label = "T:ϵbar(4,mink(4,hedge_4))"];
+          7	 [label = "T:gamma(bis(4,hedge_2),bis(4,hedge_8),mink(4,hedge_0))"];
+          8	 [label = "T:gamma(bis(4,hedge_8),bis(4,hedge_7),mink(4,edge_6_1))"];
+          9	 [label = "T:gamma(bis(4,hedge_5),bis(4,hedge_1),mink(4,hedge_3))"];
+          10	 [label = "T:gamma(bis(4,hedge_6),bis(4,hedge_5),mink(4,edge_5_1))"];
+          11	 [label = "T:gamma(bis(4,hedge_7),bis(4,hedge_6),mink(4,hedge_4))"];
+          ext0	 [style=invis];
+          0:0:s	-> ext0	 [id=0 color="red"];
+          6:22:s	-> 11:32:s	 [id=1 dir=none  color="red:blue;0.5" label="mink4|hedge_4"];
+          2:14:s	-> 10:30:s	 [id=2 dir=none  color="red:blue;0.5" label="mink4|edge_5_1"];
+          5:20:s	-> 9:28:s	 [id=3 dir=none  color="red:blue;0.5" label="mink4|hedge_3"];
+          3:16:s	-> 8:26:s	 [id=4 dir=none  color="red:blue;0.5" label="mink4|edge_6_1"];
+          4:18:s	-> 7:24:s	 [id=5 dir=none  color="red:blue;0.5" label="mink4|hedge_0"];
+          10:29:s	-> 0:2:s	 [id=6  color="red:blue;0.5"];
+          8:25:s	-> 0:4:s	 [id=7  color="red:blue;0.5"];
+          6:21:s	-> 0:6:s	 [id=8  color="red:blue;0.5"];
+          7:23:s	-> 0:5:s	 [id=9  color="red:blue;0.5"];
+          9:27:s	-> 0:3:s	 [id=10  color="red:blue;0.5"];
+          1:12:s	-> 0:11:s	 [id=11  color="red:blue;0.5"];
+          2:13:s	-> 0:10:s	 [id=12  color="red:blue;0.5"];
+          3:15:s	-> 0:9:s	 [id=13  color="red:blue;0.5"];
+          4:17:s	-> 0:8:s	 [id=14  color="red:blue;0.5"];
+          5:19:s	-> 0:7:s	 [id=15  color="red:blue;0.5"];
+          11:31:s	-> 0:1:s	 [id=16  color="red:blue;0.5"];
+        }
+        "#);
         assert_eq!(net.simple_execute(), expr);
     }
 
@@ -1041,7 +1228,7 @@ pub mod test {
                 ^ 2 * gamma(bis(4, hedge(6)), bis(4, hedge(5)), mink(4, edge_4_1))
                     * gamma(bis(4, hedge(7)), bis(4, hedge(6)), mink(4, hedge_2))
                 ^ 2 * gamma(bis(4, hedge(8)), bis(4, hedge(7)), mink(4, edge_5_1)),
-            "spenso"
+            default_namespace = "spenso"
         );
 
         let net = expr

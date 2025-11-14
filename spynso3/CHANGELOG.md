@@ -1,0 +1,33 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.1](https://github.com/alphal00p/spenso/compare/spynso3-v0.1.0...spynso3-v0.1.1) - 2025-11-14
+
+### Fixed
+
+- fix warnings
+- fix add_assign with sparse tensors
+- fix projp
+- fix param docs and iter return type
+- fix pyo3_stubs
+
+### Other
+
+- update sympolica to 0.20
+- Properly precontract scalars
+- Add back pyo3-stub-gen-derive
+- update to current dev symbolica and add pattern for pslash + m conjugate
+- first try conj
+- update python api
+- add function generic key
+- again
+- return any because python is dumb
+- update __iter__ method
+- use numpy doc format
+- add overloaded pyi stub gen

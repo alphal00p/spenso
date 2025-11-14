@@ -876,7 +876,7 @@ dependencies = [
 
 [[package]]
 name = "idenso"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "bincode",
@@ -2162,7 +2162,7 @@ dependencies = [
 
 [[package]]
 name = "spenso"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2207,7 +2207,7 @@ dependencies = [
 
 [[package]]
 name = "spenso-hep-lib"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "ahash",
  "idenso",
@@ -2220,7 +2220,7 @@ dependencies = [
 
 [[package]]
 name = "spenso-macros"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "linnet",
  "proc-macro2",
@@ -2233,7 +2233,7 @@ dependencies = [
 
 [[package]]
 name = "spynso3"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ahash",
  "anyhow",

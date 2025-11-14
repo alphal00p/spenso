@@ -437,6 +437,7 @@ fn normalise_gammas(expr: &mut Atom) {
                                     .add_args(&args)
                                     .finish();
                             **out = metric - swapped;
+                            return;
                             // println!("{}->{}", a, c);
                         }
                     }

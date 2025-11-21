@@ -613,10 +613,7 @@ impl MetricSimplifier for AtomView<'_> {
 #[cfg(test)]
 mod test {
 
-    use crate::{
-        IndexTooling,
-        representations::{Bispinor, initialize},
-    };
+    use crate::{IndexTooling, representations::Bispinor, test::test_initialize};
 
     use super::*;
 
@@ -634,7 +631,7 @@ mod test {
 
     #[test]
     fn cook() {
-        initialize();
+        test_initialize();
         let expr = parse_lit!(
             spenso::g(spenso::mink(4, f(0)), spenso::dind(spenso::cof(4, f(1))))
                 * p(spenso::mink(4, 1))
@@ -646,7 +643,7 @@ mod test {
 
     #[test]
     fn metric_contract() {
-        initialize();
+        test_initialize();
         let expr =
             parse_lit!(spenso::g(spenso::mink(4, 0), spenso::mink(4, 1)) * p(spenso::mink(4, 1)))
                 .simplify_metrics();
@@ -656,7 +653,7 @@ mod test {
 
     #[test]
     fn permute() {
-        initialize();
+        test_initialize();
         let f = IndexlessNamedStructure::<Symbol, ()>::from_iter(
             [
                 Lorentz {}.new_rep(8).to_lib(),
@@ -704,7 +701,7 @@ mod test {
 
     #[test]
     fn id_trace() {
-        initialize();
+        test_initialize();
         let bis = Bispinor {}.new_rep(symbol!("dim"));
 
         let expr = bis.g(9, 9).simplify_metrics();
@@ -713,7 +710,7 @@ mod test {
     }
     #[test]
     fn dots() {
-        initialize();
+        test_initialize();
 
         let a =
             parse_lit!(P(spenso::mink(4, -1 * g(2)), spenso::mink(4, 2)) * P(spenso::mink(4, 2)))

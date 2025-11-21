@@ -22,7 +22,7 @@ use symbolica::{
     atom::{Atom, AtomCore, AtomView, Symbol},
     evaluate::EvaluationFn,
     id::{MatchSettings, ReplaceWith},
-    poly::Variable,
+    poly::PolyVariable,
     symbol,
 };
 
@@ -399,7 +399,7 @@ impl SpensoNet {
     pub fn evaluate(
         &self,
         constants: HashMap<PythonExpression, f64>,
-        functions: HashMap<Variable, Py<PyAny>>,
+        functions: HashMap<PolyVariable, Py<PyAny>>,
     ) -> PyResult<Self> {
         let constants = constants
             .iter()
@@ -409,7 +409,7 @@ impl SpensoNet {
         let functions = functions
             .into_iter()
             .map(|(k, v)| {
-                let id = if let Variable::Symbol(v) = k {
+                let id = if let PolyVariable::Symbol(v) = k {
                     v
                 } else {
                     Err(exceptions::PyValueError::new_err(format!(

@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::anyhow;
+use idenso::representations::initialize;
 use library::SpensorLibrary;
 use library_tensor::AtomsOrFloats;
 use network::SpensoNet;
@@ -53,7 +54,7 @@ use symbolica::{
     atom::Atom,
     domains::{float::Complex as SymComplex, rational::Rational},
     evaluate::{CompileOptions, ExportSettings, FunctionMap, InlineASM, OptimizationSettings},
-    poly::Variable,
+    poly::PolyVariable,
 };
 
 use symbolica::api::python::PythonExpression;
@@ -87,6 +88,8 @@ impl SymbolicaCommunityModule for SpensoModule {
 pub(crate) fn initialize_spenso(m: &Bound<'_, PyModule>) -> PyResult<()> {
     use library_tensor::LibrarySpensor;
     use network::ExecutionMode;
+
+    initialize();
 
     SpensoNet::init(m)?;
     ExecutionMode::init(m)?;
@@ -527,7 +530,7 @@ impl Spensor {
     pub fn evaluator(
         &self,
         constants: HashMap<PythonExpression, PythonExpression>,
-        funs: HashMap<(Variable, String, Vec<Variable>), PythonExpression>,
+        funs: HashMap<(PolyVariable, String, Vec<PolyVariable>), PythonExpression>,
         params: Vec<PythonExpression>,
         iterations: usize,
         n_cores: usize,

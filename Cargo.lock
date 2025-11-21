@@ -808,6 +808,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphica"
+version = "1.0.0"
+source = "git+https://github.com/benruijl/symbolica?rev=8f2a2c4fed86b766074263a33b65f09eb2dd4d0d#8f2a2c4fed86b766074263a33b65f09eb2dd4d0d"
+dependencies = [
+ "ahash",
+ "dyn-clone",
+ "numerica",
+ "rand 0.9.1",
+]
+
+[[package]]
 name = "half"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1065,12 +1076,12 @@ checksum = "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776"
 
 [[package]]
 name = "libloading"
-version = "0.8.8"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
+checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
 dependencies = [
  "cfg-if",
- "windows-targets 0.53.2",
+ "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -1325,6 +1336,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "numerica"
+version = "1.0.0"
+source = "git+https://github.com/benruijl/symbolica?rev=8f2a2c4fed86b766074263a33b65f09eb2dd4d0d#8f2a2c4fed86b766074263a33b65f09eb2dd4d0d"
+dependencies = [
+ "ahash",
+ "bincode",
+ "bincode-trait-derive",
+ "colored 3.0.0",
+ "dyn-clone",
+ "numpy",
+ "pyo3",
+ "pyo3-stub-gen",
+ "rand 0.9.1",
+ "rand_xoshiro 0.7.0",
+ "rug",
+ "serde",
+ "smallvec",
+ "wide",
 ]
 
 [[package]]
@@ -2258,9 +2290,8 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "symbolica"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac102a364b3dd7384ef5e6912182189255dca5630581a4c8d826fe3f03099163"
+version = "1.0.0"
+source = "git+https://github.com/benruijl/symbolica?rev=8f2a2c4fed86b766074263a33b65f09eb2dd4d0d#8f2a2c4fed86b766074263a33b65f09eb2dd4d0d"
 dependencies = [
  "ahash",
  "append-only-vec",
@@ -2271,7 +2302,9 @@ dependencies = [
  "bytes",
  "colored 3.0.0",
  "dyn-clone",
+ "graphica",
  "libloading",
+ "numerica",
  "numpy",
  "once_cell",
  "pyo3",

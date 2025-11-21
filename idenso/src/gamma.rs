@@ -1101,11 +1101,12 @@ mod test {
         .replace(symbol!("nu1"))
         .with(symbol!("nu3"));
         assert_eq!(
-            expr.expand(),
+            expr.expand().canonize(AbstractIndex::Dummy),
             parse_lit!(
                 4 * dim * p(mink(dim, nu1)) ^ 2 + 4 * dim * p(mink(dim, nu1)) * q(mink(dim, nu1)),
                 default_namespace = "spenso"
-            ),
+            )
+            .canonize(AbstractIndex::Dummy),
             "got {:#}",
             expr
         );
@@ -1126,18 +1127,17 @@ mod test {
                 ),
             default_namespace = "spenso"
         )
-        .simplify_gamma()
-        .replace(symbol!("nu1"))
-        .with(symbol!("nu3"));
+        .simplify_gamma();
         assert_eq!(
-            expr.expand(),
+            expr.expand().canonize(AbstractIndex::Dummy),
             parse_lit!(
                 8 * p(mink(dim, nu1))
                     ^ 2 - 4 * dim * p(mink(dim, nu1))
                     ^ 2 + 8 * p(mink(dim, nu1)) * q(mink(dim, nu1))
                         - 4 * dim * p(mink(dim, nu1)) * q(mink(dim, nu1)),
                 default_namespace = "spenso"
-            ),
+            )
+            .canonize(AbstractIndex::Dummy),
             "got {:#}",
             expr
         );

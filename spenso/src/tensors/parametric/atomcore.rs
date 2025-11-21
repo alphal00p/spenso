@@ -3,7 +3,7 @@ use std::{marker::PhantomData, sync::Arc};
 use ahash::{HashMap, HashSet, HashSetExt};
 use dyn_clone::DynClone;
 use symbolica::{
-    atom::{Atom, AtomCore, AtomView, KeyLookup, Symbol},
+    atom::{Atom, AtomCore, AtomView, Indeterminate, KeyLookup, Symbol},
     coefficient::{Coefficient, CoefficientView, ConvertToRing},
     domains::{
         atom::AtomField,
@@ -25,7 +25,7 @@ use symbolica::{
     },
     poly::{
         factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, series::Series,
-        Exponent, PositiveExponent, Variable,
+        Exponent, PolyVariable, PositiveExponent,
     },
     solve::SolveError,
     state::RecycledAtom,
@@ -368,12 +368,12 @@ pub trait TensorAtomMaps {
         expansion_point: T,
         depth: Rational,
         depth_is_absolute: bool,
-    ) -> Result<Self::ContainerData<Series<AtomField>>, &'static str>;
+    ) -> Result<Self::ContainerData<Series<AtomField>>, String>;
 
     /// Find the root of a function in `x` numerically over the reals using Newton's method.
-    fn nsolve<N: SingleFloat + Real + PartialOrd + Clone>(
+    fn nsolve<'a, N: SingleFloat + Real + PartialOrd, V: Into<BorrowedOrOwned<'a, Indeterminate>>>(
         &self,
-        x: Symbol,
+        x: V,
         init: N,
         prec: N,
         max_iterations: usize,
@@ -396,7 +396,7 @@ pub trait TensorAtomMaps {
     fn zero_test(&self, iterations: usize, tolerance: f64) -> Self::ContainerData<ConditionResult>;
 
     /// Set the coefficient ring to the multivariate rational polynomial with `vars` variables.
-    fn set_coefficient_ring(&self, vars: &Arc<Vec<Variable>>) -> Self::AtomContainer;
+    fn set_coefficient_ring(&self, vars: &Arc<Vec<PolyVariable>>) -> Self::AtomContainer;
 
     /// Convert all coefficients to floats with a given precision `decimal_prec``.
     /// The precision of floating point coefficients in the input will be truncated to `decimal_prec`.
@@ -435,7 +435,7 @@ pub trait TensorAtomMaps {
     fn to_polynomial<R: EuclideanDomain + ConvertToRing, E: Exponent>(
         &self,
         field: &R,
-        var_map: Option<Arc<Vec<Variable>>>,
+        var_map: Option<Arc<Vec<PolyVariable>>>,
     ) -> Self::ContainerData<MultivariatePolynomial<R, E>>;
 
     /// Convert the atom to a polynomial in specific variables.
@@ -445,7 +445,7 @@ pub trait TensorAtomMaps {
     /// This routine does not perform expansions.
     fn to_polynomial_in_vars<E: Exponent>(
         &self,
-        var_map: &Arc<Vec<Variable>>,
+        var_map: &Arc<Vec<PolyVariable>>,
     ) -> Self::ContainerData<MultivariatePolynomial<AtomField, E>>;
 
     /// Convert the atom to a rational polynomial, optionally in the variable ordering
@@ -460,7 +460,7 @@ pub trait TensorAtomMaps {
         &self,
         field: &R,
         out_field: &RO,
-        var_map: Option<Arc<Vec<Variable>>>,
+        var_map: Option<Arc<Vec<PolyVariable>>>,
     ) -> Self::ContainerData<RationalPolynomial<RO, E>>
     where
         RationalPolynomial<RO, E>:
@@ -477,7 +477,7 @@ pub trait TensorAtomMaps {
         &self,
         field: &R,
         out_field: &RO,
-        var_map: Option<Arc<Vec<Variable>>>,
+        var_map: Option<Arc<Vec<PolyVariable>>>,
     ) -> Self::ContainerData<FactorizedRationalPolynomial<RO, E>>
     where
         FactorizedRationalPolynomial<RO, E>: FromNumeratorAndFactorizedDenominator<R, RO, E>
@@ -1131,20 +1131,28 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
         expansion_point: T,
         depth: Rational,
         depth_is_absolute: bool,
-    ) -> Result<Self::ContainerData<Series<AtomField>>, &'static str> {
+    ) -> Result<Self::ContainerData<Series<AtomField>>, String> {
         let expansion_point = expansion_point.as_atom_view();
         self.map_data_ref_result(|a| a.series(x, expansion_point, depth.clone(), depth_is_absolute))
     }
 
     /// Find the root of a function in `x` numerically over the reals using Newton's method.
-    fn nsolve<N: SingleFloat + Real + PartialOrd>(
+    fn nsolve<
+        'a,
+        N: SingleFloat + Real + PartialOrd,
+        V: Into<BorrowedOrOwned<'a, Indeterminate>>,
+    >(
         &self,
-        x: Symbol,
+        x: V,
         init: N,
         prec: N,
         max_iterations: usize,
     ) -> Result<Self::ContainerData<N>, String> {
-        self.map_data_ref_result(|a| a.nsolve::<N>(x, init.clone(), prec.clone(), max_iterations))
+        let binding = x.into();
+        let x = binding.borrow();
+        self.map_data_ref_result(|a| {
+            a.nsolve::<N, Indeterminate>(x.clone(), init.clone(), prec.clone(), max_iterations)
+        })
     }
 
     /// Evaluate a (nested) expression a single time.
@@ -1168,7 +1176,7 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
     }
 
     /// Set the coefficient ring to the multivariate rational polynomial with `vars` variables.
-    fn set_coefficient_ring(&self, vars: &Arc<Vec<Variable>>) -> Self {
+    fn set_coefficient_ring(&self, vars: &Arc<Vec<PolyVariable>>) -> Self {
         self.map_data_ref_self(|a| a.set_coefficient_ring(vars))
     }
 
@@ -1212,7 +1220,7 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
     fn to_polynomial<R: EuclideanDomain + ConvertToRing, E: Exponent>(
         &self,
         field: &R,
-        var_map: Option<Arc<Vec<Variable>>>,
+        var_map: Option<Arc<Vec<PolyVariable>>>,
     ) -> Self::ContainerData<MultivariatePolynomial<R, E>> {
         self.map_data_ref(|a| a.to_polynomial(field, var_map.clone()))
     }
@@ -1224,7 +1232,7 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
     /// This routine does not perform expansions.
     fn to_polynomial_in_vars<E: Exponent>(
         &self,
-        var_map: &Arc<Vec<Variable>>,
+        var_map: &Arc<Vec<PolyVariable>>,
     ) -> Self::ContainerData<MultivariatePolynomial<AtomField, E>> {
         self.map_data_ref(|a| a.to_polynomial_in_vars(var_map))
     }
@@ -1241,7 +1249,7 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
         &self,
         field: &R,
         out_field: &RO,
-        var_map: Option<Arc<Vec<Variable>>>,
+        var_map: Option<Arc<Vec<PolyVariable>>>,
     ) -> Self::ContainerData<RationalPolynomial<RO, E>>
     where
         RationalPolynomial<RO, E>:
@@ -1262,7 +1270,7 @@ impl<S: StorageTensor<Data = Atom>> TensorAtomMaps for S {
         &self,
         field: &R,
         out_field: &RO,
-        var_map: Option<Arc<Vec<Variable>>>,
+        var_map: Option<Arc<Vec<PolyVariable>>>,
     ) -> Self::ContainerData<FactorizedRationalPolynomial<RO, E>>
     where
         FactorizedRationalPolynomial<RO, E>: FromNumeratorAndFactorizedDenominator<R, RO, E>
@@ -1332,7 +1340,7 @@ impl<S: TensorStructure> DenseTensor<Atom, S> {
         N: SingleFloat + Real + PartialOrd + InternalOrdering + Eq + std::hash::Hash,
     >(
         &self,
-        vars: &[Symbol],
+        vars: &[Indeterminate],
         init: &[N],
         prec: N,
         max_iterations: usize,

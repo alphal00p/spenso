@@ -1054,8 +1054,7 @@ impl TrySmallestUpgrade<Atom> for f64 {
     type LCM = Atom;
 
     fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>> {
-        let natrat = symbolica::domains::rational::Rational::from(*self);
-        let symrat = Atom::num(symbolica::coefficient::Coefficient::from(natrat));
+        let symrat = Atom::num(*self);
 
         Some(Cow::Owned(symrat))
     }
@@ -1066,10 +1065,9 @@ impl TrySmallestUpgrade<SerializableAtom> for f64 {
     type LCM = SerializableAtom;
 
     fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>> {
-        let natrat = symbolica::domains::rational::Rational::from(*self);
-        let symrat = Atom::num(symbolica::coefficient::Coefficient::from(natrat)).into();
+        let symrat = Atom::num(*self);
 
-        Some(Cow::Owned(symrat))
+        Some(Cow::Owned(symrat.into()))
     }
 }
 
@@ -1080,7 +1078,7 @@ impl TrySmallestUpgrade<Atom> for i32 {
     fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>> {
         let symnum = Atom::num(*self);
 
-        Some(Cow::Owned(symnum))
+        Some(Cow::Owned(symnum.into()))
     }
 }
 

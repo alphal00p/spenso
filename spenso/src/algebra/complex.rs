@@ -14,7 +14,7 @@ use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "shadowing")]
 use symbolica::domains::{
-    float::{Complex as SymComplex, ConstructibleFloat, NumericalFloatLike, Real},
+    float::{Complex as SymComplex, Constructible, FloatLike, Real},
     rational::Rational,
 };
 
@@ -130,7 +130,7 @@ impl RefZero for Rational {
 impl From<f64> for Complex<Rational> {
     fn from(re: f64) -> Self {
         Complex {
-            re: Rational::from(re),
+            re: Rational::try_from(re).unwrap(),
             im: Rational::zero(),
         }
     }
@@ -140,8 +140,8 @@ impl From<f64> for Complex<Rational> {
 impl From<Complex<f64>> for Complex<Rational> {
     fn from(value: Complex<f64>) -> Self {
         Complex {
-            re: Rational::from(value.re),
-            im: Rational::from(value.im),
+            re: Rational::try_from(value.re).unwrap(),
+            im: Rational::try_from(value.im).unwrap(),
         }
     }
 }
@@ -339,7 +339,7 @@ impl<T> Complex<T> {
     #[cfg(feature = "shadowing")]
     pub fn new_zero() -> Self
     where
-        T: ConstructibleFloat,
+        T: Constructible,
     {
         Complex {
             re: T::new_zero(),
@@ -351,7 +351,7 @@ impl<T> Complex<T> {
     #[inline]
     pub fn new_i() -> Self
     where
-        T: ConstructibleFloat,
+        T: Constructible,
     {
         Complex {
             re: T::new_zero(),

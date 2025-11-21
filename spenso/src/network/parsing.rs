@@ -516,6 +516,58 @@ impl SymbolicParse for AtomView<'_> {
 
 #[cfg(test)]
 pub mod test {
+    macro_rules! symbol_set {
+        // Identifier symbols with explicit struct and static names
+        ($struct_name:ident, $static_name:ident; $($char:ident)*) => {
+            #[allow(non_snake_case)]
+            pub struct $struct_name {
+                $(pub $char: Symbol,)*
+            }
+
+            pub static $static_name: ::std::sync::LazyLock<$struct_name> = ::std::sync::LazyLock::new(|| $struct_name {
+                $($char: symbol!(stringify!($char)),)*
+            });
+        };
+
+        // String literals as individual statics
+        (statics; $($field:ident : $string:literal),* $(,)?) => {
+            $(
+                #[allow(non_upper_case_globals)]
+                pub static $field: ::std::sync::LazyLock<Symbol> = ::std::sync::LazyLock::new(|| symbol!($string));
+            )*
+        };
+
+        // String literals grouped in a struct
+        ($struct_name:ident, $static_name:ident; $($field:ident : $string:literal),* $(,)?) => {
+            #[allow(non_snake_case)]
+            pub struct $struct_name {
+                $(pub $field: Symbol,)*
+            }
+
+            pub static $static_name: ::std::sync::LazyLock<$struct_name> = ::std::sync::LazyLock::new(|| $struct_name {
+                $($field: symbol!($string),)*
+            });
+        };
+    }
+
+    // Generate TestSymbols with all alphabet characters and some multi-character symbols
+    symbol_set!(TestSymbols, TS;
+        a b c d e f g h i j k l m n o p q r s t u v w x y z
+        A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+        vbar
+        ϵbar
+        ϵ
+        ebar
+        edge_1_1 edge_2_1 edge_3_1 edge_4_1 edge_5_1 edge_6_1 edge_7_1 edge_8_1 edge_9_1 edge_10_1 edge_11_1 edge_12_1 edge_13_1 edge_14_1 edge_15_1 edge_16_1 edge_17_1 edge_18_1 edge_19_1 edge_20_1
+        hedge0 hedge1 hedge2 hedge3 hedge4 hedge5 hedge6 hedge7 hedge8 hedge9 hedge10 hedge11 hedge12 hedge13 hedge14 hedge15 hedge16 hedge17 hedge18 hedge19 hedge20
+        hedge_0 hedge_1 hedge_2 hedge_3 hedge_4 hedge_5 hedge_6 hedge_7 hedge_8 hedge_9 hedge_10 hedge_11 hedge_12 hedge_13 hedge_14 hedge_15 hedge_16 hedge_17 hedge_18 hedge_19 hedge_20 mul
+    );
+
+    pub fn test_initialize() {
+        let _ = TS.p;
+        initialize();
+    }
+
     use core::panic;
 
     use crate::{
@@ -557,9 +609,9 @@ pub mod test {
 
     #[test]
     fn parse_ratio() {
+        test_initialize();
         let expr = parse_lit!(
-            (P(1, mink(4, 1)) * P(2, mink(4, 1)))
-                / f(spenso::mul(P(3, mink(4, 1)) * P(4, mink(4, 1))))
+            (P(1, mink(4, 1)) * P(2, mink(4, 1))) / f(mul(P(3, mink(4, 1)) * P(4, mink(4, 1))))
         );
         let net = expr
             .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
@@ -572,17 +624,15 @@ pub mod test {
           layout = "neato";
 
           0	 [label = "∏"];
-          1	 [label = "^( -1 )"];
-          2	 [label = "S:f(mul(P(3,mink(4,1))*P(4,mink(4,1))))"];
-          3	 [label = "T:P(1,mink(4,1))"];
-          4	 [label = "T:P(2,mink(4,1))"];
+          1	 [label = "S:(f(mul(P(3,mink(4,1))*P(4,mink(4,1)))))^(-1)"];
+          2	 [label = "T:P(1,mink(4,1))"];
+          3	 [label = "T:P(2,mink(4,1))"];
           ext0	 [style=invis];
           0:0:s	-> ext0	 [id=0 color="red"];
-          3:8:s	-> 4:10:s	 [id=1 dir=none  color="red:blue;0.5" label="mink4|1"];
-          3:7:s	-> 0:2:s	 [id=2  color="red:blue;0.5"];
-          2:6:s	-> 1:5:s	 [id=3  color="red:blue;0.5"];
-          1:4:s	-> 0:3:s	 [id=4  color="red:blue;0.5"];
-          4:9:s	-> 0:1:s	 [id=5  color="red:blue;0.5"];
+          2:6:s	-> 3:8:s	 [id=1 dir=none  color="red:blue;0.5" label="mink4|1"];
+          2:5:s	-> 0:2:s	 [id=2  color="red:blue;0.5"];
+          1:4:s	-> 0:3:s	 [id=3  color="red:blue;0.5"];
+          3:7:s	-> 0:1:s	 [id=4  color="red:blue;0.5"];
         }
         "#);
 
@@ -590,7 +640,7 @@ pub mod test {
     }
     #[test]
     fn parse_div() {
-        let expr = parse!("c*a/spenso::bracket(d(mink(4,1))* b(mink(4,1)))(spenso::bracket(d(mink(4,1))* b(mink(4,1)))^-3)(spenso::bracket(d(mink(4,1))* b(mink(4,1)))^-2)");
+        let expr = parse!("c*a/bracket(d(mink(4,1))* b(mink(4,1)))(bracket(d(mink(4,1))* b(mink(4,1)))^-3)(bracket(d(mink(4,1))* b(mink(4,1)))^-2)");
         let net = expr
             .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
@@ -601,7 +651,7 @@ pub mod test {
             .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
         println!("{}", net.snapshot_dot());
-        assert_snapshot!(net.simple_execute().to_bare_ordered_string(), @"(Q(1,mink(4,dot_dummy_2))*Q(2,mink(4,dot_dummy_2)))^(-1)");
+        assert_snapshot!(net.simple_execute().to_bare_ordered_string(), @"(st(Q(1,mink(4,1))*Q(2,mink(4,1))))^(-1)");
     }
 
     #[test]
@@ -615,60 +665,34 @@ pub mod test {
 
     #[test]
     fn parse_val() {
-        initialize();
+        test_initialize();
         let expr = parse_lit!(
-            ((Q(5, spenso::cind(0)))
-                ^ 2 + (Q(5, spenso::cind(1)))
-                ^ 2 * -1 + (Q(5, spenso::cind(2)))
-                ^ 2 * -1 + (Q(5, spenso::cind(3)))
+            ((Q(5, cind(0)))
+                ^ 2 + (Q(5, cind(1)))
+                ^ 2 * -1 + (Q(5, cind(2)))
+                ^ 2 * -1 + (Q(5, cind(3)))
                 ^ 2 * -1)
                 ^ (-1)
-                    * ((Q(6, spenso::cind(0)))
-                        ^ 2 + (Q(6, spenso::cind(1)))
-                        ^ 2 * -1 + (Q(6, spenso::cind(2)))
-                        ^ 2 * -1 + (Q(6, spenso::cind(3)))
+                    * ((Q(6, cind(0)))
+                        ^ 2 + (Q(6, cind(1)))
+                        ^ 2 * -1 + (Q(6, cind(2)))
+                        ^ 2 * -1 + (Q(6, cind(3)))
                         ^ 2 * -1)
-                ^ (-1) * 1𝑖 / 3 * UFO::GC_1
-                ^ 3 * gammalooprs::Q(5, spenso::mink(4, gammalooprs::edge_5_1))
-                    * gammalooprs::Q(6, spenso::mink(4, gammalooprs::edge_6_1))
-                    * gammalooprs::u(1, spenso::bis(4, gammalooprs::hedge_1))
-                    * gammalooprs::vbar(2, spenso::bis(4, gammalooprs::hedge_2))
-                    * gammalooprs::ϵbar(0, spenso::mink(4, gammalooprs::hedge_0))
-                    * gammalooprs::ϵbar(3, spenso::mink(4, gammalooprs::hedge_3))
-                    * gammalooprs::ϵbar(4, spenso::mink(4, gammalooprs::hedge_4))
-                    * spenso::g(
-                        spenso::cof(3, hedge_1),
-                        spenso::dind(spenso::cof(3, hedge_2))
-                    )
-                    * spenso::g(
-                        spenso::cof(3, gammalooprs::hedge_1),
-                        spenso::dind(spenso::cof(3, gammalooprs::hedge_2))
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, gammalooprs::hedge_2),
-                        spenso::bis(4, gammalooprs::hedge_8),
-                        spenso::mink(4, gammalooprs::hedge_0)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, gammalooprs::hedge_5),
-                        spenso::bis(4, gammalooprs::hedge_1),
-                        spenso::mink(4, gammalooprs::hedge_3)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, gammalooprs::hedge_6),
-                        spenso::bis(4, gammalooprs::hedge_5),
-                        spenso::mink(4, gammalooprs::edge_5_1)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, gammalooprs::hedge_7),
-                        spenso::bis(4, gammalooprs::hedge_6),
-                        spenso::mink(4, gammalooprs::hedge_4)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, gammalooprs::hedge_8),
-                        spenso::bis(4, gammalooprs::hedge_7),
-                        spenso::mink(4, gammalooprs::edge_6_1)
-                    )
+                ^ (-1) * 1𝑖 / 3
+                ^ 3 * Q(5, mink(4, edge_5_1))
+                    * Q(6, mink(4, edge_6_1))
+                    * u(1, bis(4, hedge_1))
+                    * vbar(2, bis(4, hedge_2))
+                    * ϵbar(0, mink(4, hedge_0))
+                    * ϵbar(3, mink(4, hedge_3))
+                    * ϵbar(4, mink(4, hedge_4))
+                    * g(cof(3, hedge_1), dind(cof(3, hedge_2)))
+                    * g(cof(3, hedge_1), dind(cof(3, hedge_2)))
+                    * gamma(bis(4, hedge_2), bis(4, hedge_8), mink(4, hedge_0))
+                    * gamma(bis(4, hedge_5), bis(4, hedge_1), mink(4, hedge_3))
+                    * gamma(bis(4, hedge_6), bis(4, hedge_5), mink(4, edge_5_1))
+                    * gamma(bis(4, hedge_7), bis(4, hedge_6), mink(4, hedge_4))
+                    * gamma(bis(4, hedge_8), bis(4, hedge_7), mink(4, edge_6_1))
         );
         let net = expr
             .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
@@ -680,29 +704,29 @@ pub mod test {
           layout = "neato";
 
           0	 [label = "∏"];
-          1	 [label = "S:((Q(5,cind(0)))^2+(Q(5,cind(1)))^2*-1+(Q(5,cind(2)))^2*-1+(Q(5,cind(3)))^2*-1)^(-1)*((Q(6,cind(0)))^2+(Q(6,cind(1)))^2*-1+(Q(6,cind(2)))^2*-1+(Q(6,cind(3)))^2*-1)^(-1)*1𝑖/3*GC_1^3*g(cof(3,hedge_1),dind(cof(3,hedge_2)))*g(cof(3,hedge_1),dind(cof(3,hedge_2)))*u(1,bis(4,hedge_1))*vbar(2,bis(4,hedge_2))"];
-          2	 [label = "T:Q(5,mink(4,edge_5_1))"];
-          3	 [label = "T:Q(6,mink(4,edge_6_1))"];
-          4	 [label = "T:ϵbar(0,mink(4,hedge_0))"];
-          5	 [label = "T:ϵbar(3,mink(4,hedge_3))"];
-          6	 [label = "T:ϵbar(4,mink(4,hedge_4))"];
-          7	 [label = "T:gamma(bis(4,hedge_2),bis(4,hedge_8),mink(4,hedge_0))"];
-          8	 [label = "T:gamma(bis(4,hedge_8),bis(4,hedge_7),mink(4,edge_6_1))"];
-          9	 [label = "T:gamma(bis(4,hedge_5),bis(4,hedge_1),mink(4,hedge_3))"];
-          10	 [label = "T:gamma(bis(4,hedge_6),bis(4,hedge_5),mink(4,edge_5_1))"];
-          11	 [label = "T:gamma(bis(4,hedge_7),bis(4,hedge_6),mink(4,hedge_4))"];
+          1	 [label = "S:((Q(5,cind(0)))^2+(Q(5,cind(1)))^2*-1+(Q(5,cind(2)))^2*-1+(Q(5,cind(3)))^2*-1)^(-1)*((Q(6,cind(0)))^2+(Q(6,cind(1)))^2*-1+(Q(6,cind(2)))^2*-1+(Q(6,cind(3)))^2*-1)^(-1)*(g(cof(3,hedge_1),dind(cof(3,hedge_2))))^2*1𝑖/27*u(1,bis(4,hedge_1))*vbar(2,bis(4,hedge_2))"];
+          2	 [label = "T:gamma(bis(4,hedge_2),bis(4,hedge_8),mink(4,hedge_0))"];
+          3	 [label = "T:gamma(bis(4,hedge_5),bis(4,hedge_1),mink(4,hedge_3))"];
+          4	 [label = "T:gamma(bis(4,hedge_6),bis(4,hedge_5),mink(4,edge_5_1))"];
+          5	 [label = "T:gamma(bis(4,hedge_7),bis(4,hedge_6),mink(4,hedge_4))"];
+          6	 [label = "T:gamma(bis(4,hedge_8),bis(4,hedge_7),mink(4,edge_6_1))"];
+          7	 [label = "T:Q(5,mink(4,edge_5_1))"];
+          8	 [label = "T:Q(6,mink(4,edge_6_1))"];
+          9	 [label = "T:ϵbar(0,mink(4,hedge_0))"];
+          10	 [label = "T:ϵbar(3,mink(4,hedge_3))"];
+          11	 [label = "T:ϵbar(4,mink(4,hedge_4))"];
           ext0	 [style=invis];
           0:0:s	-> ext0	 [id=0 color="red"];
-          6:22:s	-> 11:32:s	 [id=1 dir=none  color="red:blue;0.5" label="mink4|hedge_4"];
-          2:14:s	-> 10:30:s	 [id=2 dir=none  color="red:blue;0.5" label="mink4|edge_5_1"];
-          5:20:s	-> 9:28:s	 [id=3 dir=none  color="red:blue;0.5" label="mink4|hedge_3"];
-          3:16:s	-> 8:26:s	 [id=4 dir=none  color="red:blue;0.5" label="mink4|edge_6_1"];
-          4:18:s	-> 7:24:s	 [id=5 dir=none  color="red:blue;0.5" label="mink4|hedge_0"];
-          10:29:s	-> 0:2:s	 [id=6  color="red:blue;0.5"];
-          8:25:s	-> 0:4:s	 [id=7  color="red:blue;0.5"];
+          5:20:s	-> 11:32:s	 [id=1 dir=none  color="red:blue;0.5" label="mink4|hedge_4"];
+          3:16:s	-> 10:30:s	 [id=2 dir=none  color="red:blue;0.5" label="mink4|hedge_3"];
+          2:14:s	-> 9:28:s	 [id=3 dir=none  color="red:blue;0.5" label="mink4|hedge_0"];
+          6:22:s	-> 8:26:s	 [id=4 dir=none  color="red:blue;0.5" label="mink4|edge_6_1"];
+          4:18:s	-> 7:24:s	 [id=5 dir=none  color="red:blue;0.5" label="mink4|edge_5_1"];
+          7:23:s	-> 0:5:s	 [id=6  color="red:blue;0.5"];
+          10:29:s	-> 0:2:s	 [id=7  color="red:blue;0.5"];
           6:21:s	-> 0:6:s	 [id=8  color="red:blue;0.5"];
-          7:23:s	-> 0:5:s	 [id=9  color="red:blue;0.5"];
-          9:27:s	-> 0:3:s	 [id=10  color="red:blue;0.5"];
+          9:27:s	-> 0:3:s	 [id=9  color="red:blue;0.5"];
+          8:25:s	-> 0:4:s	 [id=10  color="red:blue;0.5"];
           1:12:s	-> 0:11:s	 [id=11  color="red:blue;0.5"];
           2:13:s	-> 0:10:s	 [id=12  color="red:blue;0.5"];
           3:15:s	-> 0:9:s	 [id=13  color="red:blue;0.5"];
@@ -733,22 +757,20 @@ pub mod test {
           layout = "neato";
 
           0	 [label = "∏"];
-          1	 [label = "S:a"];
-          2	 [label = "S:c"];
-          3	 [label = "T:b(mink(4,1))"];
-          4	 [label = "T:d(mink(4,1))"];
-          5	 [label = "^( 2 )"];
-          6	 [label = "T:d(mink(4,2))"];
+          1	 [label = "S:a*c"];
+          2	 [label = "T:b(mink(4,1))"];
+          3	 [label = "T:d(mink(4,1))"];
+          4	 [label = "^( 2 )"];
+          5	 [label = "T:d(mink(4,2))"];
           ext0	 [style=invis];
           0:0:s	-> ext0	 [id=0 color="red"];
-          6:15:s	-> 5:13:s	 [id=1  color="red:blue;0.5"];
-          3:9:s	-> 4:11:s	 [id=2 dir=none  color="red:blue;0.5" label="mink4|1"];
-          3:8:s	-> 0:3:s	 [id=3  color="red:blue;0.5"];
-          1:6:s	-> 0:5:s	 [id=4  color="red:blue;0.5"];
-          2:7:s	-> 0:4:s	 [id=5  color="red:blue;0.5"];
-          4:10:s	-> 0:2:s	 [id=6  color="red:blue;0.5"];
-          6:16:s	-> 5:14:s	 [id=7 dir=none  color="red:blue;0.5" label="mink4|2"];
-          5:12:s	-> 0:1:s	 [id=8  color="red:blue;0.5"];
+          5:13:s	-> 4:11:s	 [id=1  color="red:blue;0.5"];
+          2:7:s	-> 3:9:s	 [id=2 dir=none  color="red:blue;0.5" label="mink4|1"];
+          2:6:s	-> 0:3:s	 [id=3  color="red:blue;0.5"];
+          1:5:s	-> 0:4:s	 [id=4  color="red:blue;0.5"];
+          3:8:s	-> 0:2:s	 [id=5  color="red:blue;0.5"];
+          5:14:s	-> 4:12:s	 [id=6 dir=none  color="red:blue;0.5" label="mink4|2"];
+          4:10:s	-> 0:1:s	 [id=7  color="red:blue;0.5"];
         }
         "#
         );
@@ -762,19 +784,17 @@ pub mod test {
           layout = "neato";
 
           0	 [label = "∏"];
-          1	 [label = "S:c"];
-          2	 [label = "S:a"];
-          3	 [label = "T:b(mink(4,1))"];
-          4	 [label = "T:d(mink(4,1))"];
-          5	 [label = "S:(d(mink(4,2)))^2"];
+          1	 [label = "S:a*c"];
+          2	 [label = "T:b(mink(4,1))"];
+          3	 [label = "T:d(mink(4,1))"];
+          4	 [label = "S:(d(mink(4,2)))^2"];
           ext0	 [style=invis];
           0:0:s	-> ext0	 [id=0 color="red"];
-          4:10:s	-> 0:2:s	 [id=1  color="red:blue;0.5"];
-          1:6:s	-> 0:5:s	 [id=2  color="red:blue;0.5"];
-          2:7:s	-> 0:4:s	 [id=3  color="red:blue;0.5"];
-          3:8:s	-> 0:3:s	 [id=4  color="red:blue;0.5"];
-          3:9:s	-> 4:11:s	 [id=5 dir=none  color="red:blue;0.5" label="mink4|1"];
-          5:12:s	-> 0:1:s	 [id=6  color="red:blue;0.5"];
+          3:8:s	-> 0:2:s	 [id=1  color="red:blue;0.5"];
+          1:5:s	-> 0:4:s	 [id=2  color="red:blue;0.5"];
+          2:6:s	-> 0:3:s	 [id=3  color="red:blue;0.5"];
+          2:7:s	-> 3:9:s	 [id=4 dir=none  color="red:blue;0.5" label="mink4|1"];
+          4:10:s	-> 0:1:s	 [id=5  color="red:blue;0.5"];
         }
         "#
         );
@@ -787,17 +807,15 @@ pub mod test {
           overlap = "scale";
           layout = "neato";
 
-          4	 [label = "∏"];
+          3	 [label = "∏"];
           0	 [label = "S:(d(mink(4,2)))^2"];
-          1	 [label = "S:c"];
-          2	 [label = "S:a"];
-          3	 [label = "T:b(mink(4,1))*d(mink(4,1))"];
+          1	 [label = "S:a*c"];
+          2	 [label = "T:b(mink(4,1))*d(mink(4,1))"];
           ext0	 [style=invis];
-          4:0:s	-> ext0	 [id=0 color="red"];
-          1:6:s	-> 4:5:s	 [id=1  color="red:blue;0.5"];
-          2:7:s	-> 4:4:s	 [id=2  color="red:blue;0.5"];
-          3:8:s	-> 4:3:s	 [id=3  color="red:blue;0.5"];
-          0:2:s	-> 4:1:s	 [id=4  color="red:blue;0.5"];
+          3:0:s	-> ext0	 [id=0 color="red"];
+          1:5:s	-> 3:4:s	 [id=1  color="red:blue;0.5"];
+          2:6:s	-> 3:3:s	 [id=2  color="red:blue;0.5"];
+          0:2:s	-> 3:1:s	 [id=3  color="red:blue;0.5"];
         }
         "#
         );
@@ -810,17 +828,15 @@ pub mod test {
           overlap = "scale";
           layout = "neato";
 
-          4	 [label = "∏"];
+          3	 [label = "∏"];
           0	 [label = "S:(d(mink(4,2)))^2"];
-          1	 [label = "S:c"];
-          2	 [label = "S:a"];
-          3	 [label = "T:b(mink(4,1))*d(mink(4,1))"];
+          1	 [label = "S:a*c"];
+          2	 [label = "T:b(mink(4,1))*d(mink(4,1))"];
           ext0	 [style=invis];
-          4:0:s	-> ext0	 [id=0 color="red"];
-          0:2:s	-> 4:1:s	 [id=1  color="red:blue;0.5"];
-          1:6:s	-> 4:5:s	 [id=2  color="red:blue;0.5"];
-          2:7:s	-> 4:4:s	 [id=3  color="red:blue;0.5"];
-          3:8:s	-> 4:3:s	 [id=4  color="red:blue;0.5"];
+          3:0:s	-> ext0	 [id=0 color="red"];
+          0:2:s	-> 3:1:s	 [id=1  color="red:blue;0.5"];
+          1:5:s	-> 3:4:s	 [id=2  color="red:blue;0.5"];
+          2:6:s	-> 3:3:s	 [id=3  color="red:blue;0.5"];
         }
         "#
         );
@@ -962,108 +978,59 @@ pub mod test {
     fn equal_duals() {
         initialize();
         let expr = parse_lit!(
-            ((_gammaloop::Q(5, spenso::cind(0)))
-                ^ 2 + (_gammaloop::Q(5, spenso::cind(1)))
-                ^ 2 * -1 + (_gammaloop::Q(5, spenso::cind(2)))
-                ^ 2 * -1 + (_gammaloop::Q(5, spenso::cind(3)))
+            ((Q(5, cind(0)))
+                ^ 2 + (Q(5, cind(1)))
+                ^ 2 * -1 + (Q(5, cind(2)))
+                ^ 2 * -1 + (Q(5, cind(3)))
                 ^ 2 * -1)
                 ^ (-1)
-                    * ((_gammaloop::Q(6, spenso::cind(0)))
-                        ^ 2 + (_gammaloop::Q(6, spenso::cind(1)))
-                        ^ 2 * -1 + (_gammaloop::Q(6, spenso::cind(2)))
-                        ^ 2 * -1 + (_gammaloop::Q(6, spenso::cind(3)))
+                    * ((Q(6, cind(0)))
+                        ^ 2 + (Q(6, cind(1)))
+                        ^ 2 * -1 + (Q(6, cind(2)))
+                        ^ 2 * -1 + (Q(6, cind(3)))
                         ^ 2 * -1)
                 ^ (-1)
-                    * ((_gammaloop::Q(7, spenso::cind(0)))
-                        ^ 2 + (_gammaloop::Q(7, spenso::cind(1)))
-                        ^ 2 * -1 + (_gammaloop::Q(7, spenso::cind(2)))
-                        ^ 2 * -1 + (_gammaloop::Q(7, spenso::cind(3)))
+                    * ((Q(7, cind(0)))
+                        ^ 2 + (Q(7, cind(1)))
+                        ^ 2 * -1 + (Q(7, cind(2)))
+                        ^ 2 * -1 + (Q(7, cind(3)))
                         ^ 2 * -1)
                 ^ (-1)
-                    * ((_gammaloop::Q(8, spenso::cind(0)))
-                        ^ 2 + (_gammaloop::Q(8, spenso::cind(1)))
-                        ^ 2 * -1 + (_gammaloop::Q(8, spenso::cind(2)))
-                        ^ 2 * -1 + (_gammaloop::Q(8, spenso::cind(3)))
+                    * ((Q(8, cind(0)))
+                        ^ 2 + (Q(8, cind(1)))
+                        ^ 2 * -1 + (Q(8, cind(2)))
+                        ^ 2 * -1 + (Q(8, cind(3)))
                         ^ 2 * -1)
                 ^ (-1)
-                    * ((_gammaloop::Q(9, spenso::cind(0)))
-                        ^ 2 + (_gammaloop::Q(9, spenso::cind(1)))
-                        ^ 2 * -1 + (_gammaloop::Q(9, spenso::cind(2)))
-                        ^ 2 * -1 + (_gammaloop::Q(9, spenso::cind(3)))
+                    * ((Q(9, cind(0)))
+                        ^ 2 + (Q(9, cind(1)))
+                        ^ 2 * -1 + (Q(9, cind(2)))
+                        ^ 2 * -1 + (Q(9, cind(3)))
                         ^ 2 * -1)
                 ^ (-1) * -1𝑖 / 3 * UFO::GC_11
                 ^ 2 * UFO::GC_1
-                ^ 3 * UFO::Gamma(
-                    spenso::mink(4, _gammaloop::hedge_13),
-                    spenso::bis(4, _gammaloop::hedge_11),
-                    2
-                ) * _gammaloop::Q(5, spenso::mink(4, _gammaloop::edge_5_1))
-                    * _gammaloop::Q(6, spenso::mink(4, _gammaloop::edge_6_1))
-                    * _gammaloop::Q(7, spenso::mink(4, _gammaloop::edge_7_1))
-                    * _gammaloop::Q(8, spenso::mink(4, _gammaloop::edge_8_1))
-                    * _gammaloop::u(1)
-                    * _gammaloop::vbar(2, spenso::bis(4, _gammaloop::hedge_2))
-                    * _gammaloop::ebar(0, spenso::mink(4, _gammaloop::hedge_0))
-                    * _gammaloop::ebar(3, spenso::mink(4, _gammaloop::hedge_3))
-                    * _gammaloop::ebar(4, spenso::mink(4, _gammaloop::hedge_4))
-                    * spenso::g(
-                        spenso::cof(3, _gammaloop::hedge_1),
-                        spenso::dind(spenso::cof(3, _gammaloop::hedge_2))
-                    )
-                    * spenso::g(
-                        spenso::mink(4, _gammaloop::hedge_13),
-                        spenso::mink(4, _gammaloop::hedge_14)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, _gammaloop::hedge_10),
-                        spenso::bis(4, _gammaloop::hedge_9),
-                        spenso::mink(4, _gammaloop::edge_8_1)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, _gammaloop::hedge_12),
-                        spenso::bis(4, _gammaloop::hedge_11),
-                        spenso::mink(4, _gammaloop::edge_7_1)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, _gammaloop::hedge_2),
-                        spenso::bis(4, _gammaloop::hedge_10),
-                        spenso::mink(4, _gammaloop::hedge_14)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, _gammaloop::hedge_5),
-                        spenso::bis(4, _gammaloop::hedge_12),
-                        spenso::mink(4, _gammaloop::hedge_3)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, _gammaloop::hedge_6),
-                        spenso::bis(4, _gammaloop::hedge_5),
-                        spenso::mink(4, _gammaloop::edge_5_1)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, _gammaloop::hedge_7),
-                        spenso::bis(4, _gammaloop::hedge_6),
-                        spenso::mink(4, _gammaloop::hedge_4)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, _gammaloop::hedge_8),
-                        spenso::bis(4, _gammaloop::hedge_7),
-                        spenso::mink(4, _gammaloop::edge_6_1)
-                    )
-                    * spenso::gamma(
-                        spenso::bis(4, _gammaloop::hedge_9),
-                        spenso::bis(4, _gammaloop::hedge_8),
-                        spenso::mink(4, _gammaloop::hedge_0)
-                    )
-                    * spenso::t(
-                        spenso::coad(8, _gammaloop::hedge_13),
-                        spenso::cof(2),
-                        spenso::dind(spenso::cof(3, _gammaloop::hedge_11))
-                    )
-                    * spenso::t(
-                        spenso::coad(8, _gammaloop::hedge_13),
-                        spenso::cof(3, _gammaloop::hedge_11),
-                        spenso::dind(spenso::cof(3, _gammaloop::hedge_2))
-                    )
+                ^ 3 * UFO::Gamma(mink(4, hedge_13), bis(4, hedge_11), 2)
+                    * Q(5, mink(4, edge_5_1))
+                    * Q(6, mink(4, edge_6_1))
+                    * Q(7, mink(4, edge_7_1))
+                    * Q(8, mink(4, edge_8_1))
+                    * u(1)
+                    * vbar(2, bis(4, hedge_2))
+                    * ebar(0, mink(4, hedge_0))
+                    * ebar(3, mink(4, hedge_3))
+                    * ebar(4, mink(4, hedge_4))
+                    * g(cof(3, hedge_1), dind(cof(3, hedge_2)))
+                    * g(mink(4, hedge_13), mink(4, hedge_14))
+                    * gamma(bis(4, hedge_10), bis(4, hedge_9), mink(4, edge_8_1))
+                    * gamma(bis(4, hedge_12), bis(4, hedge_11), mink(4, edge_7_1))
+                    * gamma(bis(4, hedge_2), bis(4, hedge_10), mink(4, hedge_14))
+                    * gamma(bis(4, hedge_5), bis(4, hedge_12), mink(4, hedge_3))
+                    * gamma(bis(4, hedge_6), bis(4, hedge_5), mink(4, edge_5_1))
+                    * gamma(bis(4, hedge_7), bis(4, hedge_6), mink(4, hedge_4))
+                    * gamma(bis(4, hedge_8), bis(4, hedge_7), mink(4, edge_6_1))
+                    * gamma(bis(4, hedge_9), bis(4, hedge_8), mink(4, hedge_0))
+                    * t(coad(8, hedge_13), cof(2), dind(cof(3, hedge_11)))
+                    * t(coad(8, hedge_13), cof(3, hedge_11), dind(cof(3, hedge_2)))
         );
 
         let net = expr
@@ -1144,30 +1111,13 @@ pub mod test {
         initialize();
 
         let expr = parse_lit!(
-            (-1 * spenso::Q(spenso::EMRID(0, 4), spenso::mink(4, python::l_20))
-                * spenso::gamma(
-                    spenso::euc(4, python::l_3),
-                    spenso::euc(4, python::l_6),
-                    spenso::mink(4, python::l_0)
-                )
-                * spenso::gamma(
-                    spenso::euc(4, python::l_5),
-                    spenso::euc(4, python::l_2),
-                    spenso::mink(4, python::l_20)
-                )
-                * spenso::gamma(
-                    spenso::euc(4, python::l_6),
-                    spenso::euc(4, python::l_5),
-                    spenso::mink(4, python::l_1)
-                )
-                + 2 * spenso::Q(spenso::EMRID(0, 4), spenso::mink(4, python::l_1))
-                    * spenso::gamma(
-                        spenso::euc(4, python::l_3),
-                        spenso::euc(4, python::l_2),
-                        spenso::mink(4, python::l_0)
-                    ))
+            (-1 * Q(EMRID(0, 4), mink(4, l_20))
+                * gamma(euc(4, l_3), euc(4, l_6), mink(4, l_0))
+                * gamma(euc(4, l_5), euc(4, l_2), mink(4, l_20))
+                * gamma(euc(4, l_6), euc(4, l_5), mink(4, l_1))
+                + 2 * Q(EMRID(0, 4), mink(4, l_1)) * gamma(euc(4, l_3), euc(4, l_2), mink(4, l_0)))
                 * 1𝑖
-                * spenso::G
+                * G
                 ^ 2
         );
 
@@ -1240,44 +1190,33 @@ pub mod test {
     // #[should_panic]
     fn infinite_execution() {
         initialize();
-        let _s = symbol!("python::dim");
+        let _s = symbol!("dim");
 
         let _ = parse_lit!(
-            (spenso::N(0, spenso::mink(python::dim, python::l(0)))
-                * spenso::P(0, spenso::mink(python::dim, python::r(0)))
-                + spenso::N(0, spenso::mink(python::dim, python::r(0)))
-                    * spenso::P(0, spenso::mink(python::dim, python::l(0))))
-                * spenso::N(0, spenso::mink(python::dim, python::dummy_ss(0, 1)))
-                * spenso::P(0, spenso::mink(python::dim, python::dummy_ss(0, 1)))
-                + -1 * spenso::N(0, spenso::mink(python::dim, python::dummy_ss(0, 3)))
-                    * spenso::N(0, spenso::mink(python::dim, python::dummy_ss(0, 4)))
-                    * spenso::P(0, spenso::mink(python::dim, python::dummy_ss(0, 3)))
-                    * spenso::P(0, spenso::mink(python::dim, python::dummy_ss(0, 4)))
-                    * spenso::g(
-                        spenso::mink(python::dim, python::l(0)),
-                        spenso::mink(python::dim, python::r(0))
-                    )
+            (N(0, mink(dim, l(0))) * P(0, mink(dim, r(0)))
+                + N(0, mink(dim, r(0))) * P(0, mink(dim, l(0))))
+                * N(0, mink(dim, dummy_ss(0, 1)))
+                * P(0, mink(dim, dummy_ss(0, 1)))
+                + -1 * N(0, mink(dim, dummy_ss(0, 3)))
+                    * N(0, mink(dim, dummy_ss(0, 4)))
+                    * P(0, mink(dim, dummy_ss(0, 3)))
+                    * P(0, mink(dim, dummy_ss(0, 4)))
+                    * g(mink(dim, l(0)), mink(dim, r(0)))
         )
-        .replace(parse_lit!(python::dim))
+        .replace(parse_lit!(dim))
         .with(Atom::num(4));
 
         let expr = parse_lit!(
-            -1𝑖 * spenso::G
-                ^ 3 * (spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_8))
-                    * spenso::g(spenso::mink(4, python::l_7), spenso::mink(4, python::l_9))
-                    - spenso::g(spenso::mink(4, python::l_6), spenso::mink(4, python::l_9))
-                        * spenso::g(spenso::mink(4, python::l_8), spenso::mink(4, python::l_7)))
-                    * spenso::g(spenso::mink(4, python::l_0), spenso::mink(4, python::l_6))
-                    * spenso::g(spenso::mink(4, python::l_1), spenso::mink(4, python::l_7))
-                    * spenso::g(spenso::mink(4, python::l_4), spenso::mink(4, python::l_8))
-                    * spenso::g(spenso::mink(4, python::l_5), spenso::mink(4, python::l_9))
-                    * spenso::g(spenso::bis(4, python::l_2), spenso::bis(4, python::l_5))
-                    * spenso::g(spenso::bis(4, python::l_3), spenso::bis(4, python::l_6))
-                    * spenso::gamma(
-                        spenso::bis(4, python::l_6),
-                        spenso::bis(4, python::l_5),
-                        spenso::mink(4, python::l_5)
-                    )
+            -1𝑖 * G
+                ^ 3 * (g(mink(4, l_6), mink(4, l_8)) * g(mink(4, l_7), mink(4, l_9))
+                    - g(mink(4, l_6), mink(4, l_9)) * g(mink(4, l_8), mink(4, l_7)))
+                    * g(mink(4, l_0), mink(4, l_6))
+                    * g(mink(4, l_1), mink(4, l_7))
+                    * g(mink(4, l_4), mink(4, l_8))
+                    * g(mink(4, l_5), mink(4, l_9))
+                    * g(bis(4, l_2), bis(4, l_5))
+                    * g(bis(4, l_3), bis(4, l_6))
+                    * gamma(bis(4, l_6), bis(4, l_5), mink(4, l_5))
         );
 
         let lib = DummyLibrary::<_>::new();
@@ -1311,11 +1250,11 @@ pub mod test {
           ext0	 [style=invis];
           0:0:s	-> ext0	 [id=0 color="red"];
           ext1	 [style=invis];
-          0:1:s	-> ext1	 [id=1 dir=none color="red" label="mink4|l_4"];
+          0:2:s	-> ext1	 [id=1 dir=none color="red" label="mink4|l_1"];
           ext2	 [style=invis];
-          0:2:s	-> ext2	 [id=2 dir=none color="red" label="mink4|l_1"];
+          0:3:s	-> ext2	 [id=2 dir=none color="red" label="mink4|l_0"];
           ext3	 [style=invis];
-          0:3:s	-> ext3	 [id=3 dir=none color="red" label="mink4|l_0"];
+          0:1:s	-> ext3	 [id=3 dir=none color="red" label="mink4|l_4"];
         }
         "#
         );

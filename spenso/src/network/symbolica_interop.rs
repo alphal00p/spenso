@@ -4,13 +4,13 @@ use ahash::{AHashMap, AHashSet, HashMap};
 
 use anyhow::anyhow;
 use symbolica::{
-    atom::{Atom, AtomCore, AtomView, KeyLookup, Symbol},
+    atom::{Atom, AtomCore, AtomView, Indeterminate, KeyLookup, Symbol},
     coefficient::ConvertToRing,
     domains::{
         factorized_rational_polynomial::{
             FactorizedRationalPolynomial, FromNumeratorAndFactorizedDenominator,
         },
-        float::{Complex as SymComplex, NumericalFloatLike, Real, SingleFloat},
+        float::{Complex as SymComplex, FloatLike, Real, SingleFloat},
         rational::Rational,
         rational_polynomial::{FromNumeratorAndDenominator, RationalPolynomial},
         EuclideanDomain, InternalOrdering,
@@ -21,8 +21,8 @@ use symbolica::{
     },
     id::{BorrowReplacement, Context, Pattern},
     poly::{
-        factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial,
-        PositiveExponent, Variable,
+        factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, PolyVariable,
+        PositiveExponent,
     },
     symbol,
     utils::{BorrowedOrOwned, Settable},
@@ -274,13 +274,19 @@ where
         self.map_ref(|a| a.factor(), |a| a.factor())
     }
 
-    fn nsolve<N: SingleFloat + Real + PartialOrd + Clone>(
+    fn nsolve<
+        'a,
+        N: SingleFloat + Real + PartialOrd,
+        V: Into<BorrowedOrOwned<'a, Indeterminate>>,
+    >(
         &self,
-        x: Symbol,
+        x: V,
         init: N,
         prec: N,
         max_iterations: usize,
     ) -> std::result::Result<Self::ContainerData<N>, std::string::String> {
+        let binding = x.into();
+        let x = binding.borrow();
         self.map_ref_result(
             |a| a.nsolve(x, init.clone(), prec.clone(), max_iterations),
             |a| a.nsolve(x, init.clone(), prec.clone(), max_iterations),
@@ -295,7 +301,7 @@ where
         depth_is_absolute: bool,
     ) -> std::result::Result<
         Self::ContainerData<symbolica::poly::series::Series<symbolica::domains::atom::AtomField>>,
-        &'static str,
+        String,
     > {
         self.map_ref_result(
             |a| {
@@ -392,7 +398,7 @@ where
     fn to_polynomial<R: EuclideanDomain + ConvertToRing, E: symbolica::poly::Exponent>(
         &self,
         field: &R,
-        var_map: Option<Arc<Vec<Variable>>>,
+        var_map: Option<Arc<Vec<PolyVariable>>>,
     ) -> Self::ContainerData<MultivariatePolynomial<R, E>> {
         self.map_ref(
             |a| a.to_polynomial(field, var_map.clone()),
@@ -447,7 +453,7 @@ where
         )
     }
 
-    fn set_coefficient_ring(&self, vars: &Arc<Vec<Variable>>) -> Self::AtomContainer {
+    fn set_coefficient_ring(&self, vars: &Arc<Vec<PolyVariable>>) -> Self::AtomContainer {
         self.map_ref(
             |a| a.set_coefficient_ring(vars),
             |a| a.set_coefficient_ring(vars),
@@ -467,7 +473,7 @@ where
 
     fn to_polynomial_in_vars<E: symbolica::poly::Exponent>(
         &self,
-        var_map: &Arc<Vec<Variable>>,
+        var_map: &Arc<Vec<PolyVariable>>,
     ) -> Self::ContainerData<MultivariatePolynomial<symbolica::domains::atom::AtomField, E>> {
         self.map_ref(
             |a| a.to_polynomial_in_vars(var_map),
@@ -483,7 +489,7 @@ where
         &self,
         field: &R,
         out_field: &RO,
-        var_map: Option<Arc<Vec<Variable>>>,
+        var_map: Option<Arc<Vec<PolyVariable>>>,
     ) -> Self::ContainerData<RationalPolynomial<RO, E>>
     where
         RationalPolynomial<RO, E>:
@@ -536,7 +542,7 @@ where
         &self,
         field: &R,
         out_field: &RO,
-        var_map: Option<Arc<Vec<Variable>>>,
+        var_map: Option<Arc<Vec<PolyVariable>>>,
     ) -> Self::ContainerData<FactorizedRationalPolynomial<RO, E>>
     where
         FactorizedRationalPolynomial<RO, E>: FromNumeratorAndFactorizedDenominator<R, RO, E>
@@ -749,7 +755,7 @@ impl<
         TensorNetworkError<K, FK>,
     >
     where
-        T: NumericalFloatLike + ExportNumber + SingleFloat,
+        T: FloatLike + ExportNumber + SingleFloat,
         S: Clone,
     {
         // TODO @Lucien with the new export_cpp you are now able to put these different functions in the same file!

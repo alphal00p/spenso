@@ -10,7 +10,7 @@ repository.workspace = true
 [dependencies]
 
 spenso = { version = "0.5", features = ["shadowing"] }
-symbolica = { version = "0.20", default-features = false }
+symbolica = { version = "1", default-features = false }
 spenso-macros = { version = "0.2" }
 idenso = "0.2"
 

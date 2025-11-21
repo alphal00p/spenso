@@ -4,7 +4,7 @@ use ref_ops::{RefAdd, RefDiv, RefMul, RefSub};
 use symbolica::{
     coefficient::Coefficient,
     domains::{
-        float::{Complex as SymComplex, Float, NumericalFloatLike, Real, SingleFloat},
+        float::{Complex as SymComplex, Float, FloatLike, Real, SingleFloat},
         rational::Rational,
     },
     evaluate::{
@@ -200,7 +200,7 @@ where
     }
 }
 
-impl<T: NumericalFloatLike> NumericalFloatLike for Complex<T>
+impl<T: FloatLike> FloatLike for Complex<T>
 where
     T: for<'a> RefMul<&'a T, Output = T>
         + for<'a> RefAdd<&'a T, Output = T>

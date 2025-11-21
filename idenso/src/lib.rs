@@ -352,7 +352,26 @@ impl IndexTooling for AtomView<'_> {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
+    use std::sync::LazyLock;
+
+    pub struct TestSymbols {
+        pub p: Symbol,
+        pub a: Symbol,
+        pub u: Symbol,
+    }
+
+    pub fn test_initialize() {
+        let _ = TS.p;
+        initialize();
+    }
+
+    pub static TS: LazyLock<TestSymbols> = LazyLock::new(|| TestSymbols {
+        p: symbol!("p";Real),
+        a: symbol!("a"),
+        u: symbol!("u"),
+    });
+
     use insta::assert_snapshot;
     use spenso::structure::{
         IndexlessNamedStructure,
@@ -366,7 +385,12 @@ mod test {
         symbol,
     };
 
-    use crate::{IndexTooling, gamma::AGS, metric::PermuteWithMetric, representations::Bispinor};
+    use crate::{
+        IndexTooling,
+        gamma::AGS,
+        metric::PermuteWithMetric,
+        representations::{Bispinor, initialize},
+    };
     pub fn gamma(
         i: impl Into<AbstractIndex>,
         j: impl Into<AbstractIndex>,
@@ -391,7 +415,7 @@ mod test {
         let m_atom: AbstractIndex = m.into();
         let m_atom: Atom = m_atom.into();
         let mink = Bispinor {}.new_rep(4);
-        function!(symbol!("spenso::u"), i, mink.to_symbolic([m_atom]))
+        function!(TS.u, i, mink.to_symbolic([m_atom]))
     }
 
     #[allow(dead_code)]
@@ -399,7 +423,7 @@ mod test {
         let m_atom: AbstractIndex = m.into();
         let m_atom: Atom = m_atom.into();
         let mink = Minkowski {}.new_rep(4);
-        function!(symbol!("spenso::p";Real), i, mink.to_symbolic([m_atom]))
+        function!(TS.p, i, mink.to_symbolic([m_atom]))
     }
 
     #[allow(dead_code)]
@@ -411,7 +435,7 @@ mod test {
         let n_atom: Atom = n_atom.into();
         let mink = Bispinor {}.new_rep(4);
         function!(
-            symbol!("spenso::A"),
+            TS.a,
             i,
             mink.to_symbolic([m_atom]),
             mink.to_symbolic([n_atom])
@@ -420,6 +444,7 @@ mod test {
 
     #[test]
     fn gamma_conj() {
+        test_initialize();
         // let expr = gamma(1, 2, 3).dirac_adjoint::<AbstractIndex>().unwrap();
         // println!("{expr}");
         //

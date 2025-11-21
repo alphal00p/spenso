@@ -60,7 +60,7 @@ use symbolica::{
     atom::{Atom, AtomCore, AtomView, FunctionBuilder, KeyLookup, Symbol},
     coefficient::Coefficient,
     domains::{
-        float::{NumericalFloatLike, Real, SingleFloat},
+        float::{FloatLike, Real, SingleFloat},
         rational::Rational,
         InternalOrdering,
     },

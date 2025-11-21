@@ -2,90 +2,43 @@ use std::sync::LazyLock;
 
 use symbolica::{atom::Symbol, symbol};
 
-pub struct RepSymbols {
-    pub x_: Symbol,
-    pub y_: Symbol,
-    pub z_: Symbol,
-    pub a_: Symbol,
-    pub b_: Symbol,
-    pub c_: Symbol,
-    pub d_: Symbol,
-    pub e_: Symbol,
-    pub f_: Symbol,
-    pub g_: Symbol,
-    pub h_: Symbol,
-    pub i_: Symbol,
-    pub j_: Symbol,
+macro_rules! symbol_set {
+    // Identifier symbols with explicit struct and static names
+    ($struct_name:ident, $static_name:ident; $($char:ident)*) => {
+        #[allow(non_snake_case)]
+        pub struct $struct_name {
+            $(pub $char: Symbol,)*
+        }
 
-    pub x__: Symbol,
-    pub y__: Symbol,
-    pub z__: Symbol,
-    pub a__: Symbol,
-    pub b__: Symbol,
-    pub c__: Symbol,
-    pub d__: Symbol,
-    pub e__: Symbol,
-    pub f__: Symbol,
-    pub g__: Symbol,
-    pub h__: Symbol,
-    pub i__: Symbol,
-    pub j__: Symbol,
+        pub static $static_name: LazyLock<$struct_name> = LazyLock::new(|| $struct_name {
+            $($char: symbol!(stringify!($char)),)*
+        });
+    };
 
-    pub x___: Symbol,
-    pub y___: Symbol,
-    pub z___: Symbol,
-    pub a___: Symbol,
-    pub b___: Symbol,
-    pub c___: Symbol,
-    pub d___: Symbol,
-    pub e___: Symbol,
-    pub f___: Symbol,
-    pub g___: Symbol,
-    pub h___: Symbol,
-    pub i___: Symbol,
-    pub j___: Symbol,
+    // String literals as individual statics
+    (statics; $($field:ident : $string:literal),* $(,)?) => {
+        $(
+            #[allow(non_upper_case_globals)]
+            pub static $field: LazyLock<Symbol> = LazyLock::new(|| symbol!($string));
+        )*
+    };
+
+    // String literals grouped in a struct
+    ($struct_name:ident, $static_name:ident; $($field:ident : $string:literal),* $(,)?) => {
+        #[allow(non_snake_case)]
+        pub struct $struct_name {
+            $(pub $field: Symbol,)*
+        }
+
+        pub static $static_name: LazyLock<$struct_name> = LazyLock::new(|| $struct_name {
+            $($field: symbol!($string),)*
+        });
+    };
 }
 
-pub static RS: LazyLock<RepSymbols> = LazyLock::new(|| RepSymbols {
-    x_: symbol!("x_"),
-    y_: symbol!("y_"),
-    z_: symbol!("z_"),
-    a_: symbol!("a_"),
-    b_: symbol!("b_"),
-    c_: symbol!("c_"),
-    d_: symbol!("d_"),
-    e_: symbol!("e_"),
-    f_: symbol!("f_"),
-    g_: symbol!("g_"),
-    h_: symbol!("h_"),
-    i_: symbol!("i_"),
-    j_: symbol!("j_"),
-    x__: symbol!("x__"),
-    y__: symbol!("y__"),
-    z__: symbol!("z__"),
-    a__: symbol!("a__"),
-    b__: symbol!("b__"),
-    c__: symbol!("c__"),
-    d__: symbol!("d__"),
-    e__: symbol!("e__"),
-    f__: symbol!("f__"),
-    g__: symbol!("g__"),
-    h__: symbol!("h__"),
-    i__: symbol!("i__"),
-
-    j__: symbol!("j__"),
-    x___: symbol!("x___"),
-    y___: symbol!("y___"),
-    z___: symbol!("z___"),
-    a___: symbol!("a___"),
-    b___: symbol!("b___"),
-    c___: symbol!("c___"),
-    d___: symbol!("d___"),
-    e___: symbol!("e___"),
-    f___: symbol!("f___"),
-    g___: symbol!("g___"),
-    h___: symbol!("h___"),
-    i___: symbol!("i___"),
-
-    j___: symbol!("j___"),
-});
+// Generate RepSymbols with all the underscore variants
+symbol_set!(RepSymbols, RS;
+    a_ b_ c_ d_ e_ f_ g_ h_ i_ j_ k_ l_ m_ n_ o_ p_ q_ r_ s_ t_ u_ v_ w_ x_ y_ z_
+    a__ b__ c__ d__ e__ f__ g__ h__ i__ j__ k__ l__ m__ n__ o__ p__ q__ r__ s__ t__ u__ v__ w__ x__ y__ z__
+    a___ b___ c___ d___ e___ f___ g___ h___ i___ j___ k___ l___ m___ n___ o___ p___ q___ r___ s___ t___ u___ v___ w___ x___ y___ z___
+);

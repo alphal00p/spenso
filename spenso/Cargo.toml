@@ -70,7 +70,7 @@ symbolica = { version = "1", optional = true, features = [
 ], default-features = false }
 thiserror = "1.0.60"
 linnet = { version = "0.13.1", features = ["serde", "bincode"] }
-spenso-macros = { version = "0.2" }
+spenso-macros = { version = "0.3" }
 features = "0.10.0"
 rayon = "1.10.0"
 tabled = "0.20.0"

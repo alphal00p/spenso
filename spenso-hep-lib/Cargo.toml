@@ -11,7 +11,7 @@ repository.workspace = true
 
 spenso = { version = "0.5", features = ["shadowing"] }
 symbolica = { version = "1", default-features = false }
-spenso-macros = { version = "0.2" }
+spenso-macros = { version = "0.3" }
 idenso = "0.2"
 
 

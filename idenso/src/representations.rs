@@ -120,6 +120,11 @@ pub struct Bispinor {}
 #[representation(name = "coad", self_dual)] // Specify the dual name
 pub struct ColorAdjoint {}
 
+#[cfg_attr(
+    feature = "python_stubgen",
+    gen_stub_pyfunction(module = "symbolica.community.spenso")
+)]
+#[pyfunction]
 pub fn initialize() {
     let _ = AIND_SYMBOLS.dind;
     let _ = Minkowski {}.to_symbolic([Atom::Zero]);

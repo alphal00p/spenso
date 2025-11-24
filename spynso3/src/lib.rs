@@ -89,8 +89,7 @@ pub(crate) fn initialize_spenso(m: &Bound<'_, PyModule>) -> PyResult<()> {
     use library_tensor::LibrarySpensor;
     use network::ExecutionMode;
 
-    initialize();
-
+    m.add_function(wrap_pyfunction!(initialize, m)?)?;
     SpensoNet::init(m)?;
     ExecutionMode::init(m)?;
     Spensor::init(m)?;

@@ -10,6 +10,10 @@ use symbolica::atom::Atom;
 
 use super::{color::CS, gamma::AGS, metric::MS, rep_symbols::RS};
 
+#[cfg(feature = "python")]
+use pyo3::pyfunction;
+#[cfg(feature = "python_stubgen")]
+use pyo3_stub_gen::derive::gen_stub_pyfunction;
 #[rustfmt::skip]
 #[derive(SimpleRepresentation)]
 #[derive(
@@ -124,7 +128,7 @@ pub struct ColorAdjoint {}
     feature = "python_stubgen",
     gen_stub_pyfunction(module = "symbolica.community.spenso")
 )]
-#[pyfunction]
+#[cfg_attr(feature = "python", pyfunction)]
 pub fn initialize() {
     let _ = AIND_SYMBOLS.dind;
     let _ = Minkowski {}.to_symbolic([Atom::Zero]);

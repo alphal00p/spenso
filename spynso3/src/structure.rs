@@ -397,55 +397,55 @@ impl SpensoName {
     }
 
     /// Predefined metric tensor name.
-    #[classattr]
+    #[staticmethod]
     fn g() -> SpensoName {
         SpensoName { name: ETS.metric }
     }
 
     /// Predefined musical isomorphism tensor name. This enables dualizing self dual indices.
-    #[classattr]
+    #[staticmethod]
     fn flat() -> SpensoName {
         SpensoName { name: ETS.flat }
     }
 
     /// Predefined gamma matrix name.
-    #[classattr]
+    #[staticmethod]
     fn gamma() -> SpensoName {
         SpensoName { name: AGS.gamma }
     }
 
     /// Predefined gamma5 matrix name.
-    #[classattr]
+    #[staticmethod]
     fn gamma5() -> SpensoName {
         SpensoName { name: AGS.gamma5 }
     }
 
     /// Predefined left chiral projector name.
-    #[classattr]
+    #[staticmethod]
     fn projm() -> SpensoName {
         SpensoName { name: AGS.projm }
     }
 
     /// Predefined right chiral projector name.
-    #[classattr]
+    #[staticmethod]
     fn projp() -> SpensoName {
         SpensoName { name: AGS.projp }
     }
 
     /// Predefined sigma matrix name.
-    #[classattr]
+    #[staticmethod]
     fn sigma() -> SpensoName {
         SpensoName { name: AGS.sigma }
     }
 
     /// Predefined color structure constant name.
-    #[classattr]
+    #[staticmethod]
     fn f() -> SpensoName {
         SpensoName { name: CS.f }
     }
 
     /// Predefined color generator name.
-    #[classattr]
+    #[staticmethod]
     fn t() -> SpensoName {
         SpensoName { name: CS.t }
     }

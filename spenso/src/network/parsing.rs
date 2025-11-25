@@ -29,12 +29,16 @@ use crate::{shadowing::Concretize, structure::representation::LibraryRep, struct
 
 pub struct SpensoTags {
     pub tag: String,
+    pub upper: String,
+    pub lower: String,
     pub bracket: Symbol,
     pub pure_scalar: Symbol,
 }
 
 pub static SPENSO_TAG: std::sync::LazyLock<SpensoTags> = std::sync::LazyLock::new(|| SpensoTags {
     tag: tag!("broadcast"),
+    upper: tag!("upper"),
+    lower: tag!("lower"),
     bracket: symbol!("bracket"),
     pure_scalar: symbol!("pure_scalar"),
 });

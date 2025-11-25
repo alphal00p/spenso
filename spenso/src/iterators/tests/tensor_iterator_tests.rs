@@ -8,9 +8,9 @@ use crate::{
         SparseTensorIterator, SparseTensorLinearIterator, TensorStructureIndexIterator,
     },
     structure::{
+        OrderedStructure, PermutedStructure,
         concrete_index::{ExpandedIndex, FlatIndex},
         representation::{Euclidean, RepName},
-        OrderedStructure, PermutedStructure,
     },
     tensors::data::{DenseTensor, SetTensorData, SparseTensor},
 };
@@ -39,7 +39,7 @@ fn test_dense_tensor_iterators() {
     let linear_results: Vec<(FlatIndex, &i32)> = linear_iter.collect();
 
     assert_eq!(linear_results.len(), 6);
-    for (i, (_, &val)) in linear_results.iter().enumerate() {
+    for (i, &(_, &val)) in linear_results.iter().enumerate() {
         assert_eq!(val, i as i32);
     }
 
@@ -83,7 +83,7 @@ fn test_sparse_tensor_iterators() {
     assert_eq!(expanded_results.len(), 3);
 
     // Verify each index has the expected value
-    for (indices, &val) in &expanded_results {
+    for &(ref indices, &val) in &expanded_results {
         match indices.indices.as_slice() {
             [0, 0] => assert_eq!(val, 1),
             [1, 1] => assert_eq!(val, 2),

@@ -6,7 +6,7 @@ resolver = "2"                                                               # A
 authors = ["Lucien Huber <cargo+mail@lucien.ch>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/alphal00p/spenso"
-edition = "2021"
+edition = "2024"
 
 [profile.bench]
 lto = "fat"

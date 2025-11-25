@@ -908,7 +908,7 @@ dependencies = [
  "itertools 0.14.0",
  "linnet",
  "pyo3",
- "pyo3-stub-gen",
+ "pyo3-stub-gen 0.17.2",
  "spenso",
  "spenso-macros",
  "symbolica",
@@ -1367,7 +1367,7 @@ dependencies = [
  "dyn-clone",
  "numpy",
  "pyo3",
- "pyo3-stub-gen",
+ "pyo3-stub-gen 0.16.1",
  "rand 0.9.2",
  "rand_xoshiro 0.7.0",
  "rug",
@@ -1746,6 +1746,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyo3-stub-gen"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "398b833826a83ca72c1e26d1b2c7c71f9ca7c3bfc74eacc663901895c362ae33"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "indexmap",
+ "inventory",
+ "itertools 0.14.0",
+ "log",
+ "maplit",
+ "num-complex",
+ "pyo3",
+ "pyo3-stub-gen-derive 0.17.2",
+ "serde",
+ "toml 0.9.8",
+]
+
+[[package]]
 name = "pyo3-stub-gen-derive"
 version = "0.13.1"
 source = "git+https://github.com/benruijl/pyo3-stub-gen?branch=patched#f421197e60e3617992ebfe0615db1fe846c1da81"
@@ -1761,6 +1781,20 @@ name = "pyo3-stub-gen-derive"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdabf0cc57d1790fed79eca57467d459374dc3dd7b1db1a4be138a981f96d192"
+dependencies = [
+ "heck 0.5.0",
+ "indexmap",
+ "proc-macro2",
+ "quote",
+ "rustpython-parser",
+ "syn 2.0.110",
+]
+
+[[package]]
+name = "pyo3-stub-gen-derive"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2426ba759d848787239d80f9fdb1f223786976f87fb6c3da8188ca7c17744b28"
 dependencies = [
  "heck 0.5.0",
  "indexmap",
@@ -2003,6 +2037,7 @@ checksum = "4cdaf8ee5c1473b993b398c174641d3aa9da847af36e8d5eb8291930b72f31a5"
 dependencies = [
  "is-macro",
  "malachite-bigint",
+ "num-bigint",
  "rustpython-parser-core",
  "static_assertions",
 ]
@@ -2019,6 +2054,7 @@ dependencies = [
  "lalrpop-util",
  "log",
  "malachite-bigint",
+ "num-bigint",
  "num-traits",
  "phf",
  "phf_codegen",
@@ -2236,12 +2272,13 @@ dependencies = [
  "gat-lending-iterator",
  "indexmap",
  "insta",
+ "itertools 0.14.0",
  "linnet",
  "log",
  "num",
  "once_cell",
  "pyo3",
- "pyo3-stub-gen",
+ "pyo3-stub-gen 0.16.1",
  "rand 0.9.2",
  "rand_xoshiro 0.6.0",
  "rayon",
@@ -2291,7 +2328,7 @@ dependencies = [
  "idenso",
  "itertools 0.14.0",
  "pyo3",
- "pyo3-stub-gen",
+ "pyo3-stub-gen 0.17.2",
  "pyo3-stub-gen-derive 0.13.1",
  "spenso",
  "spenso-hep-lib",
@@ -2328,7 +2365,7 @@ dependencies = [
  "numpy",
  "once_cell",
  "pyo3",
- "pyo3-stub-gen",
+ "pyo3-stub-gen 0.16.1",
  "pyo3-stub-gen-derive 0.16.1",
  "rand 0.9.2",
  "rand_xoshiro 0.7.0",

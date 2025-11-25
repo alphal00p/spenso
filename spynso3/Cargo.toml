@@ -24,7 +24,7 @@ pyo3 = { version = "0.27", features = ["anyhow"] }
 
 pyo3-stub-gen-derive = { git = "https://github.com/benruijl/pyo3-stub-gen", branch = "patched", package = "pyo3-stub-gen-derive", default-features = false }
 
-pyo3-stub-gen = { version = "0.16", default-features = false, optional = true }
+pyo3-stub-gen = { version = "0.17", default-features = false, optional = true }
 itertools = "0.14.0"
 thiserror = "2.0.16"
 

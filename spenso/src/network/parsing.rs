@@ -5,8 +5,8 @@ use super::*;
 
 use library::Library;
 
-use crate::network::library::function_lib::Wrap;
 use crate::network::library::DummyLibrary;
+use crate::network::library::function_lib::Wrap;
 use crate::shadowing::symbolica_utils::AtomCoreExt;
 use crate::structure::abstract_index::AIND_SYMBOLS;
 // use crate::shadowing::Concretize;
@@ -21,11 +21,11 @@ use std::fmt::Display;
 use store::TensorScalarStore;
 // use log::trace;
 
-use symbolica::atom::{representation::FunView, AddView, Atom, AtomView, MulView, PowView};
+use symbolica::atom::{AddView, Atom, AtomView, MulView, PowView, representation::FunView};
 
 use crate::structure::{HasStructure, TensorStructure};
 
-use crate::{shadowing::Concretize, structure::representation::LibraryRep, structure::HasName};
+use crate::{shadowing::Concretize, structure::HasName, structure::representation::LibraryRep};
 
 pub struct SpensoTags {
     pub tag: String,
@@ -161,14 +161,14 @@ impl Default for ParseSettings {
 }
 
 impl<
-        'a,
-        Sc,
-        T: HasStructure + TensorStructure,
-        K: Clone + Display + Debug,
-        // FK: Clone + Display + Debug,
-        Str: TensorScalarStore<Tensor = T, Scalar = Sc> + Clone,
-        Aind: AbsInd,
-    > Network<Str, K, Symbol, Aind>
+    'a,
+    Sc,
+    T: HasStructure + TensorStructure,
+    K: Clone + Display + Debug,
+    // FK: Clone + Display + Debug,
+    Str: TensorScalarStore<Tensor = T, Scalar = Sc> + Clone,
+    Aind: AbsInd,
+> Network<Str, K, Symbol, Aind>
 where
     Sc: for<'r> TryFrom<AtomView<'r>> + Clone,
     TensorNetworkError<K, Symbol>: for<'r> From<<Sc as TryFrom<AtomView<'r>>>::Error>,
@@ -556,7 +556,7 @@ pub mod test {
 
     // Generate TestSymbols with all alphabet characters and some multi-character symbols
     symbol_set!(TestSymbols, TS;
-        a b c d e f g h i j k l m n o p q r s t u v w x y z
+        a b c d e f h i j k l m n o p q r s t u v w x y z
         A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
         vbar
         ϵbar
@@ -568,19 +568,19 @@ pub mod test {
     );
 
     pub fn test_initialize() {
-        let _ = TS.p;
         initialize();
+        let _ = TS.p;
     }
 
     use core::panic;
 
     use crate::{
-        network::library::panicing::ErroringLibrary,
-        network::parsing::SymbolicParse,
+        network::{library::panicing::ErroringLibrary, parsing::SymbolicParse},
+        shadowing::symbolica_utils::TypstSettings,
         structure::{
-            representation::{initialize, Euclidean, Lorentz, Minkowski, RepName},
-            slot::IsAbstractSlot,
             ToSymbolic,
+            representation::{Euclidean, Lorentz, Minkowski, RepName, initialize},
+            slot::IsAbstractSlot,
         },
         tensors::symbolic::SymbolicTensor,
     };
@@ -644,7 +644,9 @@ pub mod test {
     }
     #[test]
     fn parse_div() {
-        let expr = parse!("c*a/bracket(d(mink(4,1))* b(mink(4,1)))(bracket(d(mink(4,1))* b(mink(4,1)))^-3)(bracket(d(mink(4,1))* b(mink(4,1)))^-2)");
+        let expr = parse!(
+            "c*a/bracket(d(mink(4,1))* b(mink(4,1)))(bracket(d(mink(4,1))* b(mink(4,1)))^-3)(bracket(d(mink(4,1))* b(mink(4,1)))^-2)"
+        );
         let net = expr
             .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
@@ -709,27 +711,27 @@ pub mod test {
 
           0	 [label = "∏"];
           1	 [label = "S:((Q(5,cind(0)))^2+(Q(5,cind(1)))^2*-1+(Q(5,cind(2)))^2*-1+(Q(5,cind(3)))^2*-1)^(-1)*((Q(6,cind(0)))^2+(Q(6,cind(1)))^2*-1+(Q(6,cind(2)))^2*-1+(Q(6,cind(3)))^2*-1)^(-1)*(g(cof(3,hedge_1),dind(cof(3,hedge_2))))^2*1𝑖/27*u(1,bis(4,hedge_1))*vbar(2,bis(4,hedge_2))"];
-          2	 [label = "T:gamma(bis(4,hedge_2),bis(4,hedge_8),mink(4,hedge_0))"];
-          3	 [label = "T:gamma(bis(4,hedge_5),bis(4,hedge_1),mink(4,hedge_3))"];
-          4	 [label = "T:gamma(bis(4,hedge_6),bis(4,hedge_5),mink(4,edge_5_1))"];
-          5	 [label = "T:gamma(bis(4,hedge_7),bis(4,hedge_6),mink(4,hedge_4))"];
-          6	 [label = "T:gamma(bis(4,hedge_8),bis(4,hedge_7),mink(4,edge_6_1))"];
-          7	 [label = "T:Q(5,mink(4,edge_5_1))"];
-          8	 [label = "T:Q(6,mink(4,edge_6_1))"];
-          9	 [label = "T:ϵbar(0,mink(4,hedge_0))"];
-          10	 [label = "T:ϵbar(3,mink(4,hedge_3))"];
-          11	 [label = "T:ϵbar(4,mink(4,hedge_4))"];
+          2	 [label = "T:Q(5,mink(4,edge_5_1))"];
+          3	 [label = "T:Q(6,mink(4,edge_6_1))"];
+          4	 [label = "T:ϵbar(0,mink(4,hedge_0))"];
+          5	 [label = "T:ϵbar(3,mink(4,hedge_3))"];
+          6	 [label = "T:ϵbar(4,mink(4,hedge_4))"];
+          7	 [label = "T:gamma(bis(4,hedge_2),bis(4,hedge_8),mink(4,hedge_0))"];
+          8	 [label = "T:gamma(bis(4,hedge_5),bis(4,hedge_1),mink(4,hedge_3))"];
+          9	 [label = "T:gamma(bis(4,hedge_6),bis(4,hedge_5),mink(4,edge_5_1))"];
+          10	 [label = "T:gamma(bis(4,hedge_7),bis(4,hedge_6),mink(4,hedge_4))"];
+          11	 [label = "T:gamma(bis(4,hedge_8),bis(4,hedge_7),mink(4,edge_6_1))"];
           ext0	 [style=invis];
           0:0:s	-> ext0	 [id=0 color="red"];
-          5:20:s	-> 11:32:s	 [id=1 dir=none  color="red:blue;0.5" label="mink4|hedge_4"];
-          3:16:s	-> 10:30:s	 [id=2 dir=none  color="red:blue;0.5" label="mink4|hedge_3"];
-          2:14:s	-> 9:28:s	 [id=3 dir=none  color="red:blue;0.5" label="mink4|hedge_0"];
-          6:22:s	-> 8:26:s	 [id=4 dir=none  color="red:blue;0.5" label="mink4|edge_6_1"];
-          4:18:s	-> 7:24:s	 [id=5 dir=none  color="red:blue;0.5" label="mink4|edge_5_1"];
-          7:23:s	-> 0:5:s	 [id=6  color="red:blue;0.5"];
-          10:29:s	-> 0:2:s	 [id=7  color="red:blue;0.5"];
+          3:16:s	-> 11:32:s	 [id=1 dir=none  color="red:blue;0.5" label="mink4|edge_6_1"];
+          6:22:s	-> 10:30:s	 [id=2 dir=none  color="red:blue;0.5" label="mink4|hedge_4"];
+          2:14:s	-> 9:28:s	 [id=3 dir=none  color="red:blue;0.5" label="mink4|edge_5_1"];
+          5:20:s	-> 8:26:s	 [id=4 dir=none  color="red:blue;0.5" label="mink4|hedge_3"];
+          4:18:s	-> 7:24:s	 [id=5 dir=none  color="red:blue;0.5" label="mink4|hedge_0"];
+          9:27:s	-> 0:3:s	 [id=6  color="red:blue;0.5"];
+          7:23:s	-> 0:5:s	 [id=7  color="red:blue;0.5"];
           6:21:s	-> 0:6:s	 [id=8  color="red:blue;0.5"];
-          9:27:s	-> 0:3:s	 [id=9  color="red:blue;0.5"];
+          10:29:s	-> 0:2:s	 [id=9  color="red:blue;0.5"];
           8:25:s	-> 0:4:s	 [id=10  color="red:blue;0.5"];
           1:12:s	-> 0:11:s	 [id=11  color="red:blue;0.5"];
           2:13:s	-> 0:10:s	 [id=12  color="red:blue;0.5"];
@@ -740,6 +742,9 @@ pub mod test {
         }
         "#);
         assert_eq!(net.simple_execute(), expr);
+        let mut out = String::new();
+        expr.typst_fmt(&mut out, &TypstSettings::lowering());
+        println!("{}", out)
     }
 
     #[test]
@@ -971,7 +976,9 @@ pub mod test {
     #[test]
     fn parse_big_tensors() {
         initialize();
-        let expr = parse!("-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ebar(2,mink(4,2))*ebar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
+        let expr = parse!(
+            "-G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*id(mink(4,2),mink(4,5))*id(mink(4,3),mink(4,6))*id(euc(4,0),euc(4,5))*id(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ebar(2,mink(4,2))*ebar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))"
+        );
         let net = expr
             .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();

@@ -19,6 +19,8 @@ use symbolica::{
 use symbolica::coefficient::CoefficientView;
 
 #[cfg(feature = "shadowing")]
+use crate::network::parsing::SPENSO_TAG;
+#[cfg(feature = "shadowing")]
 use crate::shadowing::symbolica_utils::SerializableSymbol;
 #[cfg(feature = "shadowing")]
 use crate::structure::slot::ParseableAind;
@@ -114,6 +116,18 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
                         **out = f.iter().next().unwrap().to_owned();
                     }
                 }
+            },
+            tag = SPENSO_TAG.upper,
+            print = |a, opt| {
+                if let Some(("typst", 1)) = opt.custom_print_mode {
+                    let body = r#"(..arg)={
+let args = arg.pos().map(to-eq).join("")
+(content: args,upper:true)
+}"#;
+                    Some(body.into())
+                } else {
+                    None
+                }
             }
         ),
         dind: symbol!(
@@ -128,6 +142,18 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
                             }
                         }
                     }
+                }
+            },
+            tag = SPENSO_TAG.lower,
+            print = |a, opt| {
+                if let Some(("typst", 1)) = opt.custom_print_mode {
+                    let body = r#"(..arg)={
+let args = arg.pos().map(to-eq).join("")
+(content: args,lower:true)
+}"#;
+                    Some(body.into())
+                } else {
+                    None
                 }
             }
         ),

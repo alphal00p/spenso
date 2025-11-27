@@ -155,7 +155,29 @@ pub static GS: LazyLock<GammaSymbolsInternal> = LazyLock::new(|| GammaSymbolsInt
 });
 
 pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
-    gamma: symbol!("spenso::gamma"),
+    gamma: symbol!(
+        "spenso::gamma",
+        print = |a, opts| if let Some(("typst", 1)) = opts.custom_print_mode
+            && let AtomView::Fun(f) = a
+        {
+            let body = r#"(a,b) = {
+if a.at("lower",default:false) and b.at("lower",default:false){
+$eta_(#to-eq(a) #to-eq(b))$
+} else if a.at("lower",default:false) and b.at("upper",default:false){
+$delta_(#to-eq(a))^#to-eq(b)$
+}else if b.at("lower",default:false) and a.at("upper",default:false){
+$delta_(#to-eq(b))^#to-eq(a)$
+}else if a.at("upper",default:false) and b.at("upper",default:false){
+$eta^(#to-eq(a)^#to-eq(b))$
+} else{
+$g(#to-eq(a),#to-eq(b))$
+}
+}"#;
+            Some(body.into())
+        } else {
+            None
+        }
+    ),
     gammaadj: symbol!("spenso::gammaadj"),
     projp: symbol!("spenso::projp"),
     projm: symbol!("spenso::projm"),
@@ -898,6 +920,8 @@ macro_rules! id {
 #[cfg(test)]
 mod test {
 
+    use spenso::shadowing::symbolica_utils::AtomCoreExt;
+    use spenso::shadowing::symbolica_utils::TypstSettings;
     use spenso::structure::IndexlessNamedStructure;
     use spenso::structure::PermutedStructure;
 
@@ -970,6 +994,9 @@ mod test {
         );
 
         println!("Bef:{}", expr);
+        let mut out = String::new();
+        expr.typst_fmt(&mut out, &TypstSettings::lowering());
+        println!("{}", out);
         println!("Aft:{}", expr.simplify_gamma());
     }
 

@@ -4,7 +4,7 @@ use super::*;
 use ahash::AHashMap;
 use linnet::permutation::Permutation;
 use symbolica::{
-    atom::{Atom, Symbol},
+    atom::{Atom, AtomView, Symbol},
     symbol,
 };
 
@@ -13,11 +13,11 @@ use anyhow::anyhow;
 use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
+        HasName, IndexlessNamedStructure,
         named::{IdentityName, METRIC_NAME},
         permuted::{Perm, PermuteTensor},
-        representation::{initialize, LibraryRep, RepName},
+        representation::{LibraryRep, RepName, initialize},
         slot::AbsInd,
-        HasName, IndexlessNamedStructure,
     },
     tensors::parametric::{ConcreteOrParam, MixedTensor, ParamOrConcrete, ParamTensor},
 };
@@ -215,7 +215,26 @@ pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTenso
 
 impl IdentityName for Symbol {
     fn id() -> Self {
-        symbol!(METRIC_NAME;Symmetric,Real)
+        symbol!(METRIC_NAME;Symmetric,Real;print = |a, opt| {
+            if let Some(("typst", 1)) = opt.custom_print_mode && let AtomView::Fun(f)=a {
+                let body = r#"(a,b) = {
+  if a.at("lower",default:false) and b.at("lower",default:false){
+    $eta_(#to-eq(a) #to-eq(b))$
+  } else if a.at("lower",default:false) and b.at("upper",default:false){
+    $delta_(#to-eq(a))^#to-eq(b)$
+  }else if b.at("lower",default:false) and a.at("upper",default:false){
+    $delta_(#to-eq(b))^#to-eq(a)$
+  }else if a.at("upper",default:false) and b.at("upper",default:false){
+    $eta^(#to-eq(a)^#to-eq(b))$
+  } else{
+    $g(#to-eq(a),#to-eq(b))$
+  }
+}"#;
+                Some(body.into())
+            } else {
+                None
+            }
+        })
     }
 }
 impl<T: HasStructure<Structure = ExplicitKey<Aind>>, Aind: AbsInd> Default
@@ -257,10 +276,10 @@ impl<T: TensorLibraryData> TensorLibraryData for ConcreteOrParam<T> {
 }
 
 impl<
-        Aind: AbsInd,
-        T: HasStructure<Structure = ExplicitKey<Aind>> + Clone,
-        S: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs>,
-    > Library<S> for TensorLibrary<T, Aind>
+    Aind: AbsInd,
+    T: HasStructure<Structure = ExplicitKey<Aind>> + Clone,
+    S: TensorStructure + HasName<Name: IntoSymbol, Args: IntoArgs>,
+> Library<S> for TensorLibrary<T, Aind>
 {
     type Key = ExplicitKey<Aind>;
     type Value = PermutedStructure<T>;
@@ -305,13 +324,13 @@ impl<
 }
 
 impl<
-        Aind: AbsInd,
-        T: HasStructure<Structure = ExplicitKey<Aind>>
-            + SetTensorData<SetData = <T as LibraryTensor>::Data>
-            + Clone
-            + LibraryTensor
-            + PermuteTensor<Permuted = T>,
-    > TensorLibrary<T, Aind>
+    Aind: AbsInd,
+    T: HasStructure<Structure = ExplicitKey<Aind>>
+        + SetTensorData<SetData = <T as LibraryTensor>::Data>
+        + Clone
+        + LibraryTensor
+        + PermuteTensor<Permuted = T>,
+> TensorLibrary<T, Aind>
 {
     pub fn get_key_from_name(
         &self,
@@ -488,16 +507,16 @@ mod test {
 
     use crate::{
         network::{
+            ExecutionResult, Network, Sequential, SmallestDegree, TensorOrScalarOrKey,
             library::panicing::ErroringLibrary,
             parsing::{ParseSettings, ShadowedStructure},
             store::NetworkStore,
-            ExecutionResult, Network, Sequential, SmallestDegree, TensorOrScalarOrKey,
         },
         shadowing::Concretize,
         structure::{
+            ToSymbolic,
             abstract_index::AbstractIndex,
             representation::{Euclidean, Minkowski},
-            ToSymbolic,
         },
         tensors::data::SparseOrDense,
     };
@@ -797,7 +816,9 @@ mod test {
 
         if let Ok(ExecutionResult::Val(a)) = net.result_scalar() {
             if let ConcreteOrParam::Param(a) = a.as_ref() {
-                let res= parse!("p(1,cind(0))*q(2,cind(0))-p(1,cind(1))*q(2,cind(1))-p(1,cind(2))*q(2,cind(2))-p(1,cind(3))*q(2,cind(3))");
+                let res = parse!(
+                    "p(1,cind(0))*q(2,cind(0))-p(1,cind(1))*q(2,cind(1))-p(1,cind(2))*q(2,cind(2))-p(1,cind(3))*q(2,cind(3))"
+                );
                 assert_eq!(a, &res);
             } else {
                 panic!("Not Key")
@@ -814,7 +835,9 @@ mod test {
             TensorLibrary::<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>::new();
         lib.update_ids();
 
-        let expr = parse!(" -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*g(mink(4,2),mink(4,5))*g(mink(4,3),mink(4,6))*g(euc(4,0),euc(4,5))*g(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))");
+        let expr = parse!(
+            " -G^2*(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7))+g(mink(4,5),mink(4,7))*Q(2,mink(4,6))+g(mink(4,5),mink(4,7))*Q(4,mink(4,6))-g(mink(4,6),mink(4,7))*Q(3,mink(4,5))-g(mink(4,6),mink(4,7))*Q(4,mink(4,5)))*g(mink(4,2),mink(4,5))*g(mink(4,3),mink(4,6))*g(euc(4,0),euc(4,5))*g(euc(4,1),euc(4,4))*g(mink(4,4),mink(4,7))*vbar(1,euc(4,1))*u(0,euc(4,0))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))*gamma(euc(4,5),euc(4,4),mink(4,4))"
+        );
         let mut net = Network::<
             NetworkStore<
                 MixedTensor<f64, ShadowedStructure<AbstractIndex>>,
@@ -861,9 +884,9 @@ mod test {
             TensorLibrary::<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>::new();
         lib.update_ids();
 
-        let expr =
-            parse!("(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7)))*g(mink(4,2),mink(4,5))*g(mink(4,3),mink(4,6))*g(mink(4,4),mink(4,7))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))")
-                ;
+        let expr = parse!(
+            "(-g(mink(4,5),mink(4,6))*Q(2,mink(4,7))+g(mink(4,5),mink(4,6))*Q(3,mink(4,7)))*g(mink(4,2),mink(4,5))*g(mink(4,3),mink(4,6))*g(mink(4,4),mink(4,7))*ϵbar(2,mink(4,2))*ϵbar(3,mink(4,3))"
+        );
         let mut net = Network::<
             NetworkStore<
                 MixedTensor<f64, ShadowedStructure<AbstractIndex>>,

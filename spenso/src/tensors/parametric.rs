@@ -6,11 +6,11 @@ use std::{
     path::Path,
 };
 
+use crate::structure::{IndexLess, slot::IsAbstractSlot};
+use crate::structure::{StructureError, slot::AbsInd};
 use crate::structure::{
     permuted::PermuteTensor, representation::Representation, slot::ParseableAind,
 };
-use crate::structure::{slot::AbsInd, StructureError};
-use crate::structure::{slot::IsAbstractSlot, IndexLess};
 use crate::{
     algebra::algebraic_traits::RefOne,
     structure::{dimension::Dimension, representation::RepName},
@@ -22,8 +22,8 @@ use crate::{
 use ahash::HashMap;
 use delegate::delegate;
 
-use anyhow::anyhow;
 use anyhow::Result;
+use anyhow::anyhow;
 
 use atomcore::{ReplaceBuilderGeneric, TensorAtomMaps};
 // use anyhow::Ok;
@@ -43,10 +43,10 @@ use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol, SerializableAtom},
     shadowing::{ShadowMapping, Shadowable},
     structure::{
-        concrete_index::{ConcreteIndex, DualConciousExpandedIndex, ExpandedIndex, FlatIndex},
-        slot::Slot,
         CastStructure, HasName, HasStructure, NamedStructure, OrderedStructure, ScalarStructure,
         ScalarTensor, StructureContract, TensorStructure, TracksCount,
+        concrete_index::{ConcreteIndex, DualConciousExpandedIndex, ExpandedIndex, FlatIndex},
+        slot::Slot,
     },
     tensors::complex::RealOrComplexTensor,
     tensors::data::{
@@ -60,9 +60,9 @@ use symbolica::{
     atom::{Atom, AtomCore, AtomView, FunctionBuilder, KeyLookup, Symbol},
     coefficient::Coefficient,
     domains::{
+        InternalOrdering,
         float::{FloatLike, Real, SingleFloat},
         rational::Rational,
-        InternalOrdering,
     },
     evaluate::{
         CompileOptions, CompiledCode, CompiledComplexEvaluator, CompiledNumber, EvalTree,
@@ -903,11 +903,11 @@ impl<C: Display + HasStructure<Structure = S> + Clone, S: TensorStructure + Clon
 }
 
 impl<
-        U: HasStructure<Structure = O> + Clone,
-        C: CastStructure<U> + HasStructure<Structure = S> + Clone,
-        S: TensorStructure + Clone,
-        O: From<S> + TensorStructure + Clone,
-    > CastStructure<ParamOrConcrete<U, O>> for ParamOrConcrete<C, S>
+    U: HasStructure<Structure = O> + Clone,
+    C: CastStructure<U> + HasStructure<Structure = S> + Clone,
+    S: TensorStructure + Clone,
+    O: From<S> + TensorStructure + Clone,
+> CastStructure<ParamOrConcrete<U, O>> for ParamOrConcrete<C, S>
 {
     fn cast_structure(self) -> ParamOrConcrete<U, O> {
         match self {
@@ -918,19 +918,19 @@ impl<
 }
 
 impl<
-        C: HasStructure<Structure = S> + Clone + Shadowable,
-        S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
-    > Shadowable for ParamOrConcrete<C, S>
+    C: HasStructure<Structure = S> + Clone + Shadowable,
+    S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
+> Shadowable for ParamOrConcrete<C, S>
 where
     <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
 }
 
 impl<
-        U,
-        C: HasStructure<Structure = S> + Clone + ShadowMapping<U>,
-        S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
-    > ShadowMapping<U> for ParamOrConcrete<C, S>
+    U,
+    C: HasStructure<Structure = S> + Clone + ShadowMapping<U>,
+    S: TensorStructure + Clone + HasName<Args: IntoArgs, Name: IntoSymbol>,
+> ShadowMapping<U> for ParamOrConcrete<C, S>
 where
     <<Self::Structure as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
@@ -1212,11 +1212,11 @@ where
 }
 
 impl<
-        Aind: AbsInd,
-        C: PermuteTensor<Id = C, Permuted = C>,
-        S: Clone + Into<IndexLess<R, Aind>>,
-        R: RepName<Dual = R>,
-    > PermuteTensor for ParamOrConcrete<C, S>
+    Aind: AbsInd,
+    C: PermuteTensor<Id = C, Permuted = C>,
+    S: Clone + Into<IndexLess<R, Aind>>,
+    R: RepName<Dual = R>,
+> PermuteTensor for ParamOrConcrete<C, S>
 where
     S: TensorStructure<Slot = Slot<R, Aind>> + PermuteTensor<IdSlot = Slot<R, Aind>, Id = S>,
     C: HasStructure<Structure = S> + TensorStructure,
@@ -1788,6 +1788,17 @@ where
             tensor: DataTensor::new_scalar(scalar),
             param_type: ParamOrComposite::Composite,
         }
+    }
+}
+
+impl<S> crate::network::Ref for ParamTensor<S> {
+    type Ref<'a>
+        = &'a ParamTensor<S>
+    where
+        Self: 'a;
+
+    fn refer(&self) -> Self::Ref<'_> {
+        self
     }
 }
 
@@ -2732,8 +2743,8 @@ pub mod test {
 
     use crate::{
         structure::{
-            representation::{Minkowski, RepName},
             OrderedStructure, PermutedStructure, TensorStructure,
+            representation::{Minkowski, RepName},
         },
         tensors::data::{DataTensor, SparseTensor},
     };

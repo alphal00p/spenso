@@ -23,14 +23,14 @@ use bincode::{Decode, Encode};
 
 #[cfg(feature = "shadowing")]
 use crate::{
-    network::library::symbolic::ETS, structure::abstract_index::AIND_SYMBOLS,
-    structure::slot::SlotError,
+    network::{library::symbolic::ETS, parsing::SPENSO_TAG},
+    structure::{abstract_index::AIND_SYMBOLS, slot::SlotError},
 };
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomOrView, FunctionBuilder, Symbol},
-    function, symbol,
+    function, symbol,get_symbol
 };
 
 use thiserror::Error;
@@ -718,6 +718,30 @@ impl ExtendibleReps {
     pub fn reps(&self) -> impl Iterator<Item = &LibraryRep> {
         self.name_map.values()
     }
+
+    #[cfg(feature = "shadowing")]
+    pub fn symbol(name: &str) -> Symbol {
+
+        if let Some(s)= get_symbol!(name){
+            s
+        }else{
+
+        let body = format!("(dim, ind ) = (content: $ \"{}\"^#dim _#ind $, upper:true)",name);
+
+        symbol!(
+            name,
+            tag = SPENSO_TAG.upper,
+            print = move |a, opt| {
+                if let Some(("typst", 1)) = opt.custom_print_mode {
+                    Some(body.clone())
+                } else {
+                    None
+                }
+            }
+        )
+        }
+    }
+
     pub fn new_dual_impl(&mut self, name: &str) -> Result<LibraryRep, RepLibraryError> {
         if let Some(rep) = self.name_map.get(name) {
             if let LibraryRep::SelfDual(_) = rep {
@@ -730,7 +754,7 @@ impl ExtendibleReps {
 
         self.name_map.insert(name.into(), rep);
         #[cfg(feature = "shadowing")]
-        let symbol = symbol!(name);
+        let symbol = Self::symbol(name);
         #[cfg(feature = "shadowing")]
         self.symbol_map.insert(symbol, rep);
 
@@ -761,7 +785,7 @@ impl ExtendibleReps {
         let rep = LibraryRep::SelfDual(SELF_DUAL.len() as u16);
         self.name_map.insert(name.into(), rep);
         #[cfg(feature = "shadowing")]
-        let symbol = symbol!(name);
+        let symbol = Self::symbol(name);
         #[cfg(feature = "shadowing")]
         self.symbol_map.insert(symbol, rep);
 
@@ -802,7 +826,7 @@ impl ExtendibleReps {
         let rep = LibraryRep::InlineMetric(INLINE_METRIC.len() as u16);
         self.name_map.insert(name.into(), rep);
         #[cfg(feature = "shadowing")]
-        let symbol = symbol!(name);
+        let symbol = Self::symbol(name);
         #[cfg(feature = "shadowing")]
         self.symbol_map.insert(symbol, rep);
 
@@ -893,6 +917,7 @@ impl Display for LibraryRep {
 
 pub fn initialize() {
     let _ = LibraryRep::from(Minkowski {}).to_string();
+    let _ = ETS.metric;
 }
 
 impl RepName for LibraryRep {

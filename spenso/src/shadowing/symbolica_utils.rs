@@ -3,6 +3,8 @@ use crate::{
     tensors::parametric::atomcore::PatternReplacement,
 };
 use derive_more::Display;
+use itertools::Itertools;
+use rayon::Yield;
 use serde::{Deserialize, Serialize};
 use symbolica::{
     atom::{
@@ -11,6 +13,8 @@ use symbolica::{
     },
     coefficient::CoefficientView,
     domains::{float::Complex, rational::Rational},
+    evaluate::{FunctionMap, Instruction, OptimizationSettings, Slot},
+    function,
     id::Context,
     printer::{CanonicalOrderingSettings, PrintOptions, PrintState},
     state::State,
@@ -23,6 +27,7 @@ use symbolica::domains::SelfRing;
 extern crate derive_more;
 
 use std::{
+    collections::{BTreeMap, BTreeSet},
     fmt::{self, Debug, Display, Error},
     io::Cursor,
 };
@@ -34,8 +39,79 @@ pub trait AtomCoreExt {
 
     fn typst(&self) -> String;
 
+    fn typst_fmt<W: std::fmt::Write>(
+        &self,
+        f: &mut W,
+        settings: &TypstSettings,
+    ) -> Result<(), Error>;
+
     fn is_upper(&self) -> bool;
     fn is_lower(&self) -> bool;
+}
+pub struct TypstSettings {
+    pub preamble: String,
+    pub default_dis: String,
+    pub default_sym: String,
+}
+
+impl TypstSettings {
+    pub fn addln_preamble(&mut self, line: &str) {
+        self.preamble.push('\n');
+        self.preamble.push_str(line);
+    }
+
+    pub fn lowering() -> Self {
+        TypstSettings {
+            default_dis: r#"
+let args = ()
+let uppers = ()
+let lowers = ()
+for a in arg.pos(){
+  if type(a)==content{
+    args.push(a)
+  } else if type(a)==dictionary{
+    if a.at("upper",default:false){
+      uppers.push(to-eq(a.content))
+      lowers.push(hide(to-eq(a.content)))
+    }else if a.at("lower",default:false){
+      lowers.push(to-eq(a.content))
+      uppers.push(hide(to-eq(a.content)))
+    } else{
+      args.push(to-eq(a.content))
+    }
+  } else{
+    args.push(to-eq(a))
+  }
+}
+let arg = args.join()
+if uppers.len()!=0{
+  let upper= uppers.join()
+  let lower= lowers.join()
+  if args.len()==0{
+    $attach(op(#name),t:#upper,b:#lower)$
+  }else{
+    $attach(op(#name),t:#upper,b:#lower)(#arg)$
+  }
+}else{
+  $op(#name)(#arg)$
+}
+"#
+            .into(),
+            ..Default::default()
+        }
+    }
+}
+impl Default for TypstSettings {
+    fn default() -> Self {
+        let default_dis = "$ op(#name)(#arg.pos().map(to_eq).join(\", \")) $";
+        let default_sym = "$ #name $";
+
+        TypstSettings {
+            preamble: "let to-eq(a)=if type(a)==dictionary{a.content}else {$#a$}".into(),
+            default_dis: default_dis.into(),
+            default_sym: default_sym.into(),
+        }
+    }
 }
 
 impl<A: AtomCore> AtomCoreExt for A {
@@ -47,13 +123,236 @@ impl<A: AtomCore> AtomCoreExt for A {
         })
     }
 
+    fn typst_fmt<W: std::fmt::Write>(
+        &self,
+        f: &mut W,
+        settings: &TypstSettings,
+    ) -> Result<(), Error> {
+        let mut params = BTreeMap::new();
+        let mut fn_map = FunctionMap::new();
+        let mut externals = BTreeSet::new();
+
+        self.visitor(&mut |a| {
+            if let AtomView::Var(a) = a {
+                params.insert(a.get_symbol(), a.as_view().to_owned());
+                false
+            } else if let AtomView::Fun(a) = a {
+                externals.insert(a.get_symbol());
+
+                let dashed_name = format!(
+                    "{}-{}",
+                    a.get_symbol().get_namespace(),
+                    a.get_symbol().get_stripped_name(),
+                );
+                fn_map.add_external_function(a.get_symbol(), dashed_name);
+                true
+            } else {
+                true
+            }
+        });
+
+        let (params, symbols): (Vec<Atom>, Vec<Symbol>) =
+            params.into_iter().map(|(s, a)| (a, s)).collect();
+        let eval_tree = self
+            .evaluator(
+                &fn_map,
+                &params,
+                OptimizationSettings {
+                    horner_iterations: 10,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        writeln!(f, "#{{");
+        writeln!(f, "{}", &settings.preamble);
+        fn typst_rat(r: &Rational) -> String {
+            if r.is_integer() {
+                r.numerator().to_string()
+            } else {
+                format!(" {}/{}", r.numerator(), r.denominator())
+            }
+        }
+
+        fn typst_slot(s: Slot, consts: &[Complex<Rational>]) -> String {
+            match s {
+                Slot::Const(c) => {
+                    let Complex { re, im } = &consts[c];
+
+                    match (re.is_zero(), im.is_zero()) {
+                        (true, true) => "0".into(),
+                        (true, false) => format!("i {}", typst_rat(im)),
+                        (false, true) => format!(" {}", typst_rat(re)),
+                        _ => format!("({} + i {})", typst_rat(re), typst_rat(im)),
+                    }
+                }
+                Slot::Out(c) => format!("out{c}"),
+                Slot::Param(c) => format!("param{c}"),
+                Slot::Temp(c) => format!("tmp{c}"),
+            }
+        }
+
+        let (instr, size, consts) = eval_tree.export_instructions();
+
+        writeln!(
+            f,
+            "let default_dis(name:\"\",namespace:\"\",..arg)={{{}}}",
+            &settings.default_dis
+        )?;
+
+        writeln!(
+            f,
+            "let default_sym(name:\"\",namespace:\"\")={{{}}}",
+            &settings.default_sym
+        )?;
+
+        for ((i, s), a) in symbols.iter().enumerate().zip(params) {
+            write!(f, "let param{i} = ")?;
+            if let Some(p) = s.get_print_function()
+                && let Some(a) = p(
+                    a.as_view(),
+                    &PrintOptions {
+                        custom_print_mode: Some(("typst", 1)),
+                        ..Default::default()
+                    },
+                )
+            {
+                writeln!(f, "{a}")?;
+            } else {
+                let name = s.get_stripped_name();
+                let namespace = s.get_namespace();
+                writeln!(f, "default_sym(namespace:\"{namespace}\",name:\"{name}\")",)?;
+            }
+        }
+
+        for s in &externals {
+            if s.is_builtin() {
+                continue;
+            }
+            let name = s.get_stripped_name();
+            let namespace = s.get_namespace();
+            let atom = function!(*s, symbol!("args"));
+            write!(f, "let {namespace}-{name}")?;
+            if let Some(p) = s.get_print_function()
+                && let Some(a) = p(
+                    atom.as_view(),
+                    &PrintOptions {
+                        custom_print_mode: Some(("typst", 1)),
+                        ..Default::default()
+                    },
+                )
+            {
+                writeln!(f, "{a}")?;
+            } else {
+                let name = s.get_stripped_name();
+                let namespace = s.get_namespace();
+                writeln!(
+                    f,
+                    "(..arg) = default_dis(namespace:\"{namespace}\",name:\"{name}\",..arg)"
+                )?;
+            }
+        }
+        for i in instr {
+            match i {
+                Instruction::Add(s, args) => {
+                    writeln!(
+                        f,
+                        "let {} = $({})$",
+                        typst_slot(s, &consts),
+                        args.into_iter().map(|a| typst_slot(a, &consts)).join(" + ")
+                    )?;
+                }
+                Instruction::Mul(s, args) => {
+                    writeln!(
+                        f,
+                        "let {} = $({})$",
+                        typst_slot(s, &consts),
+                        args.into_iter()
+                            .map(|a| typst_slot(a, &consts))
+                            .join(" dot ")
+                    );
+                }
+                Instruction::ExternalFun(o, name, args) => {
+                    writeln!(
+                        f,
+                        "let {} = {name}({})",
+                        typst_slot(o, &consts),
+                        args.into_iter().map(|a| typst_slot(a, &consts)).join(",")
+                    )?;
+                }
+                Instruction::Fun(o, builtin, s) => {
+                    let b = builtin.get_symbol();
+
+                    match b {
+                        Symbol::COS => {
+                            writeln!(
+                                f,
+                                "let {} = $ cos({})$",
+                                typst_slot(o, &consts),
+                                typst_slot(s, &consts)
+                            )?;
+                        }
+                        Symbol::SIN => {
+                            writeln!(
+                                f,
+                                "let {} = $ sin({})$",
+                                typst_slot(o, &consts),
+                                typst_slot(s, &consts)
+                            )?;
+                        }
+                        Symbol::SQRT => {
+                            writeln!(
+                                f,
+                                "let {} = $ sqrt({})$",
+                                typst_slot(o, &consts),
+                                typst_slot(s, &consts)
+                            )?;
+                        }
+                        _ => {
+                            let name = b.get_stripped_name().to_string();
+                            writeln!(
+                                f,
+                                "let {} = $op(\"{name}\")({})$",
+                                typst_slot(o, &consts),
+                                typst_slot(s, &consts)
+                            )?;
+                        }
+                    }
+                }
+                Instruction::Powf(o, b, e) => {
+                    writeln!(
+                        f,
+                        "let {} = ${}^({})$",
+                        typst_slot(o, &consts),
+                        typst_slot(b, &consts),
+                        typst_slot(e, &consts)
+                    )?;
+                }
+                Instruction::Pow(o, b, e) => {
+                    writeln!(
+                        f,
+                        "let {} = ${}^({})$",
+                        typst_slot(o, &consts),
+                        typst_slot(b, &consts),
+                        e,
+                    )?;
+                }
+                _ => {
+                    println!("{i:?}")
+                }
+            }
+        }
+        writeln!(f, "out0")?;
+        writeln!(f, "}}")
+    }
+
     fn typst(&self) -> String {
         let mut out = String::new();
         self.as_atom_view()
             .fmt_output(
                 &mut out,
                 &PrintOptions {
-                    custom_print_mode: Some(("typst", 1)),
+                    custom_print_mode: Some(("typst", 2)),
                     ..Default::default()
                 },
                 PrintState::new(),
@@ -119,6 +418,7 @@ impl FormatWithState for FunView<'_> {
         }
 
         let id = self.get_symbol();
+
         // if let Some(custom_print) = &id.fo {
         //     if let Some(s) = custom_print(self.as_view(), opts) {
         //         f.write_str(&s)?;
@@ -722,9 +1022,12 @@ impl IntoSymbol for std::string::String {
 
 #[cfg(test)]
 mod test {
-    use crate::{network::parsing::SPENSO_TAG, shadowing::symbolica_utils::AtomCoreExt};
+    use crate::{
+        network::parsing::SPENSO_TAG,
+        shadowing::symbolica_utils::{AtomCoreExt, TypstSettings},
+    };
     use itertools::Itertools;
-    use std::fmt::Write;
+    use std::{collections::BTreeSet, fmt::Write};
     use symbolica::{
         atom::{AtomCore, AtomView},
         domains::{
@@ -742,18 +1045,15 @@ mod test {
             "lower",
             tag = SPENSO_TAG.lower,
             print = |a, opt| {
-                let mut fmt = "".to_string();
-                if let AtomView::Fun(f) = a {
-                    let n_args = f.get_nargs();
-                    for (i, a) in f.iter().enumerate() {
-                        a.format(&mut fmt, opt, PrintState::new()).unwrap();
-                        if i < n_args - 1 {
-                            fmt.push_str(",");
-                        }
-                    }
+                if let Some(("typst", 1)) = opt.custom_print_mode {
+                    let body = r#"{
+let args = arg.pos().map(to-eq).join("")
+(content: args,lower:true)
+}"#;
+                    Some(body.into())
+                } else {
+                    None
                 }
-
-                Some(fmt)
             }
         );
 
@@ -761,150 +1061,25 @@ mod test {
             "upper",
             tags = [SPENSO_TAG.upper.clone(), tag!("Real")],
             print = |a, opt| {
-                let mut fmt = "".to_string();
-                if let AtomView::Fun(f) = a {
-                    let n_args = f.get_nargs();
-                    for (i, a) in f.iter().enumerate() {
-                        a.format(&mut fmt, opt, PrintState::new()).unwrap();
-                        if i < n_args - 1 {
-                            fmt.push_str(",");
-                        }
-                    }
+                if let Some(("typst", 1)) = opt.custom_print_mode {
+                    let body = r#"{
+let args = arg.pos().map(to-eq).join("")
+(content: args,upper:true)
+}"#;
+                    Some(body.into())
+                } else {
+                    None
                 }
-
-                Some(fmt)
             } // ; Real
         );
 
         let expr = parse!(
-            "a*f(lower(f(upper(x),lower(y,c))))^(sin(x)*cos(x))*g(x,lower(y),upper(x+1),lower(1))"
-        )
-        .replace(parse_lit!(_x ^ _y))
-        .with(parse_lit!(pow(_x, _y)));
-
-        let mut params = vec![];
-        let mut fn_map = FunctionMap::new();
-
-        expr.visitor(&mut |a| {
-            if let AtomView::Var(a) = a {
-                params.push(a.as_view().to_owned());
-                false
-            } else if let AtomView::Fun(a) = a {
-                let mut tags = vec![];
-                for i in a.iter() {
-                    if i.is_lower() || i.is_upper() {
-                        tags.push(i.to_owned())
-                    }
-                }
-                // fn_map.add_tagged_function(a.get_symbol(),tags, a.get_symbol().get_name().into(), vec![], body)
-                fn_map.add_external_function(a.get_symbol(), a.get_symbol().get_name().into());
-                true
-            } else {
-                true
-            }
-        });
-        let eval_tree = expr
-            .evaluator(
-                &fn_map,
-                &params,
-                OptimizationSettings {
-                    horner_iterations: 10,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
+            "a*f(lower(f(lower(upper(x),lower(a)),lower(y,c))))^(sin(x)*cos(x))*g(x,lower(y),upper(x+1),lower(1))/(x+1)/sin(g(y))*smth(3*x)^(-m)"
+        );
+        // .r ith(parse_lit!(pow(_x, _y)));
 
         let mut out = String::new();
-        writeln!(out, "#{{");
-        fn typst_rat(r: &Rational) -> String {
-            if r.is_integer() {
-                r.numerator().to_string()
-            } else {
-                format!(" {}/{}", r.numerator(), r.denominator())
-            }
-        }
-
-        fn typst_slot(
-            s: Slot,
-            params: &[symbolica::atom::Atom],
-            consts: &[Complex<Rational>],
-        ) -> String {
-            match s {
-                Slot::Const(c) => {
-                    let Complex { re, im } = &consts[c];
-
-                    match (re.is_zero(), im.is_zero()) {
-                        (true, true) => "0".into(),
-                        (true, false) => format!("i {}", typst_rat(im)),
-                        (false, true) => format!(" {}", typst_rat(re)),
-                        _ => format!("({} + i {})", typst_rat(re), typst_rat(im)),
-                    }
-                }
-                Slot::Out(c) => format!("out{c}"),
-                Slot::Param(c) => format!("\"{}\"", params[c].typst()),
-                Slot::Temp(c) => format!("tmp{c}"),
-            }
-        }
-
-        let (instr, size, consts) = eval_tree.export_instructions();
-
-        for i in instr {
-            match i {
-                Instruction::Add(s, args) => {
-                    writeln!(
-                        out,
-                        "let {} = ${}$",
-                        typst_slot(s, &params, &consts),
-                        args.into_iter()
-                            .map(|a| typst_slot(a, &params, &consts))
-                            .join(" + ")
-                    );
-                }
-                Instruction::Mul(s, args) => {
-                    writeln!(
-                        out,
-                        "let {} = ${}$",
-                        typst_slot(s, &params, &consts),
-                        args.into_iter()
-                            .map(|a| typst_slot(a, &params, &consts))
-                            .join(" ")
-                    );
-                }
-                Instruction::ExternalFun(o, name, args) => {
-                    writeln!(
-                        out,
-                        "let {} = $op(\"{name}\")({})$",
-                        typst_slot(o, &params, &consts),
-                        args.into_iter()
-                            .map(|a| typst_slot(a, &params, &consts))
-                            .join(" ")
-                    );
-                }
-                Instruction::Fun(o, builtin, s) => {
-                    let name = builtin.get_symbol().get_stripped_name().to_string();
-                    writeln!(
-                        out,
-                        "let {} = $op(\"{name}\")({})$",
-                        typst_slot(o, &params, &consts),
-                        typst_slot(s, &params, &consts)
-                    );
-                }
-                Instruction::Powf(o, b, e) => {
-                    writeln!(
-                        out,
-                        "let {} = ${}^{}$",
-                        typst_slot(o, &params, &consts),
-                        typst_slot(b, &params, &consts),
-                        typst_slot(e, &params, &consts)
-                    );
-                }
-                _ => {
-                    println!("{i:?}")
-                }
-            }
-        }
-        writeln!(out, "out0");
-        writeln!(out, "}}");
+        expr.typst_fmt(&mut out, &TypstSettings::lowering());
 
         println!("{}", out);
         println!("{}", expr.typst())

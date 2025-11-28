@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1](https://github.com/alphal00p/spenso/compare/spenso-macros-v0.3.0...spenso-macros-v0.3.1) - 2025-11-28
+
+### Other
+
+- add readmes
+- update linnet and make classattr to classmethods
+
 ## [0.2.1](https://github.com/alphal00p/spenso/compare/spenso-macros-v0.2.0...spenso-macros-v0.2.1) - 2025-08-18
 
 ### Other

@@ -345,13 +345,13 @@ where
         let (base, exp) = value.get_base_exp();
 
         if let Ok(n) = i8::try_from(exp) {
-            println!("base:{base}");
+            // println!("base:{base}");
             let base = Self::try_from_view(base, library, settings)?;
 
-            println!("base state {:?}", base.state);
+            // println!("base state {:?}", base.state);
             if settings.precontract_scalars {
                 if let NetworkState::PureScalar = base.state {
-                    println!("Pure");
+                    // println!("Pure");
                     return Ok(Self::from_scalar(value.as_view().try_into()?));
                 }
             }
@@ -364,7 +364,7 @@ where
                 // An even power of a self_dual tensor, or scalar is a scalar
                 if n % 2 == 0 || base.state.is_scalar() {
                     let out = base.pow(n);
-                    println!("{:?}", out.state);
+                    // println!("{:?}", out.state);
                     Ok(out)
                 } else {
                     Err(TensorNetworkError::NegativeExponentNonScalar(format!(
@@ -376,7 +376,7 @@ where
                 }
             } else {
                 let out = base.pow(n);
-                println!("{:?}", out.state);
+                // println!("{:?}", out.state);
                 Ok(out)
             }
         } else {

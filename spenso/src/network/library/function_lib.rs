@@ -104,7 +104,6 @@ impl<Aind: AbsInd> FunctionLibrary<SymbolicTensor<Aind>, Atom> for Wrap {
         key: &Self::Key,
         tensor: SymbolicTensor<Aind>,
     ) -> anyhow::Result<SymbolicTensor<Aind>, FunctionLibraryError<Self::Key>> {
-        println!("apply :{}", key);
         Ok(SymbolicTensor {
             structure: tensor.structure,
             expression: function!(*key, tensor.expression),

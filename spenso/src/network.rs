@@ -1464,7 +1464,6 @@ where
                 Ok(graph)
             }
             NetworkOp::Function(f) => {
-                println!("Executing function {} on graph {}", f, graph.dot());
                 let ops = graph
                     .graph
                     .iter_nodes()

@@ -30,7 +30,7 @@ use crate::{
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomOrView, FunctionBuilder, Symbol},
-    function, symbol,get_symbol
+    function, get_symbol, symbol,
 };
 
 use thiserror::Error;
@@ -721,24 +721,25 @@ impl ExtendibleReps {
 
     #[cfg(feature = "shadowing")]
     pub fn symbol(name: &str) -> Symbol {
-
-        if let Some(s)= get_symbol!(name){
+        if let Some(s) = get_symbol!(name) {
             s
-        }else{
+        } else {
+            let body = format!(
+                "(dim, ind ) = (content: $ \"{}\"^#dim _#ind $, upper:true)",
+                name
+            );
 
-        let body = format!("(dim, ind ) = (content: $ \"{}\"^#dim _#ind $, upper:true)",name);
-
-        symbol!(
-            name,
-            tag = SPENSO_TAG.upper,
-            print = move |a, opt| {
-                if let Some(("typst", 1)) = opt.custom_print_mode {
-                    Some(body.clone())
-                } else {
-                    None
+            symbol!(
+                name,
+                tag = SPENSO_TAG.upper,
+                print = move |a, opt| {
+                    if let Some(("typst", 1)) = opt.custom_print_mode {
+                        Some(body.clone())
+                    } else {
+                        None
+                    }
                 }
-            }
-        )
+            )
         }
     }
 
@@ -917,6 +918,7 @@ impl Display for LibraryRep {
 
 pub fn initialize() {
     let _ = LibraryRep::from(Minkowski {}).to_string();
+    #[cfg(feature = "shadowing")]
     let _ = ETS.metric;
 }
 

@@ -345,9 +345,13 @@ where
         let (base, exp) = value.get_base_exp();
 
         if let Ok(n) = i8::try_from(exp) {
+            println!("base:{base}");
             let base = Self::try_from_view(base, library, settings)?;
+
+            println!("base state {:?}", base.state);
             if settings.precontract_scalars {
                 if let NetworkState::PureScalar = base.state {
+                    println!("Pure");
                     return Ok(Self::from_scalar(value.as_view().try_into()?));
                 }
             }
@@ -359,7 +363,9 @@ where
             } else if n < 0 {
                 // An even power of a self_dual tensor, or scalar is a scalar
                 if n % 2 == 0 || base.state.is_scalar() {
-                    Ok(base.pow(n))
+                    let out = base.pow(n);
+                    println!("{:?}", out.state);
+                    Ok(out)
                 } else {
                     Err(TensorNetworkError::NegativeExponentNonScalar(format!(
                         "Atom:{},graph of base: {}, dangling indices: {:?}",
@@ -369,7 +375,9 @@ where
                     )))
                 }
             } else {
-                Ok(base.pow(n))
+                let out = base.pow(n);
+                println!("{:?}", out.state);
+                Ok(out)
             }
         } else {
             Ok(Self::from_scalar(value.as_view().try_into()?))
@@ -603,11 +611,14 @@ pub mod test {
 
     #[test]
     fn parse_pow() {
-        let expr = parse!("ee^3*d(mink(4,1))^-2");
+        let sqrt = symbol!("sqrt_scalar", tag = SPENSO_TAG.tag);
+        let expr = parse!("ee^3*sqrt_scalar((m+d(mink(4,1))^2)^(-5))");
 
         let net = expr
             .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
+
+        println!("{}", net.snapshot_dot());
         assert_eq!(net.simple_execute(), expr);
     }
 

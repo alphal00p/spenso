@@ -120,6 +120,20 @@ impl MulAssign for NetworkState {
     }
 }
 
+impl AddAssign for NetworkState {
+    fn add_assign(&mut self, rhs: Self) {
+        // println!("{self:?} *={rhs:?}");
+        *self = match (*self, rhs) {
+            (NetworkState::PureScalar, NetworkState::PureScalar) => NetworkState::PureScalar,
+            (NetworkState::PureScalar, NetworkState::Scalar) => NetworkState::Scalar,
+            (a, b) => {
+                assert_eq!(a, b, "Cannot add incompatible network states:{a:?} + {b:?}");
+                a
+            }
+        }
+    }
+}
+
 // pub type TensorNetwork<T, S, Str: TensorScalarStore<Tensor = T, Scalar = S>, K> = Network<Str, K>;
 
 // pub struct TensorNetwork<
@@ -457,17 +471,21 @@ impl<S: TensorScalarStore, FK: Debug, K: Debug, Aind: AbsInd> NAdd for Network<S
     fn n_add<I: IntoIterator<Item = Self>>(self, iter: I) -> Self::Output {
         let mut store = self.store;
 
+        let mut state = self.state;
+
         let items = iter.into_iter().map(|mut a| {
             a.graph.shift_scalars(store.n_scalars());
             a.graph.shift_tensors(store.n_tensors());
             store.extend(a.store);
+
+            state += a.state;
             a.graph
         });
 
         Network {
             graph: self.graph.n_add(items),
             store,
-            state: self.state,
+            state,
         }
     }
 }
@@ -729,13 +747,13 @@ impl<T: Display> Display for ExecutionResult<T> {
 }
 
 impl<
-        T: TensorStructure,
-        S,
-        K: Display + Debug,
-        FK: Display + Debug,
-        Str: TensorScalarStore<Tensor = T, Scalar = S>,
-        Aind: AbsInd,
-    > Network<Str, K, FK, Aind>
+    T: TensorStructure,
+    S,
+    K: Display + Debug,
+    FK: Display + Debug,
+    Str: TensorScalarStore<Tensor = T, Scalar = S>,
+    Aind: AbsInd,
+> Network<Str, K, FK, Aind>
 where
     T::Slot: IsAbstractSlot<Aind = Aind>,
 {
@@ -833,7 +851,6 @@ where
         FK: Display + Debug + Clone,
         LT: TensorStructure<Indexed = T> + Clone + LibraryTensor<WithIndices = T>,
         T: PermuteTensor<Permuted = T>,
-
         for<'b> &'b S: Into<T::Scalar>,
         <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
             IsAbstractSlot<Aind = Aind>,
@@ -1210,7 +1227,7 @@ where
         K: Display + Clone + Debug,
         FK: Display + Clone + Debug,
         L: Library<S, Key = K, Value = PermutedStructure<LT>> + Sync,
-        FL: FunctionLibrary<Store::Tensor, Key = FK>,
+        FL: FunctionLibrary<Store::Tensor, Store::Scalar, Key = FK>,
         LT: LibraryTensor<WithIndices = Store::Tensor>,
         Store: ExecuteOp<FL, L, K, FK, Aind>,
     {
@@ -1223,31 +1240,31 @@ where
 }
 
 impl<
-        LT: LibraryTensor + Clone,
-        T: HasStructure
-            + TensorStructure
-            + Neg<Output = T>
-            + Clone
-            + Ref
-            + Contract<LCM = T>
-            + for<'a> AddAssign<T::Ref<'a>>
-            + for<'a> AddAssign<LT::WithIndices>
-            + From<LT::WithIndices>,
-        L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
-        Sc: Neg<Output = Sc>
-            + RefOne
-            + Div<Output = Sc>
-            + for<'a> AddAssign<Sc::Ref<'a>>
-            + Clone
-            + for<'a> AddAssign<T::ScalarRef<'a>>
-            + From<T::Scalar>
-            + Ref
-            + for<'a> MulAssign<Sc::Ref<'a>>,
-        K: Display + Debug + Clone,
-        FK: Display + Debug,
-        FL: FunctionLibrary<T, Key = FK>,
-        Aind: AbsInd,
-    > ExecuteOp<FL, L, K, FK, Aind> for NetworkStore<T, Sc>
+    LT: LibraryTensor + Clone,
+    T: HasStructure
+        + TensorStructure
+        + Neg<Output = T>
+        + Clone
+        + Ref
+        + Contract<LCM = T>
+        + for<'a> AddAssign<T::Ref<'a>>
+        + for<'a> AddAssign<LT::WithIndices>
+        + From<LT::WithIndices>,
+    L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
+    Sc: Neg<Output = Sc>
+        + RefOne
+        + Div<Output = Sc>
+        + for<'a> AddAssign<Sc::Ref<'a>>
+        + Clone
+        + for<'a> AddAssign<T::ScalarRef<'a>>
+        + From<T::Scalar>
+        + Ref
+        + for<'a> MulAssign<Sc::Ref<'a>>,
+    K: Display + Debug + Clone,
+    FK: Display + Debug,
+    FL: FunctionLibrary<T, Sc, Key = FK>,
+    Aind: AbsInd,
+> ExecuteOp<FL, L, K, FK, Aind> for NetworkStore<T, Sc>
 where
     LT::WithIndices: PermuteTensor<Permuted = LT::WithIndices>,
     <<LT::WithIndices as HasStructure>::Structure as TensorStructure>::Slot:
@@ -1397,7 +1414,7 @@ where
                                     NetworkLeaf::Scalar(_) => {
                                         return Err(TensorNetworkError::SumScalarTensor(
                                             "".to_string(),
-                                        ))
+                                        ));
                                     }
                                     NetworkLeaf::LocalTensor(t) => {
                                         accumulator += self.tensors[*t].refer();
@@ -1422,7 +1439,9 @@ where
                         for (nid, t) in &targets[1..] {
                             match t {
                                 NetworkLeaf::Scalar(_) => {
-                                    return Err(TensorNetworkError::SumScalarTensor("".to_string()))
+                                    return Err(TensorNetworkError::SumScalarTensor(
+                                        "".to_string(),
+                                    ));
                                 }
                                 NetworkLeaf::LocalTensor(t) => {
                                     accumulator += self.tensors[*t].refer();
@@ -1445,6 +1464,7 @@ where
                 Ok(graph)
             }
             NetworkOp::Function(f) => {
+                println!("Executing function {} on graph {}", f, graph.dot());
                 let ops = graph
                     .graph
                     .iter_nodes()
@@ -1473,6 +1493,7 @@ where
                         NetworkLeaf::Scalar(s) => {
                             let s = self.scalar[*s].clone();
                             let pos = self.scalar.len();
+                            let s = fn_lib.apply_scalar(&f, s)?;
                             self.scalar.push(s);
 
                             NetworkLeaf::Scalar(pos)

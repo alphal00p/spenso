@@ -18,10 +18,18 @@ impl<K> ErroringLibrary<K> {
     }
 }
 
-impl<T, K: Display + Clone> FunctionLibrary<T> for ErroringLibrary<K> {
+impl<T, S, K: Display + Clone> FunctionLibrary<T, S> for ErroringLibrary<K> {
     type Key = K;
 
     fn apply(&self, key: &Self::Key, _tensor: T) -> Result<T, FunctionLibraryError<K>> {
+        Err(FunctionLibraryError::NotFound(key.clone()))
+    }
+
+    fn apply_scalar(
+        &self,
+        key: &Self::Key,
+        scalar: S,
+    ) -> anyhow::Result<S, FunctionLibraryError<Self::Key>> {
         Err(FunctionLibraryError::NotFound(key.clone()))
     }
 }

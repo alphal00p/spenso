@@ -15,10 +15,10 @@ use crate::{
         library::{FunctionLibrary, FunctionLibraryError},
         parsing::SPENSO_TAG,
     },
-    structure::{slot::AbsInd, HasStructure, TensorStructure},
+    structure::{HasStructure, TensorStructure, slot::AbsInd},
     tensors::{
         data::StorageTensor,
-        parametric::{to_param::ToParam, ParamOrConcrete, ParamTensor},
+        parametric::{ParamOrConcrete, ParamTensor, to_param::ToParam},
         symbolic::SymbolicTensor,
     },
 };
@@ -97,17 +97,26 @@ impl Panic {
 }
 pub struct Wrap;
 
-impl<Aind: AbsInd> FunctionLibrary<SymbolicTensor<Aind>> for Wrap {
+impl<Aind: AbsInd> FunctionLibrary<SymbolicTensor<Aind>, Atom> for Wrap {
     type Key = Symbol;
     fn apply(
         &self,
         key: &Self::Key,
         tensor: SymbolicTensor<Aind>,
     ) -> anyhow::Result<SymbolicTensor<Aind>, FunctionLibraryError<Self::Key>> {
+        println!("apply :{}", key);
         Ok(SymbolicTensor {
             structure: tensor.structure,
             expression: function!(*key, tensor.expression),
         })
+    }
+
+    fn apply_scalar(
+        &self,
+        key: &Self::Key,
+        scalar: Atom,
+    ) -> anyhow::Result<Atom, FunctionLibraryError<Self::Key>> {
+        Ok(function!(*key, scalar))
     }
 }
 impl Wrap {
@@ -119,7 +128,9 @@ impl Wrap {
     }
 }
 
-impl<S: TensorStructure> FunctionLibrary<ParamTensor<S>> for SymbolLib<ParamTensor<S>, Panic> {
+impl<S: TensorStructure> FunctionLibrary<ParamTensor<S>, Atom>
+    for SymbolLib<ParamTensor<S>, Panic>
+{
     type Key = Symbol;
 
     fn apply(
@@ -133,9 +144,17 @@ impl<S: TensorStructure> FunctionLibrary<ParamTensor<S>> for SymbolLib<ParamTens
             Err(FunctionLibraryError::NotFound(*key))
         }
     }
+
+    fn apply_scalar(
+        &self,
+        key: &Self::Key,
+        scalar: Atom,
+    ) -> anyhow::Result<Atom, FunctionLibraryError<Self::Key>> {
+        Ok(function!(*key, scalar))
+    }
 }
 
-impl<S: TensorStructure + Clone> FunctionLibrary<ParamTensor<S>>
+impl<S: TensorStructure + Clone> FunctionLibrary<ParamTensor<S>, Atom>
     for SymbolLib<ParamTensor<S>, Wrap>
 {
     type Key = Symbol;
@@ -151,10 +170,18 @@ impl<S: TensorStructure + Clone> FunctionLibrary<ParamTensor<S>>
             tensor.map_data_self(|a| function!(*key, a))
         })
     }
+
+    fn apply_scalar(
+        &self,
+        key: &Self::Key,
+        scalar: Atom,
+    ) -> anyhow::Result<Atom, FunctionLibraryError<Self::Key>> {
+        Ok(function!(*key, scalar))
+    }
 }
 
 impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
-    FunctionLibrary<ParamOrConcrete<C, S>> for SymbolLib<C, Wrap>
+    FunctionLibrary<ParamOrConcrete<C, S>, Atom> for SymbolLib<C, Wrap>
 {
     type Key = Symbol;
 
@@ -176,6 +203,14 @@ impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
             }
         })
     }
+
+    fn apply_scalar(
+        &self,
+        key: &Self::Key,
+        scalar: Atom,
+    ) -> anyhow::Result<Atom, FunctionLibraryError<Self::Key>> {
+        Ok(function!(*key, scalar))
+    }
 }
 
 pub struct PanicMissingConcrete;
@@ -189,7 +224,7 @@ impl PanicMissingConcrete {
 }
 
 impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
-    FunctionLibrary<ParamOrConcrete<C, S>> for SymbolLib<C, PanicMissingConcrete>
+    FunctionLibrary<ParamOrConcrete<C, S>, Atom> for SymbolLib<C, PanicMissingConcrete>
 {
     type Key = Symbol;
 
@@ -211,10 +246,18 @@ impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
             )),
         }
     }
+
+    fn apply_scalar(
+        &self,
+        key: &Self::Key,
+        scalar: Atom,
+    ) -> anyhow::Result<Atom, FunctionLibraryError<Self::Key>> {
+        Ok(function!(*key, scalar))
+    }
 }
 
 impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
-    FunctionLibrary<ParamOrConcrete<C, S>> for SymbolLib<C, Panic>
+    FunctionLibrary<ParamOrConcrete<C, S>, Atom> for SymbolLib<C, Panic>
 {
     type Key = Symbol;
 
@@ -235,10 +278,18 @@ impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
             Err(FunctionLibraryError::NotFound(*key))
         }
     }
+
+    fn apply_scalar(
+        &self,
+        key: &Self::Key,
+        scalar: Atom,
+    ) -> anyhow::Result<Atom, FunctionLibraryError<Self::Key>> {
+        Ok(function!(*key, scalar))
+    }
 }
 
 impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
-    FunctionLibrary<ParamOrConcrete<C, S>> for SymbolLib<ParamOrConcrete<C, S>, Wrap>
+    FunctionLibrary<ParamOrConcrete<C, S>, Atom> for SymbolLib<ParamOrConcrete<C, S>, Wrap>
 {
     type Key = Symbol;
 
@@ -259,9 +310,17 @@ impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
             )
         })
     }
+
+    fn apply_scalar(
+        &self,
+        key: &Self::Key,
+        scalar: Atom,
+    ) -> anyhow::Result<Atom, FunctionLibraryError<Self::Key>> {
+        Ok(function!(*key, scalar))
+    }
 }
 
-impl<S: TensorStructure + Clone, C> FunctionLibrary<ParamOrConcrete<C, S>>
+impl<S: TensorStructure + Clone, C> FunctionLibrary<ParamOrConcrete<C, S>, Atom>
     for SymbolLib<ParamOrConcrete<C, S>, PanicMissingConcrete>
 {
     type Key = Symbol;
@@ -281,10 +340,18 @@ impl<S: TensorStructure + Clone, C> FunctionLibrary<ParamOrConcrete<C, S>>
             Err(FunctionLibraryError::NotFound(*key))
         }
     }
+
+    fn apply_scalar(
+        &self,
+        key: &Self::Key,
+        scalar: Atom,
+    ) -> anyhow::Result<Atom, FunctionLibraryError<Self::Key>> {
+        Ok(function!(*key, scalar))
+    }
 }
 
 impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
-    FunctionLibrary<ParamOrConcrete<C, S>> for SymbolLib<ParamOrConcrete<C, S>, Panic>
+    FunctionLibrary<ParamOrConcrete<C, S>, Atom> for SymbolLib<ParamOrConcrete<C, S>, Panic>
 {
     type Key = Symbol;
     fn apply(
@@ -297,6 +364,14 @@ impl<S: TensorStructure + Clone, C: ToParam + HasStructure<Structure = S>>
         } else {
             Err(FunctionLibraryError::NotFound(*key))
         }
+    }
+
+    fn apply_scalar(
+        &self,
+        key: &Self::Key,
+        scalar: Atom,
+    ) -> anyhow::Result<Atom, FunctionLibraryError<Self::Key>> {
+        Ok(function!(*key, scalar))
     }
 }
 

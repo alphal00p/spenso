@@ -4,8 +4,9 @@ use crate::{
     algebra::complex::{Complex, RealOrComplex},
     network::StructureLessDisplay,
     structure::{
+        HasStructure, PermutedStructure, StructureError, TensorStructure,
         concrete_index::ConcreteIndex, dimension::Dimension, representation::Representation,
-        slot::IsAbstractSlot, HasStructure, PermutedStructure, StructureError, TensorStructure,
+        slot::IsAbstractSlot,
     },
     tensors::{
         complex::RealOrComplexTensor,
@@ -43,10 +44,16 @@ pub enum FunctionLibraryError<Key: Display> {
     Other(#[from] anyhow::Error),
 }
 
-pub trait FunctionLibrary<T> {
+pub trait FunctionLibrary<T, S> {
     type Key: Display;
 
     fn apply(&self, key: &Self::Key, tensor: T) -> Result<T, FunctionLibraryError<Self::Key>>;
+
+    fn apply_scalar(
+        &self,
+        key: &Self::Key,
+        scalar: S,
+    ) -> Result<S, FunctionLibraryError<Self::Key>>;
 }
 
 pub trait Library<S> {

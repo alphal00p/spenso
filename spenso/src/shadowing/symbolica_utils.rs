@@ -252,6 +252,7 @@ impl<A: AtomCore> AtomCoreExt for A {
                 )?;
             }
         }
+
         for i in instr {
             match i {
                 Instruction::Add(s, args) => {

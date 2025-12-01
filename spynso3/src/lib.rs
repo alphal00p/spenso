@@ -14,6 +14,7 @@ use pyo3::{
     exceptions::{self, PyIndexError, PyOverflowError, PyRuntimeError, PyTypeError},
     prelude::*,
     types::{PyComplex, PyFloat, PySlice, PyType},
+    wrap_pyfunction,
 };
 
 #[cfg(feature = "python_stubgen")]

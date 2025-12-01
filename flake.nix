@@ -373,6 +373,7 @@
         # Extra inputs can be added here; cargo and rustc are provided by default.
         packages = [
           pkgs.cargo-insta
+          pkgs.bacon
           pkgs.quarto
           pkgs.nodejs
           pkgs.uv

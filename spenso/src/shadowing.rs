@@ -2,9 +2,9 @@ use crate::{
     network::parsing::ShadowedStructure,
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
+        HasName, HasStructure, TensorShell, TensorStructure, ToSymbolic,
         concrete_index::FlatIndex,
         slot::{AbsInd, IsAbstractSlot, ParseableAind},
-        HasName, HasStructure, TensorShell, TensorStructure, ToSymbolic,
     },
     tensors::{
         data::{DataTensor, DenseTensor},
@@ -74,6 +74,18 @@ impl<Aind: AbsInd + ParseableAind> Concretize<SymbolicTensor<Aind>>
         SymbolicTensor {
             expression: self.to_symbolic(perm).unwrap(),
             structure: self.structure.structure,
+        }
+    }
+}
+
+impl<Aind: AbsInd + ParseableAind> Concretize<SymbolicTensor<Aind>>
+    for TensorShell<SymbolicTensor<Aind>>
+{
+    fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor<Aind> {
+        if perm.is_none() {
+            return self.structure;
+        } else {
+            panic!("Cannot concretize with a permuation")
         }
     }
 }
@@ -646,7 +658,6 @@ impl<S: TensorStructure + HasName + Clone> Shadowable for TensorShell<S>
 where
     S::Name: IntoSymbol + Clone,
     S::Args: IntoArgs,
-
     <<S as TensorStructure>::Slot as IsAbstractSlot>::Aind: ParseableAind,
 {
 }
@@ -674,7 +685,7 @@ pub mod test {
     use once_cell::sync::Lazy;
     use symbolica::atom::Symbol;
 
-    use crate::network::library::{symbolic::ExplicitKey, symbolic::TensorLibrary, symbolic::ETS};
+    use crate::network::library::{symbolic::ETS, symbolic::ExplicitKey, symbolic::TensorLibrary};
 
     #[allow(clippy::type_complexity)]
     pub static EXPLICIT_TENSOR_MAP: Lazy<
@@ -690,8 +701,8 @@ pub mod test {
     use crate::{
         contraction::Contract,
         structure::{
-            representation::{LibraryRep, RepName},
             HasStructure, IndexlessNamedStructure, TensorStructure,
+            representation::{LibraryRep, RepName},
         },
         tensors::parametric::MixedTensor,
     };

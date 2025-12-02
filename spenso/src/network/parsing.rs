@@ -149,6 +149,7 @@ impl<'a, Aind: ParseableAind + AbsInd> TryFrom<FunView<'a>>
 pub struct ParseSettings {
     pub precontract_scalars: bool,
     pub take_first_term_from_sum: bool,
+    pub depth_limit: Option<usize>,
 }
 
 impl Default for ParseSettings {
@@ -156,7 +157,20 @@ impl Default for ParseSettings {
         Self {
             precontract_scalars: true,
             take_first_term_from_sum: false,
+            depth_limit: None,
         }
+    }
+}
+
+#[derive(Clone, Debug, Copy)]
+pub struct ParseState {
+    depth: usize,
+    // func_depth: usize,
+}
+
+impl Default for ParseState {
+    fn default() -> Self {
+        Self { depth: 0 }
     }
 }
 
@@ -180,54 +194,106 @@ where
         settings: &ParseSettings,
     ) -> Result<Self, TensorNetworkError<K, Symbol>>
     where
-        S: TensorStructure + Clone + HasName,
+        S: TensorStructure + Clone,
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<FunView<'a>>,
+        PermutedStructure<S>: TryFrom<AtomView<'a>>,
+    {
+        let state = ParseState::default();
+        Self::try_from_view_impl(value, state, library, settings)
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn try_from_view_impl<S, Lib: Library<S, Key = K>>(
+        value: AtomView<'a>,
+        state: ParseState,
+        library: &Lib,
+        settings: &ParseSettings,
+    ) -> Result<Self, TensorNetworkError<K, Symbol>>
+    where
+        S: TensorStructure + Clone,
+        TensorShell<S>: Concretize<T>,
+        S::Slot: IsAbstractSlot<Aind = Aind>,
+        T::Slot: IsAbstractSlot<Aind = Aind>,
+        PermutedStructure<S>: TryFrom<AtomView<'a>>,
     {
         match value {
-            AtomView::Mul(m) => Self::try_from_mul(m, library, settings),
-            AtomView::Fun(f) => Self::try_from_fun(f, library, settings),
-            AtomView::Add(a) => Self::try_from_add(a, library, settings),
-            AtomView::Pow(p) => Self::try_from_pow(p, library, settings),
+            AtomView::Mul(m) => Self::try_from_mul(m, state, library, settings),
+            AtomView::Fun(f) => Self::try_from_fun(f, state, library, settings),
+            AtomView::Add(a) => Self::try_from_add(a, state, library, settings),
+            AtomView::Pow(p) => Self::try_from_pow(p, state, library, settings),
             a => Ok(Network::from_scalar(a.try_into()?)),
         }
+    }
+
+    fn as_leaf<S, Lib: Library<S, Key = K>>(
+        value: AtomView<'a>,
+    ) -> Result<Self, TensorNetworkError<K, Symbol>>
+    where
+        S: TensorStructure + Clone,
+        TensorShell<S>: Concretize<T>,
+        S::Slot: IsAbstractSlot<Aind = Aind>,
+        T::Slot: IsAbstractSlot<Aind = Aind>,
+        PermutedStructure<S>: TryFrom<AtomView<'a>>,
+    {
+        let s: Result<PermutedStructure<S>, _> = value.try_into();
+
+        return if let Ok(s) = s {
+            Ok(Self::from_tensor(
+                s.structure
+                    .to_shell()
+                    .concretize(Some(s.index_permutation.inverse())),
+            ))
+        } else {
+            Ok(Self::from_scalar(value.as_view().try_into()?))
+        };
     }
 
     #[allow(clippy::result_large_err)]
     fn try_from_mul<S, Lib: Library<S, Key = K>>(
         value: MulView<'a>,
+        mut state: ParseState,
         library: &Lib,
         settings: &ParseSettings,
     ) -> Result<Self, TensorNetworkError<K, Symbol>>
     where
-        S: TensorStructure + Clone + HasName,
+        S: TensorStructure + Clone,
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<FunView<'a>>,
+        PermutedStructure<S>: TryFrom<AtomView<'a>>,
     {
-        let mut iter = value.iter();
+        if let Some(a) = settings.depth_limit
+            && a > state.depth
+        {
+            return Self::as_leaf(value.as_view());
+        }
 
+        state.depth += 1;
+        let mut iter = value.iter();
         let first_atom = iter.next().unwrap();
-        let first = Self::try_from_view(first_atom, library, settings)?;
+        let first = Self::try_from_view_impl(first_atom, state, library, settings)?;
+
+        // state
 
         if settings.precontract_scalars {
             let mut scalars = Atom::num(1);
 
             let rest: Result<Vec<_>, _> = iter
-                .filter_map(|a| match Self::try_from_view(a, library, settings) {
-                    Ok(n) => {
-                        if let NetworkState::PureScalar = n.state {
-                            scalars *= a;
-                            None
-                        } else {
-                            Some(Ok(n))
+                .filter_map(
+                    |a| match Self::try_from_view_impl(a, state, library, settings) {
+                        Ok(n) => {
+                            if let NetworkState::PureScalar = n.state {
+                                scalars *= a;
+                                None
+                            } else {
+                                Some(Ok(n))
+                            }
                         }
-                    }
-                    Err(e) => Some(Err(e)),
-                })
+                        Err(e) => Some(Err(e)),
+                    },
+                )
                 .collect();
 
             let mut res = rest?;
@@ -251,7 +317,7 @@ where
             }
         } else {
             let rest: Result<Vec<_>, _> = iter
-                .map(|a| Self::try_from_view(a, library, settings))
+                .map(|a| Self::try_from_view_impl(a, state, library, settings))
                 .collect();
 
             Ok(first.n_add(rest?))
@@ -261,22 +327,23 @@ where
     #[allow(clippy::result_large_err)]
     fn try_from_fun<S, Lib: Library<S, Key = K>>(
         value: FunView<'a>,
+        state: ParseState,
         library: &Lib,
         settings: &ParseSettings,
     ) -> Result<Self, TensorNetworkError<K, Symbol>>
     where
-        S: TensorStructure + Clone + HasName,
+        S: TensorStructure + Clone,
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<FunView<'a>>,
+        PermutedStructure<S>: TryFrom<AtomView<'a>>,
     {
         let symbol = value.get_symbol();
 
         if symbol == SPENSO_TAG.bracket {
             let mut n_muls = value
                 .iter()
-                .map(|a| Self::try_from_view(a, library, settings))
+                .map(|a| Self::try_from_view_impl(a, state, library, settings))
                 .collect::<Result<Vec<_>, _>>()?;
 
             Ok(n_muls.pop().unwrap().n_mul(n_muls))
@@ -295,11 +362,11 @@ where
             }
 
             let inner = value.iter().next().unwrap();
-            let inner_tensor = Self::try_from_view(inner, library, settings)?;
+            let inner_tensor = Self::try_from_view_impl(inner, state, library, settings)?;
 
             Ok(inner_tensor.fun(symbol))
         } else {
-            let s: Result<PermutedStructure<S>, _> = value.try_into();
+            let s: Result<PermutedStructure<S>, _> = value.as_view().try_into();
 
             if let Ok(s) = s {
                 // println!("Perm:{}", s.index_permutation);
@@ -332,21 +399,28 @@ where
     #[allow(clippy::result_large_err)]
     fn try_from_pow<S, Lib: Library<S, Key = K>>(
         value: PowView<'a>,
+        mut state: ParseState,
         library: &Lib,
         settings: &ParseSettings,
     ) -> std::result::Result<Self, TensorNetworkError<K, Symbol>>
     where
-        S: TensorStructure + Clone + HasName,
+        S: TensorStructure + Clone,
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<FunView<'a>>,
+        PermutedStructure<S>: TryFrom<AtomView<'a>>,
     {
+        if let Some(a) = settings.depth_limit
+            && a > state.depth
+        {
+            return Self::as_leaf(value.as_view());
+        }
+        state.depth += 1;
         let (base, exp) = value.get_base_exp();
 
         if let Ok(n) = i8::try_from(exp) {
             // println!("base:{base}");
-            let base = Self::try_from_view(base, library, settings)?;
+            let base = Self::try_from_view_impl(base, state, library, settings)?;
 
             // println!("base state {:?}", base.state);
             if settings.precontract_scalars {
@@ -387,45 +461,54 @@ where
     #[allow(clippy::result_large_err)]
     fn try_from_add<S, Lib: Library<S, Key = K>>(
         value: AddView<'a>,
+        mut state: ParseState,
         library: &Lib,
         settings: &ParseSettings,
     ) -> Result<Self, TensorNetworkError<K, Symbol>>
     where
-        S: TensorStructure + Clone + HasName,
+        S: TensorStructure + Clone,
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<FunView<'a>>,
+        PermutedStructure<S>: TryFrom<AtomView<'a>>,
     {
+        if let Some(a) = settings.depth_limit
+            && a > state.depth
+        {
+            return Self::as_leaf(value.as_view());
+        }
+        state.depth += 1;
         let mut iter = value.iter();
 
         let first_atom = iter.next().unwrap();
 
-        let first = Self::try_from_view(first_atom, library, settings)?;
+        let first = Self::try_from_view_impl(first_atom, state, library, settings)?;
         if settings.take_first_term_from_sum {
             Ok(first)
         } else if settings.precontract_scalars {
             let mut scalars = Atom::Zero;
 
             let rest: Result<Vec<_>, _> = iter
-                .filter_map(|a| match Self::try_from_view(a, library, settings) {
-                    Ok(n) => {
-                        if n.state.is_compatible(&first.state) {
-                            if let NetworkState::PureScalar = n.state {
-                                scalars += a;
-                                None
+                .filter_map(
+                    |a| match Self::try_from_view_impl(a, state, library, settings) {
+                        Ok(n) => {
+                            if n.state.is_compatible(&first.state) {
+                                if let NetworkState::PureScalar = n.state {
+                                    scalars += a;
+                                    None
+                                } else {
+                                    Some(Ok(n))
+                                }
                             } else {
-                                Some(Ok(n))
+                                Some(Err(TensorNetworkError::IncompatibleSummand(format!(
+                                    "{} is {:?} vs {} is {:?}",
+                                    a, n.state, first_atom, first.state
+                                ))))
                             }
-                        } else {
-                            Some(Err(TensorNetworkError::IncompatibleSummand(format!(
-                                "{} is {:?} vs {} is {:?}",
-                                a, n.state, first_atom, first.state
-                            ))))
                         }
-                    }
-                    Err(e) => Some(Err(e)),
-                })
+                        Err(e) => Some(Err(e)),
+                    },
+                )
                 .collect();
 
             let mut res = rest?;
@@ -448,19 +531,21 @@ where
             }
         } else {
             let rest: Result<Vec<_>, _> = iter
-                .map(|a| match Self::try_from_view(a, library, settings) {
-                    Ok(n) => {
-                        if n.state.is_compatible(&first.state) {
-                            Ok(n)
-                        } else {
-                            Err(TensorNetworkError::IncompatibleSummand(format!(
-                                "{} is {:?} vs {} is {:?}",
-                                a, n.state, first_atom, first.state
-                            )))
+                .map(
+                    |a| match Self::try_from_view_impl(a, state, library, settings) {
+                        Ok(n) => {
+                            if n.state.is_compatible(&first.state) {
+                                Ok(n)
+                            } else {
+                                Err(TensorNetworkError::IncompatibleSummand(format!(
+                                    "{} is {:?} vs {} is {:?}",
+                                    a, n.state, first_atom, first.state
+                                )))
+                            }
                         }
-                    }
-                    Err(e) => Err(e),
-                })
+                        Err(e) => Err(e),
+                    },
+                )
                 .collect();
 
             Ok(first.n_add(rest?))

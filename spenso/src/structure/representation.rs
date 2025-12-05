@@ -506,6 +506,13 @@ impl<T: RepName> Representation<T> {
         function!(ETS.metric, self.dual().pattern(a), self.pattern(b))
     }
 
+    pub fn base(self) -> Representation<T::Base> {
+        Representation {
+            dim: self.dim,
+            rep: self.rep.base(),
+        }
+    }
+
     #[allow(clippy::cast_possible_wrap)]
     #[cfg(feature = "shadowing")]
     /// An atom representing the metric tensor with aind a, and b.

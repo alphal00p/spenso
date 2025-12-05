@@ -246,7 +246,7 @@ where
                     .concretize(Some(s.index_permutation.inverse())),
             ))
         } else {
-            Ok(Self::from_scalar(value.as_view().try_into()?))
+            Ok(Self::from_scalar(value.try_into()?))
         };
     }
 
@@ -267,7 +267,7 @@ where
         if let Some(a) = settings.depth_limit
             && a > state.depth
         {
-            return Self::as_leaf(value.as_view());
+            return Self::as_leaf::<S, Lib>(value.as_view());
         }
 
         state.depth += 1;
@@ -413,7 +413,7 @@ where
         if let Some(a) = settings.depth_limit
             && a > state.depth
         {
-            return Self::as_leaf(value.as_view());
+            return Self::as_leaf::<S, Lib>(value.as_view());
         }
         state.depth += 1;
         let (base, exp) = value.get_base_exp();
@@ -475,7 +475,7 @@ where
         if let Some(a) = settings.depth_limit
             && a > state.depth
         {
-            return Self::as_leaf(value.as_view());
+            return Self::as_leaf::<S, Lib>(value.as_view());
         }
         state.depth += 1;
         let mut iter = value.iter();

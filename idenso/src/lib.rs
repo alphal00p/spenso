@@ -17,13 +17,14 @@ use spenso::{
     structure::{
         HasName, TensorStructure,
         representation::RepName,
-        slot::{AbsInd, DummyAind, IsAbstractSlot, ParseableAind},
+        slot::{AbsInd, DualSlotTo, DummyAind, IsAbstractSlot, ParseableAind},
     },
 };
 use symbolica::{
     atom::{Atom, AtomCore, AtomView, FunctionBuilder, Symbol},
     function,
     id::Replacement,
+    symbol,
 };
 use thiserror::Error;
 
@@ -174,6 +175,8 @@ impl IndexTooling for AtomView<'_> {
             .parse_to_symbolic_net::<Aind>(&ParseSettings::default())
             .unwrap();
 
+        println!("{}", net.dot_pretty());
+
         let mut redual_reps = vec![];
 
         for t in net.store.tensors.iter_mut() {
@@ -181,21 +184,27 @@ impl IndexTooling for AtomView<'_> {
 
             let mut pat = FunctionBuilder::new(t.name().unwrap());
             let mut rhs = pat.clone();
-            for s in t.structure.external_structure_iter() {
+            for (i, s) in t.structure.external_structure_iter().enumerate() {
                 if !s.rep_name().is_self_dual() && s.rep_name().is_dual() {
-                    pat = pat.add_arg(s.rep().dual().to_symbolic([Atom::var(RS.a_)]));
+                    pat = pat.add_arg(
+                        s.rep()
+                            .dual()
+                            .to_symbolic([Atom::var(symbol!(format!("a{i}_",)))]),
+                    );
 
                     reps.push(Replacement::new(
                         s.rep().to_symbolic([Atom::var(RS.a_)]).to_pattern(),
                         s.rep().dual().to_symbolic([Atom::var(RS.a_)]),
                     ));
                 } else {
-                    pat = pat.add_arg(s.rep().to_symbolic([Atom::var(RS.a_)]));
+                    pat = pat.add_arg(s.rep().to_symbolic([Atom::var(symbol!(format!("a{i}_",)))]));
                 }
-                rhs = rhs.add_arg(s.rep().to_symbolic([Atom::var(RS.a_)]));
+                rhs = rhs.add_arg(s.rep().to_symbolic([Atom::var(symbol!(format!("a{i}_",)))]));
             }
             if !reps.is_empty() {
-                redual_reps.push(Replacement::new(pat.finish().to_pattern(), rhs.finish()));
+                let rep = Replacement::new(pat.finish().to_pattern(), rhs.finish());
+                println!("{}", rep);
+                redual_reps.push(rep);
                 t.expression = t.expression.replace_multiple(&reps);
             }
         }
@@ -206,8 +215,13 @@ impl IndexTooling for AtomView<'_> {
             if p.is_paired()
                 && let NetworkEdge::Slot(s) = d.data
             {
-                // println!("{}", s.to_atom());
-                dummies.insert(s.to_atom(), s.rep());
+                let (ind, group) = if s.rep_name().is_dual() {
+                    (s.dual().to_atom(), s.rep().dual())
+                } else {
+                    (s.to_atom(), s.rep())
+                };
+                println!("{}:{:?}", ind, group);
+                dummies.insert(ind, group);
             }
         }
 
@@ -380,7 +394,7 @@ pub mod test {
     };
     use symbolica::{
         atom::{Atom, AtomCore, Symbol},
-        function,
+        function, parse_lit,
         printer::CanonicalOrderingSettings,
         symbol,
     };
@@ -509,5 +523,37 @@ pub mod test {
 
         // println!("{a}");
         // println!("{}", a.canonize(AbstractIndex::Dummy));
+    }
+
+    #[test]
+    fn canonize_color() {
+        test_initialize();
+        let expr = parse_lit!(
+            f(coad(8, hedge(4)), coad(8, hedge(8)), coad(8, hedge(12)))
+                * t(coad(8, hedge(4)), cof(3, hedge(16)), dind(cof(3, hedge(2))))
+                * t(coad(8, hedge(8)), cof(3, hedge(2)), dind(cof(3, hedge(10))))
+                * t(
+                    coad(8, hedge(12)),
+                    cof(3, hedge(10)),
+                    dind(cof(3, hedge(16)))
+                ),
+            default_namespace = "spenso"
+        );
+
+        let can = expr
+            .cook_indices()
+            .canonize::<AbstractIndex>(AbstractIndex::Dummy);
+
+        assert_snapshot!(
+            can.to_canonically_ordered_string(CanonicalOrderingSettings {
+                include_namespace: false,
+                include_attributes: false,
+                hide_namespace: None
+            }),@"f(coad(8,d_0),coad(8,d_1),coad(8,d_2))*t(coad(8,d_0),cof(3,d_3),dind(cof(3,d_4)))*t(coad(8,d_1),cof(3,d_4),dind(cof(3,d_5)))*t(coad(8,d_2),cof(3,d_5),dind(cof(3,d_3)))"
+        );
+
+        //  gives
+        //
+        // f(coad(8,dummy(0)),coad(8,dummy(1)),coad(8,dummy(2)))*t(coad(8,dummy(0)),cof(3,dummy(3)),cof(3,hedge(2)))*t(coad(8,dummy(1)),cof(3,hedge(2)),cof(3,hedge(10)))*t(coad(8,dummy(2)),cof(3,hedge(10)),cof(3,dummy(3)))
     }
 }

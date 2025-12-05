@@ -251,6 +251,28 @@ pub fn color_simplify_impl(expression: AtomView) -> Atom {
     let cof = ColorFundamental {}.new_rep(CS.nc_);
     let coaf = cof.dual();
 
+    let tpat = CS
+        .t_pattern(CS.nc_, CS.adj_, RS.a_, RS.i_, RS.j_)
+        .to_pattern();
+    let mut ncs = None;
+    for m in expression.pattern_match(&tpat, None, None) {
+        if let Some(ncs) = &ncs
+            && ncs != &m[&CS.nc_]
+        {
+            panic!("Mismatched Nc values in expression")
+        } else {
+            ncs = Some(m[&CS.nc_].clone());
+        }
+    }
+
+    let expression = if let Some(ncs) = &ncs {
+        expression
+            .replace(ColorFundamental {}.to_symbolic([ncs.as_view(), Atom::var(RS.a_).as_view()]))
+            .with(ColorFundamental {}.to_symbolic([CS.nc, RS.a_]))
+    } else {
+        expression.to_owned()
+    };
+
     let reps = vec![
         (t(RS.a_, RS.b_, RS.b_), Atom::num(0)),
         (
@@ -373,7 +395,12 @@ pub fn color_simplify_impl(expression: AtomView) -> Atom {
     //     }
     // }
     //
-    expression.iter().fold(Atom::Zero, |a, (c, s)| a + c * s)
+    let out = expression.iter().fold(Atom::Zero, |a, (c, s)| a + c * s);
+    if let Some(ncs) = ncs {
+        out.replace(CS.nc).with(ncs)
+    } else {
+        out
+    }
 }
 /// Trait for applying SU(N) color algebra simplification rules to a symbolic expression.
 ///
@@ -469,6 +496,7 @@ mod test {
     use symbolica::{parse, parse_lit};
 
     use crate::gamma::PS;
+    use crate::test::test_initialize;
     use crate::{
         IndexTooling, gamma::GammaSimplifier, metric::MetricSimplifier, representations::initialize,
     };
@@ -1070,6 +1098,38 @@ mod test {
                 .expand()
                 .simplify_metrics()
                 .to_dots()
+        );
+    }
+
+    #[test]
+    fn ratio_simplify() {
+        test_initialize();
+        let expr = parse_lit!(
+            G ^ 4 * ee
+                ^ 2 * f(
+                    coad(ohoho, dummy(0)),
+                    coad(ohoho, dummy(1)),
+                    coad(ohoho, dummy(2))
+                ) * t(
+                    coad(ohoho, dummy(0)),
+                    cof(ahaha, dummy(3)),
+                    dind(cof(ahaha, dummy(4)))
+                ) * t(
+                    coad(ohoho, dummy(1)),
+                    cof(ahaha, dummy(5)),
+                    dind(cof(ahaha, dummy(3)))
+                ) * t(
+                    coad(ohoho, dummy(2)),
+                    cof(ahaha, dummy(4)),
+                    dind(cof(ahaha, dummy(5)))
+                ),
+            default_namespace = "spenso"
+        );
+
+        insta::assert_snapshot!(
+            expr.cook_indices()
+                .simplify_color()
+                .to_bare_ordered_string(),@"-1𝑖*G^4*TR^2*ahaha*ee^2*ohoho"
         );
     }
 }

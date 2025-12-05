@@ -175,7 +175,7 @@ impl IndexTooling for AtomView<'_> {
             .parse_to_symbolic_net::<Aind>(&ParseSettings::default())
             .unwrap();
 
-        println!("{}", net.dot_pretty());
+        // println!("{}", net.dot_pretty());
 
         let mut redual_reps = vec![];
 
@@ -203,7 +203,7 @@ impl IndexTooling for AtomView<'_> {
             }
             if !reps.is_empty() {
                 let rep = Replacement::new(pat.finish().to_pattern(), rhs.finish());
-                println!("{}", rep);
+                // println!("{}", rep);
                 redual_reps.push(rep);
                 t.expression = t.expression.replace_multiple(&reps);
             }
@@ -220,7 +220,7 @@ impl IndexTooling for AtomView<'_> {
                 } else {
                     (s.to_atom(), s.rep())
                 };
-                println!("{}:{:?}", ind, group);
+                // println!("{}:{:?}", ind, group);
                 dummies.insert(ind, group);
             }
         }

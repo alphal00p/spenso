@@ -76,7 +76,7 @@
           pkgs.gnum4
           pkgs.clang
           pkgs.mpfr.dev
-          pkgs.python312
+          pkgs.python313
           pkgs.cargo-insta
         ];
         buildInputs =

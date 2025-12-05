@@ -5,10 +5,11 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 use tabled::{builder::Builder, settings::Style};
 
+use crate::structure::slot::SlotError;
 #[cfg(feature = "shadowing")]
 use crate::{
     shadowing::symbolica_utils::IntoSymbol,
-    structure::{slot::ParseableAind, ExpandedCoefficent, FlatIndex, ToSymbolic},
+    structure::{ExpandedCoefficent, FlatIndex, ToSymbolic, slot::ParseableAind},
     tensors::{data::DenseTensor, parametric::TensorCoefficient},
 };
 
@@ -19,13 +20,13 @@ use anyhow::Result;
 use symbolica::atom::{Atom, FunctionBuilder, Symbol};
 
 use super::{
+    MergeInfo, NamedStructure, PermutedStructure, ScalarStructure, SmartShadowStructure,
+    StructureContract, StructureError, TensorStructure,
     abstract_index::AbstractIndex,
     dimension::Dimension,
     permuted::PermuteTensor,
     representation::{LibraryRep, RepName, Representation},
     slot::{AbsInd, DualSlotTo, DummyAind, IsAbstractSlot, Slot},
-    MergeInfo, NamedStructure, PermutedStructure, ScalarStructure, SmartShadowStructure,
-    StructureContract, StructureError, TensorStructure,
 };
 #[cfg(not(feature = "shadowing"))]
 use serde::{Deserialize, Serialize};
@@ -748,6 +749,7 @@ impl<R: RepName<Dual = R>, Aind: AbsInd> StructureContract for OrderedStructure<
                             *dual_cursor += 1;
                             break;
                         } else {
+                            // return Err(StructureError::SlotError(SlotError));
                             panic!("Matching and equal items must be identical");
                         }
                     }
@@ -931,9 +933,9 @@ impl<R: RepName<Dual = R>, Aind: AbsInd> StructureContract for OrderedStructure<
 #[cfg(test)]
 pub mod test {
     use crate::structure::{
+        MergeInfo, PermutedStructure, StructureContract, TensorStructure,
         representation::{Euclidean, LibraryRep, Lorentz, Minkowski, RepName},
         slot::{DualSlotTo, IsAbstractSlot},
-        MergeInfo, PermutedStructure, StructureContract, TensorStructure,
     };
 
     use super::OrderedStructure;

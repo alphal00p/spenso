@@ -920,6 +920,10 @@ macro_rules! id {
 #[cfg(test)]
 mod test {
 
+    use spenso::network::StructureLessDisplay;
+    use spenso::network::parsing::ParseSettings;
+    use spenso::network::parsing::SymbolicParse;
+    use spenso::network::store::TensorScalarStore;
     use spenso::shadowing::symbolica_utils::AtomCoreExt;
     use spenso::shadowing::symbolica_utils::TypstSettings;
     use spenso::structure::IndexlessNamedStructure;
@@ -940,7 +944,9 @@ mod test {
 
     use super::*;
 
+    use crate::color::ColorSimplifier;
     use crate::id;
+    use crate::test::test_initialize;
     use spenso::{
         structure::{abstract_index::AbstractIndex, permuted::Perm},
         tensors::symbolic::SymbolicTensor,
@@ -1404,6 +1410,206 @@ mod test {
 
         assert_eq!(a, expr);
         // println!("{a}");
+    }
+
+    #[test]
+    fn gl23() {
+        test_initialize();
+        let expr = parse_lit!(
+            (-1 * Q(2, mink(4, hedge(8))) * g(mink(4, hedge(12)), mink(4, hedge(4)))
+                + -1 * Q(4, mink(4, hedge(12))) * g(mink(4, hedge(4)), mink(4, hedge(8)))
+                + -1 * Q(6, mink(4, hedge(4))) * g(mink(4, hedge(12)), mink(4, hedge(8)))
+                + Q(2, mink(4, hedge(12))) * g(mink(4, hedge(4)), mink(4, hedge(8)))
+                + Q(4, mink(4, hedge(4))) * g(mink(4, hedge(12)), mink(4, hedge(8)))
+                + Q(6, mink(4, hedge(8))) * g(mink(4, hedge(12)), mink(4, hedge(4))))
+                * 1𝑖
+                / 9
+                * G
+                ^ 4 * Q(1, mink(4, edge(1, 1)))
+                    * Q(3, mink(4, edge(3, 1)))
+                    * Q(5, mink(4, edge(5, 1)))
+                    * Q(7, mink(4, edge(7, 1)))
+                    * Q(8, mink(4, edge(8, 1)))
+                    * ee
+                ^ 2 * f(coad(8, hedge(4)), coad(8, hedge(8)), coad(8, hedge(12)))
+                    * g(coad(8, hedge(11)), coad(8, hedge(12)))
+                    * g(coad(8, hedge(3)), coad(8, hedge(4)))
+                    * g(coad(8, hedge(7)), coad(8, hedge(8)))
+                    * g(cof(3, hedge(1)), dind(cof(3, hedge(2))))
+                    * g(cof(3, hedge(10)), dind(cof(3, hedge(14))))
+                    * g(cof(3, hedge(14)), dind(cof(3, hedge(13))))
+                    * g(cof(3, hedge(15)), dind(cof(3, hedge(16))))
+                    * g(cof(3, hedge(16)), dind(cof(3, hedge(6))))
+                    * g(cof(3, hedge(6)), dind(cof(3, hedge(5))))
+                    * g(cof(3, hedge(9)), dind(cof(3, hedge(10))))
+                    * g(mink(4, hedge(11)), mink(4, hedge(12)))
+                    * g(mink(4, hedge(3)), mink(4, hedge(4)))
+                    * g(mink(4, hedge(7)), mink(4, hedge(8)))
+                    * gamma(bis(4, hedge(1)), bis(4, hedge(5)), mink(4, hedge(3)))
+                    * gamma(bis(4, hedge(10)), bis(4, hedge(9)), mink(4, edge(5, 1)))
+                    * gamma(bis(4, hedge(13)), bis(4, hedge(14)), mink(4, edge(7, 1)))
+                    * gamma(bis(4, hedge(14)), bis(4, hedge(10)), mink(4, hedge(17)))
+                    * gamma(bis(4, hedge(15)), bis(4, hedge(13)), mink(4, hedge(11)))
+                    * gamma(bis(4, hedge(16)), bis(4, hedge(15)), mink(4, edge(8, 1)))
+                    * gamma(bis(4, hedge(2)), bis(4, hedge(1)), mink(4, edge(1, 1)))
+                    * gamma(bis(4, hedge(5)), bis(4, hedge(6)), mink(4, edge(3, 1)))
+                    * gamma(bis(4, hedge(6)), bis(4, hedge(16)), mink(4, hedge(0)))
+                    * gamma(bis(4, hedge(9)), bis(4, hedge(2)), mink(4, hedge(7)))
+                    * t(
+                        coad(8, hedge(11)),
+                        cof(3, hedge(13)),
+                        dind(cof(3, hedge(15)))
+                    )
+                    * t(coad(8, hedge(3)), cof(3, hedge(5)), dind(cof(3, hedge(1))))
+                    * t(coad(8, hedge(7)), cof(3, hedge(2)), dind(cof(3, hedge(9)))),
+            default_namespace = "spenso"
+        );
+
+        println!(
+            "{}\n",
+            expr.simplify_metrics()
+                .cook_indices()
+                .canonize(AbstractIndex::Dummy)
+        );
+
+        println!(
+            "Colored done: {}\n",
+            expr.simplify_metrics()
+                .cook_indices()
+                .canonize(AbstractIndex::Dummy)
+                .simplify_color()
+        );
+    }
+
+    #[test]
+    fn gl24() {
+        test_initialize();
+        let expr = parse_lit!(
+            (-1 * Q(2, mink(4, hedge(8))) * g(mink(4, hedge(12)), mink(4, hedge(4)))
+                + -1 * Q(4, mink(4, hedge(12))) * g(mink(4, hedge(4)), mink(4, hedge(8)))
+                + -1 * Q(6, mink(4, hedge(4))) * g(mink(4, hedge(12)), mink(4, hedge(8)))
+                + Q(2, mink(4, hedge(12))) * g(mink(4, hedge(4)), mink(4, hedge(8)))
+                + Q(4, mink(4, hedge(4))) * g(mink(4, hedge(12)), mink(4, hedge(8)))
+                + Q(6, mink(4, hedge(8))) * g(mink(4, hedge(12)), mink(4, hedge(4))))
+                * 1𝑖
+                / 9
+                * G
+                ^ 4 * Q(1, mink(4, edge(1, 1)))
+                    * Q(3, mink(4, edge(3, 1)))
+                    * Q(5, mink(4, edge(5, 1)))
+                    * Q(7, mink(4, edge(7, 1)))
+                    * Q(8, mink(4, edge(8, 1)))
+                    * ee
+                ^ 2 * f(coad(8, hedge(4)), coad(8, hedge(8)), coad(8, hedge(12)))
+                    * g(coad(8, hedge(11)), coad(8, hedge(12)))
+                    * g(coad(8, hedge(3)), coad(8, hedge(4)))
+                    * g(coad(8, hedge(7)), coad(8, hedge(8)))
+                    * g(cof(3, hedge(10)), dind(cof(3, hedge(9))))
+                    * g(cof(3, hedge(13)), dind(cof(3, hedge(14))))
+                    * g(cof(3, hedge(14)), dind(cof(3, hedge(10))))
+                    * g(cof(3, hedge(16)), dind(cof(3, hedge(15))))
+                    * g(cof(3, hedge(2)), dind(cof(3, hedge(1))))
+                    * g(cof(3, hedge(5)), dind(cof(3, hedge(6))))
+                    * g(cof(3, hedge(6)), dind(cof(3, hedge(16))))
+                    * g(mink(4, hedge(11)), mink(4, hedge(12)))
+                    * g(mink(4, hedge(3)), mink(4, hedge(4)))
+                    * g(mink(4, hedge(7)), mink(4, hedge(8)))
+                    * gamma(bis(4, hedge(1)), bis(4, hedge(2)), mink(4, edge(1, 1)))
+                    * gamma(bis(4, hedge(10)), bis(4, hedge(14)), mink(4, hedge(17)))
+                    * gamma(bis(4, hedge(13)), bis(4, hedge(15)), mink(4, hedge(11)))
+                    * gamma(bis(4, hedge(14)), bis(4, hedge(13)), mink(4, edge(7, 1)))
+                    * gamma(bis(4, hedge(15)), bis(4, hedge(16)), mink(4, edge(8, 1)))
+                    * gamma(bis(4, hedge(16)), bis(4, hedge(6)), mink(4, hedge(0)))
+                    * gamma(bis(4, hedge(2)), bis(4, hedge(9)), mink(4, hedge(7)))
+                    * gamma(bis(4, hedge(5)), bis(4, hedge(1)), mink(4, hedge(3)))
+                    * gamma(bis(4, hedge(6)), bis(4, hedge(5)), mink(4, edge(3, 1)))
+                    * gamma(bis(4, hedge(9)), bis(4, hedge(10)), mink(4, edge(5, 1)))
+                    * t(
+                        coad(8, hedge(11)),
+                        cof(3, hedge(15)),
+                        dind(cof(3, hedge(13)))
+                    )
+                    * t(coad(8, hedge(3)), cof(3, hedge(1)), dind(cof(3, hedge(5))))
+                    * t(coad(8, hedge(7)), cof(3, hedge(9)), dind(cof(3, hedge(2))))
+                    * ϵ(0, mink(4, hedge(0)))
+                    * ϵbar(0, mink(4, hedge(17))),
+            default_namespace = "spenso"
+        );
+
+        println!(
+            "{}\n",
+            expr.simplify_metrics()
+                .cook_indices()
+                .canonize(AbstractIndex::Dummy)
+        );
+
+        println!(
+            "Colored done: {}\n",
+            expr.simplify_metrics()
+                .cook_indices()
+                .canonize(AbstractIndex::Dummy)
+                .simplify_color()
+        );
+    }
+
+    #[test]
+    fn gl_06() {
+        test_initialize();
+        let expr = parse_lit!(
+            1 / 6 * Nc * ee
+                ^ 4 * sw
+                ^ -2 * vev
+                    * I3x21
+                    * (MC * g(bis(4, hedge(1)), bis(4, hedge(2)))
+                        - K(0, mink(4, edge(1, 1)))
+                            * gamma(bis(4, hedge(1)), bis(4, hedge(2)), mink(4, edge(1, 1))))
+                    * (-K(0, mink(4, edge(3, 1))) - K(1, mink(4, edge(3, 1))))
+                    * (-g(mink(4, hedge(7)), mink(4, hedge(8))) + MW
+                        ^ -2 * (-P(0, mink(4, hedge(7))) - K(1, mink(4, hedge(7))))
+                            * (-P(0, mink(4, hedge(8))) - K(1, mink(4, hedge(8)))))
+                    * (P(0, mink(4, edge(5, 1)))
+                        + K(0, mink(4, edge(5, 1)))
+                        + K(1, mink(4, edge(5, 1))))
+                    * conj(CKM2x1)
+                    * ϵ(0, mink(4, hedge(0)))
+                    * ϵbar(0, mink(4, hedge(11)))
+                    * g(mink(4, hedge(0)), mink(4, hedge(8)))
+                    * gamma(bis(4, hedge(10)), bis(4, hedge(6)), mink(4, hedge(11)))
+                    * gamma(bis(4, hedge(2)), bis(4, vertex(1, 1)), mink(4, hedge(7)))
+                    * gamma(bis(4, hedge(6)), bis(4, hedge(5)), mink(4, edge(3, 1)))
+                    * gamma(bis(4, hedge(9)), bis(4, hedge(10)), mink(4, edge(5, 1)))
+                    * projm(bis(4, hedge(5)), bis(4, hedge(1)))
+                    * projm(bis(4, vertex(1, 1)), bis(4, hedge(9)))
+                    * (1 / 2)
+                ^ (1 / 2),
+            default_namespace = "spenso"
+        );
+
+        let simplified = expr
+            .cook_indices()
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings {
+                depth_limit: Some(0),
+                ..Default::default()
+            })
+            .unwrap();
+
+        println!(
+            "{}",
+            simplified.graph.dot_impl(
+                |i| {
+                    let ss = &simplified.store.get_scalar(i);
+                    format!("{}:{}", i, ss)
+                },
+                |k| k.display(),
+                |t| {
+                    let tt = &simplified.store.get_tensor(t);
+                    format!("T{}:{}", t, tt.expression.to_bare_ordered_string())
+                },
+                |fk| fk.to_string(),
+            )
+        )
+
+        // println!("{}", expr.cook_indices().simplify_gamma().simplify_gamma());
     }
 
     #[test]

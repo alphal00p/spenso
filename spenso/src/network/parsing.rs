@@ -1,4 +1,6 @@
-use symbolica::atom::Symbol;
+use bitvec::ptr::read_unaligned;
+use symbolica::atom::{AtomCore, Symbol};
+use symbolica::domains::rational::Rational;
 use symbolica::{symbol, tag};
 
 use super::*;
@@ -12,7 +14,8 @@ use crate::structure::abstract_index::AIND_SYMBOLS;
 // use crate::shadowing::Concretize;
 use crate::structure::slot::{DummyAind, ParseableAind, Slot, SlotError};
 use crate::structure::{
-    NamedStructure, OrderedStructure, PermutedStructure, StructureError, TensorShell,
+    NamedStructure, OrderedStructure, PermutedStructure, StructureContract, StructureError,
+    TensorShell,
 };
 use crate::tensors::symbolic::SymbolicTensor;
 
@@ -54,6 +57,127 @@ impl<'a, Aind: ParseableAind + AbsInd> TryFrom<AtomView<'a>>
             f.try_into()
         } else {
             Err(StructureError::ParsingError(value.to_plain_string()))
+        }
+    }
+}
+
+impl<'a, Aind: ParseableAind + AbsInd> TryFrom<AtomView<'a>>
+    for PermutedStructure<SymbolicTensor<Aind>>
+{
+    type Error = StructureError;
+    fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
+        let structure = OrderedStructure::from_atomcore_unchecked(value)?;
+        Ok(PermutedStructure::identity(SymbolicTensor {
+            structure,
+            expression: value.to_owned(),
+        }))
+    }
+}
+
+impl<Aind: ParseableAind + AbsInd> OrderedStructure<LibraryRep, Aind> {
+    pub fn from_atomcore_unchecked<A: AtomCore>(value: A) -> Result<Self, StructureError> {
+        let view = value.as_atom_view();
+        match view {
+            AtomView::Add(a) => {
+                // println!("Add{}", a.as_view());
+                Self::from_atomcore_unchecked(a.iter().next().unwrap())
+            }
+            AtomView::Pow(p) => {
+                // println!("Pow{}", p.as_view());
+                let (base, exp) = p.get_base_exp();
+
+                let base_strct = Self::from_atomcore_unchecked(base)?;
+
+                if base_strct.is_scalar() {
+                    Ok(base_strct)
+                } else if base_strct.is_fully_self_dual()
+                    && let Ok(r) = Rational::try_from(exp)
+                {
+                    if r.numerator() % 2 == 0 {
+                        Ok(OrderedStructure::empty())
+                    } else if r.denominator() == 1 {
+                        Ok(base_strct)
+                    } else {
+                        Err(StructureError::ParsingError(format!(
+                            "Invalid power of tensor {}",
+                            view
+                        )))
+                    }
+                } else {
+                    Err(StructureError::ParsingError(format!(
+                        "Invalid power of tensor {}",
+                        view
+                    )))
+                }
+            }
+            AtomView::Mul(f) => {
+                // println!("Mul{}", f.as_view());
+                let mut structure = OrderedStructure::empty();
+
+                for i in f.into_iter() {
+                    let s = Self::from_atomcore_unchecked(i)?;
+                    structure = structure.merge(&s)?.0
+                }
+
+                if structure.is_scalar() {
+                    return Err(StructureError::EmptyStructure(SlotError::EmptyStructure));
+                }
+                Ok(structure)
+            }
+            AtomView::Fun(f) => match f.get_symbol() {
+                s if s == AIND_SYMBOLS.aind => {
+                    // println!("Fun{}", f.as_view());
+                    let mut structure: Vec<Slot<LibraryRep, Aind>> = vec![];
+
+                    for arg in f.iter() {
+                        structure.push(arg.try_into()?);
+                    }
+
+                    let o = OrderedStructure::new(structure);
+
+                    Ok(o.structure)
+                }
+                _ => {
+                    // println!("Fun{}", f.as_view());
+                    let mut args = vec![];
+                    let mut slots = vec![];
+                    let mut is_structure: Option<StructureError> =
+                        Some(SlotError::EmptyStructure.into());
+
+                    for arg in f.iter() {
+                        let slot: Result<Slot<LibraryRep, Aind>, _> = arg.try_into();
+
+                        match slot {
+                            Ok(slot) => {
+                                is_structure = None;
+                                slots.push(slot);
+                            }
+                            Err(e) => {
+                                if let AtomView::Fun(f) = arg
+                                    && f.get_symbol() == AIND_SYMBOLS.aind
+                                {
+                                    let internal_s = Self::from_atomcore_unchecked(f.as_view());
+
+                                    if let Ok(s) = internal_s {
+                                        slots.extend(s.structure);
+                                        is_structure = None;
+                                        continue;
+                                    }
+                                }
+                                is_structure = Some(e.into());
+                                args.push(arg.to_owned());
+                            }
+                        }
+                    }
+
+                    if let Some(e) = is_structure {
+                        Err(e)
+                    } else {
+                        Ok(OrderedStructure::new(slots).structure)
+                    }
+                }
+            },
+            _ => return Err(StructureError::EmptyStructure(SlotError::EmptyStructure)),
         }
     }
 }
@@ -107,20 +231,20 @@ impl<'a, Aind: ParseableAind + AbsInd> TryFrom<FunView<'a>>
                             slots.push(slot);
                         }
                         Err(e) => {
-                            if let AtomView::Fun(f) = arg {
-                                if f.get_symbol() == AIND_SYMBOLS.aind {
-                                    let internal_s = Self::try_from(f);
+                            if let AtomView::Fun(f) = arg
+                                && f.get_symbol() == AIND_SYMBOLS.aind
+                            {
+                                let internal_s = Self::try_from(f);
 
-                                    if let Ok(s) = internal_s {
-                                        let p = s.index_permutation;
-                                        let mut v = s.structure.structure.structure;
-                                        p.apply_slice_in_place_inv(&mut v); //undo sorting
-                                        let p = s.rep_permutation;
-                                        p.apply_slice_in_place_inv(&mut v); //undo sorting
-                                        slots.extend(v);
-                                        is_structure = None;
-                                        continue;
-                                    }
+                                if let Ok(s) = internal_s {
+                                    let p = s.index_permutation;
+                                    let mut v = s.structure.structure.structure;
+                                    p.apply_slice_in_place_inv(&mut v); //undo sorting
+                                    let p = s.rep_permutation;
+                                    p.apply_slice_in_place_inv(&mut v); //undo sorting
+                                    slots.extend(v);
+                                    is_structure = None;
+                                    continue;
                                 }
                             }
                             is_structure = Some(e.into());
@@ -227,9 +351,7 @@ where
         }
     }
 
-    fn as_leaf<S, Lib: Library<S, Key = K>>(
-        value: AtomView<'a>,
-    ) -> Result<Self, TensorNetworkError<K, Symbol>>
+    fn as_leaf<S>(value: AtomView<'a>) -> Result<Self, TensorNetworkError<K, Symbol>>
     where
         S: TensorStructure + Clone,
         TensorShell<S>: Concretize<T>,
@@ -265,9 +387,9 @@ where
         PermutedStructure<S>: TryFrom<AtomView<'a>>,
     {
         if let Some(a) = settings.depth_limit
-            && a > state.depth
+            && a < state.depth
         {
-            return Self::as_leaf::<S, Lib>(value.as_view());
+            return Self::as_leaf::<S>(value.as_view());
         }
 
         state.depth += 1;
@@ -411,9 +533,9 @@ where
         PermutedStructure<S>: TryFrom<AtomView<'a>>,
     {
         if let Some(a) = settings.depth_limit
-            && a > state.depth
+            && a < state.depth
         {
-            return Self::as_leaf::<S, Lib>(value.as_view());
+            return Self::as_leaf::<S>(value.as_view());
         }
         state.depth += 1;
         let (base, exp) = value.get_base_exp();
@@ -423,11 +545,11 @@ where
             let base = Self::try_from_view_impl(base, state, library, settings)?;
 
             // println!("base state {:?}", base.state);
-            if settings.precontract_scalars {
-                if let NetworkState::PureScalar = base.state {
-                    // println!("Pure");
-                    return Ok(Self::from_scalar(value.as_view().try_into()?));
-                }
+            if settings.precontract_scalars
+                && let NetworkState::PureScalar = base.state
+            {
+                // println!("Pure");
+                return Ok(Self::from_scalar(value.as_view().try_into()?));
             }
 
             if let NetworkState::Tensor = base.state {
@@ -473,9 +595,9 @@ where
         PermutedStructure<S>: TryFrom<AtomView<'a>>,
     {
         if let Some(a) = settings.depth_limit
-            && a > state.depth
+            && a < state.depth
         {
-            return Self::as_leaf::<S, Lib>(value.as_view());
+            return Self::as_leaf::<S>(value.as_view());
         }
         state.depth += 1;
         let mut iter = value.iter();
@@ -607,7 +729,7 @@ impl SymbolicParse for AtomView<'_> {
     ) -> Result<SymbolicNet<Aind>, TensorNetworkError<DummyKey, Symbol>> {
         let lib = DummyLibrary::<SymbolicTensor<Aind>>::new();
 
-        SymbolicNet::<Aind>::try_from_view(*self, &lib, settings)
+        SymbolicNet::<Aind>::try_from_view::<SymbolicTensor<Aind>, _>(*self, &lib, settings)
     }
 }
 
@@ -758,10 +880,18 @@ pub mod test {
 
     #[test]
     fn parse_scalar_tensor() {
-        let expr = parse!("c*a*b(mink(4,1))");
+        test_initialize();
+        let expr = parse!("(
+            (
+                  -1*gammalooprs::{}::mUV^2+gammalooprs::{}::Q(6,spenso::mink(4,gammalooprs::{}::uv_mink_1337))
+                    *gammalooprs::{}::Q(7,spenso::mink(4,gammalooprs::{}::uv_mink_1337))
+                 )
+            )*2");
         let net = expr
             .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
             .unwrap();
+
+        println!("{}", net.dot_pretty());
         assert_eq!(net.simple_execute(), expr);
     }
 

@@ -700,3 +700,38 @@ impl SpensoNet {
 
 #[cfg(feature = "python_stubgen")]
 pyo3_stub_gen::define_stub_info_gatherer!(stub_info);
+
+#[cfg(test)]
+mod tests {
+    use idenso::representations::initialize;
+    use spenso::network::parsing::ParseSettings;
+    use spenso_hep_lib::HEP_LIB;
+    use symbolica::parse_lit;
+
+    use crate::initialize_spenso;
+
+    use super::*;
+
+    #[test]
+    fn test_parse() {
+        initialize();
+        let expr = parse_lit!(
+            (-1 * gammalooprs::mUV
+                ^ 2 + gammalooprs::Q(6, spenso::mink(4, gammalooprs::uv_mink_1337))
+                    * gammalooprs::Q(7, spenso::mink(4, gammalooprs::uv_mink_1337)))
+                * 2
+        );
+
+        // Use the native Rust API directly to avoid Python linking issues
+        let net = SpensoNet {
+            network: ParsingNet::try_from_view(
+                expr.as_view(),
+                &*HEP_LIB,
+                &ParseSettings::default(),
+            )
+            .unwrap(),
+        };
+
+        println!("{}", net.network.dot_pretty())
+    }
+}

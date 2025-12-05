@@ -55,11 +55,10 @@ pub enum CookingError {
 
 pub fn canonize_impl(view: AtomView) -> Atom {
     let lib = DummyLibrary::<SymbolicTensor>::new();
-    let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view(
-        view,
-        &lib,
-        &ParseSettings::default(),
-    )
+    let mut net = Network::<NetworkStore<SymbolicTensor, Atom>, _, Symbol>::try_from_view::<
+        SymbolicTensor,
+        _,
+    >(view, &lib, &ParseSettings::default())
     .unwrap();
 
     let mut redual_reps = vec![];

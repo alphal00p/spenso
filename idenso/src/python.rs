@@ -612,6 +612,7 @@ impl symbolica::api::python::SymbolicaCommunityModule for IdensoModule {
 
 pub(crate) fn initialize_alg_simp(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // initialize();
+    m.add_function(wrap_pyfunction!(initialize, m)?)?;
     m.add_function(wrap_pyfunction!(simplify_gamma, m)?)?;
     m.add_function(wrap_pyfunction!(to_dots, m)?)?;
     m.add_function(wrap_pyfunction!(simplify_metrics, m)?)?;

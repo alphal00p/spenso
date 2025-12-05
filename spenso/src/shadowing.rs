@@ -82,10 +82,14 @@ impl<Aind: AbsInd + ParseableAind> Concretize<SymbolicTensor<Aind>>
     for TensorShell<SymbolicTensor<Aind>>
 {
     fn concretize(self, perm: Option<Permutation>) -> SymbolicTensor<Aind> {
-        if perm.is_none() {
-            return self.structure;
+        if let Some(p) = perm {
+            if p.is_identity() {
+                self.structure
+            } else {
+                panic!("Cannot concretize with a permuation")
+            }
         } else {
-            panic!("Cannot concretize with a permuation")
+            self.structure
         }
     }
 }

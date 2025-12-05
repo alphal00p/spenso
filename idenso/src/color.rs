@@ -1132,4 +1132,74 @@ mod test {
                 .to_bare_ordered_string(),@"-1𝑖*G^4*TR^2*ahaha*ee^2*ohoho"
         );
     }
+
+    #[test]
+    fn minus_sign() {
+        test_initialize();
+        let expr1 = parse_lit!(
+            f(coad(8, hedge(5)), coad(8, hedge(9)), coad(8, hedge(13)))
+                * g(coad(8, hedge(12)), coad(8, hedge(13)))
+                * g(coad(8, hedge(4)), coad(8, hedge(5)))
+                * g(coad(8, hedge(8)), coad(8, hedge(9)))
+                * g(cof(3, hedge(10)), dind(cof(3, hedge(11))))
+                * g(cof(3, hedge(11)), dind(cof(3, hedge(15))))
+                * g(cof(3, hedge(15)), dind(cof(3, hedge(14))))
+                * g(cof(3, hedge(16)), dind(cof(3, hedge(17))))
+                * g(cof(3, hedge(17)), dind(cof(3, hedge(7))))
+                * g(cof(3, hedge(2)), dind(cof(3, hedge(3))))
+                * g(cof(3, hedge(7)), dind(cof(3, hedge(6))))
+                * t(
+                    coad(8, hedge(12)),
+                    cof(3, hedge(14)),
+                    dind(cof(3, hedge(16)))
+                )
+                * t(coad(8, hedge(4)), cof(3, hedge(6)), dind(cof(3, hedge(2))))
+                * t(coad(8, hedge(8)), cof(3, hedge(3)), dind(cof(3, hedge(10)))),
+            default_namespace = "spenso"
+        );
+
+        let expr2 = parse_lit!(
+            f(coad(8, hedge(5)), coad(8, hedge(9)), coad(8, hedge(13)))
+                * g(coad(8, hedge(12)), coad(8, hedge(13)))
+                * g(coad(8, hedge(4)), coad(8, hedge(5)))
+                * g(coad(8, hedge(8)), coad(8, hedge(9)))
+                * g(cof(3, hedge(11)), dind(cof(3, hedge(10))))
+                * g(cof(3, hedge(14)), dind(cof(3, hedge(15))))
+                * g(cof(3, hedge(15)), dind(cof(3, hedge(11))))
+                * g(cof(3, hedge(17)), dind(cof(3, hedge(16))))
+                * g(cof(3, hedge(3)), dind(cof(3, hedge(2))))
+                * g(cof(3, hedge(6)), dind(cof(3, hedge(7))))
+                * g(cof(3, hedge(7)), dind(cof(3, hedge(17))))
+                * t(
+                    coad(8, hedge(12)),
+                    cof(3, hedge(16)),
+                    dind(cof(3, hedge(14)))
+                )
+                * t(coad(8, hedge(4)), cof(3, hedge(2)), dind(cof(3, hedge(6))))
+                * t(coad(8, hedge(8)), cof(3, hedge(10)), dind(cof(3, hedge(3)))),
+            default_namespace = "spenso"
+        );
+
+        // println!(
+        //     "{}",
+        //     (expr1.cook_indices().canonize(AbstractIndex::Dummy)
+        //         / (expr2.cook_indices().canonize(AbstractIndex::Dummy)))
+        //     .cancel()
+        // );
+        println!(
+            "{}\n",
+            expr1
+                .simplify_metrics()
+                .cook_indices()
+                .canonize(AbstractIndex::Dummy)
+        );
+        println!(
+            "{}\n",
+            expr2
+                .simplify_metrics()
+                .cook_indices()
+                .canonize(AbstractIndex::Dummy)
+        );
+        assert!((expr1.simplify_color() + expr2.simplify_color()).is_zero());
+    }
 }

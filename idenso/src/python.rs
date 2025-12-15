@@ -1,6 +1,7 @@
 use crate::color::{ColorSimplifier, SelectiveExpand};
 use crate::gamma::GammaSimplifier;
 use crate::metric::MetricSimplifier;
+use crate::representations::initialize;
 
 use pyo3::{
     Bound, PyResult,
@@ -611,7 +612,6 @@ impl symbolica::api::python::SymbolicaCommunityModule for IdensoModule {
 }
 
 pub(crate) fn initialize_alg_simp(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    // initialize();
     m.add_function(wrap_pyfunction!(initialize, m)?)?;
     m.add_function(wrap_pyfunction!(simplify_gamma, m)?)?;
     m.add_function(wrap_pyfunction!(to_dots, m)?)?;

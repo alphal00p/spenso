@@ -813,9 +813,9 @@ impl<'de> Deserialize<'de> for SerializableAtom {
 
         let state = helper.state;
 
-        let map = State::import(&mut Cursor::new(&state), None).unwrap();
+        let map = State::import(&mut state.as_slice(), None).unwrap();
 
-        let atom = Atom::import_with_map(Cursor::new(&helper.atom), &map).unwrap();
+        let atom = Atom::import_with_map(&mut helper.atom.as_slice(), &map).unwrap();
 
         Ok(SerializableAtom(atom))
     }

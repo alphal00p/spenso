@@ -549,7 +549,7 @@ impl<'a, Structure: TensorStructure + Deserialize<'a> + Clone> Deserialize<'a>
         Ok(ParamTensor {
             tensor: helper
                 .tensor
-                .map_data_ref_result(|a| Atom::import_with_map(a.as_slice(), &map))
+                .map_data_ref_result(|a| Atom::import_with_map(&mut a.as_slice(), &map))
                 .map_err(serde::de::Error::custom)?,
             param_type: helper.param_type,
         })

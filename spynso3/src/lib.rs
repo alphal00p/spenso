@@ -112,10 +112,7 @@ pub(crate) fn initialize_spenso(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// >>> data = [1.0, 2.0, 3.0, 4.0]
 /// >>> tensor = Tensor.dense(structure, data)
 /// >>> sparse_tensor = Tensor.sparse(structure, float)
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(name = "Tensor", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub struct Spensor {
@@ -668,10 +665,7 @@ impl From<MixedTensor<f64, ShadowedStructure<AbstractIndex>>> for Spensor {
 /// --------
 /// >>> evaluator = my_tensor.evaluator(constants={}, funs={}, params=[x, y])
 /// >>> results = evaluator.evaluate([[1.0, 2.0], [3.0, 4.0]])
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(name = "TensorEvaluator", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub struct SpensoExpressionEvaluator {
@@ -851,10 +845,7 @@ impl SpensoExpressionEvaluator {
 /// --------
 /// >>> compiled = evaluator.compile("eval_func", "code.cpp", "lib")
 /// >>> results = compiled.evaluate_complex(large_input_batch)
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(
     name = "CompiledTensorEvaluator",
     module = "symbolica.community.spenso"
@@ -907,6 +898,9 @@ submit! {
         attrs: &[],
         getters: &[],
         setters: &[],
+        file: file!(),
+        line: line!(),
+        column: column!(),
         methods: &[
             MethodInfo {
                 name: "__call__",
@@ -944,6 +938,7 @@ Examples
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
             MethodInfo {
                 name: "__call__",
@@ -979,6 +974,7 @@ Examples
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             }
         ]
     }
@@ -996,6 +992,9 @@ submit! {
         attrs: &[],
         getters: &[],
         setters: &[],
+        file: file!(),
+        line: line!(),
+        column: column!(),
         methods: &[
             MethodInfo {
                 name: "__iter__",
@@ -1010,6 +1009,7 @@ submit! {
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
             MethodInfo {
                 name: "__getitem__",
@@ -1038,6 +1038,7 @@ list of float, complex, or Expression
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
             MethodInfo {
                 name: "__getitem__",
@@ -1066,6 +1067,7 @@ float, complex, or Expression
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
             MethodInfo {
                 name: "__setitem__",
@@ -1107,6 +1109,7 @@ Examples
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
         ]
     }

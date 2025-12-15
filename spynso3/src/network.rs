@@ -57,10 +57,7 @@ use pyo3_stub_gen::{PyStubType, derive::*};
 /// >>> network = TensorNetwork(expr)
 /// >>> network.execute()
 /// >>> result = network.result_tensor()
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(name = "TensorNetwork", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 #[allow(clippy::type_complexity)]
@@ -81,10 +78,7 @@ pub struct SpensoNet {
 /// Single : Execute one contraction at a time, useful for debugging
 /// Scalar : Only contract scalar operations, leaving tensor structure intact
 /// All : Execute all possible contractions for complete evaluation
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass_enum(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass_enum)]
 #[pyclass(name = "ExecutionMode", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub enum ExecutionMode {

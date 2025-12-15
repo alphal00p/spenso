@@ -146,10 +146,7 @@ impl PyStubType for SpensoSlotOrArgOrRep {
 /// >>> mu = rep('mu')
 /// >>> nu = rep('nu')
 /// >>> tensor_structure = T(mu, nu)
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(name = "TensorName", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub struct SpensoName {
@@ -467,10 +464,7 @@ impl SpensoName {
 /// >>> T = TensorName("T")
 /// >>> named_indices = T(mu, nu)
 /// >>> expr = named_indices.to_expression()
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(name = "TensorIndices", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub struct SpensoIndices {
@@ -866,10 +860,7 @@ impl SpensoIndices {
 /// # Create symbolic expression
 /// expr = structure.symbolic('a', 'b')  # T(a, b)
 /// ```
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(name = "TensorStructure", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub struct SpensoStructure {
@@ -1361,10 +1352,7 @@ impl PyStubType for PossiblyIndexed {
     }
 }
 
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(name = "Representation", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 /// A representation in the sense of group representation theory for tensor indices.
@@ -1790,10 +1778,7 @@ impl SpensoRepresentation {
 /// from symbolica.community.spenso import TensorIndices
 /// tensor_structure = TensorIndices(slot1, slot2)
 /// ```
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(name = "Slot", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub struct SpensoSlot {
@@ -1891,6 +1876,9 @@ submit! {
         attrs: &[],
         getters: &[],
         setters: &[],
+        file: file!(),
+        line: line!(),
+        column: column!(),
         methods: &[
             MethodInfo {
                 name: "__call__",
@@ -1931,6 +1919,7 @@ Examples
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
             MethodInfo {
                 name: "__call__",
@@ -1969,6 +1958,7 @@ Examples
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             }
         ]
     }
@@ -1984,6 +1974,9 @@ PyMethodsInfo {
     attrs: &[],
     getters: &[],
     setters: &[],
+    file: file!(),
+    line: line!(),
+    column: column!(),
     methods: &[
         MethodInfo{
             name:"__new__",
@@ -2033,6 +2026,7 @@ Examples
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_overload: true,
         },
         MethodInfo {
             name: "__getitem__",
@@ -2062,6 +2056,7 @@ list of list of int
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_overload: true,
         },
         MethodInfo {
             name: "__getitem__",
@@ -2090,6 +2085,7 @@ int
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_overload: true,
         }, MethodInfo {
             name: "__getitem__",
             parameters: &[
@@ -2118,6 +2114,7 @@ list of int
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_overload: true,
         },
     ]
 }
@@ -2130,6 +2127,9 @@ submit! {
         attrs: &[],
         getters: &[],
         setters: &[],
+        file: file!(),
+        line: line!(),
+        column: column!(),
         methods: &[
             MethodInfo{
                 name:"__new__",
@@ -2177,6 +2177,7 @@ Examples
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
 
             MethodInfo {
@@ -2206,6 +2207,7 @@ list of list of int
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
             MethodInfo {
                 name: "__getitem__",
@@ -2234,6 +2236,7 @@ int
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             }, MethodInfo {
                 name: "__getitem__",
                 parameters: &[
@@ -2261,6 +2264,7 @@ list of int
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
             MethodInfo {
                 name: "__call__",
@@ -2305,6 +2309,7 @@ Examples
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
             MethodInfo {
                 name: "symbolic",
@@ -2359,6 +2364,7 @@ Examples
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
 
             MethodInfo {
@@ -2418,6 +2424,7 @@ Examples
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
         ]
     }

@@ -68,10 +68,7 @@ use super::{
 /// >>> data = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
 /// >>> tensor = LibraryTensor.dense(structure, data)
 /// >>> sparse_tensor = LibraryTensor.sparse(structure, float)
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(name = "LibraryTensor", module = "symbolica.community.spenso")]
 #[derive(Clone)]
 pub struct LibrarySpensor {
@@ -478,6 +475,9 @@ submit! {
         attrs: &[],
         getters: &[],
         setters: &[],
+        file: file!(),
+        line: line!(),
+        column: column!(),
         methods: &[
             MethodInfo {
                 name: "__getitem__",
@@ -506,6 +506,7 @@ list of float, complex, or Expression
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
             MethodInfo {
                 name: "__getitem__",
@@ -534,6 +535,7 @@ float, complex, or Expression
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
             MethodInfo {
                 name: "__setitem__",
@@ -574,6 +576,7 @@ Examples
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_overload: true,
             },
         ]
     }

@@ -50,19 +50,13 @@ use super::ModuleInit;
 /// lib.register(tensor)
 /// tensor_ref = lib[name]
 /// ```
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(name = "TensorLibrary", module = "symbolica.community.spenso")]
 pub struct SpensorLibrary {
     pub(crate) library: TensorLibrary<MixedTensor<f64, ExplicitKey<AbstractIndex>>, AbstractIndex>,
 }
 
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(name = "TensorFunctionLibrary", module = "symbolica.community.spenso")]
 pub struct SpensorFunctionLibrary {
     pub(crate) library:
@@ -318,10 +312,7 @@ impl SpensorLibrary {
 /// # Variants:
 /// - Weyl: Tensors related to Weyl spinors and chiral representations
 /// - Algebra: Tensors related to algebraic structures and Lie algebras
-#[cfg_attr(
-    feature = "python_stubgen",
-    gen_stub_pyclass_enum(module = "symbolica.community.spenso")
-)]
+#[cfg_attr(feature = "python_stubgen", gen_stub_pyclass_enum)]
 #[pyclass(eq, eq_int, module = "symbolica.community.spenso")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TensorNamespace {

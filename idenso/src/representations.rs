@@ -1,5 +1,5 @@
 use spenso::{
-    network::parsing::SPENSO_TAG,
+    network::{library::symbolic::ETS, parsing::SPENSO_TAG},
     structure::{
         abstract_index::AIND_SYMBOLS,
         representation::{Euclidean, Lorentz, Minkowski, RepName},
@@ -142,6 +142,7 @@ pub fn initialize() {
     let _ = RS.a_;
     let _ = MS.dot;
     let _ = AGS.gamma;
+    let _ = ETS.metric;
     let _ = CS.f;
     let _ = SPENSO_TAG.bracket;
 }

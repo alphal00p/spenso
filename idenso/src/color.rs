@@ -112,7 +112,6 @@ impl ColorSymbols {
 pub static CS: LazyLock<ColorSymbols> = LazyLock::new(|| ColorSymbols {
     t: symbol!("spenso::t";Real),
     f: symbol!("spenso::f";Real),
-
     ca: symbol!("ca"),
     adj_: symbol!("adj_"),
     nc_: symbol!("nc_"),

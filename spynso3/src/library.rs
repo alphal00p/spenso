@@ -284,7 +284,7 @@ impl SpensorLibrary {
     ///
     /// Returns a library containing standard HEP tensors such as gamma matrices,
     /// color generators, metric tensors, and other commonly used structures in
-    /// particle physics calculations.
+    /// particle physics calculations. They are floating point tensors with f64 precision.
     ///
     /// Returns
     /// -------
@@ -300,6 +300,30 @@ impl SpensorLibrary {
     pub fn hep_lib() -> Self {
         Self {
             library: spenso_hep_lib::hep_lib(1., 0.),
+        }
+    }
+
+    #[staticmethod]
+    /// Create a library pre-loaded with High Energy Physics tensor definitions.
+    ///
+    /// Returns a library containing standard HEP tensors such as gamma matrices,
+    /// color generators, metric tensors, and other commonly used structures in
+    /// particle physics calculations. They are tensors with atom numeric entries.
+    ///
+    /// Returns
+    /// -------
+    /// TensorLibrary
+    ///     A TensorLibrary pre-populated with HEP tensor definitions
+    ///
+    /// Examples
+    /// --------
+    /// >>> import symbolica
+    /// >>> from symbolica.community.spenso import TensorLibrary, TensorName
+    /// >>> hep_lib = TensorLibrary.hep_lib()
+    /// >>> gamma_structure = hep_lib[symbolica.S("spenso::gamma")]
+    pub fn hep_lib_atom() -> Self {
+        Self {
+            library: spenso_hep_lib::hep_lib_atom(),
         }
     }
 }

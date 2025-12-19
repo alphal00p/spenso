@@ -210,31 +210,31 @@ pub struct ExplicitTensorSymbols {
 pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTensorSymbols {
     flat: symbol!("♭";Symmetric),
     // sharp: symbol!("♯";Symmetric),
-    metric: Symbol::id(),
+    metric: symbol!(METRIC_NAME;Symmetric,Real;print = |a, opt| {
+        if let Some(("typst", 1)) = opt.custom_print_mode && let AtomView::Fun(_)=a {
+            let body = r#"(a,b) = {
+if a.at("lower",default:false) and b.at("lower",default:false){
+$eta_(#to-eq(a) #to-eq(b))$
+} else if a.at("lower",default:false) and b.at("upper",default:false){
+$delta_(#to-eq(a))^#to-eq(b)$
+}else if b.at("lower",default:false) and a.at("upper",default:false){
+$delta_(#to-eq(b))^#to-eq(a)$
+}else if a.at("upper",default:false) and b.at("upper",default:false){
+$eta^(#to-eq(a)^#to-eq(b))$
+} else{
+$g(#to-eq(a),#to-eq(b))$
+}
+}"#;
+            Some(body.into())
+        } else {
+            None
+        }
+    }),
 });
 
 impl IdentityName for Symbol {
     fn id() -> Self {
-        symbol!(METRIC_NAME;Symmetric,Real;print = |a, opt| {
-            if let Some(("typst", 1)) = opt.custom_print_mode && let AtomView::Fun(f)=a {
-                let body = r#"(a,b) = {
-  if a.at("lower",default:false) and b.at("lower",default:false){
-    $eta_(#to-eq(a) #to-eq(b))$
-  } else if a.at("lower",default:false) and b.at("upper",default:false){
-    $delta_(#to-eq(a))^#to-eq(b)$
-  }else if b.at("lower",default:false) and a.at("upper",default:false){
-    $delta_(#to-eq(b))^#to-eq(a)$
-  }else if a.at("upper",default:false) and b.at("upper",default:false){
-    $eta^(#to-eq(a)^#to-eq(b))$
-  } else{
-    $g(#to-eq(a),#to-eq(b))$
-  }
-}"#;
-                Some(body.into())
-            } else {
-                None
-            }
-        })
+        ETS.metric
     }
 }
 impl<T: HasStructure<Structure = ExplicitKey<Aind>>, Aind: AbsInd> Default

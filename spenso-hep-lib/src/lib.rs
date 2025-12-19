@@ -11,20 +11,17 @@ use spenso::{
             function_lib::{INBUILTS, PanicMissingConcrete, SymbolLib},
             symbolic::{ExplicitKey, TensorLibrary},
         },
-        parsing::{SPENSO_TAG, ShadowedStructure},
+        parsing::ShadowedStructure,
         store::NetworkStore,
     },
     structure::{PermutedStructure, TensorStructure, abstract_index::AbstractIndex, slot::AbsInd},
     tensors::{
         complex::RealOrComplexTensor,
         data::{SetTensorData, SparseTensor, StorageTensor},
-        parametric::MixedTensor,
+        parametric::{MixedTensor, ParamOrConcrete},
     },
 };
-use symbolica::{
-    atom::{Atom, Symbol},
-    symbol,
-};
+use symbolica::atom::{Atom, Symbol};
 
 #[allow(clippy::similar_names)]
 pub fn gamma_data_dirac<T, N>(structure: N, one: T, zero: T) -> SparseTensor<Complex<T>, N>
@@ -438,6 +435,70 @@ where
     weyl
 }
 
+pub fn hep_lib_atom<Aind: AbsInd, T: TensorLibraryData + Clone + Default>()
+-> TensorLibrary<MixedTensor<T, ExplicitKey<Aind>>, Aind>
+where
+{
+    let mut weyl = TensorLibrary::new();
+    initialize();
+    weyl.update_ids();
+
+    let one = Atom::one();
+    let zero = Atom::Zero;
+
+    let gamma_key = PermutedStructure::identity(ParamOrConcrete::param(
+        gamma_data_weyl(AGS.gamma_strct::<Aind>(4), one.clone(), zero.clone())
+            .map_data(|a| a.re + a.im * Atom::i())
+            .into(),
+    ));
+    // println!("permutation{}", gamma_key.rep_permutation);
+    weyl.insert_explicit(gamma_key);
+    let gamma_conj_key = PermutedStructure::identity(ParamOrConcrete::param(
+        gamma_conj_data_weyl(AGS.gamma_conj_strct::<Aind>(4), one.clone(), zero.clone())
+            .map_data(|a| a.re + a.im * Atom::i())
+            .into(),
+    ));
+    // println!("permutation{}", gamma_key.rep_permutation);
+    weyl.insert_explicit(gamma_conj_key);
+    let gamma_adj_key = PermutedStructure::identity(ParamOrConcrete::param(
+        gamma_adj_data_weyl(AGS.gamma_adj_strct::<Aind>(4), one.clone(), zero.clone())
+            .map_data(|a| a.re + a.im * Atom::i())
+            .into(),
+    ));
+    // println!("permutation{}", gamma_key.rep_permutation);
+    weyl.insert_explicit(gamma_adj_key);
+    let gamma0_key = PermutedStructure::identity(ParamOrConcrete::param(
+        gamma0_weyl(AGS.gamma0_strct::<Aind>(4), one.clone(), zero.clone())
+            .map_data(|a| a.re + a.im * Atom::i())
+            .into(),
+    ));
+    // println!("permutation{}", gamma_key.rep_permutation);
+    weyl.insert_explicit(gamma0_key);
+
+    let gamma5_key = PermutedStructure::identity(ParamOrConcrete::param(
+        gamma5_weyl_data(AGS.gamma5_strct::<Aind>(4), one.clone(), zero.clone())
+            .map_data(|a| a.re + a.im * Atom::i())
+            .into(),
+    ));
+    weyl.insert_explicit(gamma5_key);
+
+    let projm_key = PermutedStructure::identity(ParamOrConcrete::param(
+        proj_m_data_weyl(AGS.projm_strct::<Aind>(4), one.clone(), zero.clone())
+            .map_data(|a| a.re + a.im * Atom::i())
+            .into(),
+    ));
+    weyl.insert_explicit(projm_key);
+
+    let projp_key = PermutedStructure::identity(ParamOrConcrete::param(
+        proj_p_data_weyl(AGS.projp_strct::<Aind>(4), one.clone(), zero.clone())
+            .map_data(|a| a.re + a.im * Atom::i())
+            .into(),
+    ));
+    weyl.insert_explicit(projp_key);
+
+    weyl
+}
+
 pub type HepTensor<Aind> = MixedTensor<f64, ShadowedStructure<Aind>>;
 
 pub type HepNet<Aind> =
@@ -461,43 +522,20 @@ pub static FUN_LIB: LazyLock<
 #[cfg(test)]
 mod tests {
 
-    use idenso::{
-        gamma::GammaSimplifier,
-        metric::{MetricSimplifier, PermuteWithMetric},
-        representations::Bispinor,
-    };
     use spenso::{
-        algebra::upgrading_arithmetic::FallibleSub,
-        iterators::IteratableTensor,
         network::{
-            ExecutionResult, Network, Sequential, SingleSmallestDegree, SmallestDegree,
-            SmallestDegreeIter, Steps,
+            Network, SingleSmallestDegree, SmallestDegreeIter, Steps,
             parsing::{ParseSettings, ShadowedStructure},
             store::NetworkStore,
         },
-        shadowing::Concretize,
-        structure::{
-            HasStructure, IndexlessNamedStructure,
-            abstract_index::AbstractIndex,
-            permuted::Perm,
-            representation::{Minkowski, RepName},
-            slot::IsAbstractSlot,
-        },
-        tensors::{
-            data::{DenseTensor, SparseOrDense},
-            parametric::atomcore::TensorAtomMaps,
-            symbolic::SymbolicTensor,
-        },
+        structure::{HasStructure, abstract_index::AbstractIndex},
     };
     use symbolica::{
         atom::{Atom, Symbol},
-        function,
-        id::ConditionResult,
-        parse, parse_lit, symbol,
+        parse, parse_lit,
     };
 
     use super::*;
-    use ahash::{HashMap, HashMapExt};
 
     #[test]
     fn simple_scalar() {

@@ -17,7 +17,7 @@ use std::{
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::{Atom, AtomView, Symbol},
-    {function, symbol},
+    symbol,
 };
 
 use thiserror::Error;

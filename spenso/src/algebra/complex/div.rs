@@ -214,10 +214,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::algebra::complex::Complex;
+    // use crate::algebra::complex::Complex;
 
-    fn div() {
-        let a = Complex::new(1.0, 2.0);
-        a / 2.0;
-    }
+    // fn div() {
+    //     let a = Complex::new(1.0, 2.0);
+    //     a / 2.0;
+    // }
 }

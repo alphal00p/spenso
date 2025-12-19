@@ -1652,20 +1652,9 @@ dependencies = [
  "num-complex",
  "numpy",
  "pyo3",
- "pyo3-stub-gen-derive 0.17.2",
+ "pyo3-stub-gen-derive",
  "serde",
  "toml 0.9.8",
-]
-
-[[package]]
-name = "pyo3-stub-gen-derive"
-version = "0.13.1"
-source = "git+https://github.com/benruijl/pyo3-stub-gen?branch=patched#f421197e60e3617992ebfe0615db1fe846c1da81"
-dependencies = [
- "heck 0.5.0",
- "proc-macro2",
- "quote",
- "syn 2.0.111",
 ]
 
 [[package]]
@@ -2205,7 +2194,7 @@ dependencies = [
  "itertools 0.14.0",
  "pyo3",
  "pyo3-stub-gen",
- "pyo3-stub-gen-derive 0.13.1",
+ "pyo3-stub-gen-derive",
  "spenso",
  "spenso-hep-lib",
  "spenso-macros",
@@ -2222,9 +2211,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "symbolica"
-version = "1.1.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a62dbced0d6247ede9cc320ef5bd68918d23dd68551d9ec0d5671ffff8a0c20"
+checksum = "2f45dedffcf2374b946b2b10c30ac8e8180ae510d13aa3242a4f9269688ebc83"
 dependencies = [
  "ahash",
  "append-only-vec",
@@ -2242,7 +2231,7 @@ dependencies = [
  "once_cell",
  "pyo3",
  "pyo3-stub-gen",
- "pyo3-stub-gen-derive 0.17.2",
+ "pyo3-stub-gen-derive",
  "rand 0.9.2",
  "rand_xoshiro 0.7.0",
  "rayon",

@@ -58,8 +58,6 @@ use idenso::{
     IndexTooling, color::CS, gamma::AGS, metric::PermuteWithMetric, representations::Bispinor,
 };
 
-use crate::{EMPTY, FALSE, TensorElements};
-
 use super::{ModuleInit, SliceOrIntOrExpanded};
 
 #[cfg(feature = "python_stubgen")]

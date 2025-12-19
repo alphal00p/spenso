@@ -158,7 +158,7 @@ pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
     gamma: symbol!(
         "spenso::gamma",
         print = |a, opts| if let Some(("typst", 1)) = opts.custom_print_mode
-            && let AtomView::Fun(f) = a
+            && let AtomView::Fun(_) = a
         {
             let body = r#"(a,b) = {
 if a.at("lower",default:false) and b.at("lower",default:false){

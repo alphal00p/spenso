@@ -7,14 +7,13 @@ use spenso::{
     network::{
         ExecutionResult, Sequential, SmallestDegree, TensorNetworkError, TensorOrScalarOrKey,
         library::{TensorLibraryData, symbolic::ExplicitKey},
-        parsing::{ParseSettings, ShadowedStructure},
+        parsing::ParseSettings,
     },
     structure::{
         IndexlessNamedStructure, ScalarTensor,
         abstract_index::AbstractIndex,
         permuted::Perm,
         representation::{Minkowski, RepName},
-        slot::{AbsInd, ParseableAind},
     },
     tensors::{parametric::ParamTensor, symbolic::SymbolicTensor},
 };

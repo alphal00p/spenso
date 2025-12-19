@@ -8,7 +8,7 @@ use crate::{
     iterators::{
         CoreFlatFiberIterator, Fiber, IteratableTensor, IteratesAlongFibers, ResetableIterator,
     },
-    structure::{concrete_index::ExpandedIndex, HasStructure, StructureContract, TensorStructure},
+    structure::{HasStructure, StructureContract, TensorStructure, concrete_index::ExpandedIndex},
     tensors::data::{DataIterator, DenseTensor, GetTensorData, SetTensorData, SparseTensor},
 };
 
@@ -19,9 +19,9 @@ use super::{ContractableWith, ContractionError, ExteriorProduct, ExteriorProduct
 impl<T, U, I> ExteriorProduct<SparseTensor<T, I>> for SparseTensor<U, I>
 where
     U: ContractableWith<
-        T,
-        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
-    >,
+            T,
+            Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+        >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = SparseTensor<U::Out, I>;
@@ -50,9 +50,9 @@ where
 impl<T, U, I> ExteriorProduct<DenseTensor<T, I>> for DenseTensor<U, I>
 where
     U: ContractableWith<
-        T,
-        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
-    >,
+            T,
+            Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+        >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -83,9 +83,9 @@ where
 impl<T, U, I> ExteriorProduct<SparseTensor<T, I>> for DenseTensor<U, I>
 where
     U: ContractableWith<
-        T,
-        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
-    >,
+            T,
+            Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+        >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -115,9 +115,9 @@ where
 impl<T, U, I> ExteriorProduct<DenseTensor<T, I>> for SparseTensor<U, I>
 where
     U: ContractableWith<
-        T,
-        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
-    >,
+            T,
+            Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+        >,
     T: TrySmallestUpgrade<U, LCM = U::Out>,
     I: TensorStructure + Clone + StructureContract,
 {
@@ -155,9 +155,9 @@ where
 impl<T, U, I> ExteriorProductInterleaved<SparseTensor<T, I>> for SparseTensor<U, I>
 where
     U: ContractableWith<
-        T,
-        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
-    >,
+            T,
+            Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+        >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = SparseTensor<U::Out, I>;
@@ -193,10 +193,10 @@ where
                     let i = self.structure().flat_index(expa).unwrap();
                     let j = other.structure().flat_index(expb).unwrap();
 
-                    if let Some(u) = self.get_ref_linear(i) {
-                        if let Some(v) = other.get_ref_linear(j) {
-                            result_data.insert(result_index, u.mul_fallible(v).unwrap());
-                        }
+                    if let Some(u) = self.get_ref_linear(i)
+                        && let Some(v) = other.get_ref_linear(j)
+                    {
+                        result_data.insert(result_index, u.mul_fallible(v).unwrap());
                     }
                 }
                 other_fiber_class_iter.reset();
@@ -215,9 +215,9 @@ where
 impl<T, U, I> ExteriorProductInterleaved<DenseTensor<T, I>> for DenseTensor<U, I>
 where
     U: ContractableWith<
-        T,
-        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
-    >,
+            T,
+            Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+        >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -273,9 +273,9 @@ where
 impl<T, U, I> ExteriorProductInterleaved<SparseTensor<T, I>> for DenseTensor<U, I>
 where
     U: ContractableWith<
-        T,
-        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
-    >,
+            T,
+            Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+        >,
     I: TensorStructure + Clone + StructureContract,
 {
     type LCM = DenseTensor<U::Out, I>;
@@ -330,9 +330,9 @@ where
 impl<T, U, I> ExteriorProductInterleaved<DenseTensor<T, I>> for SparseTensor<U, I>
 where
     U: ContractableWith<
-        T,
-        Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
-    >,
+            T,
+            Out: FallibleAddAssign<U::Out> + FallibleSubAssign<U::Out> + Clone + RefZero + IsZero,
+        >,
     T: TrySmallestUpgrade<U, LCM = U::Out>,
     I: TensorStructure + Clone + StructureContract,
 {

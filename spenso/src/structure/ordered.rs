@@ -5,7 +5,6 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 use tabled::{builder::Builder, settings::Style};
 
-use crate::structure::slot::SlotError;
 #[cfg(feature = "shadowing")]
 use crate::{
     shadowing::symbolica_utils::IntoSymbol,

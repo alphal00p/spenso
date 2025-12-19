@@ -76,7 +76,6 @@ jobs:
   nextest:
     name: Nextest ${{ inputs.os }} / ${{ inputs.crate }} / ${{ inputs.features }}
     runs-on: ${{ inputs.os }}
-    needs: clippy
     environment: symbolica_keys # To access SYMBOLICA_LICENSE
 
     steps:

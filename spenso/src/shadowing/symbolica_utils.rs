@@ -4,12 +4,11 @@ use crate::{
 };
 use derive_more::Display;
 use itertools::Itertools;
-use rayon::Yield;
 use serde::{Deserialize, Serialize};
 use symbolica::{
     atom::{
-        AddView, Atom, AtomCore, AtomView, FunctionBuilder, MulView, NumView, PowView, Symbol,
-        VarView, representation::FunView,
+        AddView, Atom, AtomCore, AtomView, FunctionBuilder, MulView, PowView, Symbol,
+        representation::FunView,
     },
     coefficient::CoefficientView,
     domains::{float::Complex, rational::Rational},
@@ -22,14 +21,11 @@ use symbolica::{
     utils::Settable,
 };
 
-use symbolica::domains::SelfRing;
-
 extern crate derive_more;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fmt::{self, Debug, Display, Error},
-    io::Cursor,
+    fmt::{Debug, Display, Error},
 };
 
 use anyhow::Result;
@@ -144,7 +140,7 @@ impl<A: AtomCore> AtomCoreExt for A {
                     a.get_symbol().get_namespace(),
                     a.get_symbol().get_stripped_name(),
                 );
-                fn_map.add_external_function(a.get_symbol(), dashed_name);
+                let _ = fn_map.add_external_function(a.get_symbol(), dashed_name);
                 true
             } else {
                 true
@@ -164,8 +160,8 @@ impl<A: AtomCore> AtomCoreExt for A {
             )
             .unwrap();
 
-        writeln!(f, "#{{");
-        writeln!(f, "{}", &settings.preamble);
+        writeln!(f, "#{{")?;
+        writeln!(f, "{}", &settings.preamble)?;
         fn typst_rat(r: &Rational) -> String {
             if r.is_integer() {
                 r.numerator().to_string()
@@ -192,7 +188,7 @@ impl<A: AtomCore> AtomCoreExt for A {
             }
         }
 
-        let (instr, size, consts) = eval_tree.export_instructions();
+        let (instr, _, consts) = eval_tree.export_instructions();
 
         writeln!(
             f,
@@ -271,7 +267,7 @@ impl<A: AtomCore> AtomCoreExt for A {
                         args.into_iter()
                             .map(|a| typst_slot(a, &consts))
                             .join(" dot ")
-                    );
+                    )?;
                 }
                 Instruction::ExternalFun(o, name, args) => {
                     writeln!(
@@ -394,7 +390,7 @@ impl FormatWithState for AtomView<'_> {
         &self,
         fmt: &mut W,
         opts: &PrintOptions,
-        mut print_state: PrintState,
+        print_state: PrintState,
     ) -> Result<bool, Error> {
         match self {
             AtomView::Num(n) => n.as_view().format(fmt, opts, print_state),
@@ -412,13 +408,13 @@ impl FormatWithState for FunView<'_> {
         &self,
         f: &mut W,
         opts: &PrintOptions,
-        mut print_state: PrintState,
+        print_state: PrintState,
     ) -> Result<bool, Error> {
         if print_state.in_sum {
             f.write_char('+')?;
         }
 
-        let id = self.get_symbol();
+        // let id = self.get_symbol();
 
         // if let Some(custom_print) = &id.fo {
         //     if let Some(s) = custom_print(self.as_view(), opts) {
@@ -432,7 +428,7 @@ impl FormatWithState for FunView<'_> {
         for a in self.iter() {
             if a.is_upper() {
                 let mut out = String::new();
-                a.fmt_output(&mut out, opts, print_state.clone())?;
+                a.fmt_output(&mut out, opts, print_state)?;
                 let out_low = format!("#hide(${}$)", out);
                 uppers.push(out);
                 lowers.push(out_low);
@@ -440,7 +436,7 @@ impl FormatWithState for FunView<'_> {
 
             if a.is_lower() {
                 let mut out = String::new();
-                a.fmt_output(&mut out, opts, print_state.clone())?;
+                a.fmt_output(&mut out, opts, print_state)?;
                 let out_low = format!("#hide(${}$)", out);
                 lowers.push(out);
                 uppers.push(out_low);
@@ -491,7 +487,7 @@ impl FormatWithState for FunView<'_> {
                 if i + 1 < n_args {
                     f.write_char(',')?;
                 }
-                a.fmt_output(f, opts, print_state.clone())?;
+                a.fmt_output(f, opts, print_state)?;
             }
             // f.write_char(')');
             if n_args > 0 {
@@ -1027,25 +1023,14 @@ mod test {
         network::parsing::SPENSO_TAG,
         shadowing::symbolica_utils::{AtomCoreExt, TypstSettings},
     };
-    use itertools::Itertools;
-    use std::{collections::BTreeSet, fmt::Write};
-    use symbolica::{
-        atom::{AtomCore, AtomView},
-        domains::{
-            float::{Complex, FloatLike},
-            rational::Rational,
-        },
-        evaluate::{FunctionMap, Instruction, OptimizationSettings, Slot},
-        parse, parse_lit,
-        printer::PrintState,
-        symbol, tag,
-    };
+
+    use symbolica::{parse, symbol, tag};
     #[test]
     fn print() {
-        let lower = symbol!(
+        let _lower = symbol!(
             "lower",
             tag = SPENSO_TAG.lower,
-            print = |a, opt| {
+            print = |_, opt| {
                 if let Some(("typst", 1)) = opt.custom_print_mode {
                     let body = r#"{
 let args = arg.pos().map(to-eq).join("")
@@ -1058,10 +1043,10 @@ let args = arg.pos().map(to-eq).join("")
             }
         );
 
-        let upper = symbol!(
+        let _upper = symbol!(
             "upper",
             tags = [SPENSO_TAG.upper.clone(), tag!("Real")],
-            print = |a, opt| {
+            print = |_, opt| {
                 if let Some(("typst", 1)) = opt.custom_print_mode {
                     let body = r#"{
 let args = arg.pos().map(to-eq).join("")
@@ -1080,7 +1065,8 @@ let args = arg.pos().map(to-eq).join("")
         // .r ith(parse_lit!(pow(_x, _y)));
 
         let mut out = String::new();
-        expr.typst_fmt(&mut out, &TypstSettings::lowering());
+        expr.typst_fmt(&mut out, &TypstSettings::lowering())
+            .unwrap();
 
         println!("{}", out);
         println!("{}", expr.typst())

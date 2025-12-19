@@ -28,7 +28,7 @@ impl<T, S, K: Display + Clone> FunctionLibrary<T, S> for ErroringLibrary<K> {
     fn apply_scalar(
         &self,
         key: &Self::Key,
-        scalar: S,
+        _scalar: S,
     ) -> anyhow::Result<S, FunctionLibraryError<Self::Key>> {
         Err(FunctionLibraryError::NotFound(key.clone()))
     }

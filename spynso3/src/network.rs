@@ -702,8 +702,6 @@ mod tests {
     use spenso_hep_lib::HEP_LIB;
     use symbolica::parse_lit;
 
-    use crate::initialize_spenso;
-
     use super::*;
 
     #[test]

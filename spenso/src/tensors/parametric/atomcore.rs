@@ -6,6 +6,7 @@ use symbolica::{
     atom::{Atom, AtomCore, AtomView, Indeterminate, KeyLookup, Symbol},
     coefficient::{Coefficient, CoefficientView, ConvertToRing},
     domains::{
+        EuclideanDomain, InternalOrdering,
         atom::AtomField,
         factorized_rational_polynomial::{
             FactorizedRationalPolynomial, FromNumeratorAndFactorizedDenominator,
@@ -16,7 +17,6 @@ use symbolica::{
         rational_polynomial::{
             FromNumeratorAndDenominator, RationalPolynomial, RationalPolynomialField,
         },
-        EuclideanDomain, InternalOrdering,
     },
     evaluate::{EvaluationFn, ExpressionEvaluator, FunctionMap, OptimizationSettings},
     id::{
@@ -24,8 +24,8 @@ use symbolica::{
         PatternRestriction, ReplaceBuilder,
     },
     poly::{
-        factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, series::Series,
-        Exponent, PolyVariable, PositiveExponent,
+        Exponent, PolyVariable, PositiveExponent, factor::Factorize, gcd::PolynomialGCD,
+        polynomial::MultivariatePolynomial, series::Series,
     },
     solve::SolveError,
     state::RecycledAtom,
@@ -245,8 +245,7 @@ impl<'b, 'a, Phantom> From<ReplaceBuilderGeneric<'b, AtomView<'a>, Phantom>>
     for ReplaceBuilder<'a, 'b>
 {
     fn from(builder: ReplaceBuilderGeneric<'b, AtomView<'a>, Phantom>) -> Self {
-        let rep = ReplaceBuilder::new(builder.target, builder.pattern);
-        rep
+        ReplaceBuilder::new(builder.target, builder.pattern)
     }
 }
 
@@ -1503,11 +1502,7 @@ impl<S: TensorStructure + Clone> TensorAtomOps for DenseTensor<Atom, S> {
             }
         }
 
-        if is_polynomial {
-            Some(set)
-        } else {
-            None
-        }
+        if is_polynomial { Some(set) } else { None }
     }
 }
 
@@ -1591,11 +1586,7 @@ impl<S: TensorStructure + Clone> TensorAtomOps for SparseTensor<Atom, S> {
             }
         }
 
-        if is_polynomial {
-            Some(set)
-        } else {
-            None
-        }
+        if is_polynomial { Some(set) } else { None }
     }
 }
 

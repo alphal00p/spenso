@@ -7,13 +7,13 @@ use symbolica::{
     atom::{Atom, AtomCore, AtomView, Indeterminate, KeyLookup, Symbol},
     coefficient::ConvertToRing,
     domains::{
+        EuclideanDomain, InternalOrdering,
         factorized_rational_polynomial::{
             FactorizedRationalPolynomial, FromNumeratorAndFactorizedDenominator,
         },
         float::{Complex as SymComplex, FloatLike, Real, SingleFloat},
         rational::Rational,
         rational_polynomial::{FromNumeratorAndDenominator, RationalPolynomial},
-        EuclideanDomain, InternalOrdering,
     },
     evaluate::{
         CompileOptions, CompiledCode, CompiledNumber, EvalTree, EvaluationFn, ExportNumber,
@@ -21,8 +21,8 @@ use symbolica::{
     },
     id::{BorrowReplacement, Context, Pattern},
     poly::{
-        factor::Factorize, gcd::PolynomialGCD, polynomial::MultivariatePolynomial, PolyVariable,
-        PositiveExponent,
+        PolyVariable, PositiveExponent, factor::Factorize, gcd::PolynomialGCD,
+        polynomial::MultivariatePolynomial,
     },
     symbol,
     utils::{BorrowedOrOwned, Settable},
@@ -30,32 +30,32 @@ use symbolica::{
 
 use crate::{
     algebra::{
-        complex::{symbolica_traits::CompiledComplexEvaluatorSpenso, Complex},
+        complex::{Complex, symbolica_traits::CompiledComplexEvaluatorSpenso},
         upgrading_arithmetic::TrySmallestUpgrade,
     },
     iterators::IteratableTensor,
     shadowing::{
-        symbolica_utils::{IntoArgs, IntoSymbol},
         ShadowMapping, Shadowable,
+        symbolica_utils::{IntoArgs, IntoSymbol},
     },
     structure::{
-        slot::{AbsInd, IsAbstractSlot, ParseableAind},
         HasName, TensorStructure, ToSymbolic,
+        slot::{AbsInd, IsAbstractSlot, ParseableAind},
     },
     tensors::{
         complex::RealOrComplexTensor,
         data::DataTensor,
         parametric::{
-            atomcore::{PatternReplacement, ReplaceBuilderGeneric, TensorAtomMaps, TensorAtomOps},
             AtomViewOrConcrete, CompiledEvalTensor, EvalTensor, EvalTreeTensor, MixedTensor,
             ParamTensor,
+            atomcore::{PatternReplacement, ReplaceBuilderGeneric, TensorAtomMaps, TensorAtomOps},
         },
     },
 };
 
 use super::{
-    store::{NetworkStore, TensorScalarStore, TensorScalarStoreMapping},
     ExecutionResult, Network, TensorNetworkError,
+    store::{NetworkStore, TensorScalarStore, TensorScalarStoreMapping},
 };
 
 impl<'a> From<ExecutionResult<Cow<'a, Atom>>> for Atom {
@@ -69,13 +69,13 @@ impl<'a> From<ExecutionResult<Cow<'a, Atom>>> for Atom {
 }
 
 impl<
-        Store: TensorScalarStore<Tensor = MixedTensor<T, S>, Scalar: AtomCore>,
-        T,
-        S,
-        K,
-        FK,
-        Aind: AbsInd,
-    > Network<Store, K, FK, Aind>
+    Store: TensorScalarStore<Tensor = MixedTensor<T, S>, Scalar: AtomCore>,
+    T,
+    S,
+    K,
+    FK,
+    Aind: AbsInd,
+> Network<Store, K, FK, Aind>
 where
     S: TensorStructure + Clone,
     T: Clone,
@@ -87,6 +87,7 @@ where
         ReplaceBuilderGeneric::new(self, pattern)
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn replace_multiple<R: BorrowReplacement>(
         &self,
         replacements: &[R],
@@ -120,18 +121,19 @@ where
 }
 
 impl<
-        Store: TensorScalarStore<Tensor = T, Scalar = S>,
-        T,
-        S,
-        K: Clone,
-        FK: Clone,
-        Aind: AbsInd + ParseableAind,
-    > Network<Store, K, FK, Aind>
+    Store: TensorScalarStore<Tensor = T, Scalar = S>,
+    T,
+    S,
+    K: Clone,
+    FK: Clone,
+    Aind: AbsInd + ParseableAind,
+> Network<Store, K, FK, Aind>
 where
     T: Shadowable + HasName<Name = Symbol, Args: IntoArgs>,
     T::Structure: Clone + ToSymbolic + TensorStructure,
     <T::Structure as TensorStructure>::Slot: IsAbstractSlot<Aind = Aind>,
 {
+    #[allow(clippy::type_complexity)]
     pub fn sym_shadow(
         &mut self,
         tensor_name: &str,
@@ -150,13 +152,13 @@ where
 }
 
 impl<
-        Store: TensorScalarStore<Tensor = T, Scalar = S>,
-        T,
-        S,
-        K: Clone,
-        FK: Clone,
-        Aind: AbsInd + ParseableAind,
-    > Network<Store, K, FK, Aind>
+    Store: TensorScalarStore<Tensor = T, Scalar = S>,
+    T,
+    S,
+    K: Clone,
+    FK: Clone,
+    Aind: AbsInd + ParseableAind,
+> Network<Store, K, FK, Aind>
 where
     T: HasName<Name: IntoSymbol, Args: IntoArgs> + TensorStructure,
     T::Slot: IsAbstractSlot<Aind = Aind>,
@@ -173,6 +175,7 @@ where
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn shadow(&self) -> Network<Store::Store<ParamTensor<T::Structure>, S>, K, FK, Aind>
     where
         T: Shadowable,
@@ -213,12 +216,12 @@ where
 }
 
 impl<
-        Store: TensorScalarStore<Tensor = P, Scalar = Atom>,
-        P: TensorAtomMaps,
-        K: Clone,
-        FK: Clone,
-        Aind: AbsInd,
-    > TensorAtomMaps for Network<Store, K, FK, Aind>
+    Store: TensorScalarStore<Tensor = P, Scalar = Atom>,
+    P: TensorAtomMaps,
+    K: Clone,
+    FK: Clone,
+    Aind: AbsInd,
+> TensorAtomMaps for Network<Store, K, FK, Aind>
 where
     P: Clone + TensorStructure,
 {
@@ -574,13 +577,13 @@ pub trait Evaluate<Str: TensorScalarStore, K, FK, S, T, Aind> {
 }
 
 impl<
-        Store: TensorScalarStore<Tensor = ParamTensor<S>, Scalar = Sc>,
-        S: TensorStructure + Clone,
-        Sc: AtomCore,
-        K: Clone,
-        FK: Clone,
-        Aind: Clone + AbsInd,
-    > Network<Store, K, FK, Aind>
+    Store: TensorScalarStore<Tensor = ParamTensor<S>, Scalar = Sc>,
+    S: TensorStructure + Clone,
+    Sc: AtomCore,
+    K: Clone,
+    FK: Clone,
+    Aind: Clone + AbsInd,
+> Network<Store, K, FK, Aind>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn eval_tree(
@@ -644,13 +647,13 @@ impl<T: Real, S: TensorStructure, K: Clone, FK: Clone, Aind: AbsInd>
     }
 }
 impl<
-        Store: TensorScalarStore<Tensor = EvalTreeTensor<T, S>, Scalar = EvalTree<T>>,
-        T,
-        S: TensorStructure,
-        K: Clone,
-        FK: Clone,
-        Aind: AbsInd,
-    > Network<Store, K, FK, Aind>
+    Store: TensorScalarStore<Tensor = EvalTreeTensor<T, S>, Scalar = EvalTree<T>>,
+    T,
+    S: TensorStructure,
+    K: Clone,
+    FK: Clone,
+    Aind: AbsInd,
+> Network<Store, K, FK, Aind>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(
@@ -733,16 +736,16 @@ impl<T: Real, S: TensorStructure + Clone, K: Clone, FK: Clone, Aind: AbsInd>
 }
 
 impl<
-        Store: TensorScalarStore<
+    Store: TensorScalarStore<
             Tensor = EvalTensor<ExpressionEvaluator<T>, S>,
             Scalar = ExpressionEvaluator<T>,
         >,
-        T,
-        S: TensorStructure,
-        FK: Clone + Display,
-        K: Clone + Display,
-        Aind: AbsInd,
-    > Network<Store, K, FK, Aind>
+    T,
+    S: TensorStructure,
+    FK: Clone + Display,
+    K: Clone + Display,
+    Aind: AbsInd,
+> Network<Store, K, FK, Aind>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn export_cpp<F: CompiledNumber>(
@@ -774,13 +777,13 @@ impl<
 }
 
 impl<
-        F: CompiledNumber,
-        Store: TensorScalarStore<Tensor = EvalTensor<ExportedCode<F>, S>, Scalar = ExportedCode<F>>,
-        S: TensorStructure,
-        K: Clone + Display,
-        FK: Clone + Display,
-        Aind: AbsInd,
-    > Network<Store, K, FK, Aind>
+    F: CompiledNumber,
+    Store: TensorScalarStore<Tensor = EvalTensor<ExportedCode<F>, S>, Scalar = ExportedCode<F>>,
+    S: TensorStructure,
+    K: Clone + Display,
+    FK: Clone + Display,
+    Aind: AbsInd,
+> Network<Store, K, FK, Aind>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn compile(
@@ -864,15 +867,15 @@ impl<S: TensorStructure, K: Clone, FK: Clone, Aind: AbsInd>
 }
 
 impl<
-        Store: TensorScalarStore<
+    Store: TensorScalarStore<
             Tensor = EvalTreeTensor<SymComplex<Rational>, S>,
             Scalar = EvalTree<SymComplex<Rational>>,
         >,
-        S: Clone + TensorStructure,
-        K: Clone,
-        FK: Clone,
-        Aind: AbsInd,
-    > Network<Store, K, FK, Aind>
+    S: Clone + TensorStructure,
+    K: Clone,
+    FK: Clone,
+    Aind: AbsInd,
+> Network<Store, K, FK, Aind>
 {
     pub fn horner_scheme(&mut self) {
         self.iter_tensors_mut().for_each(|a| a.horner_scheme());
@@ -883,14 +886,14 @@ impl<
 }
 
 impl<
-        Store: TensorScalarStore<Tensor = MixedTensor<T, S>, Scalar = Sc>,
-        T,
-        S,
-        Sc: AtomCore,
-        K,
-        FK,
-        Aind: AbsInd,
-    > Network<Store, K, FK, Aind>
+    Store: TensorScalarStore<Tensor = MixedTensor<T, S>, Scalar = Sc>,
+    T,
+    S,
+    Sc: AtomCore,
+    K,
+    FK,
+    Aind: AbsInd,
+> Network<Store, K, FK, Aind>
 where
     S: Clone + TensorStructure + std::fmt::Debug,
     T: Clone,

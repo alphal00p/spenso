@@ -1,4 +1,3 @@
-use bitvec::ptr::read_unaligned;
 use symbolica::atom::{AtomCore, Symbol};
 use symbolica::domains::rational::Rational;
 use symbolica::{symbol, tag};
@@ -177,7 +176,7 @@ impl<Aind: ParseableAind + AbsInd> OrderedStructure<LibraryRep, Aind> {
                     }
                 }
             },
-            _ => return Err(StructureError::EmptyStructure(SlotError::EmptyStructure)),
+            _ => Err(StructureError::EmptyStructure(SlotError::EmptyStructure)),
         }
     }
 }
@@ -292,6 +291,7 @@ pub struct ParseState {
     // func_depth: usize,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for ParseState {
     fn default() -> Self {
         Self { depth: 0 }
@@ -351,6 +351,7 @@ where
         }
     }
 
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     fn as_leaf<S>(value: AtomView<'a>) -> Result<Self, TensorNetworkError<K, Symbol>>
     where
         S: TensorStructure + Clone,
@@ -774,8 +775,6 @@ pub mod test {
         a b c d e f h i j k l m n o p q r s t u v w x y z
         A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
         vbar
-        ϵbar
-        ϵ
         ebar
         edge_1_1 edge_2_1 edge_3_1 edge_4_1 edge_5_1 edge_6_1 edge_7_1 edge_8_1 edge_9_1 edge_10_1 edge_11_1 edge_12_1 edge_13_1 edge_14_1 edge_15_1 edge_16_1 edge_17_1 edge_18_1 edge_19_1 edge_20_1
         hedge0 hedge1 hedge2 hedge3 hedge4 hedge5 hedge6 hedge7 hedge8 hedge9 hedge10 hedge11 hedge12 hedge13 hedge14 hedge15 hedge16 hedge17 hedge18 hedge19 hedge20
@@ -818,7 +817,7 @@ pub mod test {
 
     #[test]
     fn parse_pow() {
-        let sqrt = symbol!("sqrt_scalar", tag = SPENSO_TAG.tag);
+        let _sqrt = symbol!("sqrt_scalar", tag = SPENSO_TAG.tag);
         let expr = parse!("ee^3*sqrt_scalar((m+d(mink(4,1))^2)^(-5))");
 
         let net = expr
@@ -915,9 +914,9 @@ pub mod test {
                     * Q(6, mink(4, edge_6_1))
                     * u(1, bis(4, hedge_1))
                     * vbar(2, bis(4, hedge_2))
-                    * ϵbar(0, mink(4, hedge_0))
-                    * ϵbar(3, mink(4, hedge_3))
-                    * ϵbar(4, mink(4, hedge_4))
+                    * ebar(0, mink(4, hedge_0))
+                    * ebar(3, mink(4, hedge_3))
+                    * ebar(4, mink(4, hedge_4))
                     * g(cof(3, hedge_1), dind(cof(3, hedge_2)))
                     * g(cof(3, hedge_1), dind(cof(3, hedge_2)))
                     * gamma(bis(4, hedge_2), bis(4, hedge_8), mink(4, hedge_0))
@@ -939,9 +938,9 @@ pub mod test {
           1	 [label = "S:((Q(5,cind(0)))^2+(Q(5,cind(1)))^2*-1+(Q(5,cind(2)))^2*-1+(Q(5,cind(3)))^2*-1)^(-1)*((Q(6,cind(0)))^2+(Q(6,cind(1)))^2*-1+(Q(6,cind(2)))^2*-1+(Q(6,cind(3)))^2*-1)^(-1)*(g(cof(3,hedge_1),dind(cof(3,hedge_2))))^2*1𝑖/27*u(1,bis(4,hedge_1))*vbar(2,bis(4,hedge_2))"];
           2	 [label = "T:Q(5,mink(4,edge_5_1))"];
           3	 [label = "T:Q(6,mink(4,edge_6_1))"];
-          4	 [label = "T:ϵbar(0,mink(4,hedge_0))"];
-          5	 [label = "T:ϵbar(3,mink(4,hedge_3))"];
-          6	 [label = "T:ϵbar(4,mink(4,hedge_4))"];
+          4	 [label = "T:ebar(0,mink(4,hedge_0))"];
+          5	 [label = "T:ebar(3,mink(4,hedge_3))"];
+          6	 [label = "T:ebar(4,mink(4,hedge_4))"];
           7	 [label = "T:gamma(bis(4,hedge_2),bis(4,hedge_8),mink(4,hedge_0))"];
           8	 [label = "T:gamma(bis(4,hedge_5),bis(4,hedge_1),mink(4,hedge_3))"];
           9	 [label = "T:gamma(bis(4,hedge_6),bis(4,hedge_5),mink(4,edge_5_1))"];
@@ -969,7 +968,8 @@ pub mod test {
         "#);
         assert_eq!(net.simple_execute(), expr);
         let mut out = String::new();
-        expr.typst_fmt(&mut out, &TypstSettings::lowering());
+        expr.typst_fmt(&mut out, &TypstSettings::lowering())
+            .unwrap();
         println!("{}", out)
     }
 

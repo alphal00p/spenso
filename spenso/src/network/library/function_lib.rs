@@ -38,14 +38,15 @@ pub static INBUILTS: std::sync::LazyLock<Inbuilts> = std::sync::LazyLock::new(||
         "spenso::conj",
         tag = SPENSO_TAG.tag,
         norm = |view, out| {
-            if let AtomView::Fun(dind1) = view {
-                if dind1.get_nargs() == 1 {
-                    let arg = dind1.iter().next().unwrap();
-                    if let AtomView::Fun(arg) = arg {
-                        if arg.get_nargs() == 1 && arg.get_symbol() == symbol!("spenso::conj") {
-                            **out = arg.iter().next().unwrap().to_owned();
-                        }
-                    }
+            if let AtomView::Fun(dind1) = view
+                && dind1.get_nargs() == 1
+            {
+                let arg = dind1.iter().next().unwrap();
+                if let AtomView::Fun(arg) = arg
+                    && arg.get_nargs() == 1
+                    && arg.get_symbol() == symbol!("spenso::conj")
+                {
+                    **out = arg.iter().next().unwrap().to_owned();
                 }
             }
         },

@@ -8,17 +8,17 @@ use crate::{
     contraction::Contract,
     network::graph::{NetworkLeaf, NetworkNode, NetworkOp},
     structure::{
+        HasStructure, PermutedStructure, TensorStructure,
         permuted::PermuteTensor,
         slot::{AbsInd, IsAbstractSlot},
-        HasStructure, PermutedStructure, TensorStructure,
     },
 };
 
 use super::{
+    Ref, TensorNetworkError,
     graph::NetworkGraph,
     library::{Library, LibraryTensor},
     store::NetworkStore,
-    Ref, TensorNetworkError,
 };
 
 pub struct SmallestDegree;
@@ -41,24 +41,24 @@ pub trait ContractionStrategy<E, L, K, FK, Aind>: Sized {
 }
 
 impl<
-        LT: LibraryTensor + Clone,
-        T: HasStructure
-            + TensorStructure
-            + Clone
-            + Contract<LCM = T>
-            + ScalarMul<Sc, Output = T>
-            + Contract<LT::WithIndices, LCM = T>
-            + From<LT::WithIndices>,
-        L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
-        Sc: for<'a> MulAssign<Sc::Ref<'a>>
-            + Clone
-            + for<'a> MulAssign<T::ScalarRef<'a>>
-            + From<T::Scalar>
-            + Ref,
-        K: Display + Debug + Clone,
-        FK: Display + Debug + Clone,
-        Aind: AbsInd,
-    > ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for ContractScalars
+    LT: LibraryTensor + Clone,
+    T: HasStructure
+        + TensorStructure
+        + Clone
+        + Contract<LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + Contract<LT::WithIndices, LCM = T>
+        + From<LT::WithIndices>,
+    L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
+    Sc: for<'a> MulAssign<Sc::Ref<'a>>
+        + Clone
+        + for<'a> MulAssign<T::ScalarRef<'a>>
+        + From<T::Scalar>
+        + Ref,
+    K: Display + Debug + Clone,
+    FK: Display + Debug + Clone,
+    Aind: AbsInd,
+> ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for ContractScalars
 where
     LT::WithIndices: Contract<LT::WithIndices, LCM = T>
         + ScalarMul<Sc, Output = T>
@@ -194,39 +194,39 @@ where
             Ok((graph, true))
         } else {
             let mut didsmth = false;
-            if remove_op_node {
-                if let Some(other) = other {
-                    if let Some(head) = head {
-                        let v = graph.graph[other].clone();
-                        graph.identify_nodes_without_self_edges(&[head, other], v);
-                        didsmth = true;
-                    }
-                }
+            if remove_op_node
+                && let Some(other) = other
+                && let Some(head) = head
+            {
+                let v = graph.graph[other].clone();
+                graph.identify_nodes_without_self_edges(&[head, other], v);
+                didsmth = true;
             }
+
             Ok((graph, didsmth))
         }
     }
 }
 
 impl<
-        LT: LibraryTensor + Clone,
-        T: HasStructure
-            + TensorStructure
-            + Clone
-            + Contract<LCM = T>
-            + ScalarMul<Sc, Output = T>
-            + Contract<LT::WithIndices, LCM = T>
-            + From<LT::WithIndices>,
-        L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
-        Sc: for<'a> MulAssign<Sc::Ref<'a>>
-            + Clone
-            + for<'a> MulAssign<T::ScalarRef<'a>>
-            + From<T::Scalar>
-            + Ref,
-        K: Display + Debug + Clone,
-        FK: Display + Debug + Clone,
-        Aind: AbsInd,
-    > ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for SmallestDegree
+    LT: LibraryTensor + Clone,
+    T: HasStructure
+        + TensorStructure
+        + Clone
+        + Contract<LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + Contract<LT::WithIndices, LCM = T>
+        + From<LT::WithIndices>,
+    L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
+    Sc: for<'a> MulAssign<Sc::Ref<'a>>
+        + Clone
+        + for<'a> MulAssign<T::ScalarRef<'a>>
+        + From<T::Scalar>
+        + Ref,
+    K: Display + Debug + Clone,
+    FK: Display + Debug + Clone,
+    Aind: AbsInd,
+> ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for SmallestDegree
 where
     LT::WithIndices: Contract<LT::WithIndices, LCM = T>
         + ScalarMul<Sc, Output = T>
@@ -264,25 +264,25 @@ where
 }
 
 impl<
-        LT: LibraryTensor + Clone,
-        T: HasStructure
-            + TensorStructure
-            + Clone
-            + Contract<LCM = T>
-            + ScalarMul<Sc, Output = T>
-            + Contract<LT::WithIndices, LCM = T>
-            + From<LT::WithIndices>,
-        L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
-        Sc: for<'a> MulAssign<Sc::Ref<'a>>
-            + Clone
-            + for<'a> MulAssign<T::ScalarRef<'a>>
-            + From<T::Scalar>
-            + Ref,
-        K: Display + Debug + Clone,
-        FK: Display + Debug + Clone,
-        Aind: AbsInd,
-        const N: usize,
-    > ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for SmallestDegreeIter<N>
+    LT: LibraryTensor + Clone,
+    T: HasStructure
+        + TensorStructure
+        + Clone
+        + Contract<LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + Contract<LT::WithIndices, LCM = T>
+        + From<LT::WithIndices>,
+    L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
+    Sc: for<'a> MulAssign<Sc::Ref<'a>>
+        + Clone
+        + for<'a> MulAssign<T::ScalarRef<'a>>
+        + From<T::Scalar>
+        + Ref,
+    K: Display + Debug + Clone,
+    FK: Display + Debug + Clone,
+    Aind: AbsInd,
+    const N: usize,
+> ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for SmallestDegreeIter<N>
 where
     LT::WithIndices: Contract<LT::WithIndices, LCM = T>
         + ScalarMul<Sc, Output = T>
@@ -315,25 +315,25 @@ where
 }
 
 impl<
-        LT: LibraryTensor + Clone,
-        T: HasStructure
-            + TensorStructure
-            + Clone
-            + Contract<LCM = T>
-            + ScalarMul<Sc, Output = T>
-            + Contract<LT::WithIndices, LCM = T>
-            + From<LT::WithIndices>,
-        L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
-        Sc: for<'a> MulAssign<Sc::Ref<'a>>
-            + Clone
-            + for<'a> MulAssign<T::ScalarRef<'a>>
-            + From<T::Scalar>
-            + Ref,
-        K: Display + Debug + Clone,
-        FK: Display + Debug + Clone,
-        Aind: AbsInd,
-        const D: bool,
-    > ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for SingleSmallestDegree<D>
+    LT: LibraryTensor + Clone,
+    T: HasStructure
+        + TensorStructure
+        + Clone
+        + Contract<LCM = T>
+        + ScalarMul<Sc, Output = T>
+        + Contract<LT::WithIndices, LCM = T>
+        + From<LT::WithIndices>,
+    L: Library<T::Structure, Key = K, Value = PermutedStructure<LT>>,
+    Sc: for<'a> MulAssign<Sc::Ref<'a>>
+        + Clone
+        + for<'a> MulAssign<T::ScalarRef<'a>>
+        + From<T::Scalar>
+        + Ref,
+    K: Display + Debug + Clone,
+    FK: Display + Debug + Clone,
+    Aind: AbsInd,
+    const D: bool,
+> ContractionStrategy<NetworkStore<T, Sc>, L, K, FK, Aind> for SingleSmallestDegree<D>
 where
     LT::WithIndices: Contract<LT::WithIndices, LCM = T>
         + ScalarMul<Sc, Output = T>
@@ -400,11 +400,11 @@ where
             let new_node = match (n1, n2) {
                 (NetworkNode::Leaf(_), NetworkNode::Op(NetworkOp::Product))
                 | (NetworkNode::Op(NetworkOp::Product), NetworkNode::Leaf(_)) => {
-                    return Err(TensorNetworkError::SlotEdgeToProdNode)
+                    return Err(TensorNetworkError::SlotEdgeToProdNode);
                 }
                 (NetworkNode::Leaf(l1), NetworkNode::Leaf(l2)) => match (l1, l2) {
                     (NetworkLeaf::Scalar(_), _) | (_, NetworkLeaf::Scalar(_)) => {
-                        return Err(TensorNetworkError::SlotEdgeToScalarNode)
+                        return Err(TensorNetworkError::SlotEdgeToScalarNode);
                     }
 
                     (NetworkLeaf::LocalTensor(l1), NetworkLeaf::LocalTensor(l2)) => {
@@ -483,7 +483,7 @@ where
                     return Err(TensorNetworkError::CannotContractEdgeBetween(
                         a.clone(),
                         b.clone(),
-                    ))
+                    ));
                 }
             };
             graph.identify_nodes_without_self_edges_merge_heads(

@@ -1078,7 +1078,7 @@ impl TrySmallestUpgrade<Atom> for i32 {
     fn try_upgrade(&self) -> Option<Cow<'_, Self::LCM>> {
         let symnum = Atom::num(*self);
 
-        Some(Cow::Owned(symnum.into()))
+        Some(Cow::Owned(symnum))
     }
 }
 

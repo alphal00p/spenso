@@ -4,7 +4,7 @@ use crate::metric::MetricSimplifier;
 use crate::representations::initialize;
 
 use pyo3::{
-    Bound, PyResult,
+    Bound, PyResult, Python,
     exceptions::PyTypeError,
     pyfunction,
     types::{PyModule, PyModuleMethods},
@@ -608,6 +608,11 @@ impl symbolica::api::python::SymbolicaCommunityModule for IdensoModule {
 
     fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
         initialize_alg_simp(m)
+    }
+
+    fn initialize(_py: Python) -> PyResult<()> {
+        crate::representations::initialize();
+        Ok(())
     }
 }
 

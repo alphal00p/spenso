@@ -111,14 +111,14 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
         uind: symbol!(
             UPIND,
             norm = |view, out| {
-                if let AtomView::Fun(f) = view {
-                    if f.get_nargs() == 1 {
-                        **out = f.iter().next().unwrap().to_owned();
-                    }
+                if let AtomView::Fun(f) = view
+                    && f.get_nargs() == 1
+                {
+                    **out = f.iter().next().unwrap().to_owned();
                 }
             },
             tag = SPENSO_TAG.upper,
-            print = |a, opt| {
+            print = |_, opt| {
                 if let Some(("typst", 1)) = opt.custom_print_mode {
                     let body = r#"(..arg)={
 let args = arg.pos().map(to-eq).join("")
@@ -133,19 +133,20 @@ let args = arg.pos().map(to-eq).join("")
         dind: symbol!(
             DOWNIND,
             norm = |view, out| {
-                if let AtomView::Fun(dind1) = view {
-                    if dind1.get_nargs() == 1 {
-                        let arg = dind1.iter().next().unwrap();
-                        if let AtomView::Fun(arg) = arg {
-                            if arg.get_nargs() == 1 && arg.get_symbol() == symbol!(DOWNIND) {
-                                **out = arg.iter().next().unwrap().to_owned();
-                            }
-                        }
+                if let AtomView::Fun(dind1) = view
+                    && dind1.get_nargs() == 1
+                {
+                    let arg = dind1.iter().next().unwrap();
+                    if let AtomView::Fun(arg) = arg
+                        && arg.get_nargs() == 1
+                        && arg.get_symbol() == symbol!(DOWNIND)
+                    {
+                        **out = arg.iter().next().unwrap().to_owned();
                     }
                 }
             },
             tag = SPENSO_TAG.lower,
-            print = |a, opt| {
+            print = |_, opt| {
                 if let Some(("typst", 1)) = opt.custom_print_mode {
                     let body = r#"(..arg)={
 let args = arg.pos().map(to-eq).join("")
@@ -160,10 +161,10 @@ let args = arg.pos().map(to-eq).join("")
         selfdualind: symbol!(
             SELFDUALIND,
             norm = |view, out| {
-                if let AtomView::Fun(f) = view {
-                    if f.get_nargs() == 1 {
-                        **out = f.iter().next().unwrap().to_owned();
-                    }
+                if let AtomView::Fun(f) = view
+                    && f.get_nargs() == 1
+                {
+                    **out = f.iter().next().unwrap().to_owned();
                 }
             }
         ),

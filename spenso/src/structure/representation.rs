@@ -739,7 +739,7 @@ impl ExtendibleReps {
             symbol!(
                 name,
                 tag = SPENSO_TAG.upper,
-                print = move |a, opt| {
+                print = move |_, opt| {
                     if let Some(("typst", 1)) = opt.custom_print_mode {
                         Some(body.clone())
                     } else {

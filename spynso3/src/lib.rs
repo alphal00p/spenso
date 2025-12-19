@@ -1,10 +1,7 @@
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Deref,
-};
+use std::{collections::HashMap, ops::Deref};
 
 use anyhow::anyhow;
-use idenso::representations::initialize;
+
 use library::SpensorLibrary;
 use library_tensor::AtomsOrFloats;
 use network::SpensoNet;
@@ -14,7 +11,6 @@ use pyo3::{
     exceptions::{self, PyIndexError, PyOverflowError, PyRuntimeError, PyTypeError},
     prelude::*,
     types::{PyComplex, PyFloat, PySlice, PyType},
-    wrap_pyfunction,
 };
 
 #[cfg(feature = "python_stubgen")]
@@ -46,10 +42,7 @@ use spenso::{
         parametric::{LinearizedEvalTensor, MixedTensor},
     },
 };
-use structure::{
-    ConvertibleToAbstractIndex, ConvertibleToStructure, SpensoIndices, SpensoRepresentation,
-    SpensoSlot,
-};
+use structure::{ConvertibleToStructure, SpensoIndices};
 use symbolica::{
     api::python::SymbolicaCommunityModule,
     atom::Atom,
@@ -83,6 +76,11 @@ impl SymbolicaCommunityModule for SpensoModule {
 
     fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
         initialize_spenso(m)
+    }
+
+    fn initialize(_py: Python) -> PyResult<()> {
+        idenso::representations::initialize();
+        Ok(())
     }
 }
 
@@ -980,9 +978,6 @@ Examples
     }
 }
 
-static EMPTY: fn() -> String = || "[]".into();
-
-static FALSE: fn() -> String = || "False".to_string();
 // static NONE: LazyLock<String> = LazyLock::new(|| "None".to_string());
 
 #[cfg(feature = "python_stubgen")]

@@ -1289,13 +1289,13 @@ where
 
                 let mut child = None;
                 for c in children {
-                    if let Some(id) = graph.graph.involved_node_id(c) {
-                        if let NetworkNode::Leaf(l) = &graph.graph[id] {
-                            if child.is_some() {
-                                return Err(TensorNetworkError::MoreThanOneNeg);
-                            } else {
-                                child = Some((id, l));
-                            }
+                    if let Some(id) = graph.graph.involved_node_id(c)
+                        && let NetworkNode::Leaf(l) = &graph.graph[id]
+                    {
+                        if child.is_some() {
+                            return Err(TensorNetworkError::MoreThanOneNeg);
+                        } else {
+                            child = Some((id, l));
                         }
                     }
                 }
@@ -1473,17 +1473,17 @@ where
 
                 let mut child = None;
                 for c in children {
-                    if let Some(id) = graph.graph.involved_node_id(c) {
-                        if let NetworkNode::Leaf(l) = &graph.graph[id] {
-                            if let Some((nid, _)) = child {
-                                if nid != id {
-                                    return Err(TensorNetworkError::Other(anyhow!(
-                                        "Cannot have more than one tensor argument to function"
-                                    )));
-                                }
-                            } else {
-                                child = Some((id, l));
+                    if let Some(id) = graph.graph.involved_node_id(c)
+                        && let NetworkNode::Leaf(l) = &graph.graph[id]
+                    {
+                        if let Some((nid, _)) = child {
+                            if nid != id {
+                                return Err(TensorNetworkError::Other(anyhow!(
+                                    "Cannot have more than one tensor argument to function"
+                                )));
                             }
+                        } else {
+                            child = Some((id, l));
                         }
                     }
                 }
@@ -1536,18 +1536,18 @@ where
 
                 let mut child = None;
                 for c in children {
-                    if let Some(id) = graph.graph.involved_node_id(c) {
-                        if let NetworkNode::Leaf(l) = &graph.graph[id] {
-                            if let Some((nid, _)) = child {
-                                if nid != id {
-                                    return Err(TensorNetworkError::Other(anyhow!(
-                                        "Cannot have more than one tensor argument to power:{}",
-                                        graph.dot()
-                                    )));
-                                }
-                            } else {
-                                child = Some((id, l));
+                    if let Some(id) = graph.graph.involved_node_id(c)
+                        && let NetworkNode::Leaf(l) = &graph.graph[id]
+                    {
+                        if let Some((nid, _)) = child {
+                            if nid != id {
+                                return Err(TensorNetworkError::Other(anyhow!(
+                                    "Cannot have more than one tensor argument to power:{}",
+                                    graph.dot()
+                                )));
                             }
+                        } else {
+                            child = Some((id, l));
                         }
                     }
                 }

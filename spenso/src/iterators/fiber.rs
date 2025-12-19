@@ -10,8 +10,8 @@ use std::{
 };
 
 use crate::structure::{
-    concrete_index::FlatIndex, dimension::Dimension, representation::Representation,
-    slot::IsAbstractSlot, TensorStructure,
+    TensorStructure, concrete_index::FlatIndex, dimension::Dimension,
+    representation::Representation, slot::IsAbstractSlot,
 };
 
 use super::indices::{AbstractFiberIndex, FiberClassIndex, FiberData, FiberIndex};
@@ -146,10 +146,10 @@ impl BareFiber {
     /// * `pos` - The position to fix
     /// * `val` - The value to fix it to
     pub fn fix(&mut self, pos: usize, val: usize) {
-        if let FiberIndex::Fixed(single_pos) = self.is_single {
-            if single_pos == pos {
-                self.is_single = FiberIndex::Free;
-            }
+        if let FiberIndex::Fixed(single_pos) = self.is_single
+            && single_pos == pos
+        {
+            self.is_single = FiberIndex::Free;
         }
 
         self.indices[pos] = val.into();

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.6](https://github.com/alphal00p/spenso/compare/spenso-v0.5.5...spenso-v0.5.6) - 2025-12-21
+
+### Fixed
+
+- fix python_stub_gen feature
+- fix metric initialization and update to symbolica 1.2
+
 ## [0.5.5](https://github.com/alphal00p/spenso/compare/spenso-v0.5.4...spenso-v0.5.5) - 2025-12-15
 
 ### Fixed

@@ -4,7 +4,7 @@ use bincode_trait_derive::{Decode, Encode};
 use linnet::permutation::Permutation;
 use serde::{Deserialize, Serialize};
 
-use super::{slot::IsAbstractSlot, StructureError, TensorStructure};
+use super::{StructureError, TensorStructure, slot::IsAbstractSlot};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Encode, Decode)]
 pub struct PermutedStructure<S> {

@@ -1868,6 +1868,12 @@ impl SpensoSlot {
 }
 
 #[cfg(feature = "python_stubgen")]
+static EMPTY: fn() -> String = || "[]".into();
+
+#[cfg(feature = "python_stubgen")]
+static FALSE: fn() -> String = || "False".to_string();
+
+#[cfg(feature = "python_stubgen")]
 submit! {
     PyMethodsInfo {
         struct_id: std::any::TypeId::of::<SpensoName>,
@@ -2038,7 +2044,7 @@ Examples
                 },
             ],
             r#type: MethodType::Instance,
-            r#return: Vec::<TensorElements>::type_output,
+            r#return: Vec::<crate::TensorElements>::type_output,
             doc:r##"Get expanded indices at the specified range of flattened indices.
 
 Parameters
@@ -2067,7 +2073,7 @@ list of list of int
                 },
             ],
             r#type: MethodType::Instance,
-            r#return: TensorElements::type_output,
+            r#return: crate::TensorElements::type_output,
             doc:r##"Get flattened index associated to this expanded index.
 
 Parameters
@@ -2096,7 +2102,7 @@ int
                 },
             ],
             r#type: MethodType::Instance,
-            r#return: TensorElements::type_output,
+            r#return: crate::TensorElements::type_output,
             doc:r##"Get expanded index associated to this flat index.
 
 Parameters
@@ -2189,7 +2195,7 @@ Examples
                     },
                 ],
                 r#type: MethodType::Instance,
-                r#return: Vec::<TensorElements>::type_output,
+                r#return: Vec::<crate::TensorElements>::type_output,
                 doc:r##"Get expanded indices at the specified range of flattened indices.
 
 Parameters
@@ -2218,7 +2224,7 @@ list of list of int
                     },
                 ],
                 r#type: MethodType::Instance,
-                r#return: TensorElements::type_output,
+                r#return: crate::TensorElements::type_output,
                 doc:r##"Get flattened index associated to this expanded index.
 
 Parameters
@@ -2246,7 +2252,7 @@ int
                     },
                 ],
                 r#type: MethodType::Instance,
-                r#return: TensorElements::type_output,
+                r#return: crate::TensorElements::type_output,
                 doc:r##"Get expanded index associated to this flat index.
 
 Parameters

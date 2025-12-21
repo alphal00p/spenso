@@ -892,7 +892,7 @@ impl SpensoCompiledExpressionEvaluator {
 #[cfg(feature = "python_stubgen")]
 submit! {
     PyMethodsInfo {
-        struct_id: std::any::TypeId::of::<SpensoRepresentation>,
+        struct_id: std::any::TypeId::of::<crate::structure::SpensoRepresentation>,
         attrs: &[],
         getters: &[],
         setters: &[],
@@ -907,11 +907,11 @@ submit! {
                         name: "aind",
                         kind: ParameterKind::PositionalOrKeyword,
                         default: ParameterDefault::None,
-                        type_info: ConvertibleToAbstractIndex::type_input,
+                        type_info: structure::ConvertibleToAbstractIndex::type_input,
                     },
                 ],
                 r#type: MethodType::Instance,
-                r#return: SpensoSlot::type_output,
+                r#return: structure::SpensoSlot::type_output,
                 doc:r##"Create a slot from this representation, by specifying an index.
 
 Parameters
@@ -949,7 +949,7 @@ Examples
                     },
                 ],
                 r#type: MethodType::Instance,
-                r#return: || PythonExpression::type_output()| SpensoSlot::type_output(),
+                r#return: || PythonExpression::type_output()| structure::SpensoSlot::type_output(),
                 doc:r##"Create a slot or symbolic expression from this representation.
 
 Parameters
@@ -998,7 +998,7 @@ submit! {
                 r#return:||
                 TypeInfo {
                     name: "typing.Iterator[typing.Any]".into(),
-                    import: HashSet::new(),
+                    import: std::collections::HashSet::new(),
                 },
                 doc:r##"Iterator"##,
                 is_async: false,

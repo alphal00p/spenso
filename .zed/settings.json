@@ -9,15 +9,15 @@
           "maxLength": null,
           "lifetimeElisionHints": {
             "useParameterNames": true,
-            "enable": "skip_trivial"
+            "enable": "skip_trivial",
           },
           "closureReturnTypeHints": {
-            "enable": "always"
-          }
+            "enable": "always",
+          },
         },
         "cargo": {
           // "features": []
-          "features": ["shadowing"]
+          "features": ["shadowing", "python_stubgen"],
         },
         // "diagnostics": {
         //   "experimental": {
@@ -30,14 +30,14 @@
         "check": {
           "onSave": true,
           // "features": [],
-          "features": ["shadowing"],
-          "command": "clippy"
-        }
-      }
-    }
+          "features": ["shadowing", "python_stubgen"],
+          "command": "clippy",
+        },
+      },
+    },
   },
   // "shell": {
   //   "program": "nu"
   // },
-  "load_direnv": "direct"
+  "load_direnv": "direct",
 }

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5](https://github.com/alphal00p/spenso/compare/idenso-v0.2.4...idenso-v0.2.5) - 2026-01-08
+
+### Fixed
+
+- fix metric initialization and update to symbolica 1.2
+- fix initialize to also load ETS
+
+### Other
+
+- update linnet
+
 ## [0.2.4](https://github.com/alphal00p/spenso/compare/idenso-v0.2.3...idenso-v0.2.4) - 2025-12-15
 
 ### Fixed

@@ -69,7 +69,7 @@ symbolica = { version = "1.2", optional = true, features = [
     "bincode",
 ], default-features = false }
 thiserror = "1.0.60"
-linnet = { version = "0.15", features = ["serde", "bincode"] }
+linnet = { version = "0.16", features = ["serde", "bincode"] }
 spenso-macros = { version = "0.3" }
 features = "0.10.0"
 rayon = "1.10.0"

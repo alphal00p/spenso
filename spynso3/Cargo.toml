@@ -1,6 +1,6 @@
 [package]
 name = "spynso3"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "Pyo3 bindings for spenso"
 authors.workspace = true

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7](https://github.com/alphal00p/spenso/compare/spenso-hep-lib-v0.1.6...spenso-hep-lib-v0.1.7) - 2026-01-14
+
+### Other
+
+- update versions
+
 ## [0.1.6](https://github.com/alphal00p/spenso/compare/spenso-hep-lib-v0.1.5...spenso-hep-lib-v0.1.6) - 2026-01-08
 
 ### Fixed

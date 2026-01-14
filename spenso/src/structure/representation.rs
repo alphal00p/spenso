@@ -29,7 +29,7 @@ use crate::{
 
 #[cfg(feature = "shadowing")]
 use symbolica::{
-    atom::{Atom, AtomOrView, FunctionBuilder, Symbol},
+    atom::{Atom, AtomOrView, AtomView, FunctionBuilder, Symbol},
     function, get_symbol, symbol,
 };
 
@@ -504,6 +504,22 @@ impl<T: RepName> Representation<T> {
         let a: AtomOrView<'a> = a.into();
         let b: AtomOrView<'a> = b.into();
         function!(ETS.metric, self.dual().pattern(a), self.pattern(b))
+    }
+
+    // [allow(clippy::cast_possible_wrap)]
+    #[cfg(feature = "shadowing")]
+    /// An atom representing the identity tensor with aind a, and b.
+    /// a is dualized, b is not.
+    ///
+    pub fn inner_product<'a, It: Into<AtomOrView<'a>>>(&self, a: It, b: It) -> Atom {
+        let a: AtomOrView<'a> = a.into();
+        let b: AtomOrView<'a> = b.into();
+        function!(
+            SPENSO_TAG.dot,
+            self.to_symbolic([]),
+            a.as_view(),
+            b.as_view()
+        )
     }
 
     pub fn base(self) -> Representation<T::Base> {
@@ -1220,6 +1236,41 @@ fn test_negative() {
     }
 
     assert!(agree);
+}
+
+#[cfg(feature = "shadowing")]
+/// Can possibly constuct a Representation from an `AtomView`, if it is of the form: <representation>(<dimension>)
+///
+impl<'a, T: RepName> TryFrom<AtomView<'a>> for Representation<T> {
+    type Error = SlotError;
+
+    fn try_from(value: AtomView<'a>) -> Result<Self, Self::Error> {
+        let (rep, mut iter) = if let AtomView::Fun(f) = value {
+            let name = f.get_symbol();
+
+            let innerf = f.iter().next().ok_or(SlotError::Composite)?;
+
+            if let AtomView::Fun(innerf) = innerf {
+                let rep =
+                    T::try_from_symbol(innerf.get_symbol(), name).map_err(SlotError::RepError)?;
+
+                (rep, innerf.iter())
+            } else {
+                let rep = T::try_from_symbol_coerced(name).map_err(SlotError::RepError)?;
+                (rep, f.iter())
+            }
+        } else {
+            return Err(SlotError::Composite);
+        };
+
+        let dim: Dimension = if let Some(a) = iter.next() {
+            Dimension::try_from(a).map_err(SlotError::DimErr)?
+        } else {
+            return Err(SlotError::NoMoreArguments);
+        };
+
+        Ok(Representation { dim, rep })
+    }
 }
 
 impl<T: RepName> Display for Representation<T> {

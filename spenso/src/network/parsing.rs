@@ -1,4 +1,4 @@
-use symbolica::atom::{AtomCore, Symbol};
+use symbolica::atom::{AtomCore, FunctionBuilder, Symbol};
 use symbolica::domains::rational::Rational;
 use symbolica::{symbol, tag};
 
@@ -10,6 +10,7 @@ use crate::network::library::DummyLibrary;
 use crate::network::library::function_lib::Wrap;
 use crate::shadowing::symbolica_utils::AtomCoreExt;
 use crate::structure::abstract_index::AIND_SYMBOLS;
+use crate::structure::representation::Representation;
 // use crate::shadowing::Concretize;
 use crate::structure::slot::{DummyAind, ParseableAind, Slot, SlotError};
 use crate::structure::{
@@ -35,6 +36,7 @@ pub struct SpensoTags {
     pub lower: String,
     pub bracket: Symbol,
     pub pure_scalar: Symbol,
+    pub dot: Symbol,
 }
 
 pub static SPENSO_TAG: std::sync::LazyLock<SpensoTags> = std::sync::LazyLock::new(|| SpensoTags {
@@ -43,6 +45,7 @@ pub static SPENSO_TAG: std::sync::LazyLock<SpensoTags> = std::sync::LazyLock::ne
     lower: tag!("lower"),
     bracket: symbol!("bracket"),
     pure_scalar: symbol!("pure_scalar"),
+    dot: symbol!("dot";Symmetric,Linear),
 });
 
 pub type ShadowedStructure<Aind> = NamedStructure<Symbol, Vec<Atom>, LibraryRep, Aind>;
@@ -322,7 +325,7 @@ where
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<AtomView<'a>>,
+        PermutedStructure<S>: for<'r> TryFrom<AtomView<'r>>,
     {
         let state = ParseState::default();
         Self::try_from_view_impl(value, state, library, settings)
@@ -340,7 +343,7 @@ where
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<AtomView<'a>>,
+        PermutedStructure<S>: for<'r> TryFrom<AtomView<'r>>,
     {
         match value {
             AtomView::Mul(m) => Self::try_from_mul(m, state, library, settings),
@@ -358,7 +361,7 @@ where
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<AtomView<'a>>,
+        PermutedStructure<S>: for<'r> TryFrom<AtomView<'r>>,
     {
         let s: Result<PermutedStructure<S>, _> = value.try_into();
 
@@ -385,7 +388,7 @@ where
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<AtomView<'a>>,
+        PermutedStructure<S>: for<'r> TryFrom<AtomView<'r>>,
     {
         if let Some(a) = settings.depth_limit
             && a < state.depth
@@ -459,7 +462,8 @@ where
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<AtomView<'a>>,
+        PermutedStructure<S>: for<'r> TryFrom<AtomView<'r>>,
+        // <PermutedStructure<S>>::Error: Debug,
     {
         let symbol = value.get_symbol();
 
@@ -476,7 +480,127 @@ where
                     value.as_view().to_plain_string(),
                 ));
             }
+
             Ok(Self::from_scalar(value.iter().next().unwrap().try_into()?))
+        } else if symbol == SPENSO_TAG.dot {
+            if value.get_nargs() != 3 {
+                return Err(TensorNetworkError::TooManyArgsFunction(
+                    value.as_view().to_plain_string(),
+                ));
+            }
+
+            let mut args = value.iter();
+            let a = args.next().unwrap();
+            let b = args.next().unwrap();
+            let c = args.next().unwrap();
+
+            let (rep, l, r) = if let Ok(rep) = Representation::<LibraryRep>::try_from(a)
+                && Representation::<LibraryRep>::try_from(b).is_err()
+                && Representation::<LibraryRep>::try_from(c).is_err()
+            {
+                (rep, b, c)
+            } else if let Ok(rep) = Representation::<LibraryRep>::try_from(b)
+                && Representation::<LibraryRep>::try_from(a).is_err()
+                && Representation::<LibraryRep>::try_from(c).is_err()
+            {
+                (rep, a, c)
+            } else if let Ok(rep) = Representation::<LibraryRep>::try_from(c)
+                && Representation::<LibraryRep>::try_from(b).is_err()
+                && Representation::<LibraryRep>::try_from(a).is_err()
+            {
+                (rep, a, b)
+            } else {
+                return Err(TensorNetworkError::InvalidDotFunction(
+                    value.as_view().to_plain_string(),
+                ));
+            };
+
+            let dummy_index: Slot<LibraryRep> = rep.slot(1);
+
+            fn index<D: Display>(
+                ind: Slot<LibraryRep>,
+                view: AtomView,
+            ) -> Result<Atom, TensorNetworkError<D, Symbol>> {
+                match view {
+                    AtomView::Fun(f) => {
+                        let mut fb = FunctionBuilder::new(f.get_symbol());
+
+                        for a in f.iter() {
+                            fb = fb.add_arg(a);
+                        }
+                        Ok(fb.add_arg(ind.to_atom()).finish())
+                    }
+                    AtomView::Var(s) => Ok(FunctionBuilder::new(s.get_symbol())
+                        .add_arg(ind.to_atom())
+                        .finish()),
+                    a => Err(TensorNetworkError::InvalidDotFunction(a.to_plain_string())),
+                }
+            }
+
+            let indexed_l = index(dummy_index, l)?;
+            // let Ok(indexed_l_structure): Result<PermutedStructure<S>, _> =
+            //     indexed_l.as_view().try_into()
+            // else {
+            //     return Err(TensorNetworkError::InvalidDotFunction(
+            //         indexed_l.as_view().to_plain_string(),
+            //     ));
+            // };
+            let indexed_r = index(dummy_index, r)?;
+
+            Self::try_from_view_impl((indexed_l * indexed_r).as_view(), state, library, settings)
+            // let Ok(indexed_r_structure): Result<PermutedStructure<S>, _> =
+            //     indexed_r.as_view().try_into()
+            // else {
+            //     return Err(TensorNetworkError::InvalidDotFunction(
+            //         indexed_l.as_view().to_plain_string(),
+            //     ));
+            // };
+
+            // let l = match library.key_for_structure(&indexed_l_structure) {
+            //     Ok(key) => {
+            //         // println!("Adding lib");
+            //         // let t = library.get(&key).unwrap();
+            //         Self::library_tensor(
+            //             &indexed_l_structure.structure,
+            //             PermutedStructure {
+            //                 structure: key,
+            //                 rep_permutation: indexed_l_structure.rep_permutation,
+            //                 index_permutation: indexed_l_structure.index_permutation,
+            //             },
+            //         )
+            //     }
+            //     Err(_) => Self::from_tensor(
+            //         indexed_l_structure
+            //             .structure
+            //             .to_shell()
+            //             .concretize(Some(indexed_l_structure.index_permutation.inverse())),
+            //     ),
+            // };
+
+            // let r = match library.key_for_structure(&indexed_r_structure) {
+            //     Ok(key) => {
+            //         // println!("Adding lib");
+            //         // let t = library.get(&key).unwrap();
+            //         Self::library_tensor(
+            //             &indexed_r_structure.structure,
+            //             PermutedStructure {
+            //                 structure: key,
+            //                 rep_permutation: indexed_r_structure.rep_permutation,
+            //                 index_permutation: indexed_r_structure.index_permutation,
+            //             },
+            //         )
+            //     }
+            //     Err(_) => Self::from_tensor(
+            //         indexed_r_structure
+            //             .structure
+            //             .to_shell()
+            //             .concretize(Some(indexed_r_structure.index_permutation.inverse())),
+            //     ),
+            // };
+
+            // let res
+            // Ok(l * r)
+            // Ok(Self::from_scalar(a.try_into()?))
         } else if symbol.has_tag(&SPENSO_TAG.tag) {
             if value.get_nargs() != 1 {
                 return Err(TensorNetworkError::TooManyArgsFunction(
@@ -531,7 +655,7 @@ where
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<AtomView<'a>>,
+        PermutedStructure<S>: for<'r> TryFrom<AtomView<'r>>,
     {
         if let Some(a) = settings.depth_limit
             && a < state.depth
@@ -593,7 +717,7 @@ where
         TensorShell<S>: Concretize<T>,
         S::Slot: IsAbstractSlot<Aind = Aind>,
         T::Slot: IsAbstractSlot<Aind = Aind>,
-        PermutedStructure<S>: TryFrom<AtomView<'a>>,
+        PermutedStructure<S>: for<'r> TryFrom<AtomView<'r>>,
     {
         if let Some(a) = settings.depth_limit
             && a < state.depth
@@ -792,7 +916,7 @@ pub mod test {
         network::{library::panicing::ErroringLibrary, parsing::SymbolicParse},
         shadowing::symbolica_utils::TypstSettings,
         structure::{
-            ToSymbolic,
+            ToSymbolic, permuted,
             representation::{Euclidean, Lorentz, Minkowski, RepName, initialize},
             slot::IsAbstractSlot,
         },
@@ -1679,5 +1803,79 @@ pub mod test {
                 panic!("Not tensor")
             }
         }
+    }
+
+    #[test]
+    fn dot_derivative() {
+        initialize();
+
+        let l = symbol!("lambda";Scalar);
+        let expr = parse_lit!(
+            // (2 * dot(Q3(0), Q3(2), mink(4)) + dot(Q3(0), Q3(0), mink(4)))
+            dot(mink(4), Q(1), Q(3)) * dot(mink(4), Q(3), Q(1) + Q(2))
+        );
+
+        // 2*dot(Q3(0),Q3(2),mink(4)) is Scalar vs dot(Q3(0),Q3(0),mink(4)
+
+        dbg!(<permuted::PermutedStructure<
+            NamedStructure<symbolica::atom::Symbol, Vec<symbolica::atom::Atom>>,
+        > as TryFrom<AtomView>>::Error::ParsingError(
+            "a".into()
+        ));
+
+        let e = expr
+            .replace(parse_lit!(Q(1)))
+            .with(parse_lit!(Q(1)) * l)
+            .expand();
+        println!("{}", e);
+
+        let net = e
+            .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())
+            .unwrap();
+
+        assert_snapshot!(net.snapshot_dot(),@r#"
+        digraph {
+          node	 [shape=circle,height=0.1,label=""];
+          overlap = "scale";
+          layout = "neato";
+
+          0	 [label = "∑"];
+          1	 [label = "∏"];
+          2	 [label = "S:lambda^2"];
+          3	 [label = "^( 2 )"];
+          4	 [label = "∏"];
+          5	 [label = "T:Q(1,mink(4,1))"];
+          6	 [label = "T:Q(3,mink(4,1))"];
+          7	 [label = "∏"];
+          8	 [label = "S:lambda"];
+          9	 [label = "∏"];
+          10	 [label = "T:Q(1,mink(4,1))"];
+          11	 [label = "T:Q(3,mink(4,1))"];
+          12	 [label = "∏"];
+          13	 [label = "T:Q(2,mink(4,1))"];
+          14	 [label = "T:Q(3,mink(4,1))"];
+          ext0	 [style=invis];
+          0:0:s	-> ext0	 [id=0 color="red"];
+          7:16:s	-> 0:1:s	 [id=1  color="red:blue;0.5"];
+          1:3:s	-> 0:2:s	 [id=2  color="red:blue;0.5"];
+          6:14:s	-> 4:10:s	 [id=3  color="red:blue;0.5"];
+          3:7:s	-> 1:4:s	 [id=4  color="red:blue;0.5"];
+          2:6:s	-> 1:5:s	 [id=5  color="red:blue;0.5"];
+          5:12:s	-> 4:11:s	 [id=6  color="red:blue;0.5"];
+          4:9:s	-> 3:8:s	 [id=7  color="red:blue;0.5"];
+          5:13:s	-> 6:15:s	 [id=8 dir=none  color="red:blue;0.5" label="mink4|1"];
+          13:31:s	-> 12:30:s	 [id=9  color="red:blue;0.5"];
+          12:28:s	-> 7:17:s	 [id=10  color="red:blue;0.5"];
+          9:21:s	-> 7:18:s	 [id=11  color="red:blue;0.5"];
+          8:20:s	-> 7:19:s	 [id=12  color="red:blue;0.5"];
+          10:25:s	-> 11:27:s	 [id=13 dir=none  color="red:blue;0.5" label="mink4|1"];
+          11:26:s	-> 9:22:s	 [id=14  color="red:blue;0.5"];
+          10:24:s	-> 9:23:s	 [id=15  color="red:blue;0.5"];
+          13:32:s	-> 14:34:s	 [id=16 dir=none  color="red:blue;0.5" label="mink4|1"];
+          14:33:s	-> 12:29:s	 [id=17  color="red:blue;0.5"];
+        }
+        "#);
+
+        assert_snapshot!(net.simple_execute().to_bare_ordered_string(),@"(Q(1,mink(4,1)))^2*(Q(3,mink(4,1)))^2*lambda^2+(Q(3,mink(4,1)))^2*Q(1,mink(4,1))*Q(2,mink(4,1))*lambda");
     }
 }

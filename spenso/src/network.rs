@@ -669,6 +669,8 @@ pub enum TensorNetworkError<K: Display, FK: Display> {
     #[error("Too many arguments for function:{0}")]
     TooManyArgsFunction(String),
     #[error("Non self-dual tensor power{0}")]
+    InvalidDotFunction(String),
+    #[error("Invalid dot function{0}")]
     NonSelfDualTensorPower(String),
     #[error("invalid resulting node{0}")]
     InvalidResultNode(NetworkNode<DummyKey, FK>),

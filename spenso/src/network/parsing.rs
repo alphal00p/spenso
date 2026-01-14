@@ -8,6 +8,7 @@ use library::Library;
 
 use crate::network::library::DummyLibrary;
 use crate::network::library::function_lib::Wrap;
+use crate::network::library::panicing::ErroringLibrary;
 use crate::shadowing::symbolica_utils::AtomCoreExt;
 use crate::structure::abstract_index::AIND_SYMBOLS;
 use crate::structure::representation::Representation;
@@ -17,6 +18,7 @@ use crate::structure::{
     NamedStructure, OrderedStructure, PermutedStructure, StructureContract, StructureError,
     TensorShell,
 };
+use crate::tensors::parametric::ParamTensor;
 use crate::tensors::symbolic::SymbolicTensor;
 
 use std::fmt::Display;
@@ -276,6 +278,7 @@ pub struct ParseSettings {
     pub precontract_scalars: bool,
     pub take_first_term_from_sum: bool,
     pub depth_limit: Option<usize>,
+    pub parse_inner_products: bool,
 }
 
 impl Default for ParseSettings {
@@ -284,6 +287,7 @@ impl Default for ParseSettings {
             precontract_scalars: true,
             take_first_term_from_sum: false,
             depth_limit: None,
+            parse_inner_products: true,
         }
     }
 }
@@ -482,7 +486,7 @@ where
             }
 
             Ok(Self::from_scalar(value.iter().next().unwrap().try_into()?))
-        } else if symbol == SPENSO_TAG.dot {
+        } else if symbol == SPENSO_TAG.dot && settings.parse_inner_products {
             if value.get_nargs() != 3 {
                 return Err(TensorNetworkError::TooManyArgsFunction(
                     value.as_view().to_plain_string(),
@@ -803,6 +807,13 @@ where
 pub type SymbolicNet<Aind> =
     Network<NetworkStore<SymbolicTensor<Aind>, Atom>, DummyKey, Symbol, Aind>;
 
+// pub type HepTensor<Aind> = MixedTensor<f64, ShadowedStructure<Aind>>;
+
+pub type ParamNet<Aind> =
+    Network<NetworkStore<ParamTensor<ShadowedStructure<Aind>>, Atom>, DummyKey, Symbol, Aind>;
+// pub type ParamNet<Aind> =
+//     Network<NetworkStore<ParamTensor<SymbolicTensor<Aind>, Atom>, DummyKey, Symbol, Aind>;
+
 impl<Aind: AbsInd + DummyAind + ParseableAind + 'static> SymbolicNet<Aind> {
     pub fn snapshot_dot(&self) -> String {
         self.dot_display_impl(
@@ -830,24 +841,46 @@ impl<Aind: AbsInd + DummyAind + ParseableAind + 'static> SymbolicNet<Aind> {
         }
     }
 }
-pub trait SymbolicParse {
+
+impl<Aind: AbsInd + DummyAind + ParseableAind + 'static> ParamNet<Aind> {
+    pub fn simple_execute(&mut self) {
+        let lib = DummyLibrary::<_>::new();
+
+        self.execute::<Sequential, SmallestDegree, _, _, _>(&lib, &ErroringLibrary::new())
+            .unwrap();
+    }
+}
+pub trait NetworkParse {
     #[allow(clippy::result_large_err)]
     fn parse_to_symbolic_net<Aind: AbsInd + ParseableAind>(
         &self,
         settings: &ParseSettings,
     ) -> Result<SymbolicNet<Aind>, TensorNetworkError<DummyKey, Symbol>>;
+
+    #[allow(clippy::result_large_err)]
+    fn parse_to_atom_net<Aind: AbsInd + ParseableAind>(
+        &self,
+        settings: &ParseSettings,
+    ) -> Result<ParamNet<Aind>, TensorNetworkError<DummyKey, Symbol>>;
 }
 
-impl SymbolicParse for Atom {
+impl NetworkParse for Atom {
     fn parse_to_symbolic_net<Aind: AbsInd + ParseableAind>(
         &self,
         settings: &ParseSettings,
     ) -> Result<SymbolicNet<Aind>, TensorNetworkError<DummyKey, Symbol>> {
         self.as_view().parse_to_symbolic_net::<Aind>(settings)
     }
+
+    fn parse_to_atom_net<Aind: AbsInd + ParseableAind>(
+        &self,
+        settings: &ParseSettings,
+    ) -> Result<ParamNet<Aind>, TensorNetworkError<DummyKey, Symbol>> {
+        self.as_view().parse_to_atom_net::<Aind>(settings)
+    }
 }
 
-impl SymbolicParse for AtomView<'_> {
+impl NetworkParse for AtomView<'_> {
     fn parse_to_symbolic_net<Aind: AbsInd + ParseableAind>(
         &self,
         settings: &ParseSettings,
@@ -855,6 +888,15 @@ impl SymbolicParse for AtomView<'_> {
         let lib = DummyLibrary::<SymbolicTensor<Aind>>::new();
 
         SymbolicNet::<Aind>::try_from_view::<SymbolicTensor<Aind>, _>(*self, &lib, settings)
+    }
+
+    fn parse_to_atom_net<Aind: AbsInd + ParseableAind>(
+        &self,
+        settings: &ParseSettings,
+    ) -> Result<ParamNet<Aind>, TensorNetworkError<DummyKey, Symbol>> {
+        let lib = DummyLibrary::<ParamTensor<ShadowedStructure<Aind>>>::new();
+
+        ParamNet::<Aind>::try_from_view::<ShadowedStructure<Aind>, _>(*self, &lib, settings)
     }
 }
 
@@ -913,7 +955,7 @@ pub mod test {
     use core::panic;
 
     use crate::{
-        network::{library::panicing::ErroringLibrary, parsing::SymbolicParse},
+        network::{library::panicing::ErroringLibrary, parsing::NetworkParse},
         shadowing::symbolica_utils::TypstSettings,
         structure::{
             ToSymbolic, permuted,

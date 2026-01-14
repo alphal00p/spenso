@@ -4,12 +4,13 @@ use spenso::{
     network::{
         Network,
         library::{DummyLibrary, symbolic::ETS},
-        parsing::{ParseSettings, SymbolicParse},
+        parsing::{NetworkParse, ParseSettings, SPENSO_TAG},
         store::NetworkStore,
     },
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         HasName, PermutedStructure, TensorStructure, ToSymbolic,
+        abstract_index::AbstractIndex,
         permuted::Perm,
         representation::{LibraryRep, LibrarySlot, RepName},
         slot::{AbsInd, DualSlotTo, DummyAind, IsAbstractSlot, ParseableAind},
@@ -33,13 +34,13 @@ use super::rep_symbols::RS;
 
 pub struct MetricSymbols {
     pub dim: Symbol,
-    pub dot: Symbol,
+    // pub dot: Symbol,
     pub dummy: Symbol,
 }
 
 pub static MS: LazyLock<MetricSymbols> = LazyLock::new(|| MetricSymbols {
     dim: symbol!("spenso::dim"),
-    dot: symbol!("spenso::dot";Symmetric, Linear),
+    // dot: symbol!("spenso::dot";Symmetric, Linear),
     dummy: symbol!("spenso::dummy"),
 });
 
@@ -497,30 +498,42 @@ pub fn to_dots_impl(expr: AtomView) -> Atom {
 
     for i in LibraryRep::all_self_duals().chain(LibraryRep::all_inline_metrics()) {
         reps.push(Replacement::new(
-            (function!(RS.f_, i.to_symbolic([RS.i__])) * function!(RS.g_, i.to_symbolic([RS.i__])))
-                .to_pattern(),
-            function!(MS.dot, RS.f_, RS.g_),
+            (function!(RS.f_, i.to_symbolic([RS.d_, RS.i_]))
+                * function!(RS.g_, i.to_symbolic([RS.d_, RS.i_])))
+            .to_pattern(),
+            function!(SPENSO_TAG.dot, i.to_symbolic([RS.d_]), RS.f_, RS.g_),
         ));
 
         reps.push(Replacement::new(
-            (function!(RS.f_, i.to_symbolic([RS.i__])).pow(Atom::num(2))).to_pattern(),
-            function!(MS.dot, RS.f_, RS.f_),
+            (function!(RS.f_, i.to_symbolic([RS.d_, RS.i_])).pow(Atom::num(2))).to_pattern(),
+            function!(SPENSO_TAG.dot, i.to_symbolic([RS.d_]), RS.f_, RS.f_),
         ));
 
         reps.push(
             Replacement::new(
-                (function!(RS.f_, RS.x___, i.to_symbolic([RS.i__]))
-                    * function!(RS.g_, RS.y___, i.to_symbolic([RS.i__])))
+                (function!(RS.f_, RS.x___, i.to_symbolic([RS.d_, RS.i_]))
+                    * function!(RS.g_, RS.y___, i.to_symbolic([RS.d_, RS.i_])))
                 .to_pattern(),
-                function!(MS.dot, function!(RS.f_, RS.x___), function!(RS.g_, RS.y___)),
+                function!(
+                    SPENSO_TAG.dot,
+                    i.to_symbolic([RS.d_]),
+                    function!(RS.f_, RS.x___),
+                    function!(RS.g_, RS.y___)
+                ),
             )
             .with_conditions(not_slot(RS.x___) & not_slot(RS.y___)),
         );
 
         reps.push(
             Replacement::new(
-                (function!(RS.f_, RS.x___, i.to_symbolic([RS.i__])).pow(Atom::num(2))).to_pattern(),
-                function!(MS.dot, function!(RS.f_, RS.x___), function!(RS.f_, RS.x___)),
+                (function!(RS.f_, RS.x___, i.to_symbolic([RS.d_, RS.i_])).pow(Atom::num(2)))
+                    .to_pattern(),
+                function!(
+                    SPENSO_TAG.dot,
+                    i.to_symbolic([RS.d_]),
+                    function!(RS.f_, RS.x___),
+                    function!(RS.f_, RS.x___)
+                ),
             )
             .with_conditions(not_slot(RS.x___)),
         );
@@ -530,10 +543,15 @@ pub fn to_dots_impl(expr: AtomView) -> Atom {
         let di = i.dual();
         reps.push(
             Replacement::new(
-                (function!(RS.f_, RS.x___, i.to_symbolic([RS.i__]))
-                    * function!(RS.g_, RS.y___, di.to_symbolic([RS.i__])))
+                (function!(RS.f_, RS.x___, i.to_symbolic([RS.d_, RS.i_]))
+                    * function!(RS.g_, RS.y___, di.to_symbolic([RS.d_, RS.i_])))
                 .to_pattern(),
-                function!(MS.dot, function!(RS.f_, RS.x___), function!(RS.g_, RS.y___)),
+                function!(
+                    SPENSO_TAG.dot,
+                    i.to_symbolic([RS.d_]),
+                    function!(RS.f_, RS.x___),
+                    function!(RS.g_, RS.y___)
+                ),
             )
             .with_conditions(not_slot(RS.x___) & not_slot(RS.y___)),
         );
@@ -563,6 +581,8 @@ pub trait MetricSimplifier {
     /// An [`Atom`] representing the expression after metric simplification.
     fn simplify_metrics(&self) -> Atom;
 
+    fn expand_dots(&self) -> Atom;
+
     /// Converts contracted index patterns into dot product notation `dot(...)`.
     ///
     /// Replaces expressions like `p(mu) * q(mu)` or `p(mu) * M(mu, nu) * q(nu)` (implicitly via metric rules)
@@ -576,10 +596,36 @@ pub trait MetricSimplifier {
 
 impl MetricSimplifier for Atom {
     fn to_dots(&self) -> Atom {
-        to_dots_impl(self.as_view())
+        self.as_view().to_dots()
+    }
+
+    fn expand_dots(&self) -> Atom {
+        self.as_view().expand_dots()
     }
     fn simplify_metrics(&self) -> Atom {
         simplify_metrics_impl(self.as_view())
+    }
+}
+
+impl MetricSimplifier for AtomView<'_> {
+    fn to_dots(&self) -> Atom {
+        to_dots_impl(*self)
+    }
+
+    fn expand_dots(&self) -> Atom {
+        let set = ParseSettings::default();
+        let pat = function!(SPENSO_TAG.dot, RS.f_, RS.g_, RS.h_).to_pattern();
+        self.replace(pat.clone()).with_map(move |a| {
+            let mut net = pat
+                .replace_wildcards_with_matches(a)
+                .parse_to_atom_net::<AbstractIndex>(&set)
+                .unwrap();
+            net.simple_execute();
+            net.result_scalar().unwrap().into()
+        })
+    }
+    fn simplify_metrics(&self) -> Atom {
+        simplify_metrics_impl(*self)
     }
 }
 
@@ -601,14 +647,6 @@ where
     }
 }
 
-impl MetricSimplifier for AtomView<'_> {
-    fn to_dots(&self) -> Atom {
-        to_dots_impl(*self)
-    }
-    fn simplify_metrics(&self) -> Atom {
-        simplify_metrics_impl(*self)
-    }
-}
 #[cfg(test)]
 mod test {
 
@@ -618,6 +656,7 @@ mod test {
 
     use spenso::{
         network::parsing::ShadowedStructure,
+        shadowing::symbolica_utils::AtomCoreExt,
         structure::{
             IndexlessNamedStructure, PermutedStructure,
             abstract_index::AbstractIndex,
@@ -722,6 +761,15 @@ mod test {
             parse_lit!(P(wrong::mink(4, -1 * g(2)), spenso::mink(4, 2)) * P(spenso::mink(4, 2)))
                 .to_dots();
         println!("{a}");
-        assert_eq!(a, parse_lit!(spenso::dot(P(), P(wrong::mink(4, -g(2))))));
+        assert_eq!(
+            a,
+            parse_lit!(spenso::dot(
+                spenso::mink(4),
+                idenso::P(),
+                idenso::P(wrong::mink(4, -idenso::g(2)))
+            ))
+        );
+
+        insta::assert_snapshot!(a.expand_dots().to_bare_ordered_string(),@"-1*P(cind(1))*P(mink(4,-1*g(2)),cind(1))+-1*P(cind(2))*P(mink(4,-1*g(2)),cind(2))+-1*P(cind(3))*P(mink(4,-1*g(2)),cind(3))+P(cind(0))*P(mink(4,-1*g(2)),cind(0))")
     }
 }

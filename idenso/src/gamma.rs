@@ -921,8 +921,8 @@ macro_rules! id {
 mod test {
 
     use spenso::network::StructureLessDisplay;
+    use spenso::network::parsing::NetworkParse;
     use spenso::network::parsing::ParseSettings;
-    use spenso::network::parsing::SymbolicParse;
     use spenso::network::store::TensorScalarStore;
     use spenso::shadowing::symbolica_utils::AtomCoreExt;
     use spenso::shadowing::symbolica_utils::TypstSettings;

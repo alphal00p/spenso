@@ -12,7 +12,7 @@ use spenso::{
     network::{
         graph::NetworkEdge,
         library::function_lib::INBUILTS,
-        parsing::{ParseSettings, SymbolicParse},
+        parsing::{NetworkParse, ParseSettings},
     },
     structure::{
         HasName, TensorStructure,

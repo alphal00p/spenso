@@ -280,40 +280,35 @@ impl<A: AtomCore> AtomCoreExt for A {
                 Instruction::Fun(o, builtin, s) => {
                     let b = builtin.get_symbol();
 
-                    match b {
-                        Symbol::COS => {
-                            writeln!(
-                                f,
-                                "let {} = $ cos({})$",
-                                typst_slot(o, &consts),
-                                typst_slot(s, &consts)
-                            )?;
-                        }
-                        Symbol::SIN => {
-                            writeln!(
-                                f,
-                                "let {} = $ sin({})$",
-                                typst_slot(o, &consts),
-                                typst_slot(s, &consts)
-                            )?;
-                        }
-                        Symbol::SQRT => {
-                            writeln!(
-                                f,
-                                "let {} = $ sqrt({})$",
-                                typst_slot(o, &consts),
-                                typst_slot(s, &consts)
-                            )?;
-                        }
-                        _ => {
-                            let name = b.get_stripped_name().to_string();
-                            writeln!(
-                                f,
-                                "let {} = $op(\"{name}\")({})$",
-                                typst_slot(o, &consts),
-                                typst_slot(s, &consts)
-                            )?;
-                        }
+                    if b == Symbol::COS {
+                        writeln!(
+                            f,
+                            "let {} = $ cos({})$",
+                            typst_slot(o, &consts),
+                            typst_slot(s, &consts)
+                        )?;
+                    } else if b == Symbol::SIN {
+                        writeln!(
+                            f,
+                            "let {} = $ sin({})$",
+                            typst_slot(o, &consts),
+                            typst_slot(s, &consts)
+                        )?;
+                    } else if b == Symbol::SQRT {
+                        writeln!(
+                            f,
+                            "let {} = $ sqrt({})$",
+                            typst_slot(o, &consts),
+                            typst_slot(s, &consts)
+                        )?;
+                    } else {
+                        let name = b.get_stripped_name().to_string();
+                        writeln!(
+                            f,
+                            "let {} = $op(\"{name}\")({})$",
+                            typst_slot(o, &consts),
+                            typst_slot(s, &consts)
+                        )?;
                     }
                 }
                 Instruction::Powf(o, b, e) => {

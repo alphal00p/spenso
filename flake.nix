@@ -380,7 +380,9 @@
           pkgs.marimo
           pkgs.python313
           pkgs.deno
+          pkgs.cargo-machete
           pkgs.asciinema
+          pkgs.hyperfine
           pkgs.nixd
           pkgs.nil
           pkgs.nixfmt-classic

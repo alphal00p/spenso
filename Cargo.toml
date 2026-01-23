@@ -22,4 +22,4 @@ spenso-hep-lib = { path = "./spenso-hep-lib" }
 # linnet = { path = "../linnet" }
 # linnet = { git = "https://github.com/alphal00p/linnet", rev = "c48d2f85b75c6d3323dd337a32166b68232c2f08" }
 # symbolica = { path = "../symbolica" }
-# symbolica = { git = "https://github.com/benruijl/symbolica", branch = "dev" }
+symbolica = { git = "https://github.com/benruijl/symbolica", branch = "dev" }

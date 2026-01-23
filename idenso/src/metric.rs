@@ -620,6 +620,7 @@ impl MetricSimplifier for AtomView<'_> {
                 .replace_wildcards_with_matches(a)
                 .parse_to_atom_net::<AbstractIndex>(&set)
                 .unwrap();
+
             net.simple_execute();
             net.result_scalar().unwrap().into()
         })

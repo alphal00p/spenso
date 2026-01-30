@@ -586,7 +586,7 @@ impl Spensor {
         evaltensor.optimize_horner_scheme(&settings);
 
         evaltensor.common_subexpression_elimination();
-        let linear = evaltensor.linearize(None, false);
+        let linear = evaltensor.linearize(&settings);
         Ok(SpensoExpressionEvaluator {
             eval: None,
             eval_complex: linear

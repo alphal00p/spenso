@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     algebra::algebraic_traits::{One, Zero},
     structure::{
+        PermutedStructure,
         permuted::PermuteTensor,
         slot::{AbsInd, IsAbstractSlot},
-        PermutedStructure,
     },
 };
 use std::{
@@ -19,19 +19,19 @@ use std::{
 use symbolica::{
     atom::{Atom, AtomView},
     domains::{
+        InternalOrdering,
         float::{Complex as SymComplex, Real, SingleFloat},
         rational::Rational,
-        InternalOrdering,
     },
     evaluate::{
         CompileOptions, CompiledCode, CompiledNumber, EvalTree, ExportNumber, ExportSettings,
-        ExportedCode, ExpressionEvaluator, FunctionMap,
+        ExportedCode, ExpressionEvaluator, FunctionMap, OptimizationSettings,
     },
 };
 
 #[cfg(feature = "shadowing")]
 use crate::{
-    algebra::complex::{symbolica_traits::CompiledComplexEvaluatorSpenso, Complex},
+    algebra::complex::{Complex, symbolica_traits::CompiledComplexEvaluatorSpenso},
     tensors::data::{DataIterator, DenseTensor, SetTensorData, SparseTensor},
     tensors::parametric::ParamTensor,
 };
@@ -45,9 +45,9 @@ use crate::{
 };
 
 use super::{
+    ExecutionResult,
     library::LibraryTensor,
     store::{NetworkStore, TensorScalarStore},
-    ExecutionResult,
 };
 use super::{Library, Network, TensorNetworkError, TensorOrScalarOrKey};
 
@@ -123,13 +123,13 @@ pub struct SharedTensorNetworkSet<
 }
 
 impl<
-        T: TensorStructure,
-        S,
-        K: Display + Debug,
-        FK: Display + Debug + Clone,
-        Str: TensorScalarStore<Tensor = T, Scalar = S>,
-        Aind: AbsInd,
-    > TensorNetworkSet<Str, K, FK, Aind>
+    T: TensorStructure,
+    S,
+    K: Display + Debug,
+    FK: Display + Debug + Clone,
+    Str: TensorScalarStore<Tensor = T, Scalar = S>,
+    Aind: AbsInd,
+> TensorNetworkSet<Str, K, FK, Aind>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn result(
@@ -191,12 +191,12 @@ impl<
 
 #[cfg(feature = "shadowing")]
 impl<
-        Store: TensorScalarStore<Tensor = ParamTensor<S>, Scalar = Atom>,
-        S: TensorStructure + Clone,
-        K: Clone,
-        FK: Clone,
-        Aind: AbsInd,
-    > TensorNetworkSet<Store, K, FK, Aind>
+    Store: TensorScalarStore<Tensor = ParamTensor<S>, Scalar = Atom>,
+    S: TensorStructure + Clone,
+    K: Clone,
+    FK: Clone,
+    Aind: AbsInd,
+> TensorNetworkSet<Store, K, FK, Aind>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn eval_tree(
@@ -279,12 +279,12 @@ impl<
 
 #[cfg(feature = "shadowing")]
 impl<
-        S: Clone + TensorStructure,
-        K,
-        FK,
-        Aind: AbsInd,
-        Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize>,
-    > EvalTreeTensorNetworkSet<SymComplex<Rational>, S, K, FK, Aind, Store>
+    S: Clone + TensorStructure,
+    K,
+    FK,
+    Aind: AbsInd,
+    Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize>,
+> EvalTreeTensorNetworkSet<SymComplex<Rational>, S, K, FK, Aind, Store>
 {
     pub fn horner_scheme(&mut self) {
         self.shared_data.horner_scheme();
@@ -293,13 +293,13 @@ impl<
 
 #[cfg(feature = "shadowing")]
 impl<
-        T,
-        S: TensorStructure + Clone,
-        K: Clone,
-        FK: Clone,
-        Aind: AbsInd,
-        Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> + Clone,
-    > EvalTreeTensorNetworkSet<T, S, K, FK, Aind, Store>
+    T,
+    S: TensorStructure + Clone,
+    K: Clone,
+    FK: Clone,
+    Aind: AbsInd,
+    Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> + Clone,
+> EvalTreeTensorNetworkSet<T, S, K, FK, Aind, Store>
 {
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(
         &self,
@@ -318,15 +318,14 @@ impl<
 
     pub fn linearize(
         self,
-        cpe_rounds: Option<usize>,
-        verbose: bool,
+        settings: &OptimizationSettings,
     ) -> EvalTensorNetworkSet<T, S, K, FK, Aind, Store>
     where
         T: Clone + Default + PartialEq,
     {
         EvalTensorNetworkSet {
             networks: self.networks,
-            shared_data: self.shared_data.linearize(cpe_rounds, verbose),
+            shared_data: self.shared_data.linearize(settings),
             len: self.len,
         }
     }
@@ -387,13 +386,13 @@ impl<
 
 #[cfg(feature = "shadowing")]
 impl<
-        T,
-        S: TensorStructure + Clone,
-        K: Clone,
-        FK: Clone,
-        Aind: AbsInd,
-        Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> + Clone,
-    > EvalTensorNetworkSet<T, S, K, FK, Aind, Store>
+    T,
+    S: TensorStructure + Clone,
+    K: Clone,
+    FK: Clone,
+    Aind: AbsInd,
+    Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> + Clone,
+> EvalTensorNetworkSet<T, S, K, FK, Aind, Store>
 {
     #[allow(clippy::type_complexity)]
     pub fn evaluate(
@@ -496,12 +495,12 @@ impl<F: CompiledNumber, S: TensorStructure + Clone, K: Clone, FK: Clone, Aind: A
 
 #[cfg(feature = "shadowing")]
 impl<
-        S: TensorStructure + Clone,
-        K: Clone,
-        FK: Clone,
-        Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> + Clone,
-        Aind: AbsInd,
-    > CompiledTensorNetworkSet<S, K, FK, Aind, Store>
+    S: TensorStructure + Clone,
+    K: Clone,
+    FK: Clone,
+    Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> + Clone,
+    Aind: AbsInd,
+> CompiledTensorNetworkSet<S, K, FK, Aind, Store>
 {
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn evaluate(

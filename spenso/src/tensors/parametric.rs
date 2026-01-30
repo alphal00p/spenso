@@ -2087,14 +2087,13 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
     #[allow(clippy::type_complexity)]
     pub fn linearize(
         self,
-        cpe_rounds: Option<usize>,
-        verbose: bool,
+        settings: &OptimizationSettings,
     ) -> EvalTensorSet<(ExpressionEvaluator<T>, Option<Vec<Expression<T>>>), S>
     where
         T: Clone + Default + PartialEq,
     {
         EvalTensorSet {
-            eval: (self.eval.0.linearize(cpe_rounds, verbose), self.eval.1),
+            eval: (self.eval.0.linearize(settings), self.eval.1),
             tensors: self.tensors,
             size: self.size,
         }
@@ -2148,7 +2147,7 @@ impl<S: Clone> EvalTreeTensor<SymComplex<Rational>, S> {
     ) -> EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, S> {
         let _ = self.optimize_horner_scheme(settings);
         self.common_subexpression_elimination();
-        self.clone().linearize(None, false)
+        self.clone().linearize(settings)
     }
 }
 
@@ -2215,16 +2214,12 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
         // self.map_data_ref(|x| x.map_coeff(f))
     }
 
-    pub fn linearize(
-        self,
-        cpe_rounds: Option<usize>,
-        verbose: bool,
-    ) -> EvalTensor<ExpressionEvaluator<T>, S>
+    pub fn linearize(self, settings: &OptimizationSettings) -> EvalTensor<ExpressionEvaluator<T>, S>
     where
         T: Clone + Default + PartialEq,
     {
         EvalTensor {
-            eval: self.eval.linearize(cpe_rounds, verbose),
+            eval: self.eval.linearize(settings),
             structure: self.structure,
             indexmap: self.indexmap,
         }
@@ -2474,7 +2469,7 @@ impl<S: TensorStructure + Clone>
 
         self.eval
             .0
-            .merge(tensor.linearize(None, settings.verbose).eval, None)
+            .merge(tensor.linearize(settings).eval, None)
             .unwrap();
     }
 }

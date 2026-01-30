@@ -17,7 +17,7 @@ use symbolica::{
     },
     evaluate::{
         CompileOptions, CompiledCode, CompiledNumber, EvalTree, EvaluationFn, ExportNumber,
-        ExportSettings, ExportedCode, ExpressionEvaluator, FunctionMap,
+        ExportSettings, ExportedCode, ExpressionEvaluator, FunctionMap, OptimizationSettings,
     },
     id::{BorrowReplacement, Context, Pattern},
     poly::{
@@ -671,8 +671,7 @@ impl<
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn linearize(
         self,
-        cpe_rounds: Option<usize>,
-        verbose: bool,
+        settings: &OptimizationSettings,
     ) -> Network<
         Store::Store<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>,
         K,
@@ -683,10 +682,7 @@ impl<
         T: Clone + Default + PartialEq,
         S: Clone,
     {
-        self.map(
-            |a| a.linearize(cpe_rounds, verbose),
-            |a| a.linearize(cpe_rounds, verbose),
-        )
+        self.map(|a| a.linearize(settings), |a| a.linearize(settings))
     }
 
     pub fn common_subexpression_elimination(&mut self)

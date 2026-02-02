@@ -7,12 +7,12 @@ use std::{
 use bincode::{Decode, Encode};
 use linnet::{
     half_edge::{
+        HedgeGraph, HedgeGraphError, NodeIndex,
         builder::HedgeGraphBuilder,
         involution::{EdgeData, Flow, Hedge},
         nodestore::NodeStorageOps,
         subgraph::{ModifySubSet, SuBitGraph, SubGraphLike, SubSetLike, SubSetOps},
         tree::SimpleTraversalTree,
-        HedgeGraph, HedgeGraphError, NodeIndex,
     },
     permutation::Permutation,
     tree::{child_pointer::ParentChildStore, child_vec::ChildVecStore},
@@ -23,17 +23,17 @@ use thiserror::Error;
 use crate::{
     network::NetworkState,
     structure::{
+        HasStructure, PermutedStructure, TensorStructure,
         abstract_index::AbstractIndex,
         permuted::{Perm, PermuteTensor},
         representation::{LibrarySlot, RepName},
         slot::{AbsInd, DualSlotTo, IsAbstractSlot},
-        HasStructure, PermutedStructure, TensorStructure,
     },
 };
 
 use super::{
-    library::{Library, LibraryTensor},
     TensorNetworkError,
+    library::{Library, LibraryTensor},
 };
 
 #[derive(
@@ -1519,9 +1519,9 @@ pub mod test {
     use crate::{
         network::graph::NetworkLeaf,
         structure::{
+            OrderedStructure, PermutedStructure,
             representation::{Euclidean, Lorentz, Minkowski, RepName},
             slot::IsAbstractSlot,
-            OrderedStructure, PermutedStructure,
         },
     };
 

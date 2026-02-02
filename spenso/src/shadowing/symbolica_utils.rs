@@ -251,7 +251,7 @@ impl<A: AtomCore> AtomCoreExt for A {
 
         for i in instr {
             match i {
-                Instruction::Add(s, args) => {
+                Instruction::Add(s, args, _is_real) => {
                     writeln!(
                         f,
                         "let {} = $({})$",
@@ -259,7 +259,7 @@ impl<A: AtomCore> AtomCoreExt for A {
                         args.into_iter().map(|a| typst_slot(a, &consts)).join(" + ")
                     )?;
                 }
-                Instruction::Mul(s, args) => {
+                Instruction::Mul(s, args, _is_real) => {
                     writeln!(
                         f,
                         "let {} = $({})$",
@@ -277,7 +277,7 @@ impl<A: AtomCore> AtomCoreExt for A {
                         args.into_iter().map(|a| typst_slot(a, &consts)).join(",")
                     )?;
                 }
-                Instruction::Fun(o, builtin, s) => {
+                Instruction::Fun(o, builtin, s, _is_real) => {
                     let b = builtin.get_symbol();
 
                     if b == Symbol::COS {
@@ -311,7 +311,7 @@ impl<A: AtomCore> AtomCoreExt for A {
                         )?;
                     }
                 }
-                Instruction::Powf(o, b, e) => {
+                Instruction::Powf(o, b, e, _is_real) => {
                     writeln!(
                         f,
                         "let {} = ${}^({})$",
@@ -320,7 +320,7 @@ impl<A: AtomCore> AtomCoreExt for A {
                         typst_slot(e, &consts)
                     )?;
                 }
-                Instruction::Pow(o, b, e) => {
+                Instruction::Pow(o, b, e, _is_real) => {
                     writeln!(
                         f,
                         "let {} = ${}^({})$",

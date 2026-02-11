@@ -968,7 +968,7 @@ pub mod test {
     use super::*;
     use insta::assert_snapshot;
     use library::DummyLibrary;
-    use symbolica::{atom::AtomCore, parse, parse_lit, symbol};
+    use symbolica::{atom::AtomCore, parse, parse_lit, printer::PrintOptions, symbol};
 
     #[test]
     fn parse_scalar() {
@@ -1090,6 +1090,16 @@ pub mod test {
                     * gamma(bis(4, hedge_6), bis(4, hedge_5), mink(4, edge_5_1))
                     * gamma(bis(4, hedge_7), bis(4, hedge_6), mink(4, hedge_4))
                     * gamma(bis(4, hedge_8), bis(4, hedge_7), mink(4, edge_6_1))
+        );
+
+        println!(
+            "{}",
+            expr.printer(PrintOptions {
+                custom_print_mode: Some(("spenso", 0)),
+                color_builtin_symbols: true,
+                square_brackets_for_function: true,
+                ..Default::default()
+            })
         );
         let net = expr
             .parse_to_symbolic_net::<AbstractIndex>(&ParseSettings::default())

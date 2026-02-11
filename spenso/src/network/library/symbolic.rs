@@ -3,17 +3,22 @@ use std::sync::LazyLock;
 use super::*;
 use ahash::AHashMap;
 use linnet::permutation::Permutation;
+
+use symbolica::printer::PrintState;
 use symbolica::{
-    atom::{Atom, AtomView, Symbol},
+    atom::{Atom, AtomCore, AtomView, Symbol},
     symbol,
 };
 
 use anyhow::anyhow;
 
+#[cfg(test)]
+use crate::shadowing::symbolica_utils::FormatWithState;
 use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
         HasName, IndexlessNamedStructure,
+        abstract_index::AIND_SYMBOLS,
         named::{IdentityName, METRIC_NAME},
         permuted::{Perm, PermuteTensor},
         representation::{LibraryRep, RepName, initialize},
@@ -211,8 +216,11 @@ pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTenso
     flat: symbol!("♭";Symmetric),
     // sharp: symbol!("♯";Symmetric),
     metric: symbol!(METRIC_NAME;Symmetric,Real;print = |a, opt| {
-        if let Some(("typst", 1)) = opt.custom_print_mode && let AtomView::Fun(_)=a {
-            let body = r#"(a,b) = {
+
+        match opt.custom_print_mode {
+             Some(("typst", 1)) =>{
+                 if let AtomView::Fun(_)=a {
+                     let body = r#"(a,b) = {
 if a.at("lower",default:false) and b.at("lower",default:false){
 $eta_(#to-eq(a) #to-eq(b))$
 } else if a.at("lower",default:false) and b.at("upper",default:false){
@@ -225,10 +233,128 @@ $eta^(#to-eq(a)^#to-eq(b))$
 $g(#to-eq(a),#to-eq(b))$
 }
 }"#;
-            Some(body.into())
-        } else {
-            None
+                     return Some(body.into())
+                 }
+             }
+             Some(("spenso",i))=>{
+                let AtomView::Fun(f)=a else {
+                    return None;
+                };
+
+                if f.get_nargs()==2 {
+                    let mut argitem = f.iter();
+                    let a = argitem.next().unwrap();
+                    let b = argitem.next().unwrap();
+
+                    let AtomView::Fun(mut f_a)=a else {
+                     return None;
+                    };
+                    let AtomView::Fun(mut f_b)=b else {
+                     return None;
+                    };
+
+                    let mut a_sym = f_a.get_symbol();
+                    let mut b_sym = f_b.get_symbol();
+
+                    let a_is_dind = a_sym == AIND_SYMBOLS.dind;
+                    if a_is_dind {
+                        if f_a.get_nargs()==1{
+                            let new_a = f_a.iter().next().unwrap();
+                            let AtomView::Fun(new_f_a)=new_a else {
+                                return None;
+                            };
+                            a_sym = new_f_a.get_symbol();
+                            f_a = new_f_a;
+                        }else{
+                            return None;
+                        }
+                    }
+                    let b_is_dind = b_sym == AIND_SYMBOLS.dind;
+                    if b_is_dind {
+                        if f_b.get_nargs()==1{
+                            let new_b = f_b.iter().next().unwrap();
+                            let AtomView::Fun(new_f_b)=new_b else {
+                                return None;
+                            };
+                            b_sym = new_f_b.get_symbol();
+                            f_b = new_f_b;
+                        }else{
+                            return None;
+                        }
+                    }
+
+                    if a_sym != b_sym {
+                        return None;
+                    }
+
+                    match (a_is_dind,b_is_dind){
+                        (true,true)=>{
+                            let mut out = if opt.color_builtin_symbols {
+                                nu_ansi_term::Color::Magenta.paint("g_").to_string()
+                            } else {
+                                "g_".to_string()
+                            };
+                            // out.push('');
+                            f_a.as_view().format(&mut out, opt, PrintState::new()).unwrap();
+                            out.push(',');
+                            f_b.as_view().format(&mut out, opt, PrintState::new()).unwrap();
+                            // out.push(')');
+                            return Some(out)
+
+                        }
+                        (true,false)=>{
+                            let mut out = if opt.color_builtin_symbols {
+                                nu_ansi_term::Color::Magenta.paint("δ_").to_string()
+                            } else {
+                                "δ_".to_string()
+                            };
+                            // out.push('');
+                            f_a.as_view().format(&mut out, opt, PrintState::new()).unwrap();
+                            if opt.color_builtin_symbols {
+                                out.push_str( &nu_ansi_term::Color::Magenta.paint("^").to_string())
+                            } else {
+                                out.push('^');
+                            };
+                            f_b.as_view().format(&mut out, opt, PrintState::new()).unwrap();
+                            // out.push('');
+                            return Some(out)
+                        }
+                        (false,true)=>{
+                            let mut out = if opt.color_builtin_symbols {
+                                nu_ansi_term::Color::Magenta.paint("δ_").to_string()
+                            } else {
+                                "δ_".to_string()
+                            };
+                            // out.push('');
+                            f_b.as_view().format(&mut out, opt, PrintState::new()).unwrap();
+                            if opt.color_builtin_symbols {
+                                out.push_str( &nu_ansi_term::Color::Magenta.paint("^").to_string())
+                            } else {
+                                out.push('^');
+                            };
+                            f_a.as_view().format(&mut out, opt, PrintState::new()).unwrap();
+                            // out.push('');
+                            return Some(out)
+                        }
+                        (false,false)=>{
+                            let mut out = if opt.color_builtin_symbols {
+                                nu_ansi_term::Color::Magenta.paint("g^").to_string()
+                            } else {
+                                "g^".to_string()
+                            };
+                            // out.push('(');
+                            f_a.as_view().format(&mut out, opt, PrintState::new()).unwrap();
+                            out.push(',');
+                            f_b.as_view().format(&mut out, opt, PrintState::new()).unwrap();
+                            // out.push(')');
+                            return Some(out)
+                        }
+                    }
+                }
+            },
+            _=>{}
         }
+        None
     }),
 });
 

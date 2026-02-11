@@ -668,7 +668,128 @@ pub(crate) static SELF_DUAL: AppendOnlyVec<(LibraryRep, RepData)> = AppendOnlyVe
 pub(crate) static INLINE_METRIC: AppendOnlyVec<(LibraryRep, MetricRepData)> = AppendOnlyVec::new();
 pub(crate) static DUALIZABLE: AppendOnlyVec<(LibraryRep, RepData)> = AppendOnlyVec::new();
 
+const LATIN: [&str; 26] = [
+    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s",
+    "t", "u", "v", "w", "x", "y", "z",
+];
+
+const GREEK: [&str; 24] = [
+    "α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "ν", "ξ", "ο", "π", "ρ", "σ", "τ",
+    "υ", "φ", "χ", "ψ", "ω",
+];
+
+const CYRILLIC: [&str; 33] = [
+    "а", "б", "в", "г", "д", "е", "ё", "ж", "з", "и", "й", "к", "л", "м", "н", "о", "п", "р", "с",
+    "т", "у", "ф", "х", "ц", "ч", "ш", "щ", "ъ", "ы", "ь", "э", "ю", "я",
+];
+
+const CIRCLED: [&str; 26] = [
+    "ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "ⓕ", "ⓖ", "ⓗ", "ⓘ", "ⓙ", "ⓚ", "ⓛ", "ⓜ", "ⓝ", "ⓞ", "ⓟ", "ⓠ", "ⓡ", "ⓢ",
+    "ⓣ", "ⓤ", "ⓥ", "ⓦ", "ⓧ", "ⓨ", "ⓩ",
+];
+const MATH_BOLD: [&str; 26] = [
+    "𝐚", "𝐛", "𝐜", "𝐝", "𝐞", "𝐟", "𝐠", "𝐡", "𝐢", "𝐣", "𝐤", "𝐥", "𝐦", "𝐧", "𝐨", "𝐩", "𝐪", "𝐫", "𝐬",
+    "𝐭", "𝐮", "𝐯", "𝐰", "𝐱", "𝐲", "𝐳",
+];
+
+fn encode_base(mut n: usize, alphabet: &[&str]) -> String {
+    let base = alphabet.len();
+    assert!(base > 0);
+    let mut parts: Vec<&str> = Vec::new();
+    loop {
+        parts.push(alphabet[n % base]);
+        n /= base;
+        if n == 0 {
+            break;
+        }
+    }
+    parts.reverse();
+    parts.concat()
+}
+
 impl LibraryRep {
+    #[cfg(feature = "shadowing")]
+    pub fn new_symbol(&self, name: &str) -> Symbol {
+        if let Some(s) = get_symbol!(name) {
+            s
+        } else {
+            use symbolica::{atom::AtomCore, printer::PrintState};
+
+            let body = format!(
+                "(dim, ind ) = (content: $ \"{}\"^#dim _#ind $, upper:true)",
+                name
+            );
+
+            let rep_name = match self {
+                LibraryRep::SelfDual(a) => encode_base(*a as usize, &LATIN),
+                LibraryRep::Dualizable(a) => encode_base(a.unsigned_abs() as usize, &CYRILLIC),
+                LibraryRep::InlineMetric(a) => encode_base(*a as usize, &GREEK),
+                LibraryRep::Dummy => String::new(),
+            };
+
+            symbol!(
+                name,
+                tag = SPENSO_TAG.upper,
+                print = move |a, opt| {
+                    match opt.custom_print_mode {
+                        Some(("typst", 1)) => Some(body.clone()),
+                        Some(("spenso", i)) => {
+                            let AtomView::Fun(f) = a else {
+                                return None;
+                            };
+
+                            let mut out = if opt.color_builtin_symbols {
+                                nu_ansi_term::Color::DarkGray.paint(&rep_name).to_string()
+                            } else {
+                                rep_name.clone()
+                            };
+
+                            if f.get_nargs() == 2 {
+                                let mut arg_iter = f.iter();
+                                let dim = arg_iter.next()?;
+
+                                if i != 0 {
+                                    dim.format(&mut out, opt, PrintState::new()).unwrap();
+                                }
+                                let ind = arg_iter.next()?;
+
+                                ind.format(&mut out, opt, PrintState::new()).unwrap();
+
+                                return Some(out);
+                            }
+
+                            None
+                        }
+                        _ => {
+                            let AtomView::Fun(f) = a else {
+                                return None;
+                            };
+
+                            let mut out = if opt.color_builtin_symbols {
+                                nu_ansi_term::Color::DarkGray.paint(&rep_name).to_string()
+                            } else {
+                                return None;
+                            };
+
+                            out.push('(');
+                            let mut first = true;
+                            for arg in f.iter() {
+                                if !first {
+                                    out.push_str(", ");
+                                } else {
+                                    first = false;
+                                }
+                                out.push_str(&arg.to_string());
+                            }
+                            out.push(')');
+                            Some(out)
+                        }
+                    }
+                }
+            )
+        }
+    }
+
     pub fn new_dual(name: &str) -> Result<Self, RepLibraryError> {
         REPS.write().unwrap().new_dual_impl(name)
     }
@@ -742,30 +863,6 @@ impl ExtendibleReps {
         self.name_map.values()
     }
 
-    #[cfg(feature = "shadowing")]
-    pub fn symbol(name: &str) -> Symbol {
-        if let Some(s) = get_symbol!(name) {
-            s
-        } else {
-            let body = format!(
-                "(dim, ind ) = (content: $ \"{}\"^#dim _#ind $, upper:true)",
-                name
-            );
-
-            symbol!(
-                name,
-                tag = SPENSO_TAG.upper,
-                print = move |_, opt| {
-                    if let Some(("typst", 1)) = opt.custom_print_mode {
-                        Some(body.clone())
-                    } else {
-                        None
-                    }
-                }
-            )
-        }
-    }
-
     pub fn new_dual_impl(&mut self, name: &str) -> Result<LibraryRep, RepLibraryError> {
         if let Some(rep) = self.name_map.get(name) {
             if let LibraryRep::SelfDual(_) = rep {
@@ -774,11 +871,12 @@ impl ExtendibleReps {
                 return Ok(*rep);
             }
         }
+
         let rep = LibraryRep::Dualizable(DUALIZABLE.len() as i16 + 1);
 
         self.name_map.insert(name.into(), rep);
         #[cfg(feature = "shadowing")]
-        let symbol = Self::symbol(name);
+        let symbol = rep.new_symbol(name);
         #[cfg(feature = "shadowing")]
         self.symbol_map.insert(symbol, rep);
 
@@ -809,7 +907,7 @@ impl ExtendibleReps {
         let rep = LibraryRep::SelfDual(SELF_DUAL.len() as u16);
         self.name_map.insert(name.into(), rep);
         #[cfg(feature = "shadowing")]
-        let symbol = Self::symbol(name);
+        let symbol = rep.new_symbol(name);
         #[cfg(feature = "shadowing")]
         self.symbol_map.insert(symbol, rep);
 
@@ -850,7 +948,7 @@ impl ExtendibleReps {
         let rep = LibraryRep::InlineMetric(INLINE_METRIC.len() as u16);
         self.name_map.insert(name.into(), rep);
         #[cfg(feature = "shadowing")]
-        let symbol = Self::symbol(name);
+        let symbol = rep.new_symbol(name);
         #[cfg(feature = "shadowing")]
         self.symbol_map.insert(symbol, rep);
 

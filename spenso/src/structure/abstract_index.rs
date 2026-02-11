@@ -11,9 +11,13 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "shadowing")]
 use symbolica::{
     atom::Symbol,
-    atom::{Atom, AtomView},
+    atom::{Atom, AtomCore, AtomView},
+    printer::PrintState,
     symbol, try_parse,
 };
+
+#[cfg(feature = "shadowing")]
+use nu_ansi_term::Color::DarkGray;
 
 #[cfg(feature = "shadowing")]
 use symbolica::coefficient::CoefficientView;
@@ -105,8 +109,77 @@ mod test {
 #[cfg(feature = "shadowing")]
 pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
     std::sync::LazyLock::new(|| AindSymbols {
-        cind: symbol!(super::concrete_index::CONCRETEIND),
-        find: symbol!(super::concrete_index::FLATIND),
+        cind: symbol!(
+            super::concrete_index::CONCRETEIND,
+            print = |a, opt| {
+                match opt.custom_print_mode {
+                    Some(("spenso", i)) => {
+                        let AtomView::Fun(f) = a else {
+                            return None;
+                        };
+
+                        let mut out = if opt.color_builtin_symbols {
+                            DarkGray.paint("[").to_string()
+                        } else {
+                            "[".to_string()
+                        };
+                        let mut first = true;
+                        for a in f.iter() {
+                            let Ok(a) = usize::try_from(a) else {
+                                return None;
+                            };
+                            if !first {
+                                out.push(',');
+                            }
+                            first = false;
+                            out.push_str(&a.to_string());
+                        }
+                        if opt.color_builtin_symbols {
+                            out.push_str(&DarkGray.paint("]").to_string());
+                        } else {
+                            out.push('[')
+                        };
+                        Some(out)
+                    }
+                    _ => None,
+                }
+            }
+        ),
+        find: symbol!(
+            super::concrete_index::FLATIND,
+            print = |a, opt| {
+                match opt.custom_print_mode {
+                    Some(("spenso", _)) => {
+                        let AtomView::Fun(f) = a else {
+                            return None;
+                        };
+
+                        let mut out = if opt.color_builtin_symbols {
+                            DarkGray.paint("{").to_string()
+                        } else {
+                            "{".to_string()
+                        };
+                        if f.get_nargs() != 1 {
+                            return None;
+                        }
+                        let arg = f.iter().next().unwrap();
+
+                        let Ok(a) = usize::try_from(arg) else {
+                            return None;
+                        };
+                        out.push_str(&a.to_string());
+
+                        if opt.color_builtin_symbols {
+                            out.push_str(&DarkGray.paint("}").to_string());
+                        } else {
+                            out.push('}')
+                        };
+                        Some(out)
+                    }
+                    _ => None,
+                }
+            }
+        ),
         aind: symbol!(ABSTRACTIND),
         uind: symbol!(
             UPIND,
@@ -119,14 +192,15 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
             },
             tag = SPENSO_TAG.upper,
             print = |_, opt| {
-                if let Some(("typst", 1)) = opt.custom_print_mode {
-                    let body = r#"(..arg)={
+                match opt.custom_print_mode {
+                    Some(("typst", 1)) => {
+                        let body = r#"(..arg)={
 let args = arg.pos().map(to-eq).join("")
 (content: args,upper:true)
 }"#;
-                    Some(body.into())
-                } else {
-                    None
+                        Some(body.into())
+                    }
+                    _ => None,
                 }
             }
         ),
@@ -146,15 +220,33 @@ let args = arg.pos().map(to-eq).join("")
                 }
             },
             tag = SPENSO_TAG.lower,
-            print = |_, opt| {
-                if let Some(("typst", 1)) = opt.custom_print_mode {
-                    let body = r#"(..arg)={
+            print = |a, opt| {
+                match opt.custom_print_mode {
+                    Some(("typst", 1)) => {
+                        let body = r#"(..arg)={
 let args = arg.pos().map(to-eq).join("")
 (content: args,lower:true)
 }"#;
-                    Some(body.into())
-                } else {
-                    None
+                        Some(body.into())
+                    }
+                    Some(("spenso", i)) => {
+                        let AtomView::Fun(f) = a else {
+                            return None;
+                        };
+
+                        let mut out = if opt.color_builtin_symbols {
+                            DarkGray.paint("_").to_string()
+                        } else {
+                            "_".to_string()
+                        };
+                        if f.get_nargs() != 1 {
+                            return None;
+                        }
+                        let arg = f.iter().next().unwrap();
+                        arg.format(&mut out, opt, PrintState::new()).unwrap();
+                        Some(out)
+                    }
+                    _ => None,
                 }
             }
         ),
@@ -478,8 +570,38 @@ impl TryFrom<&'_ str> for AbstractIndex {
     }
 }
 
+fn add_caron_below_each(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 2);
+    for ch in s.chars() {
+        out.push(ch);
+        // Skip if it's already a combining mark
+        if !ch.is_combining_mark() {
+            out.push('\u{0302}');
+        }
+    }
+    out
+}
+
+// Helper via unicode categories (use unicode-segmentation or unicode-normalization crates
+// for more robust handling)
+trait CombiningMark {
+    fn is_combining_mark(self) -> bool;
+}
+impl CombiningMark for char {
+    fn is_combining_mark(self) -> bool {
+        // Basic range for combining diacritics
+        (0x0300..=0x036F).contains(&(self as u32))
+    }
+}
 #[cfg(test)]
 mod tests {
+    use crate::{structure::abstract_index::add_caron_below_each, utils::to_superscript};
+
     #[test]
-    fn mem_size_test() {}
+    fn caron_below() {
+        println!(
+            "{}",
+            add_caron_below_each(&format!("muij{}", to_superscript(1)))
+        )
+    }
 }

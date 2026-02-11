@@ -81,6 +81,7 @@ pyo3 = { version = "0.27", optional = true ,default-features = false }
 pyo3-stub-gen = { version = "0.17", default-features = false, optional = true }
 colored = "3.0.0"
 itertools = "0.14.0"
+nu-ansi-term = "0.50.3"
 [features]
 python = ["dep:pyo3"]
 python_stubgen = ["dep:pyo3-stub-gen", "python"]

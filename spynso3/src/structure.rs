@@ -1526,6 +1526,12 @@ impl SpensoRepresentation {
         })
     }
 
+    fn dual(&self) -> Self {
+        Self {
+            representation: self.representation.dual(),
+        }
+    }
+
     /// Create a slot or symbolic expression from this representation.
     ///
     /// # Parameters:
@@ -1792,6 +1798,12 @@ impl SpensoSlot {
 
     fn __str__(&self) -> String {
         format!("{}", self.slot.to_atom())
+    }
+
+    fn dual(&self) -> Self {
+        SpensoSlot {
+            slot: self.slot.dual(),
+        }
     }
 
     #[new]

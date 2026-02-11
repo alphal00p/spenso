@@ -12,8 +12,6 @@ use symbolica::{
 
 use anyhow::anyhow;
 
-#[cfg(test)]
-use crate::shadowing::symbolica_utils::FormatWithState;
 use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
@@ -236,7 +234,7 @@ $g(#to-eq(a),#to-eq(b))$
                      return Some(body.into())
                  }
              }
-             Some(("spenso",i))=>{
+             Some(("spenso",_))=>{
                 let AtomView::Fun(f)=a else {
                     return None;
                 };

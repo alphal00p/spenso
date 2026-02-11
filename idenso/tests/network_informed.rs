@@ -1,5 +1,5 @@
 use symbolica::{
-    LicenseManager,
+
     atom::{Atom, AtomCore, AtomView, Symbol},
     function,
     id::{Match, MatchSettings, MatchStack, Pattern, Replacement},

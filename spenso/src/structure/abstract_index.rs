@@ -113,7 +113,7 @@ pub static AIND_SYMBOLS: std::sync::LazyLock<AindSymbols> =
             super::concrete_index::CONCRETEIND,
             print = |a, opt| {
                 match opt.custom_print_mode {
-                    Some(("spenso", i)) => {
+                    Some(("spenso", _)) => {
                         let AtomView::Fun(f) = a else {
                             return None;
                         };
@@ -229,7 +229,7 @@ let args = arg.pos().map(to-eq).join("")
 }"#;
                         Some(body.into())
                     }
-                    Some(("spenso", i)) => {
+                    Some(("spenso", _)) => {
                         let AtomView::Fun(f) = a else {
                             return None;
                         };
@@ -567,41 +567,5 @@ impl TryFrom<&'_ str> for AbstractIndex {
     fn try_from(value: &'_ str) -> Result<Self, Self::Error> {
         let atom = try_parse!(value).map_err(AbstractIndexError::ParsingError)?;
         Self::try_from(atom.as_view())
-    }
-}
-
-fn add_caron_below_each(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() * 2);
-    for ch in s.chars() {
-        out.push(ch);
-        // Skip if it's already a combining mark
-        if !ch.is_combining_mark() {
-            out.push('\u{0302}');
-        }
-    }
-    out
-}
-
-// Helper via unicode categories (use unicode-segmentation or unicode-normalization crates
-// for more robust handling)
-trait CombiningMark {
-    fn is_combining_mark(self) -> bool;
-}
-impl CombiningMark for char {
-    fn is_combining_mark(self) -> bool {
-        // Basic range for combining diacritics
-        (0x0300..=0x036F).contains(&(self as u32))
-    }
-}
-#[cfg(test)]
-mod tests {
-    use crate::{structure::abstract_index::add_caron_below_each, utils::to_superscript};
-
-    #[test]
-    fn caron_below() {
-        println!(
-            "{}",
-            add_caron_below_each(&format!("muij{}", to_superscript(1)))
-        )
     }
 }

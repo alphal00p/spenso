@@ -668,17 +668,17 @@ pub(crate) static SELF_DUAL: AppendOnlyVec<(LibraryRep, RepData)> = AppendOnlyVe
 pub(crate) static INLINE_METRIC: AppendOnlyVec<(LibraryRep, MetricRepData)> = AppendOnlyVec::new();
 pub(crate) static DUALIZABLE: AppendOnlyVec<(LibraryRep, RepData)> = AppendOnlyVec::new();
 
-const LATIN: [&str; 26] = [
+pub const LATIN: [&str; 26] = [
     "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s",
     "t", "u", "v", "w", "x", "y", "z",
 ];
 
-const GREEK: [&str; 24] = [
+pub const GREEK: [&str; 24] = [
     "α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "ν", "ξ", "ο", "π", "ρ", "σ", "τ",
     "υ", "φ", "χ", "ψ", "ω",
 ];
 
-const CYRILLIC: [&str; 33] = [
+pub const CYRILLIC: [&str; 33] = [
     "а", "б", "в", "г", "д", "е", "ё", "ж", "з", "и", "й", "к", "л", "м", "н", "о", "п", "р", "с",
     "т", "у", "ф", "х", "ц", "ч", "ш", "щ", "ъ", "ы", "ь", "э", "ю", "я",
 ];
@@ -692,7 +692,7 @@ const MATH_BOLD: [&str; 26] = [
     "𝐭", "𝐮", "𝐯", "𝐰", "𝐱", "𝐲", "𝐳",
 ];
 
-fn encode_base(mut n: usize, alphabet: &[&str]) -> String {
+pub fn encode_base(mut n: usize, alphabet: &[&str]) -> String {
     let base = alphabet.len();
     assert!(base > 0);
     let mut parts: Vec<&str> = Vec::new();
@@ -726,9 +726,10 @@ impl LibraryRep {
                 LibraryRep::InlineMetric(a) => encode_base(*a as usize, &GREEK),
                 LibraryRep::Dummy => String::new(),
             };
+            let name = name.to_string();
 
             symbol!(
-                name,
+                &name,
                 tag = SPENSO_TAG.upper,
                 print = move |a, opt| {
                     match opt.custom_print_mode {
@@ -766,7 +767,7 @@ impl LibraryRep {
                             };
 
                             let mut out = if opt.color_builtin_symbols {
-                                nu_ansi_term::Color::DarkGray.paint(&rep_name).to_string()
+                                nu_ansi_term::Color::DarkGray.paint(&name).to_string()
                             } else {
                                 return None;
                             };

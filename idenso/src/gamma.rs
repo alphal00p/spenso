@@ -1001,7 +1001,7 @@ mod test {
 
         println!("Bef:{}", expr);
         let mut out = String::new();
-        expr.typst_fmt(&mut out, &TypstSettings::lowering());
+        expr.typst_fmt(&mut out, &TypstSettings::lowering()).unwrap();
         println!("{}", out);
         println!("Aft:{}", expr.simplify_gamma());
     }

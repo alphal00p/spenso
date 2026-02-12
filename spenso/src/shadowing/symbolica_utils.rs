@@ -30,6 +30,107 @@ use std::{
 
 use anyhow::Result;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SpensoPrintSettings {
+    pub with_dim: bool,
+    pub parens: bool,
+    pub commas: bool,
+    pub index_subscripts: bool,
+    pub symbol_scripts: bool,
+}
+
+impl From<SpensoPrintSettings> for (&'static str, usize) {
+    fn from(settings: SpensoPrintSettings) -> Self {
+        ("spenso", settings.to_usize())
+    }
+}
+
+impl From<&SpensoPrintSettings> for (&'static str, usize) {
+    fn from(settings: &SpensoPrintSettings) -> Self {
+        ("spenso", settings.to_usize())
+    }
+}
+
+impl From<usize> for SpensoPrintSettings {
+    fn from(flag: usize) -> Self {
+        Self::from_usize(flag)
+    }
+}
+
+impl SpensoPrintSettings {
+    fn from_usize(x: usize) -> Self {
+        Self {
+            parens: (x & 0b00001) != 0,
+            commas: (x & 0b00010) != 0,
+            with_dim: (x & 0b00100) != 0,
+            symbol_scripts: (x & 0b01000) != 0,
+            index_subscripts: (x & 0b10000) != 0,
+        }
+    }
+
+    fn to_usize(self) -> usize {
+        (self.parens as usize)
+            | ((self.commas as usize) << 1)
+            | ((self.with_dim as usize) << 2)
+            | ((self.symbol_scripts as usize) << 3)
+            | ((self.index_subscripts as usize) << 4)
+    }
+
+    pub fn typst() -> Self {
+        Self {
+            parens: true,
+            commas: false,
+            with_dim: false,
+            symbol_scripts: true,
+            index_subscripts: true,
+        }
+    }
+
+    pub fn is_typst(&self) -> bool {
+        self == &Self::typst()
+    }
+
+    // x^-2*a^-2*b^-2 -> 1/(x * a * b)^2
+    // x^-1*a^-1*b^-1 -> ((1/x)/a)/b
+    pub fn compact() -> Self {
+        Self {
+            parens: false,
+            commas: false,
+            with_dim: false,
+            symbol_scripts: false,
+            index_subscripts: false,
+        }
+    }
+
+    pub fn nice_symbolica(&self) -> PrintOptions {
+        PrintOptions {
+            custom_print_mode: Some(self.into()),
+            color_builtin_symbols: true,
+            terms_on_new_line: true,
+            color_namespace: false,
+            multiplication_operator: '·',
+            hide_all_namespaces: true,
+            color_top_level_sum: true,
+            num_exp_as_superscript: true,
+            ..Default::default()
+        }
+    }
+
+    pub fn typst_symbolica(&self) -> PrintOptions {
+        PrintOptions {
+            custom_print_mode: Some(self.into()),
+            color_builtin_symbols: false,
+            terms_on_new_line: false,
+            color_namespace: false,
+            multiplication_operator: ' ',
+            hide_all_namespaces: true,
+            color_top_level_sum: false,
+            num_exp_as_superscript: true,
+            ..Default::default()
+        }
+    }
+}
+
 pub trait AtomCoreExt {
     fn to_bare_ordered_string(&self) -> String;
 

@@ -17,7 +17,7 @@
         },
         "cargo": {
           // "features": []
-          "features": ["shadowing", "python_stubgen"],
+          "features": ["shadowing"], //, "python_stubgen"],
         },
         // "diagnostics": {
         //   "experimental": {

@@ -3,9 +3,10 @@ use std::{collections::HashSet, sync::LazyLock};
 use itertools::Itertools;
 use spenso::{
     network::library::symbolic::{ETS, ExplicitKey},
+    shadowing::symbolica_utils::SpensoPrintSettings,
     structure::{
         TensorStructure,
-        abstract_index::AbstractIndex,
+        abstract_index::{AIND_SYMBOLS, AbstractIndex},
         dimension::Dimension,
         representation::{Minkowski, RepName},
         slot::{AbsInd, IsAbstractSlot},
@@ -15,6 +16,7 @@ use symbolica::{
     atom::{Atom, AtomCore, AtomOrView, AtomView, Symbol},
     function,
     id::{MatchSettings, Pattern, Replacement},
+    printer::PrintState,
     symbol,
 };
 
@@ -110,8 +112,133 @@ impl ColorSymbols {
 }
 
 pub static CS: LazyLock<ColorSymbols> = LazyLock::new(|| ColorSymbols {
-    t: symbol!("spenso::t";Real),
-    f: symbol!("spenso::f";Real),
+    t: symbol!("spenso::t";Real;print = |a, opt| {
+
+        match opt.custom_print_mode {
+            Some(("spenso",i))=>{
+                let SpensoPrintSettings{
+                    parens,
+                    symbol_scripts,
+                    commas,..
+                } = SpensoPrintSettings::from(i);
+
+
+                let AtomView::Fun(f)=a else {
+                    return None;
+                };
+                if f.get_nargs()!=3 {
+                    return None;
+                }
+                let mut argitem = f.iter();
+                let a = argitem.next().unwrap();
+                let b = argitem.next().unwrap();
+                let mut c = argitem.next().unwrap();
+
+                let mut out = "t".to_string();
+                if symbol_scripts {
+                    out.push('^');
+                }
+                if opt.color_builtin_symbols {
+                    out = nu_ansi_term::Color::Magenta.paint(out).to_string();
+                }
+
+                if parens{
+                    out.push('(');
+                }
+                a.format(&mut out, opt, PrintState::new()).unwrap();
+                if commas{
+                    out.push(',');
+                } else {
+                    out.push(' ');
+                }
+                b.format(&mut out, opt, PrintState::new()).unwrap();
+                if parens{
+                    out.push(')');
+                }
+                if symbol_scripts{
+                    out.push('_');
+                }
+
+
+                if parens{
+                    out.push('(');
+                }else if !symbol_scripts{
+                    out.push(' ');
+                }
+
+                let AtomView::Fun(f)=c else {
+                    return None;
+                };
+                if f.get_nargs()!=1 {
+                    return None;
+                }
+                if f.get_symbol()!=AIND_SYMBOLS.dind{
+                    return None;
+                }
+                c = f.iter().next().unwrap();
+                c.format(&mut out, opt, PrintState::new()).unwrap();
+                if parens{
+                    out.push(')');
+                }
+                Some(out)
+            }
+            _=>None}
+
+    }),
+    f: symbol!("spenso::f";Real;print = |a, opt| {
+
+        match opt.custom_print_mode {
+            Some(("spenso",i))=>{
+                let SpensoPrintSettings{
+                    parens,
+                    symbol_scripts,
+                    commas,..
+                } = SpensoPrintSettings::from(i);
+
+
+                let AtomView::Fun(f)=a else {
+                    return None;
+                };
+                if f.get_nargs()!=3 {
+                    return None;
+                }
+                let mut argitem = f.iter();
+                let a = argitem.next().unwrap();
+                let b = argitem.next().unwrap();
+                let c = argitem.next().unwrap();
+
+                let mut out = "f".to_string();
+                if symbol_scripts {
+                    out.push('^');
+                }
+                if opt.color_builtin_symbols {
+                    out = nu_ansi_term::Color::Magenta.paint(out).to_string();
+                }
+
+                if parens{
+                    out.push('(');
+                }
+                a.format(&mut out, opt, PrintState::new()).unwrap();
+                if commas{
+                    out.push(',');
+                } else {
+                    out.push(' ');
+                }
+                b.format(&mut out, opt, PrintState::new()).unwrap();
+                if commas{
+                    out.push(',');
+                } else {
+                    out.push(' ');
+                }
+                c.format(&mut out, opt, PrintState::new()).unwrap();
+                if parens{
+                    out.push(')');
+                }
+                Some(out)
+            }
+            _=>None}
+
+    }),
     ca: symbol!("ca"),
     adj_: symbol!("adj_"),
     nc_: symbol!("nc_"),
@@ -646,6 +773,36 @@ mod test {
     }
 
     #[test]
+    fn compact_printing() {
+        initialize();
+
+        let (atom, _) = colored_matrix_element();
+        println!(
+            "{}",
+            atom.printer(SpensoPrintSettings::compact().nice_symbolica())
+        );
+
+        println!(
+            "{}",
+            atom.printer(
+                SpensoPrintSettings {
+                    parens: true,
+                    with_dim: false,
+                    commas: false,
+                    index_subscripts: false,
+                    symbol_scripts: false,
+                }
+                .nice_symbolica()
+            )
+        );
+
+        println!(
+            "{}",
+            atom.printer(SpensoPrintSettings::typst().nice_symbolica())
+        )
+    }
+
+    #[test]
     fn t_structure() {
         println!("{}", CS.t_strct::<AbstractIndex>(3, 8));
 
@@ -1129,6 +1286,33 @@ mod test {
             expr.cook_indices()
                 .simplify_color()
                 .to_bare_ordered_string(),@"-1𝑖*G^4*TR^2*ahaha*ee^2*ohoho"
+        );
+    }
+
+    #[test]
+    fn simple() {
+        test_initialize();
+        // tc₄ г₁₀ г₈·tc₆ г₈ г₁₀·fc₄ c₀ c₂·fc₆ c₂ c₁
+        let expr = parse_lit!(
+            f(
+                coad(Nc ^ 2 - 1, c4),
+                coad(Nc ^ 2 - 1, c0),
+                coad(Nc ^ 2 - 1, c2)
+            ) * f(
+                coad(Nc ^ 2 - 1, c6),
+                coad(Nc ^ 2 - 1, c2),
+                coad(Nc ^ 2 - 1, c0)
+            ) * t(coad(Nc ^ 2 - 1, c4), cof(Nc, i0), dind(cof(Nc, i2)))
+                * t(coad(Nc ^ 2 - 1, c6), cof(Nc, i2), dind(cof(Nc, i0))),
+            default_namespace = "spenso"
+        );
+
+        println!("{}", expr.simplify_color());
+        println!(
+            "{}",
+            expr.simplify_color()
+                .replace(parse_lit!(spenso::Nc))
+                .with(3)
         );
     }
 

@@ -668,34 +668,35 @@ pub(crate) static SELF_DUAL: AppendOnlyVec<(LibraryRep, RepData)> = AppendOnlyVe
 pub(crate) static INLINE_METRIC: AppendOnlyVec<(LibraryRep, MetricRepData)> = AppendOnlyVec::new();
 pub(crate) static DUALIZABLE: AppendOnlyVec<(LibraryRep, RepData)> = AppendOnlyVec::new();
 
-pub const LATIN: [&str; 26] = [
-    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s",
-    "t", "u", "v", "w", "x", "y", "z",
+pub const LATIN: [char; 26] = [
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 
-pub const GREEK: [&str; 24] = [
-    "α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "ν", "ξ", "ο", "π", "ρ", "σ", "τ",
-    "υ", "φ", "χ", "ψ", "ω",
+pub const GREEK: [char; 24] = [
+    'α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'ι', 'κ', 'λ', 'μ', 'ν', 'ξ', 'ο', 'π', 'ρ', 'σ', 'τ',
+    'υ', 'φ', 'χ', 'ψ', 'ω',
 ];
 
-pub const CYRILLIC: [&str; 33] = [
-    "а", "б", "в", "г", "д", "е", "ё", "ж", "з", "и", "й", "к", "л", "м", "н", "о", "п", "р", "с",
-    "т", "у", "ф", "х", "ц", "ч", "ш", "щ", "ъ", "ы", "ь", "э", "ю", "я",
+pub const CYRILLIC: [char; 33] = [
+    'а', 'б', 'в', 'г', 'д', 'е', 'ё', 'ж', 'з', 'и', 'й', 'к', 'л', 'м', 'н', 'о', 'п', 'р', 'с',
+    'т', 'у', 'ф', 'х', 'ц', 'ч', 'ш', 'щ', 'ъ', 'ы', 'ь', 'э', 'ю', 'я',
 ];
 
-const CIRCLED: [&str; 26] = [
-    "ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "ⓕ", "ⓖ", "ⓗ", "ⓘ", "ⓙ", "ⓚ", "ⓛ", "ⓜ", "ⓝ", "ⓞ", "ⓟ", "ⓠ", "ⓡ", "ⓢ",
-    "ⓣ", "ⓤ", "ⓥ", "ⓦ", "ⓧ", "ⓨ", "ⓩ",
-];
-const MATH_BOLD: [&str; 26] = [
-    "𝐚", "𝐛", "𝐜", "𝐝", "𝐞", "𝐟", "𝐠", "𝐡", "𝐢", "𝐣", "𝐤", "𝐥", "𝐦", "𝐧", "𝐨", "𝐩", "𝐪", "𝐫", "𝐬",
-    "𝐭", "𝐮", "𝐯", "𝐰", "𝐱", "𝐲", "𝐳",
+pub const CIRCLED: [char; 26] = [
+    'ⓐ', 'ⓑ', 'ⓒ', 'ⓓ', 'ⓔ', 'ⓕ', 'ⓖ', 'ⓗ', 'ⓘ', 'ⓙ', 'ⓚ', 'ⓛ', 'ⓜ', 'ⓝ', 'ⓞ', 'ⓟ', 'ⓠ', 'ⓡ', 'ⓢ',
+    'ⓣ', 'ⓤ', 'ⓥ', 'ⓦ', 'ⓧ', 'ⓨ', 'ⓩ',
 ];
 
-pub fn encode_base(mut n: usize, alphabet: &[&str]) -> String {
+pub const MATH_BOLD: [char; 26] = [
+    '𝐚', '𝐛', '𝐜', '𝐝', '𝐞', '𝐟', '𝐠', '𝐡', '𝐢', '𝐣', '𝐤', '𝐥', '𝐦', '𝐧', '𝐨', '𝐩', '𝐪', '𝐫', '𝐬',
+    '𝐭', '𝐮', '𝐯', '𝐰', '𝐱', '𝐲', '𝐳',
+];
+
+pub fn encode_base(mut n: usize, alphabet: &[char]) -> String {
     let base = alphabet.len();
     assert!(base > 0);
-    let mut parts: Vec<&str> = Vec::new();
+    let mut parts: Vec<char> = Vec::new();
     loop {
         parts.push(alphabet[n % base]);
         n /= base;
@@ -703,8 +704,7 @@ pub fn encode_base(mut n: usize, alphabet: &[&str]) -> String {
             break;
         }
     }
-    parts.reverse();
-    parts.concat()
+    parts.into_iter().rev().collect::<String>()
 }
 
 impl LibraryRep {
@@ -714,6 +714,8 @@ impl LibraryRep {
             s
         } else {
             use symbolica::{atom::AtomCore, printer::PrintState};
+
+            use crate::shadowing::symbolica_utils::SpensoPrintSettings;
 
             let body = format!(
                 "(dim, ind ) = (content: $ \"{}\"^#dim _#ind $, upper:true)",
@@ -734,7 +736,15 @@ impl LibraryRep {
                 print = move |a, opt| {
                     match opt.custom_print_mode {
                         Some(("typst", 1)) => Some(body.clone()),
+
                         Some(("spenso", i)) => {
+                            let SpensoPrintSettings {
+                                with_dim,
+                                commas,
+                                parens,
+                                index_subscripts,
+                                ..
+                            } = SpensoPrintSettings::from(i);
                             let AtomView::Fun(f) = a else {
                                 return None;
                             };
@@ -745,16 +755,31 @@ impl LibraryRep {
                                 rep_name.clone()
                             };
 
+                            if index_subscripts {
+                                out.push('_');
+                            }
+                            if parens && index_subscripts {
+                                out.push('(');
+                            }
+
                             if f.get_nargs() == 2 {
                                 let mut arg_iter = f.iter();
                                 let dim = arg_iter.next()?;
 
-                                if i != 0 {
+                                if with_dim {
                                     dim.format(&mut out, opt, PrintState::new()).unwrap();
+                                    if commas {
+                                        out.push(',');
+                                    } else {
+                                        out.push(' ');
+                                    }
                                 }
                                 let ind = arg_iter.next()?;
 
                                 ind.format(&mut out, opt, PrintState::new()).unwrap();
+                                if parens && index_subscripts {
+                                    out.push(')');
+                                }
 
                                 return Some(out);
                             }

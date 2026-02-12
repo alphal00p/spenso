@@ -1,5 +1,6 @@
 use symbolica::atom::{AtomCore, FunctionBuilder, Symbol};
 use symbolica::domains::rational::Rational;
+use symbolica::printer::PrintState;
 use symbolica::{symbol, tag};
 
 use super::*;
@@ -9,7 +10,7 @@ use library::Library;
 use crate::network::library::DummyLibrary;
 use crate::network::library::function_lib::Wrap;
 use crate::network::library::panicing::ErroringLibrary;
-use crate::shadowing::symbolica_utils::AtomCoreExt;
+use crate::shadowing::symbolica_utils::{AtomCoreExt, SpensoPrintSettings};
 use crate::structure::abstract_index::AIND_SYMBOLS;
 use crate::structure::representation::Representation;
 // use crate::shadowing::Concretize;
@@ -47,7 +48,63 @@ pub static SPENSO_TAG: std::sync::LazyLock<SpensoTags> = std::sync::LazyLock::ne
     lower: tag!("lower"),
     bracket: symbol!("bracket"),
     pure_scalar: symbol!("pure_scalar"),
-    dot: symbol!("dot";Symmetric,Linear),
+    dot: symbol!("dot";Symmetric,Linear; print = |a,opt|{
+    match opt.custom_print_mode {
+        Some(("spenso",i))=>{
+            let SpensoPrintSettings{
+                parens,
+                commas,..
+            } = SpensoPrintSettings::from(i);
+
+
+            let AtomView::Fun(f) = a else {
+                return None;
+            };
+
+            if f.get_nargs() != 3 {
+                return None;
+            }
+            let mut args = f.iter();
+
+            let a = args.next().unwrap();
+            let b = args.next().unwrap();
+            let c = args.next().unwrap();
+
+            fn is_rep(view:AtomView<'_>)->bool{
+                match view {
+                    AtomView::Fun(f) if f.get_symbol().has_tag(&SPENSO_TAG.upper) => true,
+                    AtomView::Var(s) if s.get_symbol().has_tag(&SPENSO_TAG.upper) => true,
+                    _=>false
+                }
+            }
+
+            let (a,b,c) = if is_rep(a) && !is_rep(b) && !is_rep(c) {
+                (a,b,c)
+            } else if is_rep(b) && !is_rep(a) && !is_rep(c) {
+                (b,c,a)
+            } else if is_rep(c) && !is_rep(a) && !is_rep(b) {
+                (c,a,b)
+            } else { return None};
+
+            let mut s = String::new();
+            if parens {
+                s.push('(');
+            }
+            b.format(&mut s, opt,PrintState::new()).unwrap();
+            s.push('.');
+            c.format(&mut s, opt,PrintState::new()).unwrap();
+            if parens {
+                s.push(')');
+            }
+            Some(s)
+
+        },
+        _=>None
+    }
+
+
+
+    }),
 });
 
 pub type ShadowedStructure<Aind> = NamedStructure<Symbol, Vec<Atom>, LibraryRep, Aind>;

@@ -2,16 +2,19 @@ use std::sync::LazyLock;
 
 use spenso::{
     network::library::symbolic::{ETS, ExplicitKey},
+    shadowing::symbolica_utils::SpensoPrintSettings,
     structure::{
         dimension::Dimension,
         representation::{LibraryRep, Minkowski, RepName},
         slot::{AbsInd, DummyAind, ParseableAind},
     },
+    utils::to_superscript,
 };
 use symbolica::{
     atom::{Atom, AtomCore, AtomOrView, AtomView, FunctionBuilder, Symbol},
     function,
     id::{Context, Replacement},
+    printer::PrintState,
     symbol,
     utils::Settable,
 };
@@ -157,33 +160,260 @@ pub static GS: LazyLock<GammaSymbolsInternal> = LazyLock::new(|| GammaSymbolsInt
 pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
     gamma: symbol!(
         "spenso::gamma",
-        print = |a, opts| if let Some(("typst", 1)) = opts.custom_print_mode
-            && let AtomView::Fun(_) = a
-        {
-            let body = r#"(a,b) = {
-if a.at("lower",default:false) and b.at("lower",default:false){
-$eta_(#to-eq(a) #to-eq(b))$
-} else if a.at("lower",default:false) and b.at("upper",default:false){
-$delta_(#to-eq(a))^#to-eq(b)$
-}else if b.at("lower",default:false) and a.at("upper",default:false){
-$delta_(#to-eq(b))^#to-eq(a)$
-}else if a.at("upper",default:false) and b.at("upper",default:false){
-$eta^(#to-eq(a)^#to-eq(b))$
-} else{
-$g(#to-eq(a),#to-eq(b))$
-}
-}"#;
-            Some(body.into())
-        } else {
-            None
+        print = |a, opt| {
+            match opt.custom_print_mode {
+                Some(("spenso", i)) => {
+                    let SpensoPrintSettings {
+                        parens,
+                        symbol_scripts,
+                        commas,
+                        ..
+                    } = SpensoPrintSettings::from(i);
+
+                    let AtomView::Fun(f) = a else {
+                        return None;
+                    };
+                    if f.get_nargs() != 3 {
+                        return None;
+                    }
+                    let mut argitem = f.iter();
+                    let i = argitem.next().unwrap();
+                    let j = argitem.next().unwrap();
+                    let mu = argitem.next().unwrap();
+
+                    let mut out = "γ".to_string();
+                    if symbol_scripts {
+                        out.push('^');
+                    }
+                    if opt.color_builtin_symbols {
+                        out = nu_ansi_term::Color::Magenta.paint(out).to_string();
+                    }
+
+                    if parens {
+                        out.push('(');
+                    }
+                    mu.format(&mut out, opt, PrintState::new()).unwrap();
+
+                    out.push(',');
+
+                    i.format(&mut out, opt, PrintState::new()).unwrap();
+                    if commas {
+                        out.push(',');
+                    } else {
+                        out.push(' ');
+                    }
+                    j.format(&mut out, opt, PrintState::new()).unwrap();
+                    if parens {
+                        out.push(')');
+                    }
+
+                    Some(out)
+                }
+                _ => None,
+            }
         }
     ),
     gammaadj: symbol!("spenso::gammaadj"),
-    projp: symbol!("spenso::projp"),
-    projm: symbol!("spenso::projm"),
-    gamma5: symbol!("spenso::gamma5"),
+    projp: symbol!(
+        "spenso::projp",
+        print = |a, opt| {
+            match opt.custom_print_mode {
+                Some(("spenso", i)) => {
+                    let SpensoPrintSettings {
+                        parens,
+                        symbol_scripts,
+                        commas,
+                        ..
+                    } = SpensoPrintSettings::from(i);
+
+                    let AtomView::Fun(f) = a else {
+                        return None;
+                    };
+                    if f.get_nargs() != 2 {
+                        return None;
+                    }
+                    let mut argitem = f.iter();
+                    let i = argitem.next().unwrap();
+                    let j = argitem.next().unwrap();
+
+                    let mut out = "ℙₚ".to_string();
+                    if symbol_scripts {
+                        out.push('^');
+                    }
+                    if opt.color_builtin_symbols {
+                        out = nu_ansi_term::Color::Magenta.paint(out).to_string();
+                    }
+
+                    if parens {
+                        out.push('(');
+                    }
+                    i.format(&mut out, opt, PrintState::new()).unwrap();
+                    if commas {
+                        out.push(',');
+                    } else {
+                        out.push(' ');
+                    }
+                    j.format(&mut out, opt, PrintState::new()).unwrap();
+                    if parens {
+                        out.push(')');
+                    }
+
+                    Some(out)
+                }
+                _ => None,
+            }
+        }
+    ),
+    projm: symbol!(
+        "spenso::projm",
+        print = |a, opt| {
+            match opt.custom_print_mode {
+                Some(("spenso", i)) => {
+                    let SpensoPrintSettings {
+                        parens,
+                        symbol_scripts,
+                        commas,
+                        ..
+                    } = SpensoPrintSettings::from(i);
+
+                    let AtomView::Fun(f) = a else {
+                        return None;
+                    };
+                    if f.get_nargs() != 2 {
+                        return None;
+                    }
+                    let mut argitem = f.iter();
+                    let i = argitem.next().unwrap();
+                    let j = argitem.next().unwrap();
+
+                    let mut out = "ℙₘ".to_string();
+                    if symbol_scripts {
+                        out.push('^');
+                    }
+                    if opt.color_builtin_symbols {
+                        out = nu_ansi_term::Color::Magenta.paint(out).to_string();
+                    }
+
+                    if parens {
+                        out.push('(');
+                    }
+                    i.format(&mut out, opt, PrintState::new()).unwrap();
+                    if commas {
+                        out.push(',');
+                    } else {
+                        out.push(' ');
+                    }
+                    j.format(&mut out, opt, PrintState::new()).unwrap();
+                    if parens {
+                        out.push(')');
+                    }
+
+                    Some(out)
+                }
+                _ => None,
+            }
+        }
+    ),
+    gamma5: symbol!(
+        "spenso::gamma5",
+        print = |a, opt| {
+            match opt.custom_print_mode {
+                Some(("spenso", i)) => {
+                    let SpensoPrintSettings {
+                        parens,
+                        symbol_scripts,
+                        commas,
+                        ..
+                    } = SpensoPrintSettings::from(i);
+
+                    let AtomView::Fun(f) = a else {
+                        return None;
+                    };
+                    if f.get_nargs() != 2 {
+                        return None;
+                    }
+                    let mut argitem = f.iter();
+                    let i = argitem.next().unwrap();
+                    let j = argitem.next().unwrap();
+
+                    let mut out = "γ".to_string();
+                    out.push_str(&to_superscript(5));
+                    if symbol_scripts {
+                        out.push('^');
+                    }
+                    if opt.color_builtin_symbols {
+                        out = nu_ansi_term::Color::Magenta.paint(out).to_string();
+                    }
+
+                    if parens {
+                        out.push('(');
+                    }
+                    i.format(&mut out, opt, PrintState::new()).unwrap();
+                    if commas {
+                        out.push(',');
+                    } else {
+                        out.push(' ');
+                    }
+                    j.format(&mut out, opt, PrintState::new()).unwrap();
+                    if parens {
+                        out.push(')');
+                    }
+
+                    Some(out)
+                }
+                _ => None,
+            }
+        }
+    ),
     sigma: symbol!("spenso::sigma"),
-    gamma0: symbol!("spenso::gamma0";Real,Symmetric),
+    gamma0: symbol!("spenso::gamma0";Real,Symmetric;print = |a, opt| {
+        match opt.custom_print_mode {
+            Some(("spenso", i)) => {
+                let SpensoPrintSettings {
+                    parens,
+                    symbol_scripts,
+                    commas,
+                    ..
+                } = SpensoPrintSettings::from(i);
+
+                let AtomView::Fun(f) = a else {
+                    return None;
+                };
+                if f.get_nargs() != 2 {
+                    return None;
+                }
+                let mut argitem = f.iter();
+                let i = argitem.next().unwrap();
+                let j = argitem.next().unwrap();
+
+                let mut out = "γ".to_string();
+                out.push_str(&to_superscript(0));
+                if symbol_scripts {
+                    out.push('^');
+                }
+                if opt.color_builtin_symbols {
+                    out = nu_ansi_term::Color::Magenta.paint(out).to_string();
+                }
+
+                if parens {
+                    out.push('(');
+                }
+                i.format(&mut out, opt, PrintState::new()).unwrap();
+                if commas {
+                    out.push(',');
+                } else {
+                    out.push(' ');
+                }
+                j.format(&mut out, opt, PrintState::new()).unwrap();
+                if parens {
+                    out.push(')');
+                }
+
+                Some(out)
+            }
+            _ => None,
+        }
+    }),
     gammaconj: symbol!("spenso::gammaconj"),
 });
 
@@ -1001,7 +1231,8 @@ mod test {
 
         println!("Bef:{}", expr);
         let mut out = String::new();
-        expr.typst_fmt(&mut out, &TypstSettings::lowering()).unwrap();
+        expr.typst_fmt(&mut out, &TypstSettings::lowering())
+            .unwrap();
         println!("{}", out);
         println!("Aft:{}", expr.simplify_gamma());
     }

@@ -12,6 +12,7 @@ use symbolica::{
 
 use anyhow::anyhow;
 
+use crate::shadowing::symbolica_utils::SpensoPrintSettings;
 use crate::{
     shadowing::symbolica_utils::{IntoArgs, IntoSymbol},
     structure::{
@@ -207,11 +208,64 @@ pub struct TensorLibrary<T: HasStructure<Structure = ExplicitKey<Aind>>, Aind> {
 
 pub struct ExplicitTensorSymbols {
     pub flat: Symbol,
+    /// Print modes:
+    /// - spenso: coloring builtin symbols colors the representation name, and tensor name
+    ///   - 0: no dim,
+    ///   - 1: no dim with parenthesis,
+    ///   - 2: no dim no commas
+    ///   - 3: no dim with parenthesis no commas
+    ///   - 4: with dim,
+    ///   - 5: with dim and parenthesis
+    ///   - 6: with dim no commas
+    ///   - 7: with dim and parenthesis no commas
     pub metric: Symbol,
 }
 
 pub static ETS: LazyLock<ExplicitTensorSymbols> = LazyLock::new(|| ExplicitTensorSymbols {
-    flat: symbol!("♭";Symmetric),
+    flat: symbol!("♭";Symmetric;print = |a, opt| {
+
+        match opt.custom_print_mode {
+            Some(("spenso",i))=>{
+                let SpensoPrintSettings{
+                    parens,
+                    commas,..
+                } = SpensoPrintSettings::from(i);
+
+
+                let AtomView::Fun(f)=a else {
+                    return None;
+                };
+                if f.get_nargs()!=2 {
+                    return None;
+                }
+                let mut argitem = f.iter();
+                let a = argitem.next().unwrap();
+                let b = argitem.next().unwrap();
+
+                let mut out = if opt.color_builtin_symbols {
+                    nu_ansi_term::Color::Magenta.paint("♭_").to_string()
+                } else {
+                    "♭_".to_string()
+                };
+
+                if parens{
+                    out.push('(');
+                }
+                a.format(&mut out, opt, PrintState::new()).unwrap();
+                if commas{
+                    out.push(',');
+                } else {
+                    out.push(' ');
+                }
+                b.format(&mut out, opt, PrintState::new()).unwrap();
+                if parens{
+                    out.push(')');
+                }
+                Some(out)
+            }
+            _=>None}
+
+    }),
     // sharp: symbol!("♯";Symmetric),
     metric: symbol!(METRIC_NAME;Symmetric,Real;print = |a, opt| {
 
@@ -234,10 +288,15 @@ $g(#to-eq(a),#to-eq(b))$
                      return Some(body.into())
                  }
              }
-             Some(("spenso",_))=>{
+             Some(("spenso",i))=>{
+                 let SpensoPrintSettings{
+                     parens,
+                     commas,..
+                 } = SpensoPrintSettings::from(i);
                 let AtomView::Fun(f)=a else {
                     return None;
                 };
+
 
                 if f.get_nargs()==2 {
                     let mut argitem = f.iter();
@@ -292,11 +351,21 @@ $g(#to-eq(a),#to-eq(b))$
                             } else {
                                 "g_".to_string()
                             };
-                            // out.push('');
+
+                            if parens{
+                                out.push('(');
+                            }
                             f_a.as_view().format(&mut out, opt, PrintState::new()).unwrap();
-                            out.push(',');
+
+                            if commas{
+                                out.push(',');
+                            } else {
+                                out.push(' ');
+                            }
                             f_b.as_view().format(&mut out, opt, PrintState::new()).unwrap();
-                            // out.push(')');
+                            if parens{
+                                out.push(')');
+                            }
                             return Some(out)
 
                         }
@@ -306,15 +375,25 @@ $g(#to-eq(a),#to-eq(b))$
                             } else {
                                 "δ_".to_string()
                             };
-                            // out.push('');
+                            if parens{
+                                out.push('(');
+                            }
                             f_a.as_view().format(&mut out, opt, PrintState::new()).unwrap();
+                            if parens{
+                                out.push(')');
+                            }
                             if opt.color_builtin_symbols {
                                 out.push_str( &nu_ansi_term::Color::Magenta.paint("^").to_string())
                             } else {
                                 out.push('^');
                             };
+                            if parens{
+                                out.push('(');
+                            }
                             f_b.as_view().format(&mut out, opt, PrintState::new()).unwrap();
-                            // out.push('');
+                            if parens{
+                                out.push(')');
+                            }
                             return Some(out)
                         }
                         (false,true)=>{
@@ -323,15 +402,25 @@ $g(#to-eq(a),#to-eq(b))$
                             } else {
                                 "δ_".to_string()
                             };
-                            // out.push('');
+                            if parens{
+                                out.push('(');
+                            }
                             f_b.as_view().format(&mut out, opt, PrintState::new()).unwrap();
+                            if parens{
+                                out.push(')');
+                            }
                             if opt.color_builtin_symbols {
                                 out.push_str( &nu_ansi_term::Color::Magenta.paint("^").to_string())
                             } else {
                                 out.push('^');
                             };
+                            if parens{
+                                out.push('(');
+                            }
                             f_a.as_view().format(&mut out, opt, PrintState::new()).unwrap();
-                            // out.push('');
+                            if parens{
+                                out.push(')');
+                            }
                             return Some(out)
                         }
                         (false,false)=>{
@@ -340,11 +429,19 @@ $g(#to-eq(a),#to-eq(b))$
                             } else {
                                 "g^".to_string()
                             };
-                            // out.push('(');
+                            if parens{
+                                out.push('(');
+                            }
                             f_a.as_view().format(&mut out, opt, PrintState::new()).unwrap();
-                            out.push(',');
+                            if commas{
+                                out.push(',');
+                            } else {
+                                out.push(' ');
+                            }
                             f_b.as_view().format(&mut out, opt, PrintState::new()).unwrap();
-                            // out.push(')');
+                            if parens{
+                                out.push(')');
+                            }
                             return Some(out)
                         }
                     }

@@ -219,12 +219,14 @@ pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
         print = |a, opt| {
             match opt.custom_print_mode {
                 Some(("spenso", i)) => {
+                    let settings = SpensoPrintSettings::from(i);
+                    let is_typst = settings.is_typst();
                     let SpensoPrintSettings {
                         parens,
                         symbol_scripts,
                         commas,
                         ..
-                    } = SpensoPrintSettings::from(i);
+                    } = settings;
 
                     let AtomView::Fun(f) = a else {
                         return None;
@@ -236,7 +238,8 @@ pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
                     let i = argitem.next().unwrap();
                     let j = argitem.next().unwrap();
 
-                    let mut out = "ℙₚ".to_string();
+                    let mut out = if is_typst { "ℙ_p" } else { "ℙₚ" }.to_string();
+
                     if symbol_scripts {
                         out.push('^');
                     }
@@ -269,12 +272,14 @@ pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
         print = |a, opt| {
             match opt.custom_print_mode {
                 Some(("spenso", i)) => {
+                    let settings = SpensoPrintSettings::from(i);
+                    let is_typst = settings.is_typst();
                     let SpensoPrintSettings {
                         parens,
                         symbol_scripts,
                         commas,
                         ..
-                    } = SpensoPrintSettings::from(i);
+                    } = settings;
 
                     let AtomView::Fun(f) = a else {
                         return None;
@@ -285,8 +290,8 @@ pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
                     let mut argitem = f.iter();
                     let i = argitem.next().unwrap();
                     let j = argitem.next().unwrap();
+                    let mut out = if is_typst { "ℙ_m" } else { "ℙₘ" }.to_string();
 
-                    let mut out = "ℙₘ".to_string();
                     if symbol_scripts {
                         out.push('^');
                     }
@@ -319,12 +324,14 @@ pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
         print = |a, opt| {
             match opt.custom_print_mode {
                 Some(("spenso", i)) => {
+                    let settings = SpensoPrintSettings::from(i);
+                    let is_typst = settings.is_typst();
                     let SpensoPrintSettings {
                         parens,
                         symbol_scripts,
                         commas,
                         ..
-                    } = SpensoPrintSettings::from(i);
+                    } = settings;
 
                     let AtomView::Fun(f) = a else {
                         return None;
@@ -337,7 +344,11 @@ pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
                     let j = argitem.next().unwrap();
 
                     let mut out = "γ".to_string();
-                    out.push_str(&to_superscript(5));
+                    if is_typst {
+                        out.push_str("_5");
+                    } else {
+                        out.push_str(&to_superscript(5));
+                    }
                     if symbol_scripts {
                         out.push('^');
                     }
@@ -369,12 +380,14 @@ pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
     gamma0: symbol!("spenso::gamma0";Real,Symmetric;print = |a, opt| {
         match opt.custom_print_mode {
             Some(("spenso", i)) => {
+                let settings = SpensoPrintSettings::from(i);
+                let is_typst = settings.is_typst();
                 let SpensoPrintSettings {
                     parens,
                     symbol_scripts,
                     commas,
                     ..
-                } = SpensoPrintSettings::from(i);
+                } = settings;
 
                 let AtomView::Fun(f) = a else {
                     return None;
@@ -387,7 +400,11 @@ pub static AGS: LazyLock<GammaLibrary> = LazyLock::new(|| GammaLibrary {
                 let j = argitem.next().unwrap();
 
                 let mut out = "γ".to_string();
-                out.push_str(&to_superscript(0));
+                if is_typst {
+                    out.push_str("_0");
+                } else {
+                    out.push_str(&to_superscript(0));
+                }
                 if symbol_scripts {
                     out.push('^');
                 }

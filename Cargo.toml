@@ -1,26 +1,22 @@
 [workspace]
-members = ["spenso", "spenso-macros", "spenso-hep-lib", "idenso", "spynso3"]
-resolver = "2"                                                               # Add this line
+resolver = "2"  # Add this line
+members = ["idenso", "spenso", "spenso-hep-lib", "spenso-macros", "spynso3"]
 
 [workspace.package]
 authors = ["Lucien Huber <cargo+mail@lucien.ch>"]
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/alphal00p/spenso"
 edition = "2024"
-
-[profile.bench]
-lto = "fat"
-
+repository = "https://github.com/alphal00p/spenso"
+license = "MIT OR Apache-2.0"
 
 [patch.crates-io]
-#symbolica = { git = "https://github.com/benruijl/symbolica", rev = "8f2a2c4fed86b766074263a33b65f09eb2dd4d0d" }
+graphica = { git = "https://github.com/benruijl/symbolica", branch = "dev" }
+numerica = { git = "https://github.com/benruijl/symbolica", branch = "dev" }
+symbolica = { git = "https://github.com/benruijl/symbolica", branch = "dev" }
 
-spenso = { path = "./spenso" }
 idenso = { path = "./idenso" }
-spenso-macros = { path = "./spenso-macros" }
+spenso = { path = "./spenso" }
 spenso-hep-lib = { path = "./spenso-hep-lib" }
+spenso-macros = { path = "./spenso-macros" }
 # linnet = { path = "../linnet" }
 # linnet = { git = "https://github.com/alphal00p/linnet", rev = "c48d2f85b75c6d3323dd337a32166b68232c2f08" }
 # symbolica = { path = "../symbolica" }
-symbolica = { git = "https://github.com/benruijl/symbolica", branch = "dev" }
-numerica = { git = "https://github.com/benruijl/symbolica", branch = "dev" }

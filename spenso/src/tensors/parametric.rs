@@ -2070,6 +2070,26 @@ impl<S: Clone + TensorStructure> EvalTreeTensorSet<SymComplex<Rational>, S> {
     }
 }
 
+impl<S: TensorStructure> EvalTreeTensorSet<SymComplex<Rational>, S> {
+    #[allow(clippy::type_complexity)]
+    pub fn linearize(
+        self,
+        settings: &OptimizationSettings,
+    ) -> EvalTensorSet<
+        (
+            ExpressionEvaluator<SymComplex<Rational>>,
+            Option<Vec<Expression<SymComplex<Rational>>>>,
+        ),
+        S,
+    > {
+        EvalTensorSet {
+            eval: (self.eval.0.linearize(settings), self.eval.1),
+            tensors: self.tensors,
+            size: self.size,
+        }
+    }
+}
+
 impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(&self, f: &F) -> EvalTreeTensorSet<T2, S>
     where
@@ -2082,21 +2102,6 @@ impl<T, S: TensorStructure> EvalTreeTensorSet<T, S> {
             size: self.size,
         }
         // self.map_data_ref(|x| x.map_coeff(f))
-    }
-
-    #[allow(clippy::type_complexity)]
-    pub fn linearize(
-        self,
-        settings: &OptimizationSettings,
-    ) -> EvalTensorSet<(ExpressionEvaluator<T>, Option<Vec<Expression<T>>>), S>
-    where
-        T: Clone + Default + PartialEq,
-    {
-        EvalTensorSet {
-            eval: (self.eval.0.linearize(settings), self.eval.1),
-            tensors: self.tensors,
-            size: self.size,
-        }
     }
 
     pub fn common_subexpression_elimination(&mut self)
@@ -2201,6 +2206,19 @@ impl<S: Clone> EvalTreeTensor<SymComplex<Rational>, S> {
     }
 }
 
+impl<S: Clone> EvalTreeTensor<SymComplex<Rational>, S> {
+    pub fn linearize(
+        self,
+        settings: &OptimizationSettings,
+    ) -> EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, S> {
+        EvalTensor {
+            eval: self.eval.linearize(settings),
+            structure: self.structure,
+            indexmap: self.indexmap,
+        }
+    }
+}
+
 impl<S: Clone, T> EvalTreeTensor<T, S> {
     pub fn map_coeff<T2, F: Fn(&T) -> T2>(&self, f: &F) -> EvalTreeTensor<T2, S>
     where
@@ -2212,17 +2230,6 @@ impl<S: Clone, T> EvalTreeTensor<T, S> {
             structure: self.structure.clone(),
         }
         // self.map_data_ref(|x| x.map_coeff(f))
-    }
-
-    pub fn linearize(self, settings: &OptimizationSettings) -> EvalTensor<ExpressionEvaluator<T>, S>
-    where
-        T: Clone + Default + PartialEq,
-    {
-        EvalTensor {
-            eval: self.eval.linearize(settings),
-            structure: self.structure,
-            indexmap: self.indexmap,
-        }
     }
 
     pub fn common_subexpression_elimination(&mut self)

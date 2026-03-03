@@ -646,6 +646,38 @@ impl<T: Real, S: TensorStructure, K: Clone, FK: Clone, Aind: AbsInd>
         )
     }
 }
+
+impl<
+    Store: TensorScalarStore<
+            Tensor = EvalTreeTensor<SymComplex<Rational>, S>,
+            Scalar = EvalTree<SymComplex<Rational>>,
+        >,
+    S: TensorStructure,
+    K: Clone,
+    FK: Clone,
+    Aind: AbsInd,
+> Network<Store, K, FK, Aind>
+{
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
+    pub fn linearize(
+        self,
+        settings: &OptimizationSettings,
+    ) -> Network<
+        Store::Store<
+            EvalTensor<ExpressionEvaluator<SymComplex<Rational>>, S>,
+            ExpressionEvaluator<SymComplex<Rational>>,
+        >,
+        K,
+        FK,
+        Aind,
+    >
+    where
+        S: Clone,
+    {
+        self.map(|a| a.linearize(settings), |a| a.linearize(settings))
+    }
+}
+
 impl<
     Store: TensorScalarStore<Tensor = EvalTreeTensor<T, S>, Scalar = EvalTree<T>>,
     T,
@@ -666,23 +698,6 @@ impl<
     {
         self.map_ref(|a| a.map_coeff(f), |a| a.map_coeff(f))
         // self.map_data_ref(|x| x.map_coeff(f))
-    }
-
-    #[allow(clippy::type_complexity, clippy::result_large_err)]
-    pub fn linearize(
-        self,
-        settings: &OptimizationSettings,
-    ) -> Network<
-        Store::Store<EvalTensor<ExpressionEvaluator<T>, S>, ExpressionEvaluator<T>>,
-        K,
-        FK,
-        Aind,
-    >
-    where
-        T: Clone + Default + PartialEq,
-        S: Clone,
-    {
-        self.map(|a| a.linearize(settings), |a| a.linearize(settings))
     }
 
     pub fn common_subexpression_elimination(&mut self)

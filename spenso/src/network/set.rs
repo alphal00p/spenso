@@ -290,6 +290,26 @@ impl<
         self.shared_data.horner_scheme();
     }
 }
+#[cfg(feature = "shadowing")]
+impl<
+    S: TensorStructure + Clone,
+    K: Clone,
+    FK: Clone,
+    Aind: AbsInd,
+    Store: TensorScalarStore<Tensor = DataTensor<usize, S>, Scalar = usize> + Clone,
+> EvalTreeTensorNetworkSet<SymComplex<Rational>, S, K, FK, Aind, Store>
+{
+    pub fn linearize(
+        self,
+        settings: &OptimizationSettings,
+    ) -> EvalTensorNetworkSet<SymComplex<Rational>, S, K, FK, Aind, Store> {
+        EvalTensorNetworkSet {
+            networks: self.networks,
+            shared_data: self.shared_data.linearize(settings),
+            len: self.len,
+        }
+    }
+}
 
 #[cfg(feature = "shadowing")]
 impl<
@@ -314,20 +334,6 @@ impl<
             len: self.len,
         }
         // self.map_data_ref(|x| x.map_coeff(f))
-    }
-
-    pub fn linearize(
-        self,
-        settings: &OptimizationSettings,
-    ) -> EvalTensorNetworkSet<T, S, K, FK, Aind, Store>
-    where
-        T: Clone + Default + PartialEq,
-    {
-        EvalTensorNetworkSet {
-            networks: self.networks,
-            shared_data: self.shared_data.linearize(settings),
-            len: self.len,
-        }
     }
 
     pub fn common_subexpression_elimination(&mut self)
